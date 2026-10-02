@@ -1,0 +1,189 @@
+= Strict contracts
+
+This document describes the implemented language contracts and their validation boundaries.
+The normative rules remain in the language specification. Resource contracts are implemented
+under R-FUNC-0019 with the conservative proof boundaries described below.
+
+== Ownership foundation
+
+Two-phase async and thread starts use one capability contract: a supported Move value
+must be Send and unborrowed. Container spelling is not an additional restriction. The one
+sanctioned exception is a task-group loan: a `@scoped async` function or a scoped standard
+operation (`read_into`, `write_from`, `write_all_from` and their file and socket forms)
+borrows caller storage that the enclosing `task_scope` keeps alive; for a standard
+operation the loan ends only when the native backend has acknowledged completion or
+cancellation, which is the publication of its outcome.
+Preparation does not consume a named owner; commitment transfers it exactly once.
+A failed start preserves the source. A successful start gives cleanup responsibility
+to the receiving execution context.
+
+A task parameter and a local task have the same await semantics. Their physical frame
+slots differ, including their initialization flags. Suspension retains the slot;
+completion or cancellation clears it after the runtime consumes the task handle.
+Cancellation initiation is not a cleanup barrier: tests must observe acknowledgement
+or executor drain before asserting destruction counts.
+
+Checked-error payloads use the same rules as successful values. The Send property of
+a task includes every completion error. Returning or throwing a borrow still requires
+provenance derived from permitted inputs or static storage. An unresolved interface
+does not supply that proof. R's existing prohibition on recursive call graphs remains
+in force; recursion is a stack-contract diagnostic, not a missing borrow feature.
+
+Continuing control-flow paths must agree on ownership. After a caught start error,
+the retained owner may be retried, returned, explicitly destroyed, or cleaned up when
+dead. It cannot be read after a join where another reaching path consumed it.
+
+Executable coverage includes
+link:../tests/fixtures/codegen_async_owner_matrix.r[container and task transfers],
+link:../tests/codegen_async_owner_matrix_wrapper.c[start failure and cancellation],
+link:../tests/fixtures/codegen_async_owner_shapes.r[fixed arrays], and the
+link:../examples/workers/README.md[owned sum pipeline]. This coverage does not establish
+that every ownership combination in the compiler is complete.
+
+== Static conditions
+
+`@if` and `@else` are implemented under R-META-0001..0003. Both branches remain
+in the CST. Module conditions depend on the target, the profile or constant conditions;
+function conditions may also query canonical type identity, existing capabilities, traits
+and callable signatures. A constant condition is one comparison or membership test over
+constants and translation-time calls (Core draft.55, draft.56). Inside a generic body a condition
+over constant generic parameters, type layouts or generic calls with dependent arguments is decided
+for each instantiation; a module
+condition is computed by the translation-time discovery pass before declarations are selected.
+
+An open generic body is checked under the facts proved for each branch. Boolean
+disjunction supplies only facts common to every satisfying alternative. An inactive
+closed branch produces no HIR/MIR operations, effects, cleanup or external dependency.
+Branch-local assumptions use private type identities and do not mutate another
+generic definition. Closing follows the original type parameter. Inactive branch
+locals are excluded before layout and cleanup instantiation. A condition cannot change an exported function signature.
+
+Executable coverage includes sync/async owner cleanup, trait and callable dispatch,
+negative generic definition checks, module-order determinism and all five profiles.
+The `preflight profile` command demonstrates selecting a service execution policy.
+
+== Resource effects
+
+Use `@noalloc` for the absence of heap allocation and `@nonblocking` for the absence
+of operations that can block the current OS thread. These are independent properties:
+heap allocation does not imply a blocking system call, and a mutex wait need not allocate.
+Neither property implies a time bound, real-time scheduling, absence of panics or purity.
+
+Both contracts are transitive. Check direct and indirect calls, generic instantiations,
+user hooks, implicit destruction, failure cleanup, cancellation, and relevant runtime
+entries. Deallocation must be checked for blocking even when allocation is forbidden.
+Do not infer either property from the absence of a `throws` clause.
+
+For async functions, retain separate summaries of launch, execution and cleanup.
+A caller's contract covers the phases it invokes; a callee annotation cannot hide
+allocation by a generated launch wrapper. Awaiting is conceptually compatible with
+nonblocking execution, but only if registration, suspension, resumption and cleanup
+have verified nonblocking implementations. Existing mutex-based runtime paths must
+not receive this guarantee merely because the source operation is asynchronous.
+
+Unknown effects are not proven absent. Imported C functions, callback signatures and
+opaque runtime entries need explicit effect contracts at the trusted FFI boundary.
+Such declarations express a boundary obligation, not a compiler proof about an unseen
+C implementation. Keep the inventory and interface summaries synchronized and include
+contracts in fingerprints. Report the first violating call or cleanup chain.
+
+The checker follows complete R bodies, generic definitions and their closed
+instantiations, destructor hooks, normal cleanup and checked-error cleanup. Exact
+named C calls use explicit boundary contracts. Raw function values and callable constraints
+carry `@noalloc` and `@nonblocking` qualifiers. Unqualified indirect calls cannot establish
+these guarantees. Closure guarantees cover both invocation and environment destruction;
+forgetting a guarantee is allowed, while strengthening it requires proof. Runtime conditionals retain
+both branch obligations; no constant-condition optimization acts as an effect proof.
+Terminal panic reporting is outside the resource contract, as specified by R-FUNC-0019.
+
+An explicit positive registry admits audited intrinsic operations such as byte hashing,
+checked integer arithmetic, byte views and collection accessors. Unknown operations and
+unknown generic destruction remain unproved. Owner destruction is allocation-free when
+its payload hooks are, but allocator calls do not establish nonblocking behavior.
+Async bodies can prove no allocation independently of launch; current executor paths
+do not prove nonblocking execution. More runtime operations can gain guarantees only
+after their implementations and cleanup have been audited.
+
+Interface schema 13 records both independent declared contracts on functions and
+generic schemas. The resource runtime test executes a checked checksum and validation
+pipeline 100 times with the next allocator attempt forced to fail, verifies zero
+allocation attempts, and also exercises an annotated async calculation.
+
+== Safe replacement
+
+`core::replace` and `core::take` are implemented under R-OWN-0019 and R-LIB-0025.
+Replacement requires an initialized mutable place and a supported unborrowed type.
+The exclusive destination loan remains active while the replacement operand is evaluated;
+`replace(&owner, move owner)` therefore fails the same aliasing check as an ordinary call.
+Named Move inputs are consumed, Copy inputs remain available, and the returned old value
+owns its normal cleanup responsibility. No user destructor runs inside the exchange.
+
+Taking uses only a proven R default: an option becomes `none`, a number becomes zero,
+and bytes become empty. An owning string or non-null owner needs an explicit replacement.
+Stored borrows and runtime string views remain excluded; no new provenance promise or
+permission to move an arbitrary field is introduced. Nested call expressions remain
+forbidden in arguments: prepare a fallible replacement in a preceding declaration.
+
+Sync and async tests cover generic Copy/Move, option payloads, fixed arrays, indexed places,
+checked preparation failure and exactly-once user destruction. The snapshots application
+uses replacement to retain the previous revision for its audit line and takes a one-shot
+delivery from an optional field while keeping the containing record initialized.
+
+== Closure call modes
+
+Shared, mutable and consuming closure calls are implemented under R-TYPE-0044 and
+R-FUNC-0015..0017. Each callable constraint has an exact mode. Copy is independent of
+call mode: moving a Copy closure preserves its source, while a Move consuming closure
+requires `(move operation).call(...)`. Optional captured owners can be extracted with
+`core::take`; arbitrary moves from captured fields remain forbidden.
+
+Synchronous local closures are available inside async functions. Owned captures cross
+task/thread startup only with Send and unborrowed capabilities. Generic thread entries
+use the same structural argument inference as ordinary generic calls. Startup failure
+restores named Move arguments; tests retry the same closure after allocation failure in
+both async and thread startup. Suspension/cancellation tests retain a closure between
+steps and verify exactly-once destruction. Thread payloads track argument initialization
+so an argument transferred to the entry function is not destroyed again by runtime cleanup.
+
+Borrowed closures cannot remain live over await. Generic lambda definitions, checked lambda
+bodies and async once lambdas use the ordinary checked/async lowering. Callable signatures
+include exact errors and sync/async form; resource guarantees may be forgotten but not
+strengthened. Modes still have no implicit adapters. No heap boxing or dynamic dispatch is
+introduced. Interface 13 includes structural signatures and contracts; synthetic traits are
+implementation details.
+The workers `owned` command demonstrates an owned list capture and generic async dispatch.
+
+== Constant size parameters
+
+`@generic<T, const usize N>` is implemented under R-TYPE-0047. The first version uses
+usize dimensions: `Buffer<u8, 64usize>`, fixed-array inference, nested schemas and
+checked dependent arithmetic. Type/value argument kinds are distinct. Values cannot be
+mutated, addressed or shadowed; runtime expressions and noninferable parameters fail.
+Canonical values reuse an instantiation, while different dimensions have independent
+layout, functions and static state. Closed generic errors and drop hooks use ordinary
+ownership and cleanup in sync/async code. Interface 13 records typed constants and source
+fingerprints. Other constant types, specialization and equation-based inference are absent.
+
+The preflight `frame` command packs a four-byte length header and up to 60 UTF-8 bytes in
+`Frame<64usize>`. Generic packing and checksum helpers have verified noalloc/nonblocking
+contracts; final display formatting retains ordinary checked allocation. Tests compare
+the binary-frame checksum to an independent implementation and cover capacity rejection.
+
+== Significant results and borrowed processing
+
+`@must_use` on a named function or nominal type rejects ignored results and unread local
+bindings. Passing, returning, borrowing or explicitly discarding acknowledges the value.
+`expression as void` preserves Copy sources and destroys a consumed Move temporary once;
+ordinary checked errors and task-resolution obligations still apply. This does not impose
+a linear application protocol or require every branch to commit an external operation.
+
+Synchronous generic views and callable results preserve their input regions. Generic cloning
+retains projected alias state and each nominal error's origin set, including rethrow.
+Interface 13 exports separate normal/error bounds; nested projections share a conservative
+union. Different fields are not assumed to have independent lifetimes. Source definitions
+remain required for generic imports; metadata cannot manufacture a borrowed-output proof.
+
+`preflight packet TEXT` validates a borrowed view through a checked generic closure,
+computes a checksum through a noalloc/nonblocking callable, then transfers only the Copy
+summary to an async closure. Borrowed processing ends before await. The significant summary
+is consumed by reporting, and the command tests compare its byte count and CRC32 independently.

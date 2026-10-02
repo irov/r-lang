@@ -1,0 +1,8 @@
+__tlv_bootstrap
+_memcpy
+_memset
+_r_runtime_environment_panic
+_r_runtime_panic
+_r_runtime_stack_initialize_current_thread
+_r_runtime_stack_require
+_r_runtime_thread_local_cleanup_install

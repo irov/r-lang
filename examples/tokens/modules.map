@@ -1,0 +1,4 @@
+example.tokens.main = src/main.r
+example.tokens.ids = src/ids.r
+example.tokens.codes = src/codes.r
+example.tokens.draws = src/draws.r

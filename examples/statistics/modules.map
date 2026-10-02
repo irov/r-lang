@@ -1,0 +1,5 @@
+example.calculator.common = ../calculator/src/common.r
+example.statistics.analysis = src/analysis.r
+example.statistics.ordering = src/ordering.r
+example.statistics.segments = src/segments.r
+example.statistics.main = src/main.r

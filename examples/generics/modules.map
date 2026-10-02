@@ -1,0 +1,2 @@
+example.generics.vector = src/vector.r
+example.generics.main = src/main.r

@@ -1,0 +1,3574 @@
+{
+  "schema_version": 1,
+  "methods": [
+    {
+      "owner": "arc",
+      "name": "clone",
+      "module": "std.arc",
+      "operation": "clone",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.arc::clone"
+    },
+    {
+      "owner": "arc",
+      "name": "downgrade",
+      "module": "std.arc",
+      "operation": "downgrade",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.arc::downgrade"
+    },
+    {
+      "owner": "arc",
+      "name": "get_mut",
+      "module": "std.arc",
+      "operation": "get_mut",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.arc::get_mut"
+    },
+    {
+      "owner": "arc",
+      "name": "into_raw",
+      "module": "std.arc",
+      "operation": "into_raw",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.arc::into_raw"
+    },
+    {
+      "owner": "arc",
+      "name": "ptr_eq",
+      "module": "std.arc",
+      "operation": "ptr_eq",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.arc::ptr_eq"
+    },
+    {
+      "owner": "arc",
+      "name": "strong_count",
+      "module": "std.arc",
+      "operation": "strong_count",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.arc::strong_count"
+    },
+    {
+      "owner": "arc",
+      "name": "try_unwrap",
+      "module": "std.arc",
+      "operation": "try_unwrap",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.arc::try_unwrap"
+    },
+    {
+      "owner": "arc",
+      "name": "weak_count",
+      "module": "std.arc",
+      "operation": "weak_count",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.arc::weak_count"
+    },
+    {
+      "owner": "array",
+      "name": "as_slice",
+      "module": "std.array",
+      "operation": "as_slice",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.array::as_slice"
+    },
+    {
+      "owner": "array",
+      "name": "as_slice_mut",
+      "module": "std.array",
+      "operation": "as_slice_mut",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.array::as_slice_mut"
+    },
+    {
+      "owner": "array",
+      "name": "capacity",
+      "module": "std.array",
+      "operation": "capacity",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.array::capacity"
+    },
+    {
+      "owner": "array",
+      "name": "clear",
+      "module": "std.array",
+      "operation": "clear",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.array::clear"
+    },
+    {
+      "owner": "array",
+      "name": "get",
+      "module": "std.array",
+      "operation": "get",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.array::get"
+    },
+    {
+      "owner": "array",
+      "name": "get_mut",
+      "module": "std.array",
+      "operation": "get_mut",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.array::get_mut"
+    },
+    {
+      "owner": "array",
+      "name": "pop",
+      "module": "std.array",
+      "operation": "pop",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.array::pop"
+    },
+    {
+      "owner": "array",
+      "name": "push",
+      "module": "std.array",
+      "operation": "push",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.array::push"
+    },
+    {
+      "owner": "array",
+      "name": "remove",
+      "module": "std.array",
+      "operation": "remove",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.array::remove"
+    },
+    {
+      "owner": "array",
+      "name": "reserve",
+      "module": "std.array",
+      "operation": "reserve",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.array::reserve"
+    },
+    {
+      "owner": "bytes",
+      "name": "append",
+      "module": "std.bytes",
+      "operation": "append",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.bytes::append"
+    },
+    {
+      "owner": "bytes",
+      "name": "append_u16_le",
+      "module": "std.bytes",
+      "operation": "append_u16_le",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.bytes::append_u16_le"
+    },
+    {
+      "owner": "bytes",
+      "name": "append_u32_le",
+      "module": "std.bytes",
+      "operation": "append_u32_le",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.bytes::append_u32_le"
+    },
+    {
+      "owner": "bytes",
+      "name": "append_u64_le",
+      "module": "std.bytes",
+      "operation": "append_u64_le",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.bytes::append_u64_le"
+    },
+    {
+      "owner": "dict",
+      "name": "clear",
+      "module": "std.dict",
+      "operation": "clear",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.dict::clear"
+    },
+    {
+      "owner": "dict",
+      "name": "contains",
+      "module": "std.dict",
+      "operation": "contains",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.dict::contains"
+    },
+    {
+      "owner": "dict",
+      "name": "get",
+      "module": "std.dict",
+      "operation": "get",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.dict::get"
+    },
+    {
+      "owner": "dict",
+      "name": "get_mut",
+      "module": "std.dict",
+      "operation": "get_mut",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.dict::get_mut"
+    },
+    {
+      "owner": "dict",
+      "name": "insert",
+      "module": "std.dict",
+      "operation": "insert",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.dict::insert"
+    },
+    {
+      "owner": "dict",
+      "name": "iter",
+      "module": "std.dict",
+      "operation": "iter",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.dict::iter"
+    },
+    {
+      "owner": "dict",
+      "name": "remove",
+      "module": "std.dict",
+      "operation": "remove",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.dict::remove"
+    },
+    {
+      "owner": "dict",
+      "name": "reserve",
+      "module": "std.dict",
+      "operation": "reserve",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.dict::reserve"
+    },
+    {
+      "owner": "list",
+      "name": "back",
+      "module": "std.list",
+      "operation": "back",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.list::back"
+    },
+    {
+      "owner": "list",
+      "name": "back_mut",
+      "module": "std.list",
+      "operation": "back_mut",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.list::back_mut"
+    },
+    {
+      "owner": "list",
+      "name": "clear",
+      "module": "std.list",
+      "operation": "clear",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.list::clear"
+    },
+    {
+      "owner": "list",
+      "name": "front",
+      "module": "std.list",
+      "operation": "front",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.list::front"
+    },
+    {
+      "owner": "list",
+      "name": "front_mut",
+      "module": "std.list",
+      "operation": "front_mut",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.list::front_mut"
+    },
+    {
+      "owner": "list",
+      "name": "get",
+      "module": "std.list",
+      "operation": "get",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.list::get"
+    },
+    {
+      "owner": "list",
+      "name": "get_mut",
+      "module": "std.list",
+      "operation": "get_mut",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.list::get_mut"
+    },
+    {
+      "owner": "list",
+      "name": "insert_after",
+      "module": "std.list",
+      "operation": "insert_after",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.list::insert_after"
+    },
+    {
+      "owner": "list",
+      "name": "insert_before",
+      "module": "std.list",
+      "operation": "insert_before",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.list::insert_before"
+    },
+    {
+      "owner": "list",
+      "name": "iter",
+      "module": "std.list",
+      "operation": "iter",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.list::iter"
+    },
+    {
+      "owner": "list",
+      "name": "pop_back",
+      "module": "std.list",
+      "operation": "pop_back",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.list::pop_back"
+    },
+    {
+      "owner": "list",
+      "name": "pop_front",
+      "module": "std.list",
+      "operation": "pop_front",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.list::pop_front"
+    },
+    {
+      "owner": "list",
+      "name": "push_back",
+      "module": "std.list",
+      "operation": "push_back",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.list::push_back"
+    },
+    {
+      "owner": "list",
+      "name": "push_front",
+      "module": "std.list",
+      "operation": "push_front",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.list::push_front"
+    },
+    {
+      "owner": "list",
+      "name": "remove",
+      "module": "std.list",
+      "operation": "remove",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.list::remove"
+    },
+    {
+      "owner": "rc",
+      "name": "clone",
+      "module": "std.rc",
+      "operation": "clone",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.rc::clone"
+    },
+    {
+      "owner": "rc",
+      "name": "downgrade",
+      "module": "std.rc",
+      "operation": "downgrade",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.rc::downgrade"
+    },
+    {
+      "owner": "rc",
+      "name": "get_mut",
+      "module": "std.rc",
+      "operation": "get_mut",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.rc::get_mut"
+    },
+    {
+      "owner": "rc",
+      "name": "into_raw",
+      "module": "std.rc",
+      "operation": "into_raw",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.rc::into_raw"
+    },
+    {
+      "owner": "rc",
+      "name": "ptr_eq",
+      "module": "std.rc",
+      "operation": "ptr_eq",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.rc::ptr_eq"
+    },
+    {
+      "owner": "rc",
+      "name": "strong_count",
+      "module": "std.rc",
+      "operation": "strong_count",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.rc::strong_count"
+    },
+    {
+      "owner": "rc",
+      "name": "try_unwrap",
+      "module": "std.rc",
+      "operation": "try_unwrap",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.rc::try_unwrap"
+    },
+    {
+      "owner": "rc",
+      "name": "weak_count",
+      "module": "std.rc",
+      "operation": "weak_count",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.rc::weak_count"
+    },
+    {
+      "owner": "std.async::broadcast",
+      "name": "clone",
+      "module": "std.async",
+      "operation": "clone_broadcast",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::clone_broadcast"
+    },
+    {
+      "owner": "std.async::broadcast",
+      "name": "send",
+      "module": "std.async",
+      "operation": "publish",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::publish"
+    },
+    {
+      "owner": "std.async::broadcast",
+      "name": "subscribe",
+      "module": "std.async",
+      "operation": "subscribe",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::subscribe"
+    },
+    {
+      "owner": "std.async::broadcast_receiver",
+      "name": "receive",
+      "module": "std.async",
+      "operation": "broadcast_receive",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::broadcast_receive"
+    },
+    {
+      "owner": "std.async::mutex",
+      "name": "clone",
+      "module": "std.async",
+      "operation": "clone_mutex",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::clone_mutex"
+    },
+    {
+      "owner": "std.async::mutex",
+      "name": "lock",
+      "module": "std.async",
+      "operation": "lock",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::lock"
+    },
+    {
+      "owner": "std.async::mutex",
+      "name": "try_lock",
+      "module": "std.async",
+      "operation": "try_lock",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::try_lock"
+    },
+    {
+      "owner": "std.async::mutex_guard",
+      "name": "get",
+      "module": "std.async",
+      "operation": "mutex_guard_ref",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::mutex_guard_ref"
+    },
+    {
+      "owner": "std.async::mutex_guard",
+      "name": "get_mut",
+      "module": "std.async",
+      "operation": "mutex_guard_mut",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.async::mutex_guard_mut"
+    },
+    {
+      "owner": "std.async::mutex_guard",
+      "name": "unlock",
+      "module": "std.async",
+      "operation": "unlock",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.async::unlock"
+    },
+    {
+      "owner": "std.async::notify",
+      "name": "clone",
+      "module": "std.async",
+      "operation": "clone_notify",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::clone_notify"
+    },
+    {
+      "owner": "std.async::notify",
+      "name": "notified",
+      "module": "std.async",
+      "operation": "notified",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::notified"
+    },
+    {
+      "owner": "std.async::notify",
+      "name": "notify_all",
+      "module": "std.async",
+      "operation": "notify_all",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::notify_all"
+    },
+    {
+      "owner": "std.async::notify",
+      "name": "notify_one",
+      "module": "std.async",
+      "operation": "notify_one",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::notify_one"
+    },
+    {
+      "owner": "std.async::rw_lock",
+      "name": "clone",
+      "module": "std.async",
+      "operation": "clone_rw_lock",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::clone_rw_lock"
+    },
+    {
+      "owner": "std.async::rw_lock",
+      "name": "read",
+      "module": "std.async",
+      "operation": "read",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::read"
+    },
+    {
+      "owner": "std.async::rw_lock",
+      "name": "try_read",
+      "module": "std.async",
+      "operation": "try_read",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::try_read"
+    },
+    {
+      "owner": "std.async::rw_lock",
+      "name": "try_write",
+      "module": "std.async",
+      "operation": "try_write",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::try_write"
+    },
+    {
+      "owner": "std.async::rw_lock",
+      "name": "write",
+      "module": "std.async",
+      "operation": "write",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::write"
+    },
+    {
+      "owner": "std.async::rw_read_guard",
+      "name": "get",
+      "module": "std.async",
+      "operation": "rw_read_guard_ref",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::rw_read_guard_ref"
+    },
+    {
+      "owner": "std.async::rw_read_guard",
+      "name": "unlock",
+      "module": "std.async",
+      "operation": "unlock",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.async::unlock"
+    },
+    {
+      "owner": "std.async::rw_write_guard",
+      "name": "get",
+      "module": "std.async",
+      "operation": "rw_write_guard_ref",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::rw_write_guard_ref"
+    },
+    {
+      "owner": "std.async::rw_write_guard",
+      "name": "get_mut",
+      "module": "std.async",
+      "operation": "rw_write_guard_mut",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.async::rw_write_guard_mut"
+    },
+    {
+      "owner": "std.async::rw_write_guard",
+      "name": "unlock",
+      "module": "std.async",
+      "operation": "unlock",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.async::unlock"
+    },
+    {
+      "owner": "std.async::semaphore",
+      "name": "acquire",
+      "module": "std.async",
+      "operation": "acquire",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::acquire"
+    },
+    {
+      "owner": "std.async::semaphore",
+      "name": "add_permits",
+      "module": "std.async",
+      "operation": "add_permits",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::add_permits"
+    },
+    {
+      "owner": "std.async::semaphore",
+      "name": "available_permits",
+      "module": "std.async",
+      "operation": "available_permits",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::available_permits"
+    },
+    {
+      "owner": "std.async::semaphore",
+      "name": "clone",
+      "module": "std.async",
+      "operation": "clone_semaphore",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::clone_semaphore"
+    },
+    {
+      "owner": "std.async::semaphore",
+      "name": "try_acquire",
+      "module": "std.async",
+      "operation": "try_acquire",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.async::try_acquire"
+    },
+    {
+      "owner": "std.async::semaphore_permit",
+      "name": "release",
+      "module": "std.async",
+      "operation": "release",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.async::release"
+    },
+    {
+      "owner": "std.bits::lsb_reader",
+      "name": "align_byte",
+      "module": "std.bits",
+      "operation": "align_byte",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.bits::align_byte"
+    },
+    {
+      "owner": "std.bits::lsb_reader",
+      "name": "read",
+      "module": "std.bits",
+      "operation": "read",
+      "receiver": "exclusive",
+      "argument_index": 1,
+      "source": "std.bits::read"
+    },
+    {
+      "owner": "std.c::c_string",
+      "name": "as_ptr",
+      "module": "std.c",
+      "operation": "string_as_ptr",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.c::string_as_ptr"
+    },
+    {
+      "owner": "std.c::c_string",
+      "name": "as_slice",
+      "module": "std.c",
+      "operation": "string_as_slice",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.c::string_as_slice"
+    },
+    {
+      "owner": "std.c::handle",
+      "name": "pointer",
+      "module": "std.c",
+      "operation": "handle_pointer",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.c::handle_pointer"
+    },
+    {
+      "owner": "std.c::handle",
+      "name": "release",
+      "module": "std.c",
+      "operation": "release_handle",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.c::release_handle"
+    },
+    {
+      "owner": "std.c::runtime_error",
+      "name": "as_error",
+      "module": "std.c",
+      "operation": "runtime_as_error",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.c::runtime_as_error"
+    },
+    {
+      "owner": "std.c::string_error",
+      "name": "as_error",
+      "module": "std.c",
+      "operation": "string_as_error",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.c::string_as_error"
+    },
+    {
+      "owner": "std.c::thread_attachment",
+      "name": "detach",
+      "module": "std.c",
+      "operation": "detach_thread",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.c::detach_thread"
+    },
+    {
+      "owner": "std.dict::iter",
+      "name": "next",
+      "module": "std.dict",
+      "operation": "next",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.dict::next"
+    },
+    {
+      "owner": "std.error::error",
+      "name": "diagnostic",
+      "module": "std.error",
+      "operation": "diagnostic",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.error::diagnostic"
+    },
+    {
+      "owner": "std.error::error",
+      "name": "name",
+      "module": "std.error",
+      "operation": "name",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.error::name"
+    },
+    {
+      "owner": "std.format::builder",
+      "name": "append",
+      "module": "std.format",
+      "operation": "append",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.format::append_SUFFIX"
+    },
+    {
+      "owner": "std.format::builder",
+      "name": "as_str",
+      "module": "std.format",
+      "operation": "as_str",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.format::as_str"
+    },
+    {
+      "owner": "std.format::builder",
+      "name": "clear",
+      "module": "std.format",
+      "operation": "clear",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.format::clear"
+    },
+    {
+      "owner": "std.format::builder",
+      "name": "finish",
+      "module": "std.format",
+      "operation": "finish",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.format::finish"
+    },
+    {
+      "owner": "std.fs::directory",
+      "name": "close",
+      "module": "std.fs",
+      "operation": "close_directory",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.fs::close_directory"
+    },
+    {
+      "owner": "std.fs::directory",
+      "name": "create_directory_beneath",
+      "module": "std.fs",
+      "operation": "create_directory_beneath",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::create_directory_beneath"
+    },
+    {
+      "owner": "std.fs::directory",
+      "name": "iterate",
+      "module": "std.fs",
+      "operation": "iterate",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::iterate"
+    },
+    {
+      "owner": "std.fs::directory",
+      "name": "metadata_beneath",
+      "module": "std.fs",
+      "operation": "metadata_beneath",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::metadata_beneath"
+    },
+    {
+      "owner": "std.fs::directory",
+      "name": "open_directory_beneath",
+      "module": "std.fs",
+      "operation": "open_directory_beneath",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::open_directory_beneath"
+    },
+    {
+      "owner": "std.fs::directory",
+      "name": "open_file_beneath",
+      "module": "std.fs",
+      "operation": "open_file_beneath",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::open_file_beneath"
+    },
+    {
+      "owner": "std.fs::directory",
+      "name": "read_file_beneath",
+      "module": "std.fs",
+      "operation": "read_file_beneath",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::read_file_beneath"
+    },
+    {
+      "owner": "std.fs::directory",
+      "name": "remove_directory_beneath",
+      "module": "std.fs",
+      "operation": "remove_directory_beneath",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::remove_directory_beneath"
+    },
+    {
+      "owner": "std.fs::directory",
+      "name": "remove_file_beneath",
+      "module": "std.fs",
+      "operation": "remove_file_beneath",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::remove_file_beneath"
+    },
+    {
+      "owner": "std.fs::directory",
+      "name": "rename_beneath",
+      "module": "std.fs",
+      "operation": "rename_beneath",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::rename_beneath"
+    },
+    {
+      "owner": "std.fs::directory",
+      "name": "write_file_atomic_no_replace_beneath",
+      "module": "std.fs",
+      "operation": "write_file_atomic_no_replace_beneath",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::write_file_atomic_no_replace_beneath"
+    },
+    {
+      "owner": "std.fs::directory_iter",
+      "name": "next",
+      "module": "std.fs",
+      "operation": "next",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.fs::next"
+    },
+    {
+      "owner": "std.fs::file",
+      "name": "close",
+      "module": "std.fs",
+      "operation": "close_file",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.fs::close_file"
+    },
+    {
+      "owner": "std.fs::file",
+      "name": "flush",
+      "module": "std.fs",
+      "operation": "flush",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::flush"
+    },
+    {
+      "owner": "std.fs::file",
+      "name": "metadata",
+      "module": "std.fs",
+      "operation": "file_metadata",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::file_metadata"
+    },
+    {
+      "owner": "std.fs::file",
+      "name": "read",
+      "module": "std.fs",
+      "operation": "read",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::read"
+    },
+    {
+      "owner": "std.fs::file",
+      "name": "read_at",
+      "module": "std.fs",
+      "operation": "read_at",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::read_at"
+    },
+    {
+      "owner": "std.fs::file",
+      "name": "seek",
+      "module": "std.fs",
+      "operation": "seek",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::seek"
+    },
+    {
+      "owner": "std.fs::file",
+      "name": "sync",
+      "module": "std.fs",
+      "operation": "sync",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::sync"
+    },
+    {
+      "owner": "std.fs::file",
+      "name": "try_lock",
+      "module": "std.fs",
+      "operation": "try_lock",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::try_lock"
+    },
+    {
+      "owner": "std.fs::file",
+      "name": "lock",
+      "module": "std.fs",
+      "operation": "lock",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::lock"
+    },
+    {
+      "owner": "std.fs::file",
+      "name": "unlock",
+      "module": "std.fs",
+      "operation": "unlock",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::unlock"
+    },
+    {
+      "owner": "std.fs::file",
+      "name": "write",
+      "module": "std.fs",
+      "operation": "write",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::write"
+    },
+    {
+      "owner": "std.fs::file",
+      "name": "write_all",
+      "module": "std.fs",
+      "operation": "write_all",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::write_all"
+    },
+    {
+      "owner": "std.fs::file",
+      "name": "write_all_at",
+      "module": "std.fs",
+      "operation": "write_all_at",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::write_all_at"
+    },
+    {
+      "owner": "std.fs::fs_error",
+      "name": "as_error",
+      "module": "std.fs",
+      "operation": "as_error",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.fs::as_error"
+    },
+    {
+      "owner": "std.fs::path",
+      "name": "clone",
+      "module": "std.fs",
+      "operation": "path_clone",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::path_clone"
+    },
+    {
+      "owner": "std.fs::path",
+      "name": "create_directory",
+      "module": "std.fs",
+      "operation": "create_directory",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::create_directory"
+    },
+    {
+      "owner": "std.fs::path",
+      "name": "is_absolute",
+      "module": "std.fs",
+      "operation": "path_is_absolute",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::path_is_absolute"
+    },
+    {
+      "owner": "std.fs::path",
+      "name": "join",
+      "module": "std.fs",
+      "operation": "path_join",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::path_join"
+    },
+    {
+      "owner": "std.fs::path",
+      "name": "metadata",
+      "module": "std.fs",
+      "operation": "metadata",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::metadata"
+    },
+    {
+      "owner": "std.fs::path",
+      "name": "open_directory",
+      "module": "std.fs",
+      "operation": "open_directory",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::open_directory"
+    },
+    {
+      "owner": "std.fs::path",
+      "name": "open_file",
+      "module": "std.fs",
+      "operation": "open_file",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::open_file"
+    },
+    {
+      "owner": "std.fs::path",
+      "name": "read_file",
+      "module": "std.fs",
+      "operation": "read_file",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::read_file"
+    },
+    {
+      "owner": "std.fs::path",
+      "name": "to_utf8",
+      "module": "std.fs",
+      "operation": "path_to_utf8",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::path_to_utf8"
+    },
+    {
+      "owner": "std.fs::path",
+      "name": "write_file_atomic_no_replace",
+      "module": "std.fs",
+      "operation": "write_file_atomic_no_replace",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::write_file_atomic_no_replace"
+    },
+    {
+      "owner": "std.io::input",
+      "name": "close",
+      "module": "std.io",
+      "operation": "close_input",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.io::close_input"
+    },
+    {
+      "owner": "std.io::input",
+      "name": "read",
+      "module": "std.io",
+      "operation": "read",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.io::read"
+    },
+    {
+      "owner": "std.io::io_error",
+      "name": "as_error",
+      "module": "std.io",
+      "operation": "as_error",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.io::as_error"
+    },
+    {
+      "owner": "std.io::output",
+      "name": "close",
+      "module": "std.io",
+      "operation": "close_output",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.io::close_output"
+    },
+    {
+      "owner": "std.io::output",
+      "name": "flush",
+      "module": "std.io",
+      "operation": "flush",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.io::flush"
+    },
+    {
+      "owner": "std.io::output",
+      "name": "write",
+      "module": "std.io",
+      "operation": "write",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.io::write"
+    },
+    {
+      "owner": "std.io::output",
+      "name": "write_all",
+      "module": "std.io",
+      "operation": "write_all",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.io::write_all"
+    },
+    {
+      "owner": "std.io::output",
+      "name": "write_shared",
+      "module": "std.io",
+      "operation": "write_shared",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.io::write_shared"
+    },
+    {
+      "owner": "std.json::decoder",
+      "name": "feed",
+      "module": "std.json",
+      "operation": "feed",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.json::feed"
+    },
+    {
+      "owner": "std.json::decoder",
+      "name": "take",
+      "module": "std.json",
+      "operation": "take",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.json::take"
+    },
+    {
+      "owner": "std.json::detached",
+      "name": "take_bytes",
+      "module": "std.json",
+      "operation": "take_bytes",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.json::take_bytes"
+    },
+    {
+      "owner": "std.json::detached",
+      "name": "take_handle",
+      "module": "std.json",
+      "operation": "take_handle",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.json::take_handle"
+    },
+    {
+      "owner": "std.json::number",
+      "name": "is_zero",
+      "module": "std.json",
+      "operation": "number_is_zero",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.json::number_is_zero"
+    },
+    {
+      "owner": "std.json::number",
+      "name": "text",
+      "module": "std.json",
+      "operation": "number_text",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.json::number_text"
+    },
+    {
+      "owner": "std.json::reader",
+      "name": "detach",
+      "module": "std.json",
+      "operation": "detach",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.json::detach"
+    },
+    {
+      "owner": "std.json::reader",
+      "name": "read_next",
+      "module": "std.json",
+      "operation": "read_next",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.json::read_next"
+    },
+    {
+      "owner": "std.json::value",
+      "name": "append",
+      "module": "std.json",
+      "operation": "append",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.json::append"
+    },
+    {
+      "owner": "std.json::value",
+      "name": "boolean",
+      "module": "std.json",
+      "operation": "boolean",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.json::boolean"
+    },
+    {
+      "owner": "std.json::value",
+      "name": "find",
+      "module": "std.json",
+      "operation": "find",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.json::find"
+    },
+    {
+      "owner": "std.json::value",
+      "name": "get",
+      "module": "std.json",
+      "operation": "get",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.json::get"
+    },
+    {
+      "owner": "std.json::value",
+      "name": "insert",
+      "module": "std.json",
+      "operation": "insert",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.json::insert"
+    },
+    {
+      "owner": "std.json::value",
+      "name": "key_at",
+      "module": "std.json",
+      "operation": "key_at",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.json::key_at"
+    },
+    {
+      "owner": "std.json::value",
+      "name": "kind",
+      "module": "std.json",
+      "operation": "kind",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.json::kind"
+    },
+    {
+      "owner": "std.json::value",
+      "name": "len",
+      "module": "std.json",
+      "operation": "len",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.json::len"
+    },
+    {
+      "owner": "std.json::value",
+      "name": "stringify",
+      "module": "std.json",
+      "operation": "stringify",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.json::stringify"
+    },
+    {
+      "owner": "std.json::value",
+      "name": "stringify_with_options",
+      "module": "std.json",
+      "operation": "stringify_with_options",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.json::stringify_with_options"
+    },
+    {
+      "owner": "std.json::value",
+      "name": "take_field",
+      "module": "std.json",
+      "operation": "take_field",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.json::take_field"
+    },
+    {
+      "owner": "std.json::value",
+      "name": "take_index",
+      "module": "std.json",
+      "operation": "take_index",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.json::take_index"
+    },
+    {
+      "owner": "std.json::value",
+      "name": "text",
+      "module": "std.json",
+      "operation": "text",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.json::text"
+    },
+    {
+      "owner": "std.list::iter",
+      "name": "next",
+      "module": "std.list",
+      "operation": "next",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.list::next"
+    },
+    {
+      "owner": "std.net::ip_address",
+      "name": "format_ip",
+      "module": "std.net",
+      "operation": "format_ip",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.net::format_ip"
+    },
+    {
+      "owner": "std.net::net_error",
+      "name": "as_error",
+      "module": "std.net",
+      "operation": "as_error",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.net::as_error"
+    },
+    {
+      "owner": "std.net::socket_address",
+      "name": "bind",
+      "module": "std.net",
+      "operation": "udp_bind",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.net::udp_bind"
+    },
+    {
+      "owner": "std.net::socket_address",
+      "name": "connect",
+      "module": "std.net",
+      "operation": "tcp_connect",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.net::tcp_connect"
+    },
+    {
+      "owner": "std.net::socket_address",
+      "name": "listen",
+      "module": "std.net",
+      "operation": "tcp_listen",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.net::tcp_listen"
+    },
+    {
+      "owner": "std.net::tcp_listener",
+      "name": "accept",
+      "module": "std.net",
+      "operation": "tcp_accept",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::tcp_accept"
+    },
+    {
+      "owner": "std.net::tcp_listener",
+      "name": "close",
+      "module": "std.net",
+      "operation": "tcp_listener_close",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.net::tcp_listener_close"
+    },
+    {
+      "owner": "std.net::tcp_listener",
+      "name": "local_address",
+      "module": "std.net",
+      "operation": "tcp_listener_local_address",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::tcp_listener_local_address"
+    },
+    {
+      "owner": "std.net::tcp_stream",
+      "name": "close",
+      "module": "std.net",
+      "operation": "tcp_close",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.net::tcp_close"
+    },
+    {
+      "owner": "std.net::tcp_stream",
+      "name": "local_address",
+      "module": "std.net",
+      "operation": "tcp_local_address",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::tcp_local_address"
+    },
+    {
+      "owner": "std.net::tcp_stream",
+      "name": "peer_address",
+      "module": "std.net",
+      "operation": "tcp_peer_address",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::tcp_peer_address"
+    },
+    {
+      "owner": "std.net::tcp_stream",
+      "name": "read",
+      "module": "std.net",
+      "operation": "tcp_read",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::tcp_read"
+    },
+    {
+      "owner": "std.net::tcp_stream",
+      "name": "shutdown",
+      "module": "std.net",
+      "operation": "tcp_shutdown",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::tcp_shutdown"
+    },
+    {
+      "owner": "std.net::tcp_stream",
+      "name": "write",
+      "module": "std.net",
+      "operation": "tcp_write",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::tcp_write"
+    },
+    {
+      "owner": "std.net::tcp_stream",
+      "name": "write_all",
+      "module": "std.net",
+      "operation": "tcp_write_all",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::tcp_write_all"
+    },
+    {
+      "owner": "std.net::udp_socket",
+      "name": "close",
+      "module": "std.net",
+      "operation": "udp_close",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.net::udp_close"
+    },
+    {
+      "owner": "std.net::udp_socket",
+      "name": "local_address",
+      "module": "std.net",
+      "operation": "udp_local_address",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::udp_local_address"
+    },
+    {
+      "owner": "std.net::udp_socket",
+      "name": "receive_from",
+      "module": "std.net",
+      "operation": "udp_receive_from",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::udp_receive_from"
+    },
+    {
+      "owner": "std.net::udp_socket",
+      "name": "send_to",
+      "module": "std.net",
+      "operation": "udp_send_to",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::udp_send_to"
+    },
+    {
+      "owner": "std.process::child",
+      "name": "id",
+      "module": "std.process",
+      "operation": "id",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.process::id"
+    },
+    {
+      "owner": "std.process::child",
+      "name": "take_stderr",
+      "module": "std.process",
+      "operation": "take_stderr",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.process::take_stderr"
+    },
+    {
+      "owner": "std.process::child",
+      "name": "take_stdin",
+      "module": "std.process",
+      "operation": "take_stdin",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.process::take_stdin"
+    },
+    {
+      "owner": "std.process::child",
+      "name": "take_stdout",
+      "module": "std.process",
+      "operation": "take_stdout",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.process::take_stdout"
+    },
+    {
+      "owner": "std.process::child",
+      "name": "terminate",
+      "module": "std.process",
+      "operation": "terminate",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.process::terminate"
+    },
+    {
+      "owner": "std.process::child",
+      "name": "wait",
+      "module": "std.process",
+      "operation": "wait",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.process::wait"
+    },
+    {
+      "owner": "std.process::command",
+      "name": "arg",
+      "module": "std.process",
+      "operation": "arg",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.process::arg"
+    },
+    {
+      "owner": "std.process::command",
+      "name": "clear_environment",
+      "module": "std.process",
+      "operation": "clear_environment",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.process::clear_environment"
+    },
+    {
+      "owner": "std.process::command",
+      "name": "environment",
+      "module": "std.process",
+      "operation": "environment",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.process::environment"
+    },
+    {
+      "owner": "std.process::command",
+      "name": "remove_environment",
+      "module": "std.process",
+      "operation": "remove_environment",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.process::remove_environment"
+    },
+    {
+      "owner": "std.process::command",
+      "name": "set_stdio",
+      "module": "std.process",
+      "operation": "set_stdio",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.process::set_stdio"
+    },
+    {
+      "owner": "std.process::command",
+      "name": "spawn",
+      "module": "std.process",
+      "operation": "spawn",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.process::spawn"
+    },
+    {
+      "owner": "std.process::command",
+      "name": "working_directory",
+      "module": "std.process",
+      "operation": "working_directory",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.process::working_directory"
+    },
+    {
+      "owner": "std.process::process_error",
+      "name": "as_error",
+      "module": "std.process",
+      "operation": "as_error",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.process::as_error"
+    },
+    {
+      "owner": "std.regex::regex",
+      "name": "find",
+      "module": "std.regex",
+      "operation": "find",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.regex::find"
+    },
+    {
+      "owner": "std.regex::regex",
+      "name": "find_all",
+      "module": "std.regex",
+      "operation": "find_all",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.regex::find_all"
+    },
+    {
+      "owner": "std.regex::regex",
+      "name": "find_from",
+      "module": "std.regex",
+      "operation": "find_from",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.regex::find_from"
+    },
+    {
+      "owner": "std.regex::regex",
+      "name": "full_match",
+      "module": "std.regex",
+      "operation": "full_match",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.regex::full_match"
+    },
+    {
+      "owner": "std.regex::regex",
+      "name": "is_match",
+      "module": "std.regex",
+      "operation": "is_match",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.regex::is_match"
+    },
+    {
+      "owner": "std.regex::regex",
+      "name": "replace_all",
+      "module": "std.regex",
+      "operation": "replace_all",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.regex::replace_all"
+    },
+    {
+      "owner": "std.regex::regex",
+      "name": "split",
+      "module": "std.regex",
+      "operation": "split",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.regex::split"
+    },
+    {
+      "owner": "std.secret::buffer",
+      "name": "as_slice",
+      "module": "std.secret",
+      "operation": "as_slice",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.secret::as_slice"
+    },
+    {
+      "owner": "std.secret::buffer",
+      "name": "as_slice_mut",
+      "module": "std.secret",
+      "operation": "as_slice_mut",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.secret::as_slice_mut"
+    },
+    {
+      "owner": "std.secret::buffer",
+      "name": "len",
+      "module": "std.secret",
+      "operation": "len",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.secret::len"
+    },
+    {
+      "owner": "std.string::string",
+      "name": "append",
+      "module": "std.string",
+      "operation": "append",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.string::append_str"
+    },
+    {
+      "owner": "std.string::string",
+      "name": "append_utf8",
+      "module": "std.string",
+      "operation": "append_utf8",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.string::append_utf8"
+    },
+    {
+      "owner": "std.string::string",
+      "name": "as_bytes",
+      "module": "std.string",
+      "operation": "as_bytes",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.string::as_bytes"
+    },
+    {
+      "owner": "std.string::string",
+      "name": "as_str",
+      "module": "std.string",
+      "operation": "as_str",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.string::as_str"
+    },
+    {
+      "owner": "std.string::string",
+      "name": "capacity",
+      "module": "std.string",
+      "operation": "capacity",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.string::capacity"
+    },
+    {
+      "owner": "std.string::string",
+      "name": "clear",
+      "module": "std.string",
+      "operation": "clear",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.string::clear"
+    },
+    {
+      "owner": "std.string::string",
+      "name": "into_bytes",
+      "module": "std.string",
+      "operation": "into_bytes",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.string::into_bytes"
+    },
+    {
+      "owner": "std.string::string",
+      "name": "len",
+      "module": "std.string",
+      "operation": "len",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.string::len"
+    },
+    {
+      "owner": "std.string::string",
+      "name": "reserve",
+      "module": "std.string",
+      "operation": "reserve",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.string::reserve"
+    },
+    {
+      "owner": "std.string::string",
+      "name": "truncate",
+      "module": "std.string",
+      "operation": "truncate",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.string::truncate"
+    },
+    {
+      "owner": "std.sync::barrier",
+      "name": "wait",
+      "module": "std.sync",
+      "operation": "barrier_wait",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::barrier_wait"
+    },
+    {
+      "owner": "std.sync::channel",
+      "name": "receiver",
+      "module": "std.sync",
+      "operation": "receiver",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.sync::receiver"
+    },
+    {
+      "owner": "std.sync::channel",
+      "name": "sender",
+      "module": "std.sync",
+      "operation": "sender",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::sender"
+    },
+    {
+      "owner": "std.sync::condvar",
+      "name": "notify_all",
+      "module": "std.sync",
+      "operation": "notify_all",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::notify_all"
+    },
+    {
+      "owner": "std.sync::condvar",
+      "name": "notify_one",
+      "module": "std.sync",
+      "operation": "notify_one",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::notify_one"
+    },
+    {
+      "owner": "std.sync::condvar",
+      "name": "wait",
+      "module": "std.sync",
+      "operation": "wait",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::wait"
+    },
+    {
+      "owner": "std.sync::mutex",
+      "name": "lock",
+      "module": "std.sync",
+      "operation": "lock",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::lock"
+    },
+    {
+      "owner": "std.sync::mutex",
+      "name": "try_lock",
+      "module": "std.sync",
+      "operation": "try_lock",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::try_lock"
+    },
+    {
+      "owner": "std.sync::mutex_guard",
+      "name": "get",
+      "module": "std.sync",
+      "operation": "mutex_guard_ref",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::mutex_guard_ref"
+    },
+    {
+      "owner": "std.sync::mutex_guard",
+      "name": "get_mut",
+      "module": "std.sync",
+      "operation": "mutex_guard_mut",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.sync::mutex_guard_mut"
+    },
+    {
+      "owner": "std.sync::mutex_guard",
+      "name": "unlock",
+      "module": "std.sync",
+      "operation": "unlock",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.sync::unlock"
+    },
+    {
+      "owner": "std.sync::once",
+      "name": "call_once",
+      "module": "std.sync",
+      "operation": "call_once",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::call_once"
+    },
+    {
+      "owner": "std.sync::once",
+      "name": "call_once_force",
+      "module": "std.sync",
+      "operation": "call_once_force",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::call_once_force"
+    },
+    {
+      "owner": "std.sync::once_lock",
+      "name": "get",
+      "module": "std.sync",
+      "operation": "get",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::get"
+    },
+    {
+      "owner": "std.sync::once_lock",
+      "name": "get_or_init",
+      "module": "std.sync",
+      "operation": "get_or_init",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::get_or_init"
+    },
+    {
+      "owner": "std.sync::once_lock",
+      "name": "set",
+      "module": "std.sync",
+      "operation": "set",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::set"
+    },
+    {
+      "owner": "std.sync::permit",
+      "name": "send",
+      "module": "std.sync",
+      "operation": "send_permit",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.sync::send_permit"
+    },
+    {
+      "owner": "std.sync::receiver",
+      "name": "receive",
+      "module": "std.sync",
+      "operation": "receive",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::receive"
+    },
+    {
+      "owner": "std.sync::receiver",
+      "name": "recv",
+      "module": "std.sync",
+      "operation": "recv",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::recv"
+    },
+    {
+      "owner": "std.sync::receiver",
+      "name": "try_recv",
+      "module": "std.sync",
+      "operation": "try_recv",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::try_recv"
+    },
+    {
+      "owner": "std.sync::rw_lock",
+      "name": "read",
+      "module": "std.sync",
+      "operation": "read",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::read"
+    },
+    {
+      "owner": "std.sync::rw_lock",
+      "name": "try_read",
+      "module": "std.sync",
+      "operation": "try_read",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::try_read"
+    },
+    {
+      "owner": "std.sync::rw_lock",
+      "name": "try_write",
+      "module": "std.sync",
+      "operation": "try_write",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::try_write"
+    },
+    {
+      "owner": "std.sync::rw_lock",
+      "name": "write",
+      "module": "std.sync",
+      "operation": "write",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::write"
+    },
+    {
+      "owner": "std.sync::rw_read_guard",
+      "name": "get",
+      "module": "std.sync",
+      "operation": "rw_read_guard_ref",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::rw_read_guard_ref"
+    },
+    {
+      "owner": "std.sync::rw_read_guard",
+      "name": "unlock",
+      "module": "std.sync",
+      "operation": "unlock",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.sync::unlock"
+    },
+    {
+      "owner": "std.sync::rw_write_guard",
+      "name": "get",
+      "module": "std.sync",
+      "operation": "rw_write_guard_ref",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::rw_write_guard_ref"
+    },
+    {
+      "owner": "std.sync::rw_write_guard",
+      "name": "get_mut",
+      "module": "std.sync",
+      "operation": "rw_write_guard_mut",
+      "receiver": "exclusive",
+      "argument_index": 0,
+      "source": "std.sync::rw_write_guard_mut"
+    },
+    {
+      "owner": "std.sync::rw_write_guard",
+      "name": "unlock",
+      "module": "std.sync",
+      "operation": "unlock",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.sync::unlock"
+    },
+    {
+      "owner": "std.sync::sender",
+      "name": "clone",
+      "module": "std.sync",
+      "operation": "clone_sender",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::clone_sender"
+    },
+    {
+      "owner": "std.sync::sender",
+      "name": "send",
+      "module": "std.sync",
+      "operation": "send",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::send"
+    },
+    {
+      "owner": "std.sync::sync_channel",
+      "name": "receiver",
+      "module": "std.sync",
+      "operation": "sync_receiver",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.sync::sync_receiver"
+    },
+    {
+      "owner": "std.sync::sync_channel",
+      "name": "sender",
+      "module": "std.sync",
+      "operation": "sync_sender",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::sync_sender"
+    },
+    {
+      "owner": "std.sync::sync_sender",
+      "name": "clone",
+      "module": "std.sync",
+      "operation": "clone_sync_sender",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::clone_sync_sender"
+    },
+    {
+      "owner": "std.sync::sync_sender",
+      "name": "reserve",
+      "module": "std.sync",
+      "operation": "reserve",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::reserve"
+    },
+    {
+      "owner": "std.sync::sync_sender",
+      "name": "send",
+      "module": "std.sync",
+      "operation": "sync_send",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::sync_send"
+    },
+    {
+      "owner": "std.sync::sync_sender",
+      "name": "try_reserve",
+      "module": "std.sync",
+      "operation": "try_reserve",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::try_reserve"
+    },
+    {
+      "owner": "std.sync::sync_sender",
+      "name": "try_send",
+      "module": "std.sync",
+      "operation": "try_send",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.sync::try_send"
+    },
+    {
+      "owner": "std.thread::panic_report",
+      "name": "category",
+      "module": "std.thread",
+      "operation": "panic_category",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.thread::panic_category"
+    },
+    {
+      "owner": "std.thread::panic_report",
+      "name": "text",
+      "module": "std.thread",
+      "operation": "panic_text",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.thread::panic_text"
+    },
+    {
+      "owner": "std.thread::thread",
+      "name": "clone",
+      "module": "std.thread",
+      "operation": "clone_thread",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.thread::clone_thread"
+    },
+    {
+      "owner": "std.thread::thread",
+      "name": "unpark",
+      "module": "std.thread",
+      "operation": "unpark",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.thread::unpark"
+    },
+    {
+      "owner": "std.time::duration",
+      "name": "add",
+      "module": "std.time",
+      "operation": "duration_add",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.time::duration_add"
+    },
+    {
+      "owner": "std.time::duration",
+      "name": "compare",
+      "module": "std.time",
+      "operation": "duration_compare",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.time::duration_compare"
+    },
+    {
+      "owner": "std.time::duration",
+      "name": "multiply",
+      "module": "std.time",
+      "operation": "duration_multiply",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.time::duration_multiply"
+    },
+    {
+      "owner": "std.time::duration",
+      "name": "nanoseconds",
+      "module": "std.time",
+      "operation": "duration_nanoseconds",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.time::duration_nanoseconds"
+    },
+    {
+      "owner": "std.time::duration",
+      "name": "seconds",
+      "module": "std.time",
+      "operation": "duration_seconds",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.time::duration_seconds"
+    },
+    {
+      "owner": "std.time::duration",
+      "name": "sleep_for",
+      "module": "std.time",
+      "operation": "sleep_for",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.time::sleep_for"
+    },
+    {
+      "owner": "std.time::duration",
+      "name": "sub",
+      "module": "std.time",
+      "operation": "duration_sub",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.time::duration_sub"
+    },
+    {
+      "owner": "std.time::instant",
+      "name": "add",
+      "module": "std.time",
+      "operation": "instant_add",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.time::instant_add"
+    },
+    {
+      "owner": "std.time::instant",
+      "name": "duration",
+      "module": "std.time",
+      "operation": "instant_duration",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.time::instant_duration"
+    },
+    {
+      "owner": "std.time::instant",
+      "name": "sleep_until",
+      "module": "std.time",
+      "operation": "sleep_until",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.time::sleep_until"
+    },
+    {
+      "owner": "std.time::system_time",
+      "name": "add",
+      "module": "std.time",
+      "operation": "system_add",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.time::system_add"
+    },
+    {
+      "owner": "std.time::system_time",
+      "name": "to_utc",
+      "module": "std.time",
+      "operation": "to_utc",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.time::to_utc"
+    },
+    {
+      "owner": "std.time::time_error",
+      "name": "as_error",
+      "module": "std.time",
+      "operation": "as_error",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.time::as_error"
+    },
+    {
+      "owner": "task",
+      "name": "cancel",
+      "module": "std.async",
+      "operation": "cancel",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.async::cancel"
+    },
+    {
+      "owner": "task",
+      "name": "detach",
+      "module": "std.async",
+      "operation": "detach",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.async::detach"
+    },
+    {
+      "owner": "weak_arc",
+      "name": "clone",
+      "module": "std.arc",
+      "operation": "clone_weak",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.arc::clone_weak"
+    },
+    {
+      "owner": "weak_arc",
+      "name": "upgrade",
+      "module": "std.arc",
+      "operation": "upgrade",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.arc::upgrade"
+    },
+    {
+      "owner": "weak_rc",
+      "name": "clone",
+      "module": "std.rc",
+      "operation": "clone_weak",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.rc::clone_weak"
+    },
+    {
+      "owner": "weak_rc",
+      "name": "upgrade",
+      "module": "std.rc",
+      "operation": "upgrade",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.rc::upgrade"
+    },
+    {
+      "owner": "std.thread::join_handle",
+      "name": "join",
+      "module": "std.thread",
+      "operation": "join",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.thread::join"
+    },
+    {
+      "owner": "std.thread::join_handle",
+      "name": "detach",
+      "module": "std.thread",
+      "operation": "detach",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.thread::detach"
+    },
+    {
+      "owner": "std.thread::scoped_join_handle",
+      "name": "join",
+      "module": "std.thread",
+      "operation": "join",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.thread::join"
+    },
+    {
+      "owner": "std.io::input",
+      "name": "read_into",
+      "module": "std.io",
+      "operation": "read_into",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.io::read_into"
+    },
+    {
+      "owner": "std.io::output",
+      "name": "write_from",
+      "module": "std.io",
+      "operation": "write_from",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.io::write_from"
+    },
+    {
+      "owner": "std.io::output",
+      "name": "write_all_from",
+      "module": "std.io",
+      "operation": "write_all_from",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.io::write_all_from"
+    },
+    {
+      "owner": "std.fs::file",
+      "name": "read_into",
+      "module": "std.fs",
+      "operation": "read_into",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::read_into"
+    },
+    {
+      "owner": "std.fs::file",
+      "name": "read_at_into",
+      "module": "std.fs",
+      "operation": "read_at_into",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::read_at_into"
+    },
+    {
+      "owner": "std.fs::file",
+      "name": "write_from",
+      "module": "std.fs",
+      "operation": "write_from",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::write_from"
+    },
+    {
+      "owner": "std.fs::file",
+      "name": "write_all_from",
+      "module": "std.fs",
+      "operation": "write_all_from",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::write_all_from"
+    },
+    {
+      "owner": "std.fs::file",
+      "name": "write_all_at_from",
+      "module": "std.fs",
+      "operation": "write_all_at_from",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.fs::write_all_at_from"
+    },
+    {
+      "owner": "std.net::tcp_stream",
+      "name": "read_into",
+      "module": "std.net",
+      "operation": "tcp_read_into",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::tcp_read_into"
+    },
+    {
+      "owner": "std.net::tcp_stream",
+      "name": "write_from",
+      "module": "std.net",
+      "operation": "tcp_write_from",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::tcp_write_from"
+    },
+    {
+      "owner": "std.net::tcp_stream",
+      "name": "write_all_from",
+      "module": "std.net",
+      "operation": "tcp_write_all_from",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::tcp_write_all_from"
+    },
+    {
+      "owner": "std.net::udp_socket",
+      "name": "send_from",
+      "module": "std.net",
+      "operation": "udp_send_from",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::udp_send_from"
+    },
+    {
+      "owner": "std.net::udp_socket",
+      "name": "receive_into",
+      "module": "std.net",
+      "operation": "udp_receive_into",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::udp_receive_into"
+    },
+    {
+      "owner": "std.signal::kind",
+      "name": "listen",
+      "module": "std.signal",
+      "operation": "listen",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.signal::listen"
+    },
+    {
+      "owner": "std.signal::kind",
+      "name": "raise",
+      "module": "std.signal",
+      "operation": "raise",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.signal::raise"
+    },
+    {
+      "owner": "std.signal::listener",
+      "name": "next",
+      "module": "std.signal",
+      "operation": "next",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.signal::next"
+    },
+    {
+      "owner": "std.net::tcp_stream",
+      "name": "get_options",
+      "module": "std.net",
+      "operation": "tcp_get_options",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::tcp_get_options"
+    },
+    {
+      "owner": "std.net::tcp_stream",
+      "name": "set_options",
+      "module": "std.net",
+      "operation": "tcp_set_options",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::tcp_set_options"
+    },
+    {
+      "owner": "std.net::udp_socket",
+      "name": "get_options",
+      "module": "std.net",
+      "operation": "udp_get_options",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::udp_get_options"
+    },
+    {
+      "owner": "std.net::udp_socket",
+      "name": "set_options",
+      "module": "std.net",
+      "operation": "udp_set_options",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::udp_set_options"
+    },
+    {
+      "owner": "std.net::udp_socket",
+      "name": "join_multicast",
+      "module": "std.net",
+      "operation": "udp_join_multicast",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::udp_join_multicast"
+    },
+    {
+      "owner": "std.net::udp_socket",
+      "name": "leave_multicast",
+      "module": "std.net",
+      "operation": "udp_leave_multicast",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::udp_leave_multicast"
+    },
+    {
+      "owner": "std.net::unix_listener",
+      "name": "accept",
+      "module": "std.net",
+      "operation": "unix_accept",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::unix_accept"
+    },
+    {
+      "owner": "std.net::unix_listener",
+      "name": "close",
+      "module": "std.net",
+      "operation": "unix_listener_close",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.net::unix_listener_close"
+    },
+    {
+      "owner": "std.net::unix_stream",
+      "name": "read_into",
+      "module": "std.net",
+      "operation": "unix_read_into",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::unix_read_into"
+    },
+    {
+      "owner": "std.net::unix_stream",
+      "name": "write_from",
+      "module": "std.net",
+      "operation": "unix_write_from",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::unix_write_from"
+    },
+    {
+      "owner": "std.net::unix_stream",
+      "name": "write_all_from",
+      "module": "std.net",
+      "operation": "unix_write_all_from",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::unix_write_all_from"
+    },
+    {
+      "owner": "std.net::unix_stream",
+      "name": "shutdown",
+      "module": "std.net",
+      "operation": "unix_shutdown",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::unix_shutdown"
+    },
+    {
+      "owner": "std.net::unix_stream",
+      "name": "close",
+      "module": "std.net",
+      "operation": "unix_close",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.net::unix_close"
+    },
+    {
+      "owner": "std.net::unix_stream",
+      "name": "peer_credentials",
+      "module": "std.net",
+      "operation": "unix_peer_credentials",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::unix_peer_credentials"
+    },
+    {
+      "owner": "std.net::unix_datagram",
+      "name": "send_from",
+      "module": "std.net",
+      "operation": "unix_send_from",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::unix_send_from"
+    },
+    {
+      "owner": "std.net::unix_datagram",
+      "name": "receive_into",
+      "module": "std.net",
+      "operation": "unix_receive_into",
+      "receiver": "shared",
+      "argument_index": 0,
+      "source": "std.net::unix_receive_into"
+    },
+    {
+      "owner": "std.net::unix_datagram",
+      "name": "close",
+      "module": "std.net",
+      "operation": "unix_datagram_close",
+      "receiver": "value",
+      "argument_index": 0,
+      "source": "std.net::unix_datagram_close"
+    }
+  ],
+  "overloads": [
+    {
+      "name": "core::checked_add",
+      "sources": [
+        "core::checked_add_SUFFIX"
+      ]
+    },
+    {
+      "name": "core::checked_mul",
+      "sources": [
+        "core::checked_mul_SUFFIX"
+      ]
+    },
+    {
+      "name": "core::checked_sub",
+      "sources": [
+        "core::checked_sub_SUFFIX"
+      ]
+    },
+    {
+      "name": "core::saturating_add",
+      "sources": [
+        "core::saturating_add_SUFFIX"
+      ]
+    },
+    {
+      "name": "core::saturating_mul",
+      "sources": [
+        "core::saturating_mul_SUFFIX"
+      ]
+    },
+    {
+      "name": "core::saturating_sub",
+      "sources": [
+        "core::saturating_sub_SUFFIX"
+      ]
+    },
+    {
+      "name": "core::wrapping_add",
+      "sources": [
+        "core::wrapping_add_SUFFIX"
+      ]
+    },
+    {
+      "name": "core::wrapping_mul",
+      "sources": [
+        "core::wrapping_mul_SUFFIX"
+      ]
+    },
+    {
+      "name": "core::wrapping_sub",
+      "sources": [
+        "core::wrapping_sub_SUFFIX"
+      ]
+    },
+    {
+      "name": "std.arc::clone",
+      "sources": [
+        "std.arc::clone",
+        "std.arc::clone_weak"
+      ]
+    },
+    {
+      "name": "std.bytes::append",
+      "sources": [
+        "std.bytes::append",
+        "std.bytes::append_u8"
+      ]
+    },
+    {
+      "name": "std.bytes::find",
+      "sources": [
+        "std.bytes::find",
+        "std.bytes::find_slice"
+      ]
+    },
+    {
+      "name": "std.format::append",
+      "sources": [
+        "std.format::append_SUFFIX",
+        "std.format::append_c_double",
+        "std.format::append_c_float",
+        "std.format::append_c_long_double",
+        "std.format::append_char",
+        "std.format::append_f32",
+        "std.format::append_f64",
+        "std.format::append_str"
+      ]
+    },
+    {
+      "name": "std.fs::close",
+      "sources": [
+        "std.fs::close_directory",
+        "std.fs::close_file"
+      ]
+    },
+    {
+      "name": "std.io::close",
+      "sources": [
+        "std.io::close_input",
+        "std.io::close_output"
+      ]
+    },
+    {
+      "name": "std.math::abs",
+      "sources": [
+        "std.math::abs_c_double",
+        "std.math::abs_c_float",
+        "std.math::abs_c_long_double",
+        "std.math::abs_f32",
+        "std.math::abs_f64"
+      ]
+    },
+    {
+      "name": "std.math::acos",
+      "sources": [
+        "std.math::acos_c_double",
+        "std.math::acos_c_float",
+        "std.math::acos_c_long_double",
+        "std.math::acos_f32",
+        "std.math::acos_f64"
+      ]
+    },
+    {
+      "name": "std.math::acosh",
+      "sources": [
+        "std.math::acosh_c_double",
+        "std.math::acosh_c_float",
+        "std.math::acosh_c_long_double",
+        "std.math::acosh_f32",
+        "std.math::acosh_f64"
+      ]
+    },
+    {
+      "name": "std.math::add_complex",
+      "sources": [
+        "std.math::add_complex_f32",
+        "std.math::add_complex_f64"
+      ]
+    },
+    {
+      "name": "std.math::asin",
+      "sources": [
+        "std.math::asin_c_double",
+        "std.math::asin_c_float",
+        "std.math::asin_c_long_double",
+        "std.math::asin_f32",
+        "std.math::asin_f64"
+      ]
+    },
+    {
+      "name": "std.math::asinh",
+      "sources": [
+        "std.math::asinh_c_double",
+        "std.math::asinh_c_float",
+        "std.math::asinh_c_long_double",
+        "std.math::asinh_f32",
+        "std.math::asinh_f64"
+      ]
+    },
+    {
+      "name": "std.math::atan",
+      "sources": [
+        "std.math::atan_c_double",
+        "std.math::atan_c_float",
+        "std.math::atan_c_long_double",
+        "std.math::atan_f32",
+        "std.math::atan_f64"
+      ]
+    },
+    {
+      "name": "std.math::atan2",
+      "sources": [
+        "std.math::atan2_c_double",
+        "std.math::atan2_c_float",
+        "std.math::atan2_c_long_double",
+        "std.math::atan2_f32",
+        "std.math::atan2_f64"
+      ]
+    },
+    {
+      "name": "std.math::atanh",
+      "sources": [
+        "std.math::atanh_c_double",
+        "std.math::atanh_c_float",
+        "std.math::atanh_c_long_double",
+        "std.math::atanh_f32",
+        "std.math::atanh_f64"
+      ]
+    },
+    {
+      "name": "std.math::cbrt",
+      "sources": [
+        "std.math::cbrt_c_double",
+        "std.math::cbrt_c_float",
+        "std.math::cbrt_c_long_double",
+        "std.math::cbrt_f32",
+        "std.math::cbrt_f64"
+      ]
+    },
+    {
+      "name": "std.math::ceil",
+      "sources": [
+        "std.math::ceil_c_double",
+        "std.math::ceil_c_float",
+        "std.math::ceil_c_long_double",
+        "std.math::ceil_f32",
+        "std.math::ceil_f64"
+      ]
+    },
+    {
+      "name": "std.math::compose_binary",
+      "sources": [
+        "std.math::compose_binary_c_double",
+        "std.math::compose_binary_c_float",
+        "std.math::compose_binary_c_long_double",
+        "std.math::compose_binary_f32",
+        "std.math::compose_binary_f64"
+      ]
+    },
+    {
+      "name": "std.math::conjugate_complex",
+      "sources": [
+        "std.math::conjugate_complex_f32",
+        "std.math::conjugate_complex_f64"
+      ]
+    },
+    {
+      "name": "std.math::copy_sign",
+      "sources": [
+        "std.math::copy_sign_c_double",
+        "std.math::copy_sign_c_float",
+        "std.math::copy_sign_c_long_double",
+        "std.math::copy_sign_f32",
+        "std.math::copy_sign_f64"
+      ]
+    },
+    {
+      "name": "std.math::cos",
+      "sources": [
+        "std.math::cos_c_double",
+        "std.math::cos_c_float",
+        "std.math::cos_c_long_double",
+        "std.math::cos_f32",
+        "std.math::cos_f64"
+      ]
+    },
+    {
+      "name": "std.math::cos_complex",
+      "sources": [
+        "std.math::cos_complex_f32",
+        "std.math::cos_complex_f64"
+      ]
+    },
+    {
+      "name": "std.math::cosh",
+      "sources": [
+        "std.math::cosh_c_double",
+        "std.math::cosh_c_float",
+        "std.math::cosh_c_long_double",
+        "std.math::cosh_f32",
+        "std.math::cosh_f64"
+      ]
+    },
+    {
+      "name": "std.math::cosh_complex",
+      "sources": [
+        "std.math::cosh_complex_f32",
+        "std.math::cosh_complex_f64"
+      ]
+    },
+    {
+      "name": "std.math::div_complex",
+      "sources": [
+        "std.math::div_complex_f32",
+        "std.math::div_complex_f64"
+      ]
+    },
+    {
+      "name": "std.math::erf",
+      "sources": [
+        "std.math::erf_c_double",
+        "std.math::erf_c_float",
+        "std.math::erf_c_long_double",
+        "std.math::erf_f32",
+        "std.math::erf_f64"
+      ]
+    },
+    {
+      "name": "std.math::erfc",
+      "sources": [
+        "std.math::erfc_c_double",
+        "std.math::erfc_c_float",
+        "std.math::erfc_c_long_double",
+        "std.math::erfc_f32",
+        "std.math::erfc_f64"
+      ]
+    },
+    {
+      "name": "std.math::exp",
+      "sources": [
+        "std.math::exp_c_double",
+        "std.math::exp_c_float",
+        "std.math::exp_c_long_double",
+        "std.math::exp_f32",
+        "std.math::exp_f64"
+      ]
+    },
+    {
+      "name": "std.math::exp2",
+      "sources": [
+        "std.math::exp2_c_double",
+        "std.math::exp2_c_float",
+        "std.math::exp2_c_long_double",
+        "std.math::exp2_f32",
+        "std.math::exp2_f64"
+      ]
+    },
+    {
+      "name": "std.math::exp_complex",
+      "sources": [
+        "std.math::exp_complex_f32",
+        "std.math::exp_complex_f64"
+      ]
+    },
+    {
+      "name": "std.math::expm1",
+      "sources": [
+        "std.math::expm1_c_double",
+        "std.math::expm1_c_float",
+        "std.math::expm1_c_long_double",
+        "std.math::expm1_f32",
+        "std.math::expm1_f64"
+      ]
+    },
+    {
+      "name": "std.math::floor",
+      "sources": [
+        "std.math::floor_c_double",
+        "std.math::floor_c_float",
+        "std.math::floor_c_long_double",
+        "std.math::floor_f32",
+        "std.math::floor_f64"
+      ]
+    },
+    {
+      "name": "std.math::gamma",
+      "sources": [
+        "std.math::gamma_c_double",
+        "std.math::gamma_c_float",
+        "std.math::gamma_c_long_double",
+        "std.math::gamma_f32",
+        "std.math::gamma_f64"
+      ]
+    },
+    {
+      "name": "std.math::hypot",
+      "sources": [
+        "std.math::hypot_c_double",
+        "std.math::hypot_c_float",
+        "std.math::hypot_c_long_double",
+        "std.math::hypot_f32",
+        "std.math::hypot_f64"
+      ]
+    },
+    {
+      "name": "std.math::is_finite",
+      "sources": [
+        "std.math::is_finite_c_double",
+        "std.math::is_finite_c_float",
+        "std.math::is_finite_c_long_double",
+        "std.math::is_finite_f32",
+        "std.math::is_finite_f64"
+      ]
+    },
+    {
+      "name": "std.math::is_infinite",
+      "sources": [
+        "std.math::is_infinite_c_double",
+        "std.math::is_infinite_c_float",
+        "std.math::is_infinite_c_long_double",
+        "std.math::is_infinite_f32",
+        "std.math::is_infinite_f64"
+      ]
+    },
+    {
+      "name": "std.math::is_nan",
+      "sources": [
+        "std.math::is_nan_c_double",
+        "std.math::is_nan_c_float",
+        "std.math::is_nan_c_long_double",
+        "std.math::is_nan_f32",
+        "std.math::is_nan_f64"
+      ]
+    },
+    {
+      "name": "std.math::is_normal",
+      "sources": [
+        "std.math::is_normal_c_double",
+        "std.math::is_normal_c_float",
+        "std.math::is_normal_c_long_double",
+        "std.math::is_normal_f32",
+        "std.math::is_normal_f64"
+      ]
+    },
+    {
+      "name": "std.math::log",
+      "sources": [
+        "std.math::log_c_double",
+        "std.math::log_c_float",
+        "std.math::log_c_long_double",
+        "std.math::log_f32",
+        "std.math::log_f64"
+      ]
+    },
+    {
+      "name": "std.math::log10",
+      "sources": [
+        "std.math::log10_c_double",
+        "std.math::log10_c_float",
+        "std.math::log10_c_long_double",
+        "std.math::log10_f32",
+        "std.math::log10_f64"
+      ]
+    },
+    {
+      "name": "std.math::log1p",
+      "sources": [
+        "std.math::log1p_c_double",
+        "std.math::log1p_c_float",
+        "std.math::log1p_c_long_double",
+        "std.math::log1p_f32",
+        "std.math::log1p_f64"
+      ]
+    },
+    {
+      "name": "std.math::log2",
+      "sources": [
+        "std.math::log2_c_double",
+        "std.math::log2_c_float",
+        "std.math::log2_c_long_double",
+        "std.math::log2_f32",
+        "std.math::log2_f64"
+      ]
+    },
+    {
+      "name": "std.math::log_complex",
+      "sources": [
+        "std.math::log_complex_f32",
+        "std.math::log_complex_f64"
+      ]
+    },
+    {
+      "name": "std.math::log_gamma",
+      "sources": [
+        "std.math::log_gamma_c_double",
+        "std.math::log_gamma_c_float",
+        "std.math::log_gamma_c_long_double",
+        "std.math::log_gamma_f32",
+        "std.math::log_gamma_f64"
+      ]
+    },
+    {
+      "name": "std.math::magnitude_complex",
+      "sources": [
+        "std.math::magnitude_complex_f32",
+        "std.math::magnitude_complex_f64"
+      ]
+    },
+    {
+      "name": "std.math::max",
+      "sources": [
+        "std.math::max_c_double",
+        "std.math::max_c_float",
+        "std.math::max_c_long_double",
+        "std.math::max_f32",
+        "std.math::max_f64"
+      ]
+    },
+    {
+      "name": "std.math::min",
+      "sources": [
+        "std.math::min_c_double",
+        "std.math::min_c_float",
+        "std.math::min_c_long_double",
+        "std.math::min_f32",
+        "std.math::min_f64"
+      ]
+    },
+    {
+      "name": "std.math::mul_complex",
+      "sources": [
+        "std.math::mul_complex_f32",
+        "std.math::mul_complex_f64"
+      ]
+    },
+    {
+      "name": "std.math::next_after",
+      "sources": [
+        "std.math::next_after_c_double",
+        "std.math::next_after_c_float",
+        "std.math::next_after_c_long_double",
+        "std.math::next_after_f32",
+        "std.math::next_after_f64"
+      ]
+    },
+    {
+      "name": "std.math::phase_complex",
+      "sources": [
+        "std.math::phase_complex_f32",
+        "std.math::phase_complex_f64"
+      ]
+    },
+    {
+      "name": "std.math::pow",
+      "sources": [
+        "std.math::pow_c_double",
+        "std.math::pow_c_float",
+        "std.math::pow_c_long_double",
+        "std.math::pow_f32",
+        "std.math::pow_f64"
+      ]
+    },
+    {
+      "name": "std.math::pow_complex",
+      "sources": [
+        "std.math::pow_complex_f32",
+        "std.math::pow_complex_f64"
+      ]
+    },
+    {
+      "name": "std.math::remainder",
+      "sources": [
+        "std.math::remainder_c_double",
+        "std.math::remainder_c_float",
+        "std.math::remainder_c_long_double",
+        "std.math::remainder_f32",
+        "std.math::remainder_f64"
+      ]
+    },
+    {
+      "name": "std.math::round",
+      "sources": [
+        "std.math::round_c_double",
+        "std.math::round_c_float",
+        "std.math::round_c_long_double",
+        "std.math::round_f32",
+        "std.math::round_f64"
+      ]
+    },
+    {
+      "name": "std.math::sign_bit",
+      "sources": [
+        "std.math::sign_bit_c_double",
+        "std.math::sign_bit_c_float",
+        "std.math::sign_bit_c_long_double",
+        "std.math::sign_bit_f32",
+        "std.math::sign_bit_f64"
+      ]
+    },
+    {
+      "name": "std.math::sin",
+      "sources": [
+        "std.math::sin_c_double",
+        "std.math::sin_c_float",
+        "std.math::sin_c_long_double",
+        "std.math::sin_f32",
+        "std.math::sin_f64"
+      ]
+    },
+    {
+      "name": "std.math::sin_complex",
+      "sources": [
+        "std.math::sin_complex_f32",
+        "std.math::sin_complex_f64"
+      ]
+    },
+    {
+      "name": "std.math::sinh",
+      "sources": [
+        "std.math::sinh_c_double",
+        "std.math::sinh_c_float",
+        "std.math::sinh_c_long_double",
+        "std.math::sinh_f32",
+        "std.math::sinh_f64"
+      ]
+    },
+    {
+      "name": "std.math::sinh_complex",
+      "sources": [
+        "std.math::sinh_complex_f32",
+        "std.math::sinh_complex_f64"
+      ]
+    },
+    {
+      "name": "std.math::split_binary",
+      "sources": [
+        "std.math::split_binary_c_double",
+        "std.math::split_binary_c_float",
+        "std.math::split_binary_c_long_double",
+        "std.math::split_binary_f32",
+        "std.math::split_binary_f64"
+      ]
+    },
+    {
+      "name": "std.math::split_fraction",
+      "sources": [
+        "std.math::split_fraction_c_double",
+        "std.math::split_fraction_c_float",
+        "std.math::split_fraction_c_long_double",
+        "std.math::split_fraction_f32",
+        "std.math::split_fraction_f64"
+      ]
+    },
+    {
+      "name": "std.math::sqrt",
+      "sources": [
+        "std.math::sqrt_c_double",
+        "std.math::sqrt_c_float",
+        "std.math::sqrt_c_long_double",
+        "std.math::sqrt_f32",
+        "std.math::sqrt_f64"
+      ]
+    },
+    {
+      "name": "std.math::sqrt_complex",
+      "sources": [
+        "std.math::sqrt_complex_f32",
+        "std.math::sqrt_complex_f64"
+      ]
+    },
+    {
+      "name": "std.math::sub_complex",
+      "sources": [
+        "std.math::sub_complex_f32",
+        "std.math::sub_complex_f64"
+      ]
+    },
+    {
+      "name": "std.math::tan",
+      "sources": [
+        "std.math::tan_c_double",
+        "std.math::tan_c_float",
+        "std.math::tan_c_long_double",
+        "std.math::tan_f32",
+        "std.math::tan_f64"
+      ]
+    },
+    {
+      "name": "std.math::tan_complex",
+      "sources": [
+        "std.math::tan_complex_f32",
+        "std.math::tan_complex_f64"
+      ]
+    },
+    {
+      "name": "std.math::tanh",
+      "sources": [
+        "std.math::tanh_c_double",
+        "std.math::tanh_c_float",
+        "std.math::tanh_c_long_double",
+        "std.math::tanh_f32",
+        "std.math::tanh_f64"
+      ]
+    },
+    {
+      "name": "std.math::tanh_complex",
+      "sources": [
+        "std.math::tanh_complex_f32",
+        "std.math::tanh_complex_f64"
+      ]
+    },
+    {
+      "name": "std.math::trunc",
+      "sources": [
+        "std.math::trunc_c_double",
+        "std.math::trunc_c_float",
+        "std.math::trunc_c_long_double",
+        "std.math::trunc_f32",
+        "std.math::trunc_f64"
+      ]
+    },
+    {
+      "name": "std.net::close",
+      "sources": [
+        "std.net::tcp_close",
+        "std.net::tcp_listener_close",
+        "std.net::udp_close",
+        "std.net::unix_close",
+        "std.net::unix_datagram_close",
+        "std.net::unix_listener_close"
+      ]
+    },
+    {
+      "name": "std.rc::clone",
+      "sources": [
+        "std.rc::clone",
+        "std.rc::clone_weak"
+      ]
+    },
+    {
+      "name": "std.string::append",
+      "sources": [
+        "std.string::append_str",
+        "std.string::push_scalar"
+      ]
+    },
+    {
+      "name": "std.time::add",
+      "sources": [
+        "std.time::duration_add",
+        "std.time::instant_add",
+        "std.time::system_add"
+      ]
+    },
+    {
+      "name": "std.time::compare",
+      "sources": [
+        "std.time::duration_compare"
+      ]
+    },
+    {
+      "name": "std.time::multiply",
+      "sources": [
+        "std.time::duration_multiply"
+      ]
+    },
+    {
+      "name": "std.time::sub",
+      "sources": [
+        "std.time::duration_sub"
+      ]
+    }
+  ]
+}

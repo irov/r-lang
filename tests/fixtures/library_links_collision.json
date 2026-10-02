@@ -1,0 +1,110 @@
+{
+    "schema": "r-link-manifest-0.1",
+    "links": [
+        {
+            "logical_name": "std.tls.native",
+            "available": true,
+            "kind": "static",
+            "target_triple": "arm64-apple-darwin",
+            "c_abi_identity": "darwin-arm64-lp64-c17",
+            "compile_artifact_identity": "library/native/tls",
+            "link_artifact_identity": "r_std_tls_native",
+            "header_roots": [
+                "library/native/tls/include"
+            ],
+            "abi_record_roots": [],
+            "library_version": "0.1",
+            "dependencies": [
+                "mbedtls"
+            ],
+            "feature_test_definitions": [],
+            "symbols": [
+                {
+                    "c_identifier": "r_std_tls_native_config_create",
+                    "kind": "function",
+                    "binding": "strong"
+                },
+                {
+                    "c_identifier": "r_std_tls_native_config_release",
+                    "kind": "function",
+                    "binding": "strong"
+                },
+                {
+                    "c_identifier": "r_std_tls_native_config_add_authority",
+                    "kind": "function",
+                    "binding": "strong"
+                },
+                {
+                    "c_identifier": "r_std_tls_native_config_set_identity",
+                    "kind": "function",
+                    "binding": "strong"
+                },
+                {
+                    "c_identifier": "r_std_tls_native_config_add_protocol",
+                    "kind": "function",
+                    "binding": "strong"
+                },
+                {
+                    "c_identifier": "r_std_tls_native_config_set_verification",
+                    "kind": "function",
+                    "binding": "strong"
+                },
+                {
+                    "c_identifier": "r_std_tls_native_session_create",
+                    "kind": "function",
+                    "binding": "strong"
+                },
+                {
+                    "c_identifier": "r_std_tls_native_session_release",
+                    "kind": "function",
+                    "binding": "strong"
+                },
+                {
+                    "c_identifier": "r_std_tls_native_session_feed",
+                    "kind": "function",
+                    "binding": "strong"
+                },
+                {
+                    "c_identifier": "r_std_tls_native_session_take",
+                    "kind": "function",
+                    "binding": "strong"
+                },
+                {
+                    "c_identifier": "r_std_tls_native_session_pending",
+                    "kind": "function",
+                    "binding": "strong"
+                },
+                {
+                    "c_identifier": "r_std_tls_native_session_handshake",
+                    "kind": "function",
+                    "binding": "strong"
+                },
+                {
+                    "c_identifier": "r_std_tls_native_session_read",
+                    "kind": "function",
+                    "binding": "strong"
+                },
+                {
+                    "c_identifier": "r_std_tls_native_session_write",
+                    "kind": "function",
+                    "binding": "strong"
+                },
+                {
+                    "c_identifier": "r_std_tls_native_session_close",
+                    "kind": "function",
+                    "binding": "strong"
+                },
+                {
+                    "c_identifier": "r_std_tls_native_session_protocol",
+                    "kind": "function",
+                    "binding": "strong"
+                },
+                {
+                    "c_identifier": "r_std_tls_native_session_version",
+                    "kind": "function",
+                    "binding": "strong"
+                }
+            ]
+        }
+    ]
+}

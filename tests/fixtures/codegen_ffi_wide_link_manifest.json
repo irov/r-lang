@@ -1,0 +1,30 @@
+{
+  "schema": "r-link-manifest-0.1",
+  "links": [
+    {
+      "logical_name": "wide",
+      "available": true,
+      "kind": "static",
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "tests/fixtures/ffi/wide_library.c",
+      "link_artifact_identity": "tests/fixtures/ffi/wide_library.c",
+      "header_roots": [
+        "tests/fixtures/ffi"
+      ],
+      "abi_record_roots": [
+        "tests/fixtures/ffi"
+      ],
+      "library_version": "0.1",
+      "dependencies": [],
+      "feature_test_definitions": [],
+      "symbols": [
+        {
+          "c_identifier": "wide_sum",
+          "kind": "function",
+          "binding": "strong"
+        }
+      ]
+    }
+  ]
+}

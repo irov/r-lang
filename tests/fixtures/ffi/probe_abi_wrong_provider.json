@@ -1,0 +1,43 @@
+{
+  "schema": "r-abi-record-0.1",
+  "records": [
+    {
+      "name": "probe-abi-wrong_provider",
+      "provider": "other",
+      "target_triple": "arm64-apple-darwin",
+      "compiler_identity": "static fixture",
+      "options": [
+        "-std=c17"
+      ],
+      "feature_test_definitions": [
+        "PROBE_LIBRARY_VERSION=1"
+      ],
+      "headers": [
+        {
+          "spelling": "probe_library.h",
+          "sha256": "static"
+        }
+      ],
+      "types": [
+        {
+          "c_name": "probe_pair",
+          "kind": "struct",
+          "size": 8,
+          "alignment": 4,
+          "members": [
+            {
+              "name": "left",
+              "type": "int",
+              "offset": 0
+            },
+            {
+              "name": "right",
+              "type": "int",
+              "offset": 4
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

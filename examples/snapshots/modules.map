@@ -1,0 +1,4 @@
+example.calculator.common = ../calculator/src/common.r
+example.snapshots.local_ref = src/rc.r
+example.snapshots.atomic_ref = src/arc.r
+example.snapshots.main = src/main.r

@@ -1,0 +1,24 @@
+module test.regression.loop_borrow;
+
+i32 main() {
+    try {
+        array<u8> values = std.array::with_capacity::<u8>(1);
+        std.array::push(&values, 7);
+        const u8[] view = std.array::as_slice(&values);
+        i32 iteration = 0;
+        while (iteration < 2) {
+            if (view[0] != 7) {
+                return 1;
+            }
+            std.array::push(&values, 8);
+            iteration += 1;
+        }
+        return 0;
+    } catch (std.array::push_error<u8> failure) {
+        failure as void;
+        return 2;
+    } catch (std.alloc::alloc_error failure) {
+        failure as void;
+        return 3;
+    }
+}

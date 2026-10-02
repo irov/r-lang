@@ -1,0 +1,2 @@
+example.tally.main = src/main.r
+example.tally.cells = src/cells.r

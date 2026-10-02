@@ -1,0 +1,2 @@
+example.pipeline.main = src/main.r
+example.pipeline.stages = src/stages.r

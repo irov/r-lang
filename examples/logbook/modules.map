@@ -1,0 +1,4 @@
+example.logbook.main = src/main.r
+example.logbook.model = src/model.r
+example.logbook.inspect = src/inspect.r
+example.calculator.common = ../calculator/src/common.r

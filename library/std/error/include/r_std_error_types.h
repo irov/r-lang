@@ -1,0 +1,30 @@
+#ifndef R_STD_ERROR_TYPES_H
+#define R_STD_ERROR_TYPES_H
+
+#include <stdint.h>
+
+typedef enum RStdErrorDomain {
+    R_STD_ERROR_DOMAIN_ALLOCATION = 0,
+    R_STD_ERROR_DOMAIN_ASYNC_RUNTIME = 1,
+    R_STD_ERROR_DOMAIN_BYTES = 2,
+    R_STD_ERROR_DOMAIN_STRING = 3,
+    R_STD_ERROR_DOMAIN_CONVERSION = 4,
+    R_STD_ERROR_DOMAIN_FORMAT = 5,
+    R_STD_ERROR_DOMAIN_MATH = 6,
+    R_STD_ERROR_DOMAIN_TIME = 7,
+    R_STD_ERROR_DOMAIN_ENVIRONMENT = 8,
+    R_STD_ERROR_DOMAIN_IO = 9,
+    R_STD_ERROR_DOMAIN_FILESYSTEM = 10,
+    R_STD_ERROR_DOMAIN_NETWORK = 11,
+    R_STD_ERROR_DOMAIN_PROCESS = 12,
+    R_STD_ERROR_DOMAIN_THREADING = 13,
+    R_STD_ERROR_DOMAIN_C_ABI = 14
+} RStdErrorDomain;
+
+typedef struct RStdError {
+    RStdErrorDomain domain;
+    uint32_t code;
+    int64_t native_code;
+} RStdError;
+
+#endif

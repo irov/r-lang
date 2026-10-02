@@ -1,0 +1,4 @@
+example.http.main = src/main.r
+example.http.catalog = src/catalog.r
+example.http.texts = src/texts.r
+example.http.wire = src/wire.r

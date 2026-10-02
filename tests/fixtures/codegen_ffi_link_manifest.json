@@ -1,0 +1,348 @@
+{
+  "schema": "r-link-manifest-0.1",
+  "links": [
+    {
+      "logical_name": "probe",
+      "available": true,
+      "kind": "static",
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "tests/fixtures/ffi/probe_library.c",
+      "link_artifact_identity": "tests/fixtures/ffi/probe_library.c",
+      "header_roots": [
+        "tests/fixtures/ffi"
+      ],
+      "abi_record_roots": [
+        "tests/fixtures/ffi"
+      ],
+      "library_version": "0.1",
+      "dependencies": [],
+      "feature_test_definitions": [
+        "PROBE_LIBRARY_VERSION=1"
+      ],
+      "symbols": [
+        {
+          "c_identifier": "probe_increment",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_apply",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_name",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_text_length",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_store",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_counter",
+          "kind": "data",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_open",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_read",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_close",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_session_open",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_session_id",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_session_close",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_sum",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_version",
+          "kind": "data",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_thread_slot",
+          "kind": "tls",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_pair_sum",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_pair_make",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_rect_area",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_rect_scale",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_status_next",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_mode_after",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_origin",
+          "kind": "data",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_point_sum",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_point_make",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_point_scale",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_point_apply",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_marker_shift",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_marker_raw",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_marker_visit",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_node_total",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_mode_raw",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_corner",
+          "kind": "data",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_chain",
+          "kind": "data",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "total_count",
+          "kind": "data",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_current_mode",
+          "kind": "data",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_mode_corrupt",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_exit",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_returns",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_call_fatal",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_padded_scale",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_userdata_store",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_userdata_share",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_userdata_count",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_userdata_clear",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_rounding_is_default",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_flags_raised",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_set_rounding_upward",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_raise_division_by_zero",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_call_with_upward",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_call_on_thread",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_call_null",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_call_mode",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "probe_wint_echo",
+          "kind": "function",
+          "binding": "strong"
+        }
+      ]
+    },
+    {
+      "logical_name": "system.libc",
+      "available": true,
+      "kind": "system",
+      "implicit_c_runtime": true,
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "apple-clang-system-runtime",
+      "link_artifact_identity": "apple-system-runtime",
+      "header_roots": [
+        "system-sdk"
+      ],
+      "abi_record_roots": [
+        "darwin-arm64-c17"
+      ],
+      "library_version": "target-sdk",
+      "dependencies": [],
+      "feature_test_definitions": [
+        "_DARWIN_C_SOURCE"
+      ],
+      "symbols": [
+        {
+          "c_identifier": "abs",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "strlen",
+          "kind": "function",
+          "binding": "strong"
+        }
+      ]
+    },
+    {
+      "logical_name": "probe-optional",
+      "available": false,
+      "kind": "static",
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "tests/fixtures/ffi/probe_optional.c",
+      "link_artifact_identity": "unavailable-on-target",
+      "header_roots": [
+        "tests/fixtures/ffi"
+      ],
+      "abi_record_roots": [],
+      "library_version": "0.1",
+      "dependencies": [],
+      "feature_test_definitions": [],
+      "symbols": [
+        {
+          "c_identifier": "probe_optional_call",
+          "kind": "function",
+          "binding": "strong"
+        }
+      ]
+    }
+  ]
+}

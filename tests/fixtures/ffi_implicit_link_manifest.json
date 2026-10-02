@@ -1,0 +1,23 @@
+{
+  "schema": "r-link-manifest-0.1",
+  "links": [
+    {
+      "logical_name": "system.libc",
+      "available": true,
+      "kind": "system",
+      "implicit_c_runtime": true,
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "apple-clang-system-runtime",
+      "link_artifact_identity": "apple-system-runtime",
+      "header_roots": ["tests/fixtures/ffi"],
+      "abi_record_roots": [],
+      "library_version": "target-sdk",
+      "dependencies": [],
+      "feature_test_definitions": [],
+      "symbols": [
+        {"c_identifier": "probe_increment", "kind": "function", "binding": "strong"}
+      ]
+    }
+  ]
+}

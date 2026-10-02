@@ -1,0 +1,4 @@
+example.preflight.main = src/main.r
+example.preflight.checks = src/checks.r
+example.calculator.common = ../calculator/src/common.r
+example.preflight.packet = src/packet.r

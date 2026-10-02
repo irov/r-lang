@@ -1,0 +1,5 @@
+example.json_tool.main = src/main.r
+example.json_tool.tree = src/tree.r
+example.json_tool.config = src/config.r
+example.json_tool.stream = src/stream.r
+example.calculator.common = ../calculator/src/common.r

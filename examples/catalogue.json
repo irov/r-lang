@@ -1,0 +1,961 @@
+{
+  "version": 1,
+  "applications": [
+    {
+      "id": "calculator",
+      "title": "Scientific calculator",
+      "entry": "example.calculator.main",
+      "map": "examples/calculator/modules.map",
+      "sources": [
+        "examples/calculator/src/*.r"
+      ],
+      "behaviour": "tests/run_calculator_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_calculator",
+        "r_example_calculator_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "zip",
+      "title": "Create a ZIP archive",
+      "sources": [
+        "examples/zip/src/*.r"
+      ],
+      "tests": [
+        "r_frontend_codegen_zip_full",
+        "r_frontend_zip"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "unzip",
+      "title": "Extract a ZIP archive",
+      "sources": [
+        "examples/unzip/src/*.r"
+      ],
+      "tests": [
+        "r_frontend_codegen_unzip_full",
+        "r_frontend_codegen_unzip_roundtrip",
+        "r_frontend_unzip"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "json",
+      "title": "Configuration and JSON streaming",
+      "sources": [
+        "examples/json/*.r"
+      ],
+      "tests": [
+        "r_frontend_codegen_json_example",
+        "r_frontend_codegen_json_hooks_example",
+        "r_frontend_codegen_json_stream_example",
+        "r_frontend_codegen_json_reader_example"
+      ],
+      "kind": "walkthrough"
+    },
+    {
+      "id": "format",
+      "title": "Reusable formatted messages",
+      "sources": [
+        "examples/format/*.r"
+      ],
+      "tests": [
+        "r_frontend_codegen_format_example"
+      ],
+      "kind": "walkthrough"
+    },
+    {
+      "id": "generics",
+      "title": "A generic owning vector",
+      "sources": [
+        "examples/generics/src/*.r"
+      ],
+      "tests": [
+        "r_frontend_codegen_generic_example"
+      ],
+      "kind": "walkthrough"
+    },
+    {
+      "id": "methods",
+      "title": "Geometry with methods and traits",
+      "sources": [
+        "examples/methods/src/*.r"
+      ],
+      "tests": [
+        "r_frontend_codegen_method_example"
+      ],
+      "kind": "walkthrough"
+    },
+    {
+      "id": "reflection",
+      "title": "Inspect a logging configuration",
+      "sources": [
+        "examples/reflection/src/*.r"
+      ],
+      "tests": [
+        "r_frontend_codegen_reflection_example"
+      ],
+      "kind": "walkthrough"
+    },
+    {
+      "id": "tables",
+      "title": "Compute tables and frame sizes during translation",
+      "sources": [
+        "examples/tables/src/*.r"
+      ],
+      "tests": [
+        "r_frontend_codegen_tables_example"
+      ],
+      "kind": "walkthrough"
+    },
+    {
+      "id": "regex",
+      "title": "Match and redact structured text",
+      "sources": [
+        "examples/regex/*.r"
+      ],
+      "tests": [
+        "r_frontend_codegen_regex_example"
+      ],
+      "kind": "walkthrough"
+    },
+    {
+      "id": "c_callbacks",
+      "title": "Manage a C resource with a callback",
+      "sources": [
+        "examples/c_callbacks/*.r"
+      ],
+      "tests": [
+        "r_frontend_codegen_c_callbacks_example"
+      ],
+      "kind": "walkthrough"
+    },
+    {
+      "id": "pointers",
+      "title": "Pointer ownership boundaries",
+      "sources": [
+        "examples/pointers/*.r"
+      ],
+      "tests": [
+        "r_frontend_codegen_nullable_pointers_example"
+      ],
+      "kind": "walkthrough"
+    },
+    {
+      "id": "numbers",
+      "title": "Radix and integer representation calculator",
+      "entry": "example.numbers.main",
+      "map": "examples/numbers/modules.map",
+      "sources": [
+        "examples/numbers/src/*.r",
+        "examples/calculator/src/common.r"
+      ],
+      "behaviour": "tests/run_numeric_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_numbers",
+        "r_example_numbers_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "binary",
+      "title": "Binary packets and checksums",
+      "sources": [
+        "examples/binary/src/*.r"
+      ],
+      "map": "examples/binary/modules.map",
+      "entry": "example.binary.main",
+      "behaviour": "tests/run_binary_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_binary",
+        "r_example_binary_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "text",
+      "title": "Search, redact and inspect text",
+      "sources": [
+        "examples/text/src/*.r"
+      ],
+      "map": "examples/text/modules.map",
+      "entry": "example.text.main",
+      "behaviour": "tests/run_text_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_text",
+        "r_example_text_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "deflate",
+      "title": "Compress and decompress DEFLATE, zlib and gzip streams",
+      "sources": [
+        "examples/deflate/src/*.r"
+      ],
+      "map": "examples/deflate/modules.map",
+      "entry": "example.deflate.main",
+      "behaviour": "tests/run_deflate_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_deflate",
+        "r_example_deflate_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "xml",
+      "title": "Stream, select and rewrite XML",
+      "sources": [
+        "examples/xml/src/*.r"
+      ],
+      "map": "examples/xml/modules.map",
+      "entry": "example.xml.main",
+      "behaviour": "tests/run_xml_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_xml",
+        "r_example_xml_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "statistics",
+      "title": "Measurement reports and lazy iteration",
+      "sources": [
+        "examples/statistics/src/*.r"
+      ],
+      "map": "examples/statistics/modules.map",
+      "entry": "example.statistics.main",
+      "behaviour": "tests/run_statistics_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_statistics",
+        "r_example_statistics_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "snapshots",
+      "title": "Shared snapshots and weak subscriptions",
+      "sources": [
+        "examples/snapshots/src/*.r"
+      ],
+      "map": "examples/snapshots/modules.map",
+      "entry": "example.snapshots.main",
+      "behaviour": "tests/run_snapshots_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_snapshots",
+        "r_example_snapshots_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "playlist",
+      "title": "Edit an ordered playlist",
+      "sources": [
+        "examples/playlist/src/*.r"
+      ],
+      "map": "examples/playlist/modules.map",
+      "entry": "example.playlist.main",
+      "behaviour": "tests/run_playlist_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_playlist",
+        "r_example_playlist_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "buffer_compare",
+      "title": "Compare buffers with explicit ownership",
+      "sources": [
+        "examples/buffer_compare/src/*.r"
+      ],
+      "map": "examples/buffer_compare/modules.map",
+      "entry": "example.buffer_compare.main",
+      "behaviour": "tests/run_buffer_compare_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_buffer_compare",
+        "r_example_buffer_compare_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "warehouse",
+      "title": "Warehouse inventory",
+      "sources": [
+        "examples/warehouse/src/*.r"
+      ],
+      "map": "examples/warehouse/modules.map",
+      "entry": "example.warehouse.main",
+      "behaviour": "tests/run_warehouse_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_warehouse",
+        "r_example_warehouse_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "clock",
+      "title": "Calendar conversion, date texts, durations and intervals",
+      "sources": [
+        "examples/clock/src/*.r"
+      ],
+      "map": "examples/clock/modules.map",
+      "entry": "example.clock.main",
+      "behaviour": "tests/run_clock_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_clock",
+        "r_example_clock_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "receipt",
+      "title": "Print reusable receipt templates",
+      "sources": [
+        "examples/receipt/src/*.r"
+      ],
+      "tests": [
+        "r_frontend_codegen_example_receipt",
+        "r_example_receipt_commands"
+      ],
+      "map": "examples/receipt/modules.map",
+      "entry": "example.receipt.main",
+      "kind": "application",
+      "behaviour": "tests/run_receipt_examples.py"
+    },
+    {
+      "id": "runner",
+      "title": "Command runner with concurrent pipe capture",
+      "entry": "example.runner.main",
+      "map": "examples/runner/modules.map",
+      "sources": [
+        "examples/runner/src/*.r"
+      ],
+      "behaviour": "tests/run_runner_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_runner",
+        "r_example_runner_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "process_status",
+      "title": "Child process termination probe",
+      "entry": "example.process_status.main",
+      "map": "examples/process_status/modules.map",
+      "sources": [
+        "examples/process_status/src/*.r"
+      ],
+      "behaviour": "tests/run_process_status_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_process_status",
+        "r_example_process_status_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "environment",
+      "title": "Environment and argument inspector",
+      "entry": "example.environment.main",
+      "map": "examples/environment/modules.map",
+      "sources": [
+        "examples/environment/src/*.r"
+      ],
+      "behaviour": "tests/run_environment_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_environment",
+        "r_example_environment_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "dispatch",
+      "title": "Delivery routes, priorities and booking reconciliation",
+      "entry": "example.dispatch.main",
+      "map": "examples/dispatch/modules.map",
+      "sources": [
+        "examples/dispatch/src/*.r"
+      ],
+      "behaviour": "tests/run_dispatch_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_dispatch",
+        "r_example_dispatch_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "bytepipe",
+      "title": "Bounded binary and UTF-8 pipe copier",
+      "entry": "example.bytepipe.main",
+      "map": "examples/bytepipe/modules.map",
+      "sources": [
+        "examples/bytepipe/src/*.r"
+      ],
+      "behaviour": "tests/run_bytepipe_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_bytepipe",
+        "r_example_bytepipe_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "workspace",
+      "title": "Workspace journal",
+      "entry": "example.workspace.main",
+      "map": "examples/workspace/modules.map",
+      "sources": [
+        "examples/workspace/src/*.r"
+      ],
+      "behaviour": "tests/run_workspace_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_workspace",
+        "r_example_workspace_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "json_tool",
+      "title": "JSON workbench",
+      "entry": "example.json_tool.main",
+      "map": "examples/json_tool/modules.map",
+      "sources": [
+        "examples/json_tool/src/*.r"
+      ],
+      "behaviour": "tests/run_json_tool_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_json_tool",
+        "r_example_json_tool_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "netlab",
+      "title": "Local network laboratory",
+      "entry": "example.netlab.main",
+      "map": "examples/netlab/modules.map",
+      "sources": [
+        "examples/netlab/src/*.r"
+      ],
+      "behaviour": "tests/run_netlab_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_netlab",
+        "r_example_netlab_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "workers",
+      "title": "Worker pipelines",
+      "entry": "example.workers.main",
+      "map": "examples/workers/modules.map",
+      "sources": [
+        "examples/workers/src/*.r"
+      ],
+      "behaviour": "tests/run_workers_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_workers",
+        "r_example_workers_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "ledger",
+      "title": "Synchronized ledger",
+      "entry": "example.ledger.main",
+      "map": "examples/ledger/modules.map",
+      "sources": [
+        "examples/ledger/src/*.r"
+      ],
+      "behaviour": "tests/run_ledger_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_ledger",
+        "r_example_ledger_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "quotes",
+      "title": "Cached price quotes",
+      "entry": "example.quotes.main",
+      "map": "examples/quotes/modules.map",
+      "sources": [
+        "examples/quotes/src/*.r"
+      ],
+      "behaviour": "tests/run_quotes_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_quotes",
+        "r_example_quotes_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "registers",
+      "title": "Register and ticket workbench",
+      "entry": "example.registers.main",
+      "map": "examples/registers/modules.map",
+      "sources": [
+        "examples/registers/src/*.r"
+      ],
+      "behaviour": "tests/run_registers_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_registers",
+        "r_example_registers_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "logbook",
+      "title": "Logbook controls",
+      "entry": "example.logbook.main",
+      "map": "examples/logbook/modules.map",
+      "sources": [
+        "examples/logbook/src/*.r"
+      ],
+      "behaviour": "tests/run_logbook_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_logbook",
+        "r_example_logbook_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "c_bridge",
+      "title": "C string and callback bridge",
+      "entry": "example.c_bridge.main",
+      "map": "examples/c_bridge/modules.map",
+      "sources": [
+        "examples/c_bridge/src/*.r"
+      ],
+      "behaviour": "tests/run_c_bridge_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_c_bridge",
+        "r_example_c_bridge_commands"
+      ],
+      "kind": "application",
+      "link_manifest": "examples/c_bridge/link_manifest.json"
+    },
+    {
+      "id": "tournament",
+      "title": "Tournament planner",
+      "entry": "example.tournament.main",
+      "map": "examples/tournament/modules.map",
+      "sources": [
+        "examples/tournament/src/*.r"
+      ],
+      "behaviour": "tests/run_tournament_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_tournament",
+        "r_example_tournament_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "jobs",
+      "title": "Background job supervisor",
+      "entry": "example.jobs.main",
+      "map": "examples/jobs/modules.map",
+      "sources": [
+        "examples/jobs/src/*.r"
+      ],
+      "behaviour": "tests/run_jobs_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_jobs",
+        "r_example_jobs_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "preflight",
+      "title": "Service preflight checks",
+      "entry": "example.preflight.main",
+      "map": "examples/preflight/modules.map",
+      "sources": [
+        "examples/preflight/src/*.r"
+      ],
+      "behaviour": "tests/run_preflight_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_preflight",
+        "r_example_preflight_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "fanout",
+      "title": "Concurrent sensor summary",
+      "entry": "example.fanout.main",
+      "map": "examples/fanout/modules.map",
+      "sources": [
+        "examples/fanout/src/*.r"
+      ],
+      "behaviour": "tests/run_fanout_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_fanout",
+        "r_example_fanout_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "streams",
+      "title": "Byte streams over loaned buffers",
+      "entry": "example.streams.main",
+      "map": "examples/streams/modules.map",
+      "sources": [
+        "examples/streams/src/*.r"
+      ],
+      "behaviour": "tests/run_streams_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_streams",
+        "r_example_streams_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "keystore",
+      "title": "Key-value store with a configured backend",
+      "entry": "example.keystore.main",
+      "map": "examples/keystore/modules.map",
+      "sources": [
+        "examples/keystore/src/*.r"
+      ],
+      "behaviour": "tests/run_keystore_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_keystore",
+        "r_example_keystore_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "pipeline",
+      "title": "Generic measurement pipeline with checked errors",
+      "entry": "example.pipeline.main",
+      "map": "examples/pipeline/modules.map",
+      "sources": [
+        "examples/pipeline/src/*.r"
+      ],
+      "behaviour": "tests/run_pipeline_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_pipeline",
+        "r_example_pipeline_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "wordstats",
+      "title": "Word statistics over borrowed command-line words",
+      "entry": "example.wordstats.main",
+      "map": "examples/wordstats/modules.map",
+      "sources": [
+        "examples/wordstats/src/*.r"
+      ],
+      "behaviour": "tests/run_wordstats_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_wordstats",
+        "r_example_wordstats_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "tally",
+      "title": "Labelled report columns with tuples and type packs",
+      "entry": "example.tally.main",
+      "map": "examples/tally/modules.map",
+      "sources": [
+        "examples/tally/src/*.r"
+      ],
+      "behaviour": "tests/run_tally_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_tally",
+        "r_example_tally_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "settings",
+      "title": "Checked settings with an error family",
+      "entry": "example.settings.main",
+      "map": "examples/settings/modules.map",
+      "sources": [
+        "examples/settings/src/*.r"
+      ],
+      "behaviour": "tests/run_settings_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_settings",
+        "r_example_settings_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "service",
+      "title": "TCP service with a bounded handler group",
+      "entry": "example.service.main",
+      "map": "examples/service/modules.map",
+      "sources": [
+        "examples/service/src/*.r"
+      ],
+      "behaviour": "tests/run_service_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_service",
+        "r_example_service_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "ipc",
+      "title": "Local services over Unix-domain sockets and signals",
+      "entry": "example.ipc.main",
+      "map": "examples/ipc/modules.map",
+      "sources": [
+        "examples/ipc/src/*.r"
+      ],
+      "behaviour": "tests/run_ipc_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_ipc",
+        "r_example_ipc_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "offload",
+      "title": "Blocking C calls beside running tasks",
+      "entry": "example.offload.main",
+      "map": "examples/offload/modules.map",
+      "sources": [
+        "examples/offload/src/*.r"
+      ],
+      "behaviour": "tests/run_offload_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_offload",
+        "r_example_offload_commands"
+      ],
+      "kind": "application",
+      "link_manifest": "examples/offload/link_manifest.json"
+    },
+    {
+      "id": "status",
+      "title": "Device status report with formatted records",
+      "entry": "example.status.main",
+      "map": "examples/status/modules.map",
+      "sources": [
+        "examples/status/src/*.r"
+      ],
+      "behaviour": "tests/run_status_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_status",
+        "r_example_status_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "relay",
+      "title": "Buffered line protocols over standard input, files, TCP and pipes",
+      "entry": "example.relay.main",
+      "map": "examples/relay/modules.map",
+      "sources": [
+        "examples/relay/src/*.r"
+      ],
+      "behaviour": "tests/run_relay_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_relay",
+        "r_example_relay_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "textkit",
+      "title": "Text fields, encodings, byte records, number statistics and regex groups",
+      "entry": "example.textkit.main",
+      "map": "examples/textkit/modules.map",
+      "sources": [
+        "examples/textkit/src/*.r"
+      ],
+      "behaviour": "tests/run_textkit_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_textkit",
+        "r_example_textkit_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "tokens",
+      "title": "Identifiers, message signatures, digests of standard input and seeded draws",
+      "entry": "example.tokens.main",
+      "map": "examples/tokens/modules.map",
+      "sources": [
+        "examples/tokens/src/*.r"
+      ],
+      "behaviour": "tests/run_tokens_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_tokens",
+        "r_example_tokens_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "testing",
+      "title": "Tests of a module with @test",
+      "entry": "example.testing.tests",
+      "map": "examples/testing/modules.map",
+      "sources": [
+        "examples/testing/src/*.r"
+      ],
+      "behaviour": "tests/run_testing_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_testing",
+        "r_example_testing_commands"
+      ],
+      "kind": "application",
+      "test_mode": true
+    },
+    {
+      "id": "tls",
+      "title": "TLS 1.3 over loopback TCP: ALPN, an echo and certificate rejections",
+      "entry": "example.tls.main",
+      "map": "examples/tls/modules.map",
+      "sources": [
+        "examples/tls/src/*.r"
+      ],
+      "behaviour": "tests/run_tls_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_tls",
+        "r_example_tls_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "http",
+      "title": "A JSON catalogue service over HTTP and HTTPS with its client",
+      "entry": "example.http.main",
+      "map": "examples/http/modules.map",
+      "sources": [
+        "examples/http/src/*.r"
+      ],
+      "behaviour": "tests/run_http_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_http",
+        "r_example_http_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "realtime",
+      "title": "A WebSocket chat room found through SRV, TXT and PTR records",
+      "entry": "example.realtime.main",
+      "map": "examples/realtime/modules.map",
+      "sources": [
+        "examples/realtime/src/*.r"
+      ],
+      "behaviour": "tests/run_realtime_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_realtime",
+        "r_example_realtime_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "assistant",
+      "title": "An MCP server of notes for an assistant with its client over stdio and HTTP",
+      "entry": "example.assistant.main",
+      "map": "examples/assistant/modules.map",
+      "sources": [
+        "examples/assistant/src/*.r"
+      ],
+      "behaviour": "tests/run_assistant_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_assistant",
+        "r_example_assistant_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "notary",
+      "title": "Signed and sealed messages with COSE, CBOR and libsodium cryptography",
+      "entry": "example.notary.main",
+      "map": "examples/notary/modules.map",
+      "sources": [
+        "examples/notary/src/*.r"
+      ],
+      "behaviour": "tests/run_notary_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_notary",
+        "r_example_notary_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "registry",
+      "title": "Device registry in SQLite with a transactional outbox",
+      "entry": "example.registry.main",
+      "map": "examples/registry/modules.map",
+      "sources": [
+        "examples/registry/src/*.r"
+      ],
+      "behaviour": "tests/run_registry_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_registry",
+        "r_example_registry_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "telemetry",
+      "title": "HTTP service with metrics, traces, health and signals over TCP, TLS and a Unix socket",
+      "entry": "example.telemetry.main",
+      "map": "examples/telemetry/modules.map",
+      "sources": [
+        "examples/telemetry/src/*.r"
+      ],
+      "behaviour": "tests/run_telemetry_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_telemetry",
+        "r_example_telemetry_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "ingest",
+      "title": "Message ingestion with arenas lent by a pool, each batch in a budget that it reports",
+      "entry": "example.ingest.main",
+      "map": "examples/ingest/modules.map",
+      "sources": [
+        "examples/ingest/src/*.r"
+      ],
+      "behaviour": "tests/run_ingest_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_ingest",
+        "r_example_ingest_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "journal",
+      "title": "Fixed-size records with a write-ahead journal, file locks, positional writes and sync levels",
+      "entry": "example.journal.main",
+      "map": "examples/journal/modules.map",
+      "sources": [
+        "examples/journal/src/*.r"
+      ],
+      "behaviour": "tests/run_journal_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_journal",
+        "r_example_journal_commands"
+      ],
+      "kind": "application"
+    },
+    {
+      "id": "orders",
+      "title": "Orders in PostgreSQL: stock taken in transactions, NOTIFY announcements, COPY in and out",
+      "entry": "example.orders.main",
+      "map": "examples/orders/modules.map",
+      "sources": [
+        "examples/orders/src/*.r"
+      ],
+      "behaviour": "tests/run_orders_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_orders",
+        "r_example_orders_commands"
+      ],
+      "kind": "application"
+    }
+  ]
+}

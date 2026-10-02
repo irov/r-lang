@@ -1,0 +1,2 @@
+example.tables.model = src/model.r
+example.tables.main = src/main.r

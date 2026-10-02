@@ -1,0 +1,3 @@
+example.ingest.main = src/main.r
+example.ingest.parse = src/parse.r
+example.ingest.batch = src/batch.r

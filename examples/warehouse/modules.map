@@ -1,0 +1,3 @@
+example.calculator.common = ../calculator/src/common.r
+example.warehouse.stock = src/stock.r
+example.warehouse.main = src/main.r

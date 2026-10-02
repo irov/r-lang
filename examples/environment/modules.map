@@ -1,0 +1,3 @@
+example.environment.main = src/main.r
+example.environment.inspect = src/inspect.r
+example.calculator.common = ../calculator/src/common.r

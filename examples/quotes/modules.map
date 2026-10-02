@@ -1,0 +1,4 @@
+example.quotes.main = src/main.r
+example.quotes.book = src/book.r
+example.quotes.policy = src/policy.r
+example.calculator.common = ../calculator/src/common.r

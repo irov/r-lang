@@ -1,0 +1,5 @@
+example.textkit.main = src/main.r
+example.textkit.words = src/words.r
+example.textkit.codes = src/codes.r
+example.textkit.numbers = src/numbers.r
+example.textkit.patterns = src/patterns.r

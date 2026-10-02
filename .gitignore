@@ -1,0 +1,21 @@
+# Build trees of every CMake preset (debug, sanitizers, thread-sanitizer, fuzz, release, ...).
+/build/
+/build-*/
+
+# Clang static-analyzer reports emitted by direct per-translation-unit checks.
+*.plist
+
+# Python caches of the tools and test drivers.
+__pycache__/
+*.py[cod]
+
+# Local editor and assistant settings.
+/.vscode/
+/.idea/
+/.claude/
+/.jupiter/
+*.swp
+*~
+
+# macOS
+.DS_Store

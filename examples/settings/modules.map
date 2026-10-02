@@ -1,0 +1,2 @@
+example.settings.main = src/main.r
+example.settings.rules = src/rules.r

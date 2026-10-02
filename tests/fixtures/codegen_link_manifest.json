@@ -1,0 +1,35 @@
+{
+  "schema": "r-link-manifest-0.1",
+  "links": [
+    {
+      "logical_name": "system.libc",
+      "available": true,
+      "kind": "system",
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "apple-clang-system-runtime",
+      "link_artifact_identity": "apple-system-runtime",
+      "header_roots": ["system-sdk"],
+      "abi_record_roots": ["darwin-arm64-c17"],
+      "library_version": "target-sdk",
+      "dependencies": [],
+      "feature_test_definitions": [],
+      "symbols": []
+    },
+    {
+      "logical_name": "optional-zlib",
+      "available": false,
+      "kind": "system",
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "unresolved",
+      "link_artifact_identity": "unresolved",
+      "header_roots": [],
+      "abi_record_roots": [],
+      "library_version": "unresolved",
+      "dependencies": [],
+      "feature_test_definitions": [],
+      "symbols": []
+    }
+  ]
+}

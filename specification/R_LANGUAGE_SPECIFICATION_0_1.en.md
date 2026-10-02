@@ -1,0 +1,4281 @@
+# R Core Language Specification 0.1
+
+Normative draft of the R programming language
+
+| Field | Value |
+| --- | --- |
+| Document | R Core Language Specification |
+| Language version | 0.1 |
+| Document revision | 0.1.0-draft.95 |
+| Status | Normative draft; not a stable R 1.0 standard |
+| Document language | English; normative original |
+| Target backend | ISO/IEC 9899:2018 (C17) |
+
+## Preface
+
+This document defines R independently of any implementation. It follows the structural model of the C standard by specifying program representation, syntax, constraints, semantics, the abstract machine, library requirements, and implementation limits. It neither incorporates nor reproduces the text of the C standard. Similarity to C concerns surface syntax, the translation-unit model, expressions, and systems-programming use; R defines its own safety, ownership, and evaluation rules.
+
+Normative provisions are designated by stable identifiers `R-...`. The words **shall**, **shall not**, **should** and **may** have the meaning specified in Section 3. Notes and examples are non-normative unless explicitly stated otherwise.
+
+<a id="design-summary"></a>
+
+### Principal language-design decisions
+
+| Area | R 0.1 |
+| --- | --- |
+| Declaration parsing | `struct` and `enum` introduce nominal type names; later type uses write the name directly, as in `Packet value` |
+| Program composition | Modules are connected through `import`; an import is a semantic dependency |
+| Visibility | Module-scope declarations and aggregate fields are exported by default; `protected` keeps a declaration inside its defining module |
+| Type conversion | The explicit form is `value as Type` |
+| References | Non-null safe borrows are `const T*` and `T*`; a nullable form ends in `?` |
+| Ownership | `own T*`, shared owners `arc T`/`rc T`, explicit `move`/`clone`, weak owners, and deterministic `drop` |
+| Atomic types | `atomic T`; `ai8`, `ai16`, `ai32`, `ai64`, `aisize`, `au8`, `au16`, `au32`, `au64`, and `ausize` are exact shorthand spellings, not ordinary integers |
+| Dynamic containers | `array<T>` is a contiguous growable sequence; predefined `bytes` is its exact transparent `array<u8>` alias; `list<T>` is a stable-node sequence; `dict<K,V>` is an insertion-ordered linear-probing hash table |
+| Program strings | `constexpr str` denotes immutable UTF-8 data embedded in the program image and valid for the entire execution |
+| Move | A named Move place requires `move`; a temporary is transferred implicitly |
+| Recoverable error | A function declares a checked `throws E1, E2` set; `throw` transfers one error, and typed `try`/`catch` handles it without native exception unwinding |
+| Borrow regions | Borrow origins are inferred from value flow and stored in compiler interface metadata |
+| Raw pointers | `raw T*`; dereference and arithmetic require `unsafe` |
+| Evaluation order | Left to right except for explicitly short-circuiting operators |
+| Overflow | Unsigned arithmetic is modulo; signed overflow panics; constant overflow is diagnosed |
+| Arrays and slices | An array does not decay to a pointer; indexing is checked; a slice always carries its length |
+| Read-only byte view | `const u8[]` is the single borrowed byte-view type; direct call arguments may form it without copying from byte strings, byte owners and fixed byte arrays |
+| Control flow | Every `if` branch and loop body is a `{ ... }` block; conditions contain explicit comparisons; `switch` clauses are implicit scopes ending in an explicit transfer |
+| Variants and varargs | A payload is stored in a tagged enum; C variadics are available through a verified imported C API |
+| External C libraries | `extern "C"` with logical `@link`; the target link manifest identifies physical artifacts |
+| Concurrency | Ownership transfer between threads: typed `spawn`/`join`, lexical scoped threads, structural `Send`/`Sync`, synchronized shared state, and MPSC channels |
+| Asynchronous execution | `async` functions start eager `task<T throws E...>` values; `await move name` / `await operation()` is an explicit consuming suspension point; hosted native I/O is asynchronous-only |
+
+This English file is the normative text. The Russian file with the same revision is its translation; if the two files conflict, this English file governs.
+
+<a id="scope"></a>
+
+## 1. Scope
+
+<a id="R-GEN-0001"></a>
+
+**R-GEN-0001** — This document shall define the form and interpretation of programs written in R 0.1, including syntax, constraints, semantics, abstract machine, mandatory diagnostics, and minimum implementation limits.
+
+<a id="R-GEN-0002"></a>
+
+**R-GEN-0002** — R shall be a stand-alone general-purpose system language without garbage collector, with deterministic resource management and the ability to translate to strictly conforming ISO C17.
+
+<a id="R-GEN-0003"></a>
+
+**R-GEN-0003** — A well-formed program in which no executed unsafe operation or external-code operation violates its safety contract shall have no undefined behavior. Merely executing a correctly encapsulated unsafe operation does not remove this guarantee. Every potentially erroneous operation shall produce a defined result, a required diagnostic, a panic, or behavior specified by Annex C or D.
+
+<a id="R-GEN-0004"></a>
+
+**R-GEN-0004** — This document does not specify how to run an implementation, object file format, debugging format, package manager, JIT, IDE, debugger, C++ interoperability, and module distribution mechanism.
+
+<a id="R-GEN-0005"></a>
+
+**R-GEN-0005** — Strict R 0.1 program shall consist solely of constructs derived from Annex A and satisfying the normative constraints of this document. Implementation extensions shall operate in a separate non-strict mode.
+
+<a id="normative-references"></a>
+
+## 2. Normative references
+
+For dated references, only this version applies.
+
+<a id="R-REF-0001"></a>
+
+**R-REF-0001** — [ISO/IEC 9899:2018](https://www.iso.org/standard/74528.html), *Information technology — Programming languages — C*, is the normative basis for C17 mapping and C ABI terminology, but does not define R semantics.
+
+<a id="R-REF-0002"></a>
+
+**R-REF-0002** — [RFC 3629](https://www.rfc-editor.org/rfc/rfc3629), *UTF-8, a transformation format of ISO 10646*, defines the permitted source-text encoding.
+
+<a id="R-REF-0003"></a>
+
+**R-REF-0003** — [Unicode Standard 17.0.0](https://www.unicode.org/versions/Unicode17.0.0/) and [UAX \#31 revision 43](https://www.unicode.org/reports/tr31/tr31-43.html) define Unicode scalar values and `XID_Start`/`XID_Continue` classes used by identifiers.
+
+<a id="R-REF-0004"></a>
+
+**R-REF-0004** — [ISO/IEC 60559:2020](https://webstore.iec.ch/en/publication/66123) defines the abstract arithmetic of `f32` and `f64`.
+
+<a id="R-REF-0005"></a>
+
+**R-REF-0005** — [R Standard Library Specification 0.1](R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc) defines the library modules, public signatures, native asynchronous I/O contracts and profile-specific facilities referenced by this document.
+
+<a id="terms"></a>
+
+## 3. Terms and definitions
+
+<a id="R-TERM-0001"></a>
+
+**R-TERM-0001** — **shall** stands for mandatory requirement; **shall not** stands for absolute prohibition; **should** stands for recommendation with permissible justified deviation; **may** stands for permitted possibility.
+
+<a id="R-TERM-0002"></a>
+
+**R-TERM-0002** — **undefined behavior** (UB) is behavior for which this standard imposes no requirements. In R, it is possible only after violation of a safety contract by an unsafe operation or external code.
+
+<a id="R-TERM-0003"></a>
+
+**R-TERM-0003** — **implementation-defined behavior** is a permitted choice that the implementation shall select and document; the complete catalogue is given in Annex C.
+
+<a id="R-TERM-0004"></a>
+
+**R-TERM-0004** — **unspecified behavior** is selection of one of the listed possibilities without an obligation to document the selected choice; the complete catalogue is given in Annex D.
+
+<a id="R-TERM-0005"></a>
+
+**R-TERM-0005** — A **diagnostic** is an implementation message reporting violation of a syntactic or semantic constraint. After issuing a required diagnostic, an implementation may continue analysis but shall not execute the program or classify it as conforming.
+
+<a id="R-TERM-0006"></a>
+
+**R-TERM-0006** — **object** is a storage area that has a type, identity, alignment, lifetime and current state. **Subobject** is a field, element or variant payload included in another object.
+
+<a id="R-TERM-0007"></a>
+
+**R-TERM-0007** — A **value** is a mathematical or compound value of a type; a **place** is an expression designating an object or subobject; a **temporary** is an unnamed object created during evaluation.
+
+<a id="R-TERM-0008"></a>
+
+**R-TERM-0008** — An **owner** is the object responsible for the unique required destruction of an owned resource; a **move** transfers that responsibility without copying the resource; a **drop** deterministically ends a lifetime and releases resources.
+
+<a id="R-TERM-0009"></a>
+
+**R-TERM-0009** — **borrow** is a limited lifetime right to access an object: shared immutable (`const T*`) or exclusive mutable (`T*`).
+
+<a id="R-TERM-0010"></a>
+
+**R-TERM-0010** — **raw pointer** is a `raw T*` value for which the compiler does not prove lifetime, aliasing, bounds or pointee initialization.
+
+<a id="R-TERM-0011"></a>
+
+**R-TERM-0011** — A **safety contract** is a normative precondition of an unsafe operation that calling code shall establish so that the operation retains defined behavior.
+
+<a id="R-TERM-0012"></a>
+
+**R-TERM-0012** — A **panic** is a defined exceptional event of the abstract machine that activates the implementation’s selected panic strategy; a panic is not itself UB.
+
+<a id="R-TERM-0013"></a>
+
+**R-TERM-0013** — A **data race** consists of two conflicting accesses from different threads to the same memory location, not ordered by happens-before, where at least one access is a write and the accesses are not both conforming atomic operations.
+
+<a id="R-TERM-0014"></a>
+
+**R-TERM-0014** — A **filesystem adapter lane** is a closed target-runtime service of exactly four threads, separate from every process-executor worker, that may execute only the filesystem metadata, namespace, cursor and durability operation families enumerated by R-CMAP-0039 and the selected target manifest. A lane thread never executes R code, continuations, payload byte transfer, console, DNS, socket or child-process waiting.
+
+<a id="R-TERM-0015"></a>
+
+**R-TERM-0015** — A **blocking call pool** is a target-runtime service of at most the number of threads recorded by the selected target manifest, separate from every process-executor worker and from the filesystem adapter lane, that executes only the entries passed to `std.async::blocking` (Library R-SLIB-ASYNC-0017). A pool thread runs one entry at a time, to its return, as ordinary R code on its own stack and never executes continuations; the pool adds a thread only while every existing one is busy.
+
+<a id="conformance"></a>
+
+## 4. Conformance
+
+<a id="R-CONF-0001"></a>
+
+**R-CONF-0001** — Conforming implementation shall accept and correctly execute each strictly conforming R program within documented limits.
+
+<a id="R-CONF-0002"></a>
+
+**R-CONF-0002** — A conforming translator shall diagnose every violation identified as a constraint violation or required diagnostic. In addition, every statically decidable violation by a source program of a normative `shall`, `shall not`, grammar, name resolution, type, initialization, ownership, lifetime, control-flow, or FFI declaration requirement is a constraint violation and shall receive the most specific Annex B code. Normative requirements placed on an implementation do not thereby become source-program diagnostics.
+
+<a id="R-CONF-0003"></a>
+
+**R-CONF-0003** — Extensions can be provided if they are turned off in strict-conformance mode, do not change the behavior of conforming programs and are diagnosed when used in strict-conformance mode.
+
+<a id="R-CONF-0004"></a>
+
+**R-CONF-0004** — Implementation shall publish target description, all choices from Annex C, actual limits supported by profiles, panic strategy, and C ABI.
+
+<a id="R-CONF-0005"></a>
+
+**R-CONF-0005** — A freestanding implementation shall implement the language, `core` and the freestanding subset of Annex G. If its selected profile supports allocation/new, it shall additionally implement allocation-profile namespaces `std.arc` and `std.rc` under R-LIB-0012 of the R Standard Library Specification 0.1. A hosted implementation additionally shall implement the entry point and the hosted library surface required by its selected library profile. Selection of `hosted-native-async` requires the language task runtime and every native asynchronous capability specified by R-REF-0005.
+
+<a id="R-CONF-0006"></a>
+
+**R-CONF-0006** — If generated C is used as a backend, successful C compilation is not proof of conformance: the observable behavior of the generated program shall match the R abstract machine.
+
+<a id="abstract-machine"></a>
+
+## 5. Abstract machine
+
+### 5.1 Program execution
+
+<a id="R-AM-0001"></a>
+
+**R-AM-0001** — The program consists of directed acyclic graph modules. Each module R 0.1 consists of exactly one translation unit after decoding UTF-8 and prior to semantic analysis.
+
+<a id="R-AM-0002"></a>
+
+**R-AM-0002** — Hosted execution shall be performed in order: runtime initialization; static R objects imported modules initialization in topological order; static R objects initialization of the current module; creation of the process executor when the selected entry point is asynchronous; call or start `main`; wait for the synchronous entry point or root task; perform the quiescence drain of R-AM-0013; destruction of static R objects in reverse order; process completion. Runtime initialization itself has two ordered pre-main phases: required dynamic-provider loading and required-symbol readiness under R-FFI-0037, followed, only if that phase succeeds, by native argument conversion and startup-snapshot reservation under R-FUNC-0008. Failure in a phase terminates the launch and prevents every later phase, so one launch reports only the earliest failure category.
+
+<a id="R-AM-0003"></a>
+
+**R-AM-0003** — Observable behavior includes volatile and atomic accesses, accesses to the external environment through standard library or C ABI, termination status and bytes transferred to external functions. Optimization shall preserve observable behavior.
+
+### 5.2 Object states and lifetime
+
+<a id="R-AM-0004"></a>
+
+**R-AM-0004** — The object is in exactly one state at a time: `uninitialized`, `initialized`, `moved` or `destroyed`.
+
+<a id="R-AM-0005"></a>
+
+**R-AM-0005** — An object’s lifetime begins after successful initialization and remains active during the user drop body. It ends after leaving the drop body, including the exit at panic, immediately before the destruction of the first subobject to be destroyed. If the drop body and subobjects are absent, the lifetime ends at the object’s destruction point. Until the end of the lifetime, the object itself and the fields not yet destroyed remain initialized; access via `self` is subject to R-INIT-0009 restrictions. Successful whole-object move ends the source lifetime after value transfer and changes the source to `moved`; subsequent scope exit translates this storage to `destroyed` without drop.
+
+<a id="R-AM-0006"></a>
+
+**R-AM-0006** — A value may be read only from an initialized object. A write is permitted to an initialized mutable object with exclusive access or to uninitialized storage as part of full initialization. A write to `moved` local storage is permitted only as full reinitialization by R-INIT-0007 and R-OWN-0006; it begins a new lifetime and is not access to the former object.
+
+<a id="R-AM-0007"></a>
+
+**R-AM-0007** — Reading an uninitialized, moved, or destroyed object in a safe context shall require a diagnostic. If such a read becomes possible because an unsafe contract was violated, the behavior is UB.
+
+<a id="R-AM-0008"></a>
+
+**R-AM-0008** — An object’s identity is unique within its lifetime. A new object in the same storage receives a new identity. Borrow provenance shall identify the original object, permitted subobject, or element range and shall not outlive that object.
+
+### 5.3 Evaluation
+
+<a id="R-AM-0009"></a>
+
+**R-AM-0009** — Operands, function arguments, initializer elements, and subexpressions shall be evaluated from left to right. `&&`, `||` and `?:` evaluate only the selected branch. A `try` statement selects at most one matching `catch` and then its single `finally`, if present. The side effects of one step complete before the next step begins.
+
+<a id="R-AM-0010"></a>
+
+**R-AM-0010** — A full expression ends at `;`, after evaluation of a controlling condition or initializer element, or immediately before control returns to the caller. Every fully initialized temporary whose ownership was not successfully transferred shall be destroyed in reverse order at that boundary. A temporary borrow, slice or ordinary `str` descriptor does not extend the lifetime of its designated storage. Copying, selecting or weakening such a descriptor value is not itself prohibited; R-BORROW-0020 instead prohibits forming a borrow whose storage root is a temporary object. Weakening `constexpr str` to ordinary `str` designates the program-image bytes, not the descriptor object. Under unwind strategy, if evaluation panics, still-owned fully initialized temporaries of the current full expression are dropped in reverse order before cleanup of surrounding automatic objects. Under abort strategy, R-ERR-0005 terminates without additional R drops. Successful transfer from a temporary to a staging destination, struct field, function parameter, return slot or hidden switch-owned object also transfers cleanup responsibility; the source temporary is not dropped at its original full-expression boundary.
+
+<a id="R-AM-0011"></a>
+
+**R-AM-0011** — Panic point is an observable sequencing boundary. Testing shall occur before the side effect of the most potentially erroneous operation and after all previous sequenced operations.
+
+### 5.4 Program termination
+
+<a id="R-AM-0012"></a>
+
+**R-AM-0012** — A normal return or asynchronous completion from `main`, including an
+unhandled member of its implicit checked-error set, is normal termination with a process
+status. A checked error is not panic: the required order is allocation-free diagnostic,
+then cancellation and the complete quiescence drain of R-AM-0013, then initial-thread
+thread-local and static destruction with the prescribed intervening drains. The error
+payload is consumed exactly once before destruction. Call `abort`, uncaught panic
+after applicable unwind and panic during unwinding drop complete the process without
+further R drops.
+
+<a id="R-AM-0013"></a>
+
+**R-AM-0013** — Hosted normal termination is a quiescence-and-destruction fixed point. A quiescence drain shall not pass until every R thread that existed or was created by its participating work has completed, every detached-outcome runtime cleanup duty thereby created has recursively completed including its cleanup-context thread-local drops, every task cancellation has reached terminal native acknowledgement, every detached task and task-result cleanup duty has completed, and all active attached C callback contexts have returned. Normal termination first performs a drain, then destroys each initialized initial-thread `thread_local` object and each static R object one at a time in the exact order of R-OBJ-0008, R-OBJ-0010 and R-MOD-0004; after every such top-level object destruction it performs another drain before beginning the next one. Threads or duties created by that destruction participate in the following drain, and a final drain shall pass before normal termination completes. After the first drain no new external C-origin entry may attach; providers shall already satisfy R-FFI-0055. Abrupt termination need not drain and performs no further R drops.
+
+After any boundary diagnostic required by R-AM-0012, when an asynchronous `main` commits its terminal outcome, the runtime requests cancellation of every other nonterminal task, including detached tasks, and then begins the first drain. No module or static destruction begins before those tasks and their native cancellation acknowledgements have reached the terminal state.
+
+<a id="R-AM-0014"></a>
+
+**R-AM-0014** — An asynchronous operation has exactly one execution state among reserved, running, cancellation-requested and completed. Independently, its observation right is live until consumed exactly once by `await`, `cancel`, `detach` or ordinary drop; consuming that right does not imply completion. Completion commits exactly one terminal outcome: returned T, one exact declared checked error E, or, under the unwind strategy, a panic report. Cancellation and ordinary completion may race, but only one terminal outcome is committed and every captured value, native retain, frame and result is released exactly once. Cancellation is cooperative with the target-native operation; storage remains live until terminal acknowledgement even after the source `task<T throws E...>` value has been consumed or resolved.
+
+<a id="source-lexical"></a>
+
+## 6. Source representation and lexical elements
+
+### 6.1 Encoding and characters
+
+<a id="R-LEX-0001"></a>
+
+**R-LEX-0001** — Source file shall be well-formed UTF-8 without surrogate code points, overlong encodings and code points above U+10FFFF. Violation requires `R-DIAG-LEX-001`.
+
+<a id="R-LEX-0002"></a>
+
+**R-LEX-0002** — U+FEFF may only be present in the first code point file and then is not a token. U+FEFF is an unacceptable format character.
+
+<a id="R-LEX-0003"></a>
+
+**R-LEX-0003** — A line ending may be LF or CRLF; the lexer shall normalize either form to one logical newline. A lone CR shall be accepted as a newline with a portability warning.
+
+### 6.2 Whitespace and comments
+
+<a id="R-LEX-0004"></a>
+
+**R-LEX-0004** — After R-LEX-0003 normalization, whitespace consists only of U+0009 TAB, U+000A logical newline, U+000B VT, U+000C FF and U+0020 SPACE; it separates tokens but is otherwise insignificant. Other than literal/comment, Unicode whitespace requires `R-DIAG-LEX-004`. A `//` comment extends to a logical newline or end of file. A `/* ... */` comment does not nest. An unterminated block comment requires a diagnostic.
+
+<a id="R-LEX-0005"></a>
+
+**R-LEX-0005** — Comment shall be replaced by one whitespace for tokenization. Comment delimiters inside string or character literal do not open a comment.
+
+### 6.3 Identifiers and keywords
+
+<a id="R-LEX-0006"></a>
+
+**R-LEX-0006** — An identifier shall begin with `_` or `XID_Start` and continue with `_` or `XID_Continue` according to the fixed Unicode version. Its spelling shall be NFC; a non-NFC spelling requires a diagnostic.
+
+<a id="R-LEX-0007"></a>
+
+**R-LEX-0007** — Identifier equality shall compare Unicode scalar sequences after NFC validation, case-sensitively and without locale-dependent folding.
+
+<a id="R-LEX-0008"></a>
+
+**R-LEX-0008** — The following ASCII sequences are keywords and shall not be identifiers:
+
+```
+alignof ai8 ai16 ai32 ai64 aisize arc array as async atomic au8 au16 au32 au64 ausize auto await bool break case catch char const constexpr continue default dict drop dyn else enum extern finally
+f32 f64 false fallthrough fn for i8 i16 i32 i64 if import in isize module move never
+impl list new null null_t o own panic protected raw rc return Self sizeof static str struct switch task this throw throws trait variant
+thread_scope thread_local true try u8 u16 u32 u64 unsafe usize void weak while
+c_char c_schar c_uchar c_short c_ushort c_int c_uint c_long c_ulong c_llong
+c_ullong c_bool c_wchar c_wint c_int8 c_uint8 c_int16 c_uint16 c_int32 c_uint32
+c_int64 c_uint64 c_intptr c_uintptr c_intmax c_uintmax c_float c_double
+c_long_double c_size c_ptrdiff opaque
+```
+
+Only the sequences listed above have keyword status. Every other identifier token is classified by the ordinary name-resolution rules; its spelling does not activate syntax from another language.
+
+### 6.4 Literals
+
+<a id="R-LEX-0009"></a>
+
+**R-LEX-0009** — Integer literal may be decimal, `0b` binary, `0o` octal or `0x` hexadecimal. `_` may separate digits, but shall not be the first, last, or neighboring radix prefix. Leading zero does not change decimal radix.
+
+<a id="R-LEX-0010"></a>
+
+**R-LEX-0010** — An integer suffix shall be one of `i8`, `u8`, `i16`, `u16`, `i32`, `u32`, `i64`, `u64`, `isize`, `usize`. Suffixed value shall be represented in the specified type, except signed-min formation R-EXPR-0026; otherwise `R-DIAG-CONST-001` is required. Outside the array-bound context of R-TYPE-0011 and contextual literal cases of R-INIT-0002/0012, R-EXPR-0003 and R-STMT-0006, an unsuffixed literal obtains the first type of `i32`, `i64`, `u64`, capable of representing the value; absence of such a type requires the same diagnostic.
+
+<a id="R-LEX-0011"></a>
+
+**R-LEX-0011** — Floating literal shall use decimal or hexadecimal significand, the obligatory exponent part for hexadecimal form and optional suffix `f32` or `f64`; decimal form with radix point shall have at least one digit on each side of `.`. Without a suffix type, it is `f64`. Exact mathematical value shall round to the nearest representative value of target R type with ties-to-even. Overflow above maximum finite magnitude requires `R-DIAG-CONST-001`; underflow may give subnormal or signed zero under this rounding rule. This limitation retains the unambiguous tokenization of `1..2` as integer literal, `..`, integer literal.
+
+<a id="R-LEX-0012"></a>
+
+**R-LEX-0012** — Character literal stands for exactly one Unicode scalar and has a type `char`. String literal after handling escapes and adjacent concatenation shall contain well-formed UTF-8 bytes, has type `constexpr str` and does not include implicit trailing zero. Byte escape, which creates an invalid UTF-8 sequence, requires `R-DIAG-LEX-002`.
+
+<a id="R-LEX-0013"></a>
+
+**R-LEX-0013** — Escape sequences: `\\`, `\"`, `\'`, `\n`, `\r`, `\t`, `\0`, `\xHH` (two hex digits exactly) and `\u{H...}` (1-6 hex digits, Unicode scalar). `\0` in string is byte zero. `\xHH` in character literal shall denote complete single-byte Unicode scalar; in string it contributes one byte, after which R-LEX-0012 checks the entire resulting sequence.
+
+<a id="R-LEX-0014"></a>
+
+**R-LEX-0014** — After tokenization and prior to parsing, each maximal sequence of adjacent string-literal tokens separated only by whitespace or comments shall be replaced by one logical string-literal token, concatenated after escape processing. Concatenation never crosses another token.
+
+For a mixed sequence containing a formatted literal, R-EXPR-0028 applies. UTF-8 validation combines adjacent text parts, but never crosses a slot.
+
+### 6.5 Punctuators
+
+<a id="R-LEX-0015"></a>
+
+**R-LEX-0015** — The lexer shall choose the longest token from:
+
+```
+{ } [ ] ( ) ; , . .. ... : :: ? @
++ - * / % & | ^ ~ ! = < >
+++ -- -> == != <= >= && || << >> += -= *= /= %= &= |= ^= <<= >>=
+```
+
+The punctuator list is closed; a source character sequence not matching any Annex A token requires the lexical diagnostic defined by R-LEX-0016.
+
+<a id="R-LEX-0016"></a>
+
+**R-LEX-0016** — Lexer first skips leading whitespace/comment, then selects longest sequence, matching any one token Annex A, without crossing the next whitespace/comment; process repeats. At equal length, exact spelling R-LEX-0008 is classified as keyword, not identifier. Comment opener `//` or `/*` is recognized prior to punctuator `/` and processed by R-LEX-0004 through R-LEX-0005. Therefore, `ifx` is one identifier, but `i f` is not glued together; `0x10` and `1e3` are one numeric literal, and `.`, `..`, `...` are selected maximal-munch. A complete character literal is one token by this longest-match rule. An apostrophe not completing a character literal starts no token. If no token starts at the current code point, `R-DIAG-LEX-004` is required.
+
+<a id="grammar-units"></a>
+
+## 7. Grammar and translation units
+
+<a id="R-GRAM-0001"></a>
+
+**R-GRAM-0001** — Annex A is the normative grammar. The semantic constraints of the remaining sections complement its productions. Aggregate type-name recognition is the single context-sensitive classification specified by R-GRAM-0003; it does not change tokenization.
+
+<a id="R-GRAM-0002"></a>
+
+**R-GRAM-0002** — A translation unit shall begin with an optional `module` declaration, followed by imports and then external declarations. If the module declaration is absent, the implementation-defined module map supplies it.
+
+<a id="R-GRAM-0003"></a>
+
+**R-GRAM-0003** — A `struct Name { ... };`, `enum Name { ... };`, or imported aggregate introduces `Name` as an aggregate type name. In a type position the aggregate is written directly as `Name` or a qualified `module.path::Name`; `struct Name` and `enum Name` are declaration forms, not type-use forms. The parser may tentatively parse an identifier as `aggregate-type-name`, but the resulting declaration is valid only when lookup resolves that token sequence to exactly one visible aggregate type. This type-name classification is parser feedback after ordinary tokenization and is required to disambiguate a declaration such as `Node* next = value;` from an expression statement. Within a statement or `for` initializer, when the leading token sequence resolves to a visible aggregate type name and the remaining tokens can form an object declaration, that declaration parse wins; otherwise the sequence is parsed as an expression.
+
+<a id="R-GRAM-0004"></a>
+
+**R-GRAM-0004** — Each syntactic construct R 0.1 is entered by the production annex A. Roles declaration, import, conversion, initialization, statement and expression are fully defined by the corresponding productions without contextual borrowing of other C syntactic forms, apart from aggregate type-name classification required by R-GRAM-0003.
+
+<a id="R-GRAM-0005"></a>
+
+**R-GRAM-0005** — Parser shall issue diagnostics for a token sequence not derived from Annex A and shall not assign semantics extension to strict mode.
+
+<a id="R-GRAM-0006"></a>
+
+**R-GRAM-0006** — Complete type precedes identifier, and `*`, `[]` and `?` belong to type rather than identifier. One `object-declaration` binds exactly one identifier; several objects are written in separate declarations.
+
+<a id="R-GRAM-0007"></a>
+
+**R-GRAM-0007** — Attribute set R 0.1 is closed: `@repr(C)` on struct/fieldless enum, `@safety` on unsafe or C-boundary function, `@json` on fields (R-JSON-0001), `@deny_panic_alloc` on a module declaration (R-OBJ-0012), and FFI attributes/scopes from R-FFI-0050. Unknown argument, unknown attribute or attribute outside its allowed declaration requires `R-DIAG-SYN-002` (or more specific Annex B FFI diagnostic). The function attributes `@noalloc` and `@nonblocking` are specified by R-FUNC-0019; `@must_use` is specified by R-FUNC-0020, `@discardable` by R-FUNC-0021, `@lending` on trait methods by R-TYPE-0045, `@chain` on methods by R-FUNC-0024, `@test` on functions by R-FUNC-0025, `@recursion` on synchronous functions by R-FUNC-0026, `@derive` on struct, enum and error declarations by R-AGG-0012 and `@default` on an enum variant by R-INIT-0005. After an argument-free attribute, a parenthesized group with a comma or `...` at its top level is not an argument list: it begins the tuple type of the declaration (R-TYPE-0052).
+
+<a id="R-JSON-0001"></a>
+
+**R-JSON-0001** — A field may have one `@json(...)` contract. Its parameters are `name`, `skip`, `omitempty`, `omitzero`, `string`, `case`, `embed`, `optional`, `default`, `omitnone`, and `description`. The field type alone determines R storage, layout, Copy/Move and initialization. `optional` permits an absent input key; `o<T>` permits a stored none value and JSON null but does not make a key optional. Output omission parameters do not change input requirements. `case` and `default` are attribute argument names without changing their lexical role elsewhere. Unknown, repeated, ill-typed, inapplicable or incompatible parameters require `R-DIAG-JSON-001`. `skip` permits only an additional `default`; `embed` stands alone. `default` requires `optional` or `skip`. An optional or skipped field without `default` that declares an initializer (R-INIT-0004) takes it as its default when the initializer is a constant scalar, a string literal or a call `factory()` of a default factory; any other initializer there requires `R-DIAG-JSON-001`. A default is a scalar/string literal or a safe synchronous zero-argument factory returning the exact field type; its checked errors are limited to `std.json::error` and `std.alloc::alloc_error`. `description` takes a string literal that describes the field in the JSON Schema of its type (R-SLIB-JSON-0002) and changes no conversion. The complete conversion contract belongs to R-SLIB-JSON-0001 and the schema to R-SLIB-JSON-0002. Interface schema 5 exports normalized field contracts and definition fingerprints; these do not alter physical aggregate representation. Interface schema 31 adds the description to the exported field contract and the `json_schema` hook to the exported hooks of a type.
+
+The associated names `json_marshal`, `json_unmarshal`, `json_is_zero`, and `json_schema` belong to the nominal type. Their safe synchronous definitions reside in the type’s module; the exact signatures and independent directional contracts are R-SLIB-JSON-0001, and those of `json_schema` R-SLIB-JSON-0002. Generic hooks have the same normalized parameters and constraints as their type schema.
+
+<a id="R-GRAM-0008"></a>
+
+**R-GRAM-0008** — Because `arc`, `rc`, `array`, `list` and `dict` are keywords, `std.arc::name`, `std.rc::name`, `std.array::name`, `std.list::name` and `std.dict::name` are admitted only by the corresponding closed standard qualified-name productions for the operations of R-LIB-0012 and R-LIB-0019..R-LIB-0023. They are not ordinary module paths, cannot be declared or imported by a program, and do not make a keyword usable as an identifier elsewhere. Because `async` is likewise a keyword, the `std.async` type and operation paths admitted by Annex A are also closed implementation-provided forms; a program cannot declare `async` as a module-path component.
+
+The closed JSON forms `std.json::null`, `std.json::array` and the corresponding `std.json::value_kind` variants permit these keyword components only in those paths.
+
+<a id="names-scopes"></a>
+
+## 8. Names, declarations and scopes
+
+### 8.1 Name spaces and lookup
+
+<a id="R-NAME-0001"></a>
+
+**R-NAME-0001** — R has separate name spaces for modules, aggregate type names, variants, `case` labels, and ordinary value/function names. Field names belong to the scope of their aggregate; variant names belong to the scope of the defining enum and are referenced through `Enum::Variant`. The closed associated key-operation names `hash` and `equal` belong to their nominal type and are referenced through `Type::name` under R-FUNC-0009. Method names belong to the separate method name space of their owner type under R-NAME-0010. One identifier may simultaneously be an aggregate type name and an ordinary value/function name; a type position selects the former and an expression position selects the latter, except that the head immediately followed by a braced aggregate initializer is the constructor context defined by R-AGG-0007.
+
+<a id="R-NAME-0002"></a>
+
+**R-NAME-0002** — The scope of a module-scope ordinary function name begins after its declarator; that of an R object name begins after its complete initializer; and that of an imported C object name begins after its declaration. Each extends to the end of the module. A parameter’s scope is the entire function body. The scope of a local declaration begins after its complete initializer and ends at the end of the containing block. A declared aggregate type name enters scope immediately after the identifier in its `struct` or `enum` declaration and extends to the end of the module; an imported aggregate type name enters scope after its import and has the same module extent.
+
+<a id="R-NAME-0003"></a>
+
+**R-NAME-0003** — A use shall resolve to exactly one accessible declaration. An unresolved or ambiguous use, or access to a protected name from another module, requires a diagnostic.
+
+<a id="R-NAME-0004"></a>
+
+**R-NAME-0004** — Repeated declaration of one ordinary name in one scope is prohibited, except for the compatible function prototype and its single definition. Repeated aggregate type name in one module is prohibited. A function prototype and definition shall have the same default-exported or `protected` visibility.
+
+### 8.2 Declarations
+
+<a id="R-NAME-0005"></a>
+
+**R-NAME-0005** — An object declaration shall have an initializer; `auto` in place of its type takes the type of that initializer under R-NAME-0011. A declaration without one is a constraint violation even if control-flow analysis could prove a subsequent write. Imported C object declaration inside `extern "C"` is the only exception and does not create an R object/storage.
+
+<a id="R-NAME-0006"></a>
+
+**R-NAME-0006** — Module-scope initializer shall be constant expression or aggregate of constant expressions. Dynamic module initialization is not available.
+
+<a id="R-NAME-0007"></a>
+
+**R-NAME-0007** — Every module function, object, struct, enum, extern block, and aggregate field is exported by default. Modifier `protected` may apply to any of those forms and removes the corresponding name or field from the module interface; it remains accessible wherever its declaration is otherwise in scope within the defining module. `protected` on a local, parameter, drop definition, or individual declaration already governed by an extern block is forbidden. This is a module-visibility rule, not inheritance access and not storage duration. In particular, `static` retains only the block-storage meaning of R-NAME-0008 and is never a linkage or visibility modifier. Every variant has the visibility of its defining enum and cannot carry an independent visibility modifier. A protected field remains part of its aggregate layout, drop glue, Copy/Send/Sync derivation, and interface fingerprint even though source in another module cannot name that field.
+
+<a id="R-NAME-0008"></a>
+
+**R-NAME-0008** — `static` can only be applied to block object and specifies static storage duration. `thread_local` can be applied to a module or block object and sets a separate instance on the thread. Both require a constant initializer, except for `thread_local` imported C object, the storage of which is defined by an external library.
+
+<a id="R-NAME-0009"></a>
+
+**R-NAME-0009** — Shadowing outer local name may be allowed, but shadowing parameter, module name or imported exported name in the same translation unit requires diagnostic to rule out unstable name resolution. Predeclared intrinsic name `len` shall not be declared or shadowed in any scope. Predeclared type name `bytes` shall not be declared or shadowed in the aggregate type-name space. Its spelling remains available in the separate ordinary, module, variant and field name spaces; none of those declarations shadows the predeclared type.
+
+<a id="R-NAME-0010"></a>
+
+**R-NAME-0010** — Every complete nominal, standard and built-in type has one flat method name space, separate from the ordinary, module, variant and field name spaces and shared by the inherent methods of the type and by the methods of every implementation for it. A method is referenced through `Type::name` and through the receiver forms of R-FUNC-0014. A method name that repeats another method name of the same owner, or a field or variant name of that owner, requires a diagnostic, and so does a receiver whose method name two visible implementations provide. A method of an implementation of a trait for a standard or built-in type may repeat the name of a method registered for that type (R-FUNC-0014): the receiver form then names the registered method, and the method of the implementation is reached through a generic constraint or a dyn interface (R-TYPE-0043, R-TYPE-0051). `this` and `Self` are keywords: `this` names only the receiver parameter, and `Self` only the owner inside a trait or an implementation.
+
+<a id="R-NAME-0011"></a>
+
+**R-NAME-0011** — `auto name = initializer;` declares an automatic local whose type is the type of its initializer as an uncontextualized expression: an unsuffixed integer literal has type `i32`, and a `void` initializer or a storage specifier requires a diagnostic. `auto` is a keyword, appears only in the type position of a local object declaration, including the initializer of `for` and the loop variable of a range-for (R-STMT-0014) or of a comprehension clause (R-EXPR-0030), and is the only way to hold a closure value outside its lambda name.
+
+<a id="type-system"></a>
+
+## 9. Type system
+
+### 9.1 Type categories
+
+<a id="R-TYPE-0001"></a>
+
+**R-TYPE-0001** — Types are divided into scalar, aggregate, fixed array, dynamic container, asynchronous task, slice, borrow, unique owning pointer, reference-counted strong/weak owner, raw pointer, atomic, function, closed standard-library resource and special types `void`/`never`.
+
+`null_t` is a compile-time parameter marker that accepts only the literal `null` (optionally parenthesized). It is not an object/value type: locals (including `auto`), module objects, fields, enum payloads, containers, pointer targets, return types, variadic elements and generic type arguments cannot have this type. It has no source-visible size, alignment or default value and is not a C ABI type. A declaration uses `null_t name` or `const null_t name` in a native function or method parameter list. The parameter name is not a readable, assignable, movable or addressable object; use the literal `null` in the body. Ordinary and async calls resolve this marker statically under R-FUNC-0004. No generic value parameter can infer `null_t`.
+
+<a id="R-TYPE-0002"></a>
+
+**R-TYPE-0002** — The Boolean type `bool` has exactly the values `false` and `true`. This restricts the value set of the type, not a condition to literal values. The `condition-expression` syntax consists of Boolean literals, explicit comparison operations such as `a == 1`, and compositions of those forms with `&&` and `||`. The conversion set in R-EXPR-0015 does not create a `bool` from an integer or pointer.
+
+<a id="R-TYPE-0003"></a>
+
+**R-TYPE-0003** — Signed integer types `i8`, `i16`, `i32`, `i64` use two’s-complement values from -2^(N-1) to 2^(N-1)-1. Unsigned `u8`, `u16`, `u32`, `u64` have values 0..2^N-1. These types have no padding bits.
+
+<a id="R-TYPE-0004"></a>
+
+**R-TYPE-0004** — `isize` and `usize` have the same implementation-defined width, at least 32 bits. For this width N, `isize` has two’s-complement range -2<sup>(N-1)..2</sup>(N-1)-1, `usize` has range 0..2^N-1, and neither has padding bits. `usize` can represent the size of every object, and `isize` can represent the difference between indices into one object when that difference is within an implementation limit.
+
+<a id="R-TYPE-0005"></a>
+
+**R-TYPE-0005** — `char` represents a Unicode scalar in U+0000..U+D7FF or U+E000..U+10FFFF and is not an integer type. Explicit conversion to `u32` always succeeds; the reverse conversion panics for a non-scalar value.
+
+<a id="R-TYPE-0006"></a>
+
+**R-TYPE-0006** — `f32` and `f64` conform to IEC 60559 binary32 and binary64 with round-to-nearest, ties-to-even. Overflow produces infinity, underflow is gradual, and an invalid operation produces NaN. NaN payload and sign are unspecified.
+
+<a id="R-TYPE-0007"></a>
+
+**R-TYPE-0007** — `void` denotes no value and, when used directly, is permitted only as a return type or the target of the explicit discard conversion in R-EXPR-0023. It may additionally be the pointee of `raw void*` or `raw const void*`; neither pointer can be dereferenced, indexed, arithmetically advanced, owned, or converted to a safe borrow without conversion to a complete object type under an unsafe contract. Use of `void` as an array or slice element, field, `o`, checked error type, owner pointee, or borrow pointee is a constraint violation. `void` is permitted as the logical result marker of `task<void>` under R-TYPE-0029. `never` is the uninhabited type of an expression that does not complete normally and may coerce to any type. A local, parameter, field or variant payload may have type `never`; only an expression that does not complete initializes it, so the declaration or construction ends the reachable path. A struct with an uninhabited field and a tagged enum whose every variant carries an uninhabited payload are themselves uninhabited.
+
+### 9.2 Qualified and derived types
+
+<a id="R-TYPE-0008"></a>
+
+**R-TYPE-0008** — A `const T` object cannot be modified after initialization. `const` is part of the access type but does not change the layout or lifetime of `T` and does not imply `constexpr`. In `constexpr str`, `constexpr` is not an object access or storage qualifier: it constrains the designated bytes and their provenance under R-TYPE-0028. The spelling `const constexpr str` applies the ordinary `const` access qualifier to the descriptor object; it does not change the backing-storage guarantee. Outermost object `const` qualifies a place, not a standalone copied value: R-INIT-0002 removes that qualifier for initializer conversion, and R-EXPR-0001 removes it from the value produced by reading a Copy place. Assignment, increment, exclusive borrow and move out of such an object are constraint violations; ordinary destruction remains required.
+
+<a id="R-TYPE-0009"></a>
+
+**R-TYPE-0009** — `const T*` is a shared borrow; `T*` is an exclusive borrow; `own T*` is a unique owning pointer; `arc T` and `rc T` are non-null shared owning handles; `weak arc T` and `weak rc T` are non-owning weak handles; `raw const T*` and `raw T*` are raw pointers. Pointer forms are non-null by default and suffix `?` adds one null value. Reference-counted handles have no nullable spelling; optional absence uses `o<arc T>`, `o<rc T>`, `o<weak arc T>` or `o<weak rc T>`.
+
+<a id="R-TYPE-0010"></a>
+
+**R-TYPE-0010** — Borrow, slice and ordinary `str` types have no source-level lifetime suffix or lifetime argument. Their borrow regions and provenance relationships are inferred under section 13 and recorded in compiler metadata, not written in the type. Thus the complete spellings are `const i32*`, `const i32[]`, `str` and `const str`. The last form qualifies the descriptor object and does not change the region carried by its value. Program-resident strings use `constexpr str`. Parenthesized type shall be used for nesting, such as `arc (o<Item>)` or `raw (raw const c_char*?)*?`.
+
+<a id="R-TYPE-0011"></a>
+
+**R-TYPE-0011** — `T[N]` — fixed array of N elements; `T[]` — mutable exclusive slice; `const T[]` — shared immutable slice. N shall be a positive `usize` constant expression. An unsuffixed integer literal that is the complete N expression is contextually typed as `usize`, so `u8[11]` needs no suffix; a nonpositive or unrepresentable bound requires `R-DIAG-CONST-001`. In `T[N][M]` leftmost N is outermost: type contains N arrays over M elements T, and the rightmost index changes faster; this order coincides with the C declaration `T a[N][M]`. Putting `[N]` in the type rather than after the identifier is intentional: `T[N]` is one complete type usable unchanged in every type position, including fields, return types and parametric type arguments. R therefore does not adopt C’s split array declarator. Slice is not an unsized object: its value contains bounds.
+
+<a id="R-TYPE-0012"></a>
+
+**R-TYPE-0012** — `o<T>` has variants `o::none` and `o::some(T)`. A checked error set is written only as a function `throws E1, E2` clause or inside a task/thread-handle type fixed by R-TYPE-0029 and R-LIB-0010; it is not a value type and has no source-level tagged wrapper. Each E shall be an exact named, outermost-unqualified, complete, sized, inhabited nominal type declared with `error`, or an explicitly registered standard error type or closed error schema instantiated with canonical type arguments. Ordinary `struct` and `enum` declarations do not qualify, regardless of their names or fields; using them in `throws`, `throw`, `catch` or task/thread error sets requires `R-DIAG-EFFECT-002` explaining that an `error` declaration is required. `void`, scalars, pointers, borrows, slices, runtime `str` and anonymous structural types are not error types. A throws list denotes an order-insensitive set: duplicate types are ill-formed, and implementations canonicalize it by fully qualified nominal name plus canonical type arguments for type compatibility, mangling and interface fingerprints. An entry that names an error with descendants names every exact member of its family (R-AGG-0011), and `std.error::fault` names every standard error of R-FUNC-0008; naming an error together with one of its ancestors requires `R-DIAG-EFFECT-001`. `array<T>` and `list<T>` are dynamic sequences and `dict<K,V>` is a dynamic key/value container. T, K and V shall be outermost-unqualified, complete, sized, inhabited, non-`void` value types; K shall additionally have the key contract defined by R-FUNC-0009 and R-LIB-0020. Together with `arc T`, `rc T`, their weak forms, `task<T throws E...>` and the closed schemas named by the R Standard Library Specification 0.1, these are predefined parametric constructors. User-defined schemas are governed by R-TYPE-0031 through R-TYPE-0040.
+
+<a id="R-TYPE-0013"></a>
+
+**R-TYPE-0013** — `atomic T` is valid for `bool`, integer type, `usize`, `isize` and nullable raw pointer. The predefined spellings `ai8`, `ai16`, `ai32`, `ai64`, and `aisize` are identical to `atomic i8`, `atomic i16`, `atomic i32`, `atomic i64`, and `atomic isize` in the same order. The spellings `au8`, `au16`, `au32`, `au64`, and `ausize` are identical to `atomic u8`, `atomic u16`, `atomic u32`, `atomic u64`, and `atomic usize` in the same order. They are not arithmetic integer types and do not introduce alias-distinct identities. Type/interface fingerprints, mangling, `sizeof`, `alignof`, and `atomic_is_lock_free` canonicalize each shorthand to its expanded atomic type; a declaration through one spelling is compatible with a definition through the other. These spellings are not literal suffixes and do not make C `_Atomic` an FFI type. Atomic type is not implicitly converted to T and is not Copy.
+
+### 9.3 Type identity and compatibility
+
+<a id="R-TYPE-0014"></a>
+
+**R-TYPE-0014** — Each `struct`/`enum` declaration creates a nominal type defined by module identity and aggregate name. The same members in different declarations do not create compatibility. Its declaration keyword is omitted whenever the type is used.
+
+<a id="R-TYPE-0015"></a>
+
+**R-TYPE-0015** — Derived types are compatible only when their base types, lengths, qualifiers and nullability are structurally equal and their compiler-inferred region constraints are satisfiable. Region variables have no source spelling and are compared by structure in interface metadata. They do not affect runtime layout, but affect static compatibility; R-BORROW-0021 defines permitted shortening.
+
+<a id="R-TYPE-0016"></a>
+
+**R-TYPE-0016** — A function return type shall not have the outermost object `const` described by R-TYPE-0008; shared-borrow, shared-slice and raw-pointee `const` are not that qualifier. This constraint applies to declarations, definitions and raw function types. Function declarations are compatible when they have the same calling convention, parameter types, return type, unsafe marker, asynchronous marker, checked-error set and variadic marker. Checked-error-set order does not affect compatibility.
+
+<a id="R-TYPE-0017"></a>
+
+**R-TYPE-0017** — Implicit user conversions, inheritance, specialization and inferred module interfaces are not available. User-defined generics follow R-TYPE-0031 through R-TYPE-0040, statically dispatched traits follow R-TYPE-0041 through R-TYPE-0043, dyn interfaces over them R-TYPE-0051 and their owners R-TYPE-0055, tuples R-TYPE-0052, type packs R-TYPE-0053 and function types R-TYPE-0054.
+
+### 9.4 Copy and Move types
+
+<a id="R-TYPE-0018"></a>
+
+**R-TYPE-0018** — `bool`, fixed R and C ABI integers and floats, `char`, fieldless enums, shared borrows, shared immutable slices, `str`, `constexpr str`, raw pointers, raw C function pointers and their nullable forms where the grammar permits nullability are Copy.
+
+<a id="R-TYPE-0019"></a>
+
+**R-TYPE-0019** — A fixed array, `o`, struct, or tagged enum is Copy if and only if every possible element, field, or variant payload type is Copy and the type has no user-defined drop. `own T*`, `arc T`, `rc T`, both weak-owner forms, exclusive borrow `T*`, slices with exclusive access, atomic types, `array<T>`, `list<T>`, `dict<K,V>`, `task<T throws E...>` and standard synchronization, channel, guard, thread-handle, container-iterator and closed standard outcome types from R-STMT-0006 are Move-only.
+
+<a id="R-TYPE-0020"></a>
+
+**R-TYPE-0020** — Copy creates independent value without changing the source state. For Move-only type, transfer from named place requires `move`; bitwise copy is not a language operation.
+
+<a id="R-TYPE-0021"></a>
+
+**R-TYPE-0021** — Raw pointer may become dangling when target lifetime ends. Storing, copying and equality-testing a dangling raw value remain defined; dereference, arithmetic, ordering or conversion to borrow then violates the applicable safety contract. Equality compares preserved historical allocation identity and offset.
+
+<a id="R-TYPE-0022"></a>
+
+**R-TYPE-0022** — C ABI integer types have value range, rank, signedness and representation of the corresponding selected C17 typedef or fundamental type. `c_char` signedness, `c_wchar` range, `c_wint` availability and, when available, its range, and all available widths shall be recorded in the target manifest. R shall check their signed overflow rather than inherit C UB.
+
+<a id="R-TYPE-0023"></a>
+
+**R-TYPE-0023** — `c_int8`, `c_uint8`, `c_int16`, `c_uint16`, `c_int32`, `c_uint32`, `c_int64`, `c_uint64`, `c_intptr` and `c_uintptr` are available only when the corresponding C17 typedef exists on target. `c_wint` is likewise available only when target C implementation provides compatible `wint_t` through its selected profile/headers. Use on unsupported target requires a translation diagnostic, not substitution by a merely similar type.
+
+<a id="R-TYPE-0024"></a>
+
+**R-TYPE-0024** — `c_bool` has C `_Bool` ABI and R values false/true; `c_intmax`/`c_uintmax`, `c_size`, `c_ptrdiff`, `c_float`, `c_double` and `c_long_double` match corresponding C types. Conversion between C ABI and fixed R numeric types is explicit and checked except where exact compatibility is proven.
+
+<a id="R-TYPE-0025"></a>
+
+**R-TYPE-0025** — At construction of any `arc T`/`rc T` allocation and before a value-bearing declaration of either strong or weak form is completed, T shall be one complete, sized, inhabited, non-`void`, non-`never` R object type with known drop glue; a borrow-bearing T gives the owner its regions (R-BORROW-0018). A managed-owner field may name the R aggregate currently being defined before its closing brace; that tag shall become complete in the same module before any value of the containing type is constructed. An imported opaque type never qualifies. The handle has stable allocation identity but implementation-private representation. Strong handles of one family and T may share one control block; `arc` and `rc` families never interconvert implicitly or explicitly. A weak handle is never dereferenceable.
+
+<a id="R-TYPE-0026"></a>
+
+**R-TYPE-0026** — A standard-library parametric type is written as a lowercase qualified standard name followed by its parenthesized value type or types, for example `std.thread::join_handle<i32>`, `std.thread::scoped_join_handle<i32>` or `std.sync::mutex<State>`, `std.list::iter<Item>` or `std.dict::iter<str,Item>`. Only the lowercase names, arities and constraints fixed by the R Standard Library Specification 0.1 are valid. Parsing such a spelling does not declare a user type constructor and does not relax R-TYPE-0017. A scoped handle, lock guard, container iterator or entry reference carries any hidden inferred region fixed by the creating operation; that region is never a source type argument.
+
+<a id="R-TYPE-0027"></a>
+
+**R-TYPE-0027** — `std.thread::join_handle<void throws E...>`, `std.thread::scoped_join_handle<void throws E...>` and `std.thread::join_result<void>` use `void` solely as a compile-time marker for an entry returning no value; they are complete Move-only types and contain no void object. Together with `task<void throws E...>`, these are the only exceptions permitting `void` as a type argument. Omitting the empty `throws` part produces the respective effect-free handle or task spelling. Every other standard type argument shall satisfy R-TYPE-0007.
+
+<a id="R-TYPE-0028"></a>
+
+**R-TYPE-0028** — `constexpr str` is a distinct safe string type whose well-formed UTF-8 bytes are embedded in immutable program-image storage, remain live for the entire program execution, and have no runtime destruction. Its value is a Copy descriptor containing provenance-bearing start and byte length; the descriptor may be selected, copied, passed, returned, or stored in a runtime aggregate even when its concrete value is chosen at runtime. Every possible descriptor value shall still designate such program-resident bytes. For an empty value, its start shall designate an implementation-selected program-lifetime sentinel and no byte is readable; this is the `constexpr str` specialization of R-ARRAY-0003. These guarantees apply to the backing bytes. The Copy descriptor itself has ordinary object storage duration; ending or, when it is not `const`, overwriting its object does not destroy or modify the backing bytes. `constexpr` in R 0.1 is valid only in the two-token string-type head `constexpr str`; the access-qualified type `const constexpr str` is therefore also valid, but no other placement or application of `constexpr` is valid. It is not a storage specifier, does not make an expression a constant expression, and does not require a callee to know which string a caller selected. No ordinary `str`, borrowed buffer, allocated string, or external-provider string is a source of this type; a safe `constexpr str` value originates from a string literal and zero or more Copy, selection, aggregate, argument and return operations that preserve the type.
+
+<a id="R-TYPE-0029"></a>
+
+**R-TYPE-0029** — `task<T throws E1, E2>` is a compiler-recognized Move-only handle carrying the unique right to observe one eager asynchronous computation whose logical return type is T and whose checked completion-error set is the listed canonical set. The empty spelling is `task<T>`. T and every E shall be outermost-unqualified, complete, sized and inhabited and shall not recursively contain an ordinary borrow, slice or `str`; `task<void>` is the sole fieldless-result exception and contains no void object. An async function whose logical return type is `never` is observed only by the call form of await (R-STMT-0012); its hidden task is not a `task<never>` object. `constexpr str` is permitted because its bytes have program lifetime. Every E shall additionally satisfy the checked-error constraints of R-TYPE-0012. `task<T throws E...>` is neither a user generic nor a standard-library nominal type, has implementation-private representation and has no nullable spelling. An effectful task is must-resolve as specified by R-FUNC-0012.
+
+<a id="R-TYPE-0030"></a>
+
+**R-TYPE-0030** — `bytes` is a predefined, non-shadowable type name and an exact transparent alias of `array<u8>`. It introduces no nominal identity, wrapper, conversion, storage, invariant or distinct ABI. Before type compatibility, layout, capability derivation, interface fingerprinting, mangling or generic-family selection, every occurrence of `bytes` canonicalizes to `array<u8>`; a value of either spelling is therefore usable as the other without a conversion and has exactly the same Move-only, Send and Sync properties. The empty initializer `{}` is admitted for this canonical type, performs no allocation and constructs its unique empty state with zero length and zero capacity; consequently both `bytes value = {};` and `array<u8> value = {};` denote the same initialization.
+
+`bytes` remains an identifier token under R-LEX-0008 rather than becoming a keyword. In a type position Annex A recognizes that exact spelling as the predeclared type before aggregate-name classification. It cannot be declared as an aggregate type name, but the same token spelling remains valid in another name space, including an ordinary function or value and the `bytes` field of a digest structure.
+
+### 9.7 User-defined generic schemas
+
+<a id="R-TYPE-0031"></a>
+
+**R-TYPE-0031** — A `@generic<T>` header declares type parameters for one struct, enum, error, trait, ordinary function, async function or associated hook. `generic` is a contextual name recognized as a header only after `@`; other uses remain identifiers, including applications of a type named `generic`. One header is permitted per declaration. Ordinary attributes may precede or follow the header, before declaration modifiers; `generic` is not an ordinary attribute name. Whitespace and comments may separate its tokens. Headers are not permitted on fields, parameters, local or module objects, or in or on extern blocks. Generic C exports remain prohibited. The legacy declaration header `generic(T)` is ill-formed and requires `R-DIAG-SYN-001` with the message `use @generic<...> to declare generic parameters`; valid type applications such as `generic<i32>` are unaffected. Duplicate headers, empty parameter lists and malformed constraints are syntax errors. Existing visibility applies. Type parameters may be mixed with compile-time `const usize` parameters under R-TYPE-0047. Defaults and specializations are not introduced, a pack parameter follows R-TYPE-0053; a trait constraint follows R-TYPE-0043 and a core trait constraint R-TYPE-0046. An applied aggregate type uses `Box<i32>`; type arguments shall be complete, sized, inhabited value types without outermost object `const`. Nested qualifiers are preserved.
+
+Type and generic argument lists are written between `<` and `>`: `array<i32>`, `dict<K, V>`, `o<T>`, `task<T throws E>`, `Box<i32>` and `@generic<T: copy>`. A `>>` token closes two nested lists. In an expression a name followed by `<` starts a type only when the matching `>` is followed by `::` or `{`, as in `Box<i32>::wrap(4)` and `Box<i32> { .value = 1 }`; otherwise `<` is a comparison. Explicit function arguments use `name::<arguments>` (R-TYPE-0036). A constant generic argument that contains `>` is parenthesized. A parenthesized header `@generic(...)` requires `R-DIAG-SYN-001` with the message `generic parameters are written @generic<...>`.
+
+<a id="R-TYPE-0032"></a>
+
+**R-TYPE-0032** — The identity of an application consists of the nominal schema’s module and declaration identity and its canonical type and constant arguments. `Box<bytes>` and `Box<array<u8>>` are identical. Schemas from different modules remain distinct. Constructors are `Box<i32> { .value = 1 }`, `Choice<i32>::Some(1)` and `Choice<i32>::Fields { .value = 1 }`. Generic errors retain the independent error category of R-AGG-0001; generic structs and enums do not acquire that category.
+
+<a id="R-TYPE-0033"></a>
+
+**R-TYPE-0033** — The closed constraint vocabulary is `copy`, `pod`, `send`, `sync`, `key`, `error`, `unborrowed`, `json_encode`, `json_decode` and `clone`. Constraints are conjunctions written with `&`; ordering and duplicates do not affect identity. `|` is not permitted. Copy, Send, Sync and key refer to the existing structural properties and key contract. `error` proves eligibility in every checked-error position. `unborrowed` proves absence of ordinary borrows, slices and runtime str, recursively by the task rules; it does not prove Send. A guard, a lock outcome carrying one, a scoped handle, a container iterator and an entry reference hold the region of the operation that created them (R-TYPE-0026) and are never `unborrowed`. Opaque standard types use explicit registered capabilities, never spelling or a name suffix. A constraint outside this vocabulary names a trait under R-TYPE-0043, a core trait as `core::Name` under R-TYPE-0046, or spells a callable signature under R-TYPE-0044.
+
+`json_encode` and `json_decode` prove availability of the respective JSON conversion in R-SLIB-JSON-0001. Neither implies the other. Copy and POD do not prove either JSON capability. Generic definitions must prove the requested direction before closing types. `clone` proves the clone contract of R-OWN-0020; `copy` implies it.
+
+<a id="R-TYPE-0034"></a>
+
+**R-TYPE-0034** — POD is Copy data without owners, pointers, ordinary borrows, string representations, atomic components or user drop. R and C numeric types, bool, char, fieldless enums and composites of POD components satisfy POD. Opaque standard types require an explicit POD entry in the capability registry. Padding is permitted. POD implies Copy and unborrowed, but does not prove Send, Sync or key for an unknown parameter. POD permits copying a valid representation of the same type; it does not permit arbitrary bytes, zero initialization, bytewise equality or portable serialization.
+
+<a id="R-TYPE-0035"></a>
+
+**R-TYPE-0035** — Every generic definition, including an unused one, is checked in its defining module before instantiation. Only operations proved by constraints are available. Copy and POD provide neither arithmetic, arbitrary fields, implicit default initialization nor extra methods. Unknown T is consumed after `move` unless Copy is proved; substituting a Copy type cannot repair an invalid definition. For a concrete Copy value move performs an ordinary copy and preserves the source, subject to access rules. Move values retain existing transfer rules. Explicit drop of Copy remains ill-formed; implicit scope destruction is available for unknown T. No permission to move from fields or borrowed storage is added.
+
+<a id="R-TYPE-0036"></a>
+
+**R-TYPE-0036** — Function generic arguments are named explicitly or inferred structurally from value arguments, including nested schema applications, fixed arrays and standard parameterized types. An explicit list `name::<arguments>` follows a function name, a qualified function name, `Owner<args>::name` or the method name of a receiver call. It names, in header order, every generic parameter that an owner spelling or receiver does not supply: a type for a type parameter, a checked constant for a constant parameter and `throws(E...)`, possibly empty, for an `errors` parameter; for a pack (R-TYPE-0053), the arguments after those of the other parameters, possibly none, are its elements. The list closes the function before its value arguments are checked, and no inference applies. For an overload family the list, and for a call also the value-argument count, shall select exactly one generic member. A list of the wrong length or form, or a list after a name that denotes no open generic function, requires `R-DIAG-TYPE-001`. Without a list every parameter is inferred: the schema prefix of a method follows from the owner spelling of `Owner<args>::name(...)` (R-FUNC-0013) or from the receiver, and the parameters named by the callable constraint of an inferred parameter follow from the closure argument (R-TYPE-0044); an uninferred parameter requires `R-DIAG-TYPE-001`. Parameters that the arguments leave open are then taken from the expected type of the result of the call: the declared type of the object it initializes, the target of `=`, the result type of `return`, a parameter of known type it is an argument of, and the field or element of an aggregate initializer it initializes; an awaited async call expects the awaited result and any other async call its task. The expected type fills only parameters the arguments left open and selects no overload; when the result type does not fit it, it infers nothing, and the ordinary conversions and diagnostics apply to the result. A generic parameter need not occur in a value parameter: a result-only `@generic<T> array<T> make()` is well formed and is called as `make::<i32>()`, or as `make()` where the result has an expected type such as `array<i32>`. Numeric-conversion search does not contribute inference candidates. Each overload is inferred independently under R-FUNC-0004. Uncontextualized literals use their ordinary R types. Conflicting candidates for one parameter are ill-formed. Ordinary argument conversions apply after inference or explicit closing; weakening borrow access preserves the inferred pointee type. An explicitly closed name in a value position is a function item (R-FUNC-0007). First-class polymorphic generic functions are not supported. Compiler-recognized standard operations with type operands use the same form, for example `std.array::create::<i32>()`, `std.dict::with_capacity::<Key, u32>(16usize)` and `core::enum_count::<Color>()`; a type operand among the value arguments requires `R-DIAG-SYN-001`. The constructors `std.array::create`, `std.array::with_capacity`, `std.list::create`, `std.dict::create`, `std.dict::with_capacity`, `std.sync::channel`, `std.sync::sync_channel` and `std.sync::once_lock` may omit the list where the expected type of their result is a type of their constructor, which supplies the operands, as in `array<i32> values = std.array::create();`; without such an expected type the omitted list requires `R-DIAG-TYPE-001`.
+
+<a id="R-TYPE-0037"></a>
+
+**R-TYPE-0037** — A generic drop, hash or equal hook shall use the schema’s exact type parameters and normalized constraints. Additional hook-only constraints and hooks for selected closed applications are ill-formed. `drop(Box<T>* self)` follows R-OWN-0006; after its body, fields or the active payload are destroyed in the existing order. Hash/equal remain a pair with the signatures and effect contract of R-FUNC-0009. A key constraint grants access through `core::hash` and `core::key_equal`, not an implicit equality operator. A method or an implementation of a generic owner repeats the owner’s parameters and normalized constraints in the same way.
+
+<a id="R-TYPE-0038"></a>
+
+**R-TYPE-0038** — Generic async results and completion errors require proven Send and unborrowed; errors additionally require error. Captures and values crossing suspension retain all task, ownership and borrowing rules. Conditional throw, throw/else, rethrow, conditional expressions, catch and finally retain their ordinary semantics after substitution, including cleanup of the selected active payload exactly once.
+
+<a id="R-TYPE-0039"></a>
+
+**R-TYPE-0039** — Each closed application has concrete types, layout, cleanup and code. Instantiation substitutes the checked semantic representation, not source text. It does not introduce type erasure, boxing or runtime generic metadata. One deterministic compilation cache keys instances by schema identity and canonical arguments; ordinary recursion reuses its entry. Static objects belong to a closed function instance and are shared by its calls. Increasing type instantiations are bounded by compiler limits and shall produce a diagnostic with the instantiation chain. Dependent sizes, alignments, layouts and constant values are determined after closing their types.
+
+<a id="R-TYPE-0040"></a>
+
+**R-TYPE-0040** — Cross-module instantiation requires the definition sources. Interface schema version 5 exports generic parameters, normalized constraints, field and variant schemas, error category, hooks, definition fingerprints and source dependencies. Names resolve in the definition module; discovery or source-file order shall not change instance identity, code or interface metadata. Loading generic bodies from a binary library and generic C exports are not part of this version. Standard-library C symbols and contracts are unchanged; internal compiler hashes and core container-key hashing remain independent of user generic instantiation.
+
+<a id="R-TYPE-0041"></a>
+
+**R-TYPE-0041** — `trait Name { members };` declares a static trait in the aggregate type-name space. `@generic<T: copy> trait Name ...` adds type parameters; trait parameters cannot be constant parameters. A member is a method prototype, a checked default method definition, an associated type declaration (R-TYPE-0045) or an associated constant declaration (R-TYPE-0050). `Self` names the implementing type. The checking schema consists of `Self`, explicit parameters and associated types. Every signature and default body is checked at definition, including unused declarations; only operations justified by the schema’s constraints are available. Names resolve in the definition’s module. Method attributes include the ordinary resource and must-use contracts.
+
+`trait Child : Parent<T> & copy ...` requires the listed nominal supertraits and closed capabilities of `Self`. Supertrait dependencies shall be acyclic. Inherited methods and associated-type constraints are available while checking defaults and constrained callers. Capabilities of `Self` and of explicit parameters remain independent. Trait objects and runtime witnesses are not introduced; dynamic dispatch exists only through the dyn interfaces of R-TYPE-0051.
+
+<a id="R-TYPE-0042"></a>
+
+**R-TYPE-0042** — `impl Name<Arguments> for Type { definitions };` implements a trait application for one canonical target type; parentheses are omitted for a non-generic trait. The implementation belongs to the module declaring the trait or the target. At most one implementation exists for each pair of canonical trait application and target. Distinct applications such as `Read<i32>` and `Read<u64>` may be implemented for the same type.
+
+An implementation binds every associated type and every associated constant without a default (R-TYPE-0050), and satisfies the associated-type constraints, the trait’s Self-capabilities and its separately implemented supertraits. Each method without a default requires a definition. An exact-signature override replaces a default; otherwise the checked default is instantiated with the target and associated types. Extra or differing members are errors. Parameters, result, receiver, exact checked errors, unsafe, async and scoped markers must agree with the substituted prototype. Resource and must-use promises apply to the implementation even when its declaration does not repeat the attributes. Unused implementations are checked. Methods of a protected target retain that target’s visibility. A generic implementation repeats the target schema's parameters and normalized constraints and may add constraints to them; it applies only to instances whose arguments prove them (R-TYPE-0043). The target of a generic implementation may also be a standard type constructor applied to the implementation's parameters, such as `o<T>`, `array<T>`, `T[N]`, `T[]` or `const T[]`: the implementation applies to each instance of that shape whose arguments prove its constraints, the arguments following from the instance, and method lookup on the instance finds its methods. Selection produces ordinary concrete functions and direct calls.
+
+<a id="R-TYPE-0043"></a>
+
+**R-TYPE-0043** — A nominal generic constraint names a visible trait or trait application, such as `Read<i32>` or `m.n::Read<T>`. Arity, type arguments and argument constraints are checked at definition and again after substitution. A type proves the constraint through a coherent implementation or its own declared constraints, including their substituted supertraits. Method lookup follows the actual trait application. An ambiguous method from distinct applications requires a diagnostic, even when both originate at the same declaration. An inherited path to the same method and application is not a second candidate. Expected return types do not disambiguate direct calls. Instantiation binds every trait call to its selected concrete implementation before code generation, except a call through a dyn interface, which selects among the implementations of its members (R-TYPE-0051).
+
+In the header of a generic function, an entry `P::Name: constraints` constrains the associated type `Name` of the parameter `P` of that header, as in `@generic<I: core::Iterator, I::Item: std.cmp::Ordered>`. Exactly one trait constraint of `P`, directly or through a supertrait, shall declare `Name`, otherwise `R-DIAG-TRAIT-001` is required; the constraints are capabilities and nominal traits, and a callable constraint requires `R-DIAG-TRAIT-001`. Such an entry in another header requires `R-DIAG-TYPE-001`. The entry adds no parameter to the schema. The body may apply to values of `P::Name` the operations its constraints justify, and every instantiation shall bind to `P::Name` a type that proves them; one that does not requires `R-DIAG-TYPE-001`. Interface schema 31 writes these entries as `associated_constraints=((associated=P::Name constraints=(...)))`.
+
+<a id="R-TYPE-0044"></a>
+
+**R-TYPE-0044** — The generic constraint `fn(P...) -> R` describes a synchronous callable with parameter types `P...` and result `R`. Types may depend on the same schema. Synchronous inputs and results follow ordinary borrowing rules, including borrowed aggregates, slices and runtime `str`; `void` is a result only and `never` is excluded. The result and checked payloads remain bounded by input origins under R-BORROW-0009. A mode after `fn` is `shared` (the default), `mut` or `once`; it selects a `const Self*`, `Self*` or by-value receiver. Modes have no implicit adapters. The last parameter type may be a pack expansion `P...`, which stands for the elements of the pack `P` as the last parameters (R-TYPE-0053).
+
+Argument-free `@noalloc` and `@nonblocking` may occur after `fn`, before the mode. The optional `throws(E1, E2)` after the result type names the exact checked error set; parentheses separate that set from following generic parameters. An optional leading `async` describes an async callable and requires `once` (also its default). Its logical result and completion errors, parameters and transferred environment require Send and unborrowed; errors additionally require the error category. Calling it returns the ordinary task and has the ordinary start-error transaction. Resource guarantees may be forgotten, but never acquired without proof; otherwise parameter/result types, mode, sync/async form and checked errors match exactly.
+
+Each signature denotes an implicit callable trait implemented by a matching closure or function item (R-FUNC-0007). Generic bodies use only the signature’s proven operations and resource guarantees. Structural inference uses the callable signature and value arguments; instantiation substitutes dependent types and binds calls directly to the checked lambda or original function body. No runtime dispatch, boxing or callable metadata is introduced.
+
+<a id="R-TYPE-0045"></a>
+
+**R-TYPE-0045** — `type Name: copy & Read<T>;` declares an associated type with optional closed capability and nominal trait constraints. `Self::Name` refers to it in the trait and its default bodies. A unique inherited associated name is also available. The constraints provide exactly their stated operations and are checked on every implementation, including unused implementations. An implementation binds each associated type declared by that trait exactly once with `type Name = T;`, for a complete value type. Missing, unknown or incompatible bindings require `R-DIAG-TRAIT-001`; duplicates require `R-DIAG-NAME-002`.
+
+`P::Name` projects the associated type provided by one unambiguous trait application of `P`. Before instantiation its operations are justified only by its associated constraints; after instantiation it is the selected implementation’s bound type. Associated types are not inferred independently from call arguments. An opaque result may fix its advertised associated types explicitly under R-TYPE-0048.
+
+An associated type is bound once per implementation and does not depend on the region of a call. A method that implements a prototype with a borrowed receiver whose result mentions an associated type of that trait, including one it inherits from a supertrait and in every application of a generic trait, such as `next` of `core::Iterator`, shall not return a view of the storage its receiver designates, including a view reached from that storage through an exclusive borrow or slice, an owner or a container held there; such a return requires `R-DIAG-BORROW-002`. It may return views that storage holds and views reached through the shared borrows, shared slices and ordinary `str` held there. A call of such a method depends on its borrowed receiver only through what the receiver holds (R-BORROW-0009): while the result is live, the receiver may be borrowed again, moved or destroyed, and what it held stays borrowed. What the result takes from other arguments, or from a receiver passed by value, depends on those arguments as for any call.
+
+The attribute `@lending` marks a trait method prototype, not async, with a `Self*` or `const Self*` receiver whose result mentions an associated type of the trait; on any other function it requires `R-DIAG-TRAIT-001`. The preceding paragraph does not apply to a lending method: its implementations may return views of the storage the receiver designates, and a call of it, directly or through a generic parameter, a dyn interface or an opaque result, depends on the whole receiver as on a borrowed argument its result is formed from (R-BORROW-0009), so the receiver stays borrowed while the result is live. An implementation inherits the attribute and may repeat it; writing it on a method that implements a prototype without it requires `R-DIAG-TRAIT-001`. Interface schema 31 records `lending=true`.
+
+An associated type may declare type parameters, as in `type Name<T: copy, U>: bounds;`, each with the constraints written after it (R-TYPE-0033, R-TYPE-0043). Their names differ from each other and from the parameters of the enclosing generic trait or implementation; otherwise `R-DIAG-NAME-002` is required. Such an associated type is used only applied to one type argument per parameter, as `Self::Name<i32>` or `P::Name<T>`, and each argument proves the constraints of its parameter (R-TYPE-0031). A missing or extra argument, a constant argument, arguments of an associated type without parameters and an unproven constraint require `R-DIAG-TYPE-001`. An implementation binds it with `type Name<T, U> = Type;`, which repeats the parameters in order without constraints; `Type` may mention them and shall prove the constraints of the associated type for parameters that have only their declared constraints. A binding with other parameters requires `R-DIAG-TRAIT-001`, and constraints written on its parameters require `R-DIAG-SYN-001`. Before instantiation an application has only the operations its associated type's constraints provide; after instantiation it is the selected binding with the arguments substituted for its parameters. A generic parameter is not inferred from an application. An associated type with parameters cannot be fixed by an equality of an opaque result or a dyn interface (R-TYPE-0048, R-TYPE-0051). Interface schema 31 records the parameters of an associated type, and a binding with parameters as `(type_function parameters=(...) body=...)`.
+
+<a id="R-TYPE-0046"></a>
+
+**R-TYPE-0046** — The language declares six core traits that belong to no module and are spelled `core::Iterator`, `core::LendingIterator`, `core::Contains`, `core::CaseMatcher`, `core::Format` and `core::AsyncIterator` wherever a trait name is accepted, including generic constraints and interfaces (R-TYPE-0051). `core::Iterator` declares the associated type `Item` and the prototype `o<Self::Item> next(Self* this)`; `core::LendingIterator` declares `Item` and the lending prototype `@lending o<Self::Item> next(Self* this)` (R-TYPE-0045); `core::Contains` declares `Item` and `bool contains(const Self* this, const Self::Item* value)`; `core::CaseMatcher` declares `Label` and `bool matches(const Self* this, Self::Label label)`; `core::Format` declares no associated type and the prototype `void format(const Self* this, std.format::builder* out) throws std.alloc::alloc_error`, which appends the text of the value to `out`; `core::AsyncIterator`, declared only in the `hosted-native-async` profile, declares `Item` and the prototype `@scoped async o<Self::Item> next(Self* this) throws std.error::fault` (R-STMT-0017), where `Self` is Send and `Item` is Send and holds no borrow (R-TYPE-0029). A core trait is implemented only for a nominal type of the implementing module, with its associated type bound as R-TYPE-0045 requires; any other target requires `R-DIAG-TRAIT-001`. Range-for (R-STMT-0014) advances every `core::Iterator` implementation, and every `core::LendingIterator` implementation of a type without one, the asynchronous for (R-STMT-0021) advances every `core::AsyncIterator` implementation of a type with neither, membership (R-EXPR-0029) tests every `core::Contains` implementation, and the labels of `switch` and `match` (R-STMT-0006, R-EXPR-0031) are tested by every `core::CaseMatcher` implementation, in addition to the built-in forms those rules list. The standard cursors `std.list::iter` and `std.dict::iter` are advanced by range-for through their own `next` operations and implement no trait in this revision.
+
+`core::Format` names `std.format::builder` and is available where `std.format` is (R-SLIB-PROFILE-0001). Besides the types with an implementation, it is satisfied by the types with standard formatting: the R and C integer, floating, Boolean and character types, `str`, `constexpr str`, `std.string::string`, `std.net::ip_address`, `std.net::socket_address`, and `o<T>`, `T[N]`, slices, `array<T>` and tuples whose element types satisfy it. Standard formatting writes integers in decimal, floating values in the canonical representation of `std.format`, Booleans as `true` or `false`, characters and text exactly, an address as `std.net::format_ip` does, a socket address as `a.b.c.d:port`, `[v6]:port` or, with a nonzero scope, `[v6%scope]:port`, an option as `none` or `some(v)`, arrays and slices as `[a, b]` and tuples as `(a, b)`, each element by its own formatting. A place whose type satisfies the trait has the method with a shared receiver (R-FUNC-0014): `pointer->format(out)`, and `place.format(out)`, which is this method rather than the template form of R-EXPR-0028 when the place is not a template. Formatted literals (R-EXPR-0028), these calls and the standard formatting of an enclosing value call an implementation; a failed append throws `alloc_error` and leaves the text appended before it in the builder. Formatting enters every implementation it reaches in the static call graph (R-FUNC-0004), so an implementation that formats its own type recursively requires `R-DIAG-STACK-001`, and it has no `@noalloc` or `@nonblocking` proof (R-FUNC-0019).
+
+<a id="R-TYPE-0047"></a>
+
+**R-TYPE-0047** — `@generic<T, const usize N>` declares type parameters and immutable compile-time constant parameters in the same ordered header. A constant parameter has an R integer type (`i8`, `i16`, `i32`, `i64`, `isize`, `u8`, `u16`, `u32`, `u64`, `usize`) or `bool`, without constraints, defaults, packs or specialization. The same declarations and hooks as R-TYPE-0031 support them; hooks shall match parameter kinds, types, names and normalized constraints. A constant parameter is a value of its declared type, not a value type or a runtime parameter. It cannot be assigned, borrowed as storage or shadowed by a local or value parameter.
+
+Applications such as `Buffer<u8, 64usize>` require arguments of the declared kind. A constant argument is a checked constant expression of the parameter's type, including a literal, a visible local or module constant, a constant parameter, an associated constant (R-TYPE-0050), `sizeof`/`alignof`, a reflection constant, a translation-time call (R-EXPR-0032) and integer arithmetic. No implicit conversion applies: `Buffer<u8, 4u32>` is rejected for a `usize` parameter, while an unsuffixed literal takes the parameter's type. Ordinary access and lexical scope rules apply; runtime values do not qualify. Constant size formulas reject negative results, addition/subtraction/multiplication overflow, overflowing left shifts, invalid shifts and division by zero. An already evaluated named `usize` constant contributes its value. Zero is a valid generic argument but a fixed-array bound shall remain positive under R-TYPE-0011. Closed layouts obey all existing object-size, alignment and compiler limits. Dependent formulas are checked at definition and evaluated again when their parameters close; malformed unused bodies still fail. A dependent formula may call a translation-time evaluable function (R-EXPR-0032) whose arguments or generic arguments depend on the parameters, as in `u8[size_of::<T>()]`. Such a computed formula is checked at definition like a dependent static condition (R-META-0003); the evaluability of its callees and its value are determined for each closed instance, and a panic, an exceeded limit, a callee that is not evaluable for that instance or a measurement of the instance being defined requires the diagnostics of R-EXPR-0032 naming the instance. Computed formulas with the same tokens in one module, parameters matched by position, are one formula; a formula in a function body that reads its locals is distinct. An instance closed before function bodies are checked, such as a field or a signature at module scope, receives the value computed by the discovery pass (R-EXPR-0032).
+
+Canonical identity includes each constant’s type and value. `Buffer<u8, 2usize + 2usize>` and `Buffer<u8, 4usize>` are identical. Values are substituted through checked semantic representations, never source text. Constant uses in function bodies become ordinary constants of their type in each closed function; no hidden runtime value parameters, metadata tables or allocation are introduced. Per-instantiation static objects and recursion limits follow R-TYPE-0038..0040.
+
+Inference obtains a constant parameter from a direct fixed-array dimension `T[N]` or from a nested generic argument, recursively through supported parameter shapes. It does not solve equations: `T[N + 1usize]` alone cannot infer `N`. Once another argument provides `N`, that dimension is checked after substitution. Conflicting candidates fail; a constant parameter that is not inferred is named in an explicit list such as `fill::<u8, 4usize>` (R-TYPE-0036). Expected results do not participate. Copy/Move, borrowing, checked errors, async startup and cleanup retain their ordinary rules.
+
+Interface schema 31 records constant parameters with `constant_type=usize`, closed arguments with their type and value, dependent expressions and definition fingerprints. Callable constraints from schema 11 remain structural. Importing definitions still requires their source; serialized generic bodies are not introduced.
+
+<a id="R-TYPE-0048"></a>
+
+**R-TYPE-0048** — `opaque(contracts)` is a complete function result contract that hides one concrete implementation type. Contracts contain generic capabilities, static trait applications, callable signatures and associated equalities such as `Item = i32`. Every advertised associated type requires exactly one unambiguous equality. An associated type with parameters (R-TYPE-0045) has no equality, so a contract whose traits declare one requires `R-DIAG-TRAIT-001`. For example, `opaque(core::Iterator & Item = i32)` exposes iteration of i32 values, and `opaque(fn(i32) -> i32 & copy)` exposes a Copy callable. Ordinary and async functions, including generic functions, support opaque results. The syntax requires a definition and is forbidden in parameters, objects, fields, nested type constructors and C ABI signatures. Outer object const is forbidden.
+
+Every return establishes the same canonical concrete type while checking the definition, including unused generic definitions. Static branch refinements do not change that type’s identity. A body without a concrete return cannot infer an opaque result. The concrete type shall prove every advertised capability, trait, associated equality and callable contract. Each declaring function and its canonical generic arguments define a distinct opaque identity. Generic inference uses that identity; expected result types do not reveal or select an implementation. Different opaque identities retain separate generic static state.
+
+Callers use automatic local inference or ordinary generic inference and may use only the advertised contracts. They cannot access hidden fields, perform unadvertised operations or implicitly convert to the implementation type. No universal base type or runtime type erasure is introduced. Borrow provenance follows concrete captures and returned components; opacity cannot extend a borrow’s lifetime. Async results retain Send and unborrowed rules.
+
+After checking and monomorphization the executable representation is the concrete type, with its existing layout, direct calls and cleanup. An opaque Move contract may use a Copy representation: the source is consumed semantically, while physical copying requires no destructor. Concrete Move payloads retain exactly-once cleanup. Stack, allocation and blocking analyses inspect the concrete executable graph, including hidden drop bodies. Interface 16 records opaque contracts, associated equalities, declaration identity and source fingerprints; physical carrier layout remains ABI metadata. Imported definitions require their source.
+
+<a id="R-TYPE-0049"></a>
+
+**R-TYPE-0049** — A generic parameter `E: errors` denotes a finite checked-error set, including the empty set. It is distinct from `E: error`, which denotes one nominal error type. A set parameter is not a value type and cannot be used as a value parameter, result, local, payload or catch binding. Its members retain their nominal identity. Additional capability bounds apply to every member; in particular, async completion sets require `send & unborrowed`.
+
+A throws list may include set parameters: `throws E, Failure` denotes their union with the listed nominal errors. Substitution flattens and canonically orders the union and removes overlaps; an empty union has no checked carrier or exceptional exit. Repeating a written throws entry remains invalid. `fn(P...) -> R throws(E)` infers E from the exact set in its callable argument, including an empty set from a non-throwing callable. Callable bounds on another generic parameter also supply that signature. Each callable constraint may infer at most one set parameter: explicitly listed fixed errors are checked and removed before binding the remaining set. Conflicting inferences for the same parameter fail. Two independently inferred sets can be combined in the enclosing throws list. Expected result types do not participate in inference.
+
+Generic bodies are checked before instantiation. A call with abstract effects requires those effects in the enclosing throws contract; a catch for a named error does not prove that it handles the whole abstract set or narrow the declared set parameter. On instantiation every matching named catch selects its normal cleanup path, and every unhandled member propagates. Named catches, bare rethrow and finally retain their ordinary rules. Borrow provenance is conservatively preserved through abstract calls and named catches; set substitution cannot extend a payload’s lifetime. Async startup errors remain separate from the inferred completion set. Interface schema 31 records the `errors` parameter kind, structural callable effects and canonical set arguments. Definitions are still imported from source.
+
+<a id="R-TYPE-0050"></a>
+
+**R-TYPE-0050** — In a trait, `const T NAME;` declares an associated constant and `const T NAME = value;` declares one with a default; `T` is an R integer type or `bool`, as for constant parameters (R-TYPE-0047). An implementation binds a constant with `const T NAME = value;`, repeating the declared type. It binds every constant without a default exactly once and may rebind a constant with a default. Missing, unknown or re-typed bindings require `R-DIAG-TRAIT-001`; a duplicate in one trait or implementation requires `R-DIAG-NAME-002`. The value is a constant expression of exactly the declared type, as a constant argument is under R-TYPE-0047, including translation-time calls (R-EXPR-0032); a value of another type requires `R-DIAG-TYPE-001`. Every closed implementation evaluates its constants, also when no use names them; a value that is not constant, panics or depends on itself requires the diagnostics of R-EXPR-0032.
+
+`Self::NAME` names a constant in its trait’s defaults and method bodies and in an implementation. `P::NAME` names the constant of the one trait application of `P` that declares `NAME`: through the constraints of a generic parameter, including supertraits, or through the implementations of a closed type, as in `Point::SIZE` or `Buffer<4usize>::SIZE`. A default is evaluated for each implementation with `Self` and the trait’s arguments substituted. A name that no such trait declares, or that more than one declares, requires `R-DIAG-NAME-001`. An associated constant is a value, not an object: it has no storage and cannot be assigned or borrowed.
+
+Over a generic parameter an associated constant is dependent. It may appear wherever R-TYPE-0047 accepts a constant parameter: in fixed-array bounds such as `u8[T::SIZE]`, as a constant argument such as `Buffer<T::SIZE>`, in dependent static conditions (R-META-0003) and in expressions. Each closed instance substitutes the value of the selected implementation. A closed associated constant is a translation-time value of its type; a module-scope declaration that uses one before implementations are checked receives the value computed by the discovery pass (R-EXPR-0032).
+
+Interface schema 31 lists the constants of each trait with their type and whether they have a default, and writes a dependent constant as its trait, name and owner; the definition fingerprint of an implementation covers its values. Importing definitions still requires their source.
+
+<a id="R-TYPE-0051"></a>
+
+**R-TYPE-0051** — `dyn(Contracts)` names a dyn interface. Its contracts, written like those of an opaque result (R-TYPE-0048), are one or more traits or trait applications, closed capabilities such as `send` or `sync`, and associated equalities such as `Item = i32`. Contracts written in another order or repeated denote the same interface, in every module. A contract without a trait, with a callable signature or depending on generic parameters requires `R-DIAG-TYPE-001`. Every associated type of the contract's traits, including supertraits, shall be fixed by an equality, and every method of those traits shall take its receiver as `const Self*` or `Self*`, have no generic parameters of its own and mention `Self` nowhere else in its signature except through fixed associated types; otherwise naming the interface requires `R-DIAG-TRAIT-001`. An associated type with parameters (R-TYPE-0045) cannot be fixed, so a trait that declares one is not a contract of an interface. Associated constants of the traits are not reachable through the interface.
+
+A dyn interface is not a value type: it is used only as the referent of a borrow, `dyn(C)*`, `const dyn(C)*` or their nullable forms, and as the member of an owner (R-TYPE-0055). A value, field, parameter or result of type `dyn(C)`, `sizeof` of it, a dereference or field access through its borrow, and an address comparison or ordering of interface borrows require `R-DIAG-TYPE-001`; a nullable interface borrow may be compared with `null`. An interface proves the capabilities its contract lists and those that its traits, including their supertraits, require of `Self` (R-TYPE-0041); a contract that spells such a capability and one that leaves it out denote the same interface. A borrow of an interface is Send or Sync accordingly (R-TYPE-0029).
+
+Where a borrow of an interface is expected, a borrow of a type that proves every trait, capability and associated equality of the contract converts to it implicitly, keeping its qualification or weakening an exclusive borrow to a shared interface; `dyn(C)*` weakens to `const dyn(C)*`. A type that does not prove the contract requires `R-DIAG-TRAIT-001`; one interface converts to another only by the narrowing of R-TYPE-0055, and any other conversion between interfaces requires `R-DIAG-TYPE-001`. The interface borrow keeps the origin, exclusivity and lifetime of the borrow it was converted from, and the conversion allocates nothing.
+
+The members of an interface are the closed types that the program converts to it, including in every instantiation of a generic function; the set is finite and known when the program is built. A method call through an interface borrow calls the implementation of the member it was converted from, including default and inherited methods. Its signature, checked errors, borrow contract and must-use and resource attributes are those of the trait prototype, which every implementation satisfies (R-TYPE-0042). The static call graph (R-FUNC-0004) and the resource proofs of R-FUNC-0019 follow the call to the implementation of every member: a recursive chain through an interface requires `R-DIAG-STACK-001`, and a member implementation that allocates fails `@noalloc` of its caller. A `@scoped async` method is started through an interface inside a task group like its implementations (R-STMT-0017).
+
+An interface borrow is represented by the borrowed address and a tag that selects the member, with members ordered by their canonical names; a call is a selection over the tag with a direct call of each implementation. A member of an interface over `core::Format` may be a type with standard formatting (R-TYPE-0046), whose selection formats it by that formatting. Loading further implementations when the program runs, recovering a member’s type and an interface itself as a generic argument are not part of this revision; owners of interfaces follow R-TYPE-0055. Interface schema 31 writes the type as `(dyn "dyn(...)")` with the canonical contract of the interface.
+
+<a id="R-TYPE-0052"></a>
+
+**R-TYPE-0052** — `(T1, T2, ..., Tn)` with at least two elements is a tuple type. Each element type shall be a complete, sized, inhabited value type without outermost object `const`; otherwise `R-DIAG-TYPE-001` is required. Tuples with the same element types in the same order are one type in every module, and `(T)` remains the parenthesized type `T`. A tuple has the layout, Copy and Move classification, cleanup order and Send, Sync, `pod` and `unborrowed` properties of a struct whose fields, named `0` to `n - 1`, are its elements in order; it has no hooks, is not `key`, has no JSON form and is not a C ABI type.
+
+`(e1, e2, ..., en)` with at least two elements builds a tuple: the elements are evaluated from left to right and each is moved or copied into its element. An expected tuple type with the same number of elements gives each element its expected type; otherwise the tuple type is formed from the element values. `value.N` selects element `N` as a field (R-AGG-0002), and a match pattern destructures a tuple with fields `.0`, `.1`, ... (R-EXPR-0031). Elements hold views like fields; a later use of `value.N` keeps the views of that element live. `core::type_name` spells a tuple `(A, B)`, and interface schema 31 writes it as `(tuple A B)`.
+
+<a id="R-TYPE-0053"></a>
+
+**R-TYPE-0053** — In the header of a generic function, `T...` declares a pack: a parameter that stands for an ordered list of zero or more types and whose argument is the tuple of those types (R-TYPE-0052), which may have no element. A function declares at most one pack, as the last parameter of its header; a pack in the header of another declaration, a second pack and a pack before another parameter require `R-DIAG-TYPE-001`. Constraints written after `T...` apply to each element. As a type, the pack proves `copy`, `pod`, `send`, `sync` and `unborrowed` exactly when each element does and proves no other capability or trait, so an operation of the elements needs a value of an element (R-TYPE-0035).
+
+A pack is used only expanded: `T... name` as the last value parameter declares one parameter of type `(T...)`; `(T...)` is the tuple of the pack, and `(A, B, T...)` the tuple of `A`, `B` and the elements; `fn(X, T...) -> R` in a callable constraint takes the elements as its last parameters (R-TYPE-0044); and `len(T...)` is the number of elements, a `usize` constant of each instantiation. Any other use of the name of a pack requires `R-DIAG-TYPE-001`.
+
+A call of a function with a pack passes the fixed parameters first; the remaining arguments, zero or more, are evaluated from left to right and initialize, in order, the tuple passed for the pack, and inference binds the pack to the tuple of their types. With an explicit list, the arguments after those of the other parameters are the elements of the pack (R-TYPE-0036).
+
+A spread `...operand` as the last argument of a call, or as the last element of a tuple expression, stands for the elements of a tuple or pack operand. The arguments before it are evaluated first into hidden objects; the operand is evaluated once into a hidden object whose elements are moved or copied, in order, into hidden pieces, as a pattern partitions a value (R-EXPR-0031), and the pieces are passed in order. A spread may supply fixed parameters, the pack or both; the pack of a callable signature `fn(..., P...)` is supplied by a spread of a value of type `P`. A spread that is not the last argument or element requires `R-DIAG-SYN-001`; a spread whose operand is neither a tuple nor a pack, or that supplies another number of arguments than the parameters take, requires `R-DIAG-TYPE-001`. An async start stages the pieces as named Move operands (R-FUNC-0010), so a rejected start destroys each piece once.
+
+In a generic definition the length of a pack is unknown: its elements are reached only by a spread into parameters, and `value.N` of a pack requires `R-DIAG-TYPE-001`. A spread of a pack may supply `k` fixed parameters only where an enclosing `@if` proves that the pack has at least `k` elements, and exactly `k` when the callee has no pack (R-META-0003); the fixed parameters then take the leading elements, which prove the constraints of the elements of the pack, and the pack of the callee takes the rest. Recursion over a pack, as in `show(...move tail)` under `@if (len(T...) != 0usize)`, instantiates one function per length and ends where the branch is not selected.
+
+Instantiation replaces each pack by its tuple, so an instance has only ordinary parameters and direct calls. Interface schema 31 records `pack=true` with the constraints of each element, a pack built from a prefix and the elements of another pack as `(pack prefix=(...) base=... from=k)` and an expansion in a callable signature as `(expand P)`.
+
+<a id="R-TYPE-0054"></a>
+
+**R-TYPE-0054** — `fn [@noalloc] [@nonblocking] (P1, ..., Pn) -> R [throws(E1, ...)]` is a function type, and `async fn (P...) -> R [throws(E...)]` an async function type. Their parameters, result and checked errors are those of a callable signature (R-TYPE-0044) without a callable mode and without a pack expansion; a function type with a mode, with `P...`, with a `never` result or with an error set parameter requires `R-DIAG-TYPE-001`, and an async function type whose parameters, result or errors are not Send and unborrowed requires `R-DIAG-ASYNC-001`. Function types with the same parameters, result, checked errors, form and guarantees are one type in every module. A function value is Copy, Send and Sync, is never null and has no default value, so `o<fn(...) -> R>` expresses its absence. It may be a local, a field, an element of an array or container, a parameter, a result, a module object and a generic argument. A function type at the start of a statement is written without parentheses; a function whose result is an async function type spells the result in parentheses, as in `(async fn(i32) -> i32) handler()`, because `async` before a function declaration makes the function async.
+
+Where a function type is expected, a function item (R-FUNC-0007), including a closed generic function and a method, converts to it when its parameters, result, checked errors and synchronous or async form are exactly those of the type and the function proves every resource guarantee the type lists. In the body of a generic function, a generic function named with type arguments that are parameters of that body, as `handler::<S>`, is closed in each instantiation and converts there. A value of a function type converts to a type that differs only by listing fewer guarantees; a guarantee is never added. Any other conversion, including one from a lambda, an open generic name, an unsafe or C function or a raw function pointer, requires `R-DIAG-TYPE-001`.
+
+`f(args)`, `(expression)(args)`, `object.field(args)` and `sequence[index](args)` call the function a function value designates: the arguments are evaluated after the value, and the call has the parameters, result, checked errors, borrow contract, cleanup and async start transaction of that function; its result borrows only from the arguments, never from the value. A call of an async function value is an async start like a direct call (R-FUNC-0010). A function value satisfies a callable constraint (R-TYPE-0044) of its signature in each mode when the constraint lists no guarantee the type lacks. `==` and `!=` compare two values of one function type by the function they designate; any other operator requires `R-DIAG-TYPE-001`. A function value converted from a function item is a constant, so it may initialize a module object (R-OBJ-0010).
+
+The targets of a function type are the functions the program converts to it and to every function type whose values convert to it, including in every instantiation of a generic function; the set is finite and known when the program is built. The static call graph (R-FUNC-0004) follows a call through a function value to every target, so a recursive chain through a function value requires `R-DIAG-STACK-001` at the conversion that closes the cycle. A call through a function value proves `@noalloc` or `@nonblocking` (R-FUNC-0019) exactly when its type lists that guarantee, since every conversion to the type proved it.
+
+A function value is represented by the number of the function it designates; a call is a selection over the targets of its type with a direct call of each, or the async start of the selected function. Interface schema 31 writes a function type as `(fn parameters=(...) return=R throws=(...))`, adding `async=true`, `noalloc=true` and `nonblocking=true` for the form and the guarantees it has. Function values that capture state, ordering of function values and function types in C declarations are not part of this revision.
+
+<a id="R-TYPE-0055"></a>
+
+**R-TYPE-0055** — `own dyn(C)*`, `arc dyn(C)` and `rc dyn(C)` are owners of a dyn interface (R-TYPE-0051), and `weak arc dyn(C)` and `weak rc dyn(C)` are their weak forms. Each owns, or for a weak form observes, one member of the interface and follows the rules of the same owner of a type: `own dyn(C)*` is Move-only and has exactly one owner (R-OWN-0001), and strong and weak handles are Move-only and are cloned, downgraded, upgraded and counted as in R-OWN-0011 through R-OWN-0017. Destroying `own dyn(C)*`, or the last strong owner of `arc dyn(C)` or `rc dyn(C)`, destroys the member once as its type is destroyed and releases its storage. An owner of an interface is never null, so `o<own dyn(C)*>` expresses its absence, and a nullable form requires `R-DIAG-TYPE-001`. It may be a local, a field, an element of an array or container, the payload of `o<...>`, a parameter, a result and a generic argument; it is not a `key` type. Since an interface proves the capabilities of its contract (R-TYPE-0051), R-MEM-0003 makes `own dyn(C)*` Send when the interface proves `send`, `arc dyn(C)` Send and Sync when it proves both `send` and `sync`, and `rc dyn(C)` neither.
+
+Where an owner of an interface is expected, the same owner of a closed type converts to it: `own T*` to `own dyn(C)*`, `arc T` to `arc dyn(C)`, `rc T` to `rc dyn(C)` and a weak handle to the matching weak form. The type shall prove every trait, capability and associated equality of the contract, otherwise `R-DIAG-TRAIT-001` is required, and shall be `unborrowed` (R-TYPE-0033), otherwise `R-DIAG-TYPE-001` is required; an owner of another kind or a borrow requires `R-DIAG-TYPE-001`. The conversion moves the owner, keeps its counts and allocates nothing, and the type becomes a member of the interface.
+
+A borrow or owner of `dyn(C1)` converts to the same form of `dyn(C2)` when `C1` proves every trait of `C2`, directly or through a supertrait, and every capability and associated equality of `C2`. This narrowing keeps the member, selects it by a tag among the members of the narrower interface and allocates nothing; a borrow keeps its origin, exclusivity and lifetime. Any other conversion between interfaces requires `R-DIAG-TYPE-001`.
+
+`owner->method(args)` calls a method of the member as through an interface borrow (R-TYPE-0051). `own dyn(C)*` reaches receivers `const Self*` and, through exclusive access to the owner, `Self*`; a strong shared owner reaches only `const Self*` receivers (R-OWN-0010), and another receiver requires `R-DIAG-BORROW-001`; a call through a weak owner requires `R-DIAG-TYPE-001`, since a weak owner is upgraded first. Where an interface borrow is expected, `&owner` lends the member: `own dyn(C)*` lends `dyn(C)*` or `const dyn(C)*`, a strong shared owner only `const dyn(C)*` (`R-DIAG-BORROW-001`), and the borrow is bounded by the borrow of the owner. A dereference of an owner of an interface, and `try_unwrap`, `into_raw` and `get_mut` of it, require `R-DIAG-TYPE-001`, because the program names no type for its member. `clone`, `clone_weak`, `downgrade`, `upgrade`, `strong_count`, `weak_count` and `ptr_eq` apply as to other shared owners, and `==` and `!=` compare `own dyn(C)*` owners by identity (R-EXPR-0011).
+
+An owner of an interface is represented by the owner of its member and the tag of the member; its destruction selects the destruction of the member by the tag, and narrowing renumbers the tag through a table of the two interfaces. Interface schema 31 writes it as the owner of the interface type, for example `(own (dyn "dyn(...)"))` or `(weak_rc (dyn "dyn(...)"))`. Exclusive access to the member of a shared owner, recovering the member’s type, an interface itself as a generic argument and owners of interfaces in C declarations are not part of this revision.
+
+<a id="objects-storage"></a>
+
+## 10. Objects, storage and alignment
+
+<a id="R-OBJ-0001"></a>
+
+**R-OBJ-0001** — Storage duration is automatic, static, thread, or allocated. A block object has automatic duration, a module object has static duration, a `thread_local` object has thread duration, and an object created by `new` has allocated duration.
+
+<a id="R-OBJ-0002"></a>
+
+**R-OBJ-0002** — Every complete object has positive size and alignment. `sizeof(T)` and `alignof(T)` have type `usize`, are constant expressions, and shall be at least 1 for an inhabited complete `T`.
+
+<a id="R-OBJ-0003"></a>
+
+**R-OBJ-0003** — Array elements are contiguous with no inter-element padding. Struct fields have declaration order and distinct non-overlapping storage regions; an implementation may insert padding. Safe code cannot observe padding bytes.
+
+<a id="R-OBJ-0004"></a>
+
+**R-OBJ-0004** — The default layout of an R aggregate is implementation-defined for each target and is not an ABI. `@repr(C)` selects the C-compatible layout defined by section 23; declarations with different representations are incompatible and require a diagnostic.
+
+<a id="R-OBJ-0005"></a>
+
+**R-OBJ-0005** — Address comparison `==`/`!=` for borrows determines whether they denote the same subobject. Relational address comparison is not available in safe R.
+
+<a id="R-OBJ-0006"></a>
+
+**R-OBJ-0006** — In a profile with allocation, an expression-initialized allocation is written `new T(expression)`; an aggregate-initialized allocation is written directly as `new T { initializer-items }`. For an ordinary complete sized T, either form shall select suitably aligned storage, fully initialize T and return `own T*`. Prefixing T with `arc` or `rc`, as in `new arc T { initializer-items }`, instead returns the corresponding strong handle and allocates one implementation-private control block together with or associated with T. `new weak arc` and `new weak rc` are ill-formed. Allocation failure causes the `allocation_failure` panic. Under unwind strategy, if initialization panics, initialized subobjects shall be dropped and all acquired storage shall be released; abort strategy instead follows R-ERR-0005 and promises no further cleanup. A freestanding profile without allocation diagnoses any of these forms.
+
+<a id="R-OBJ-0007"></a>
+
+**R-OBJ-0007** — `own T*?` can be `null`; a non-null owning pointer owns exactly one T. The literal `null` matches a `null_t` parameter. In a borrow, own, raw object or raw function pointer context it is permissible only with explicit `?`; it creates the corresponding null pointer value. A nullable pointer object, even when null, does not match a `null_t` parameter. `o` represents absence only through variant `o::none`. Destruction of a null owning pointer is a no-op; a non-null form follows R-INIT-0010 exactly once.
+
+<a id="R-OBJ-0008"></a>
+
+**R-OBJ-0008** — Each R `thread_local` instance is constant-initialized prior to its first access in the corresponding R thread. Its first access registers that instance as Live at the top of this thread’s drop stack. Normal thread exit repeatedly changes the top Live instance to Destroying, drops it and changes it to Destroyed; therefore instances are dropped in reverse order of first access. A first access to another never-accessed instance during this teardown registers it at the top and that instance is dropped next after the current destruction completes. Access to an instance already Destroying or Destroyed causes `thread_local_lifetime` panic before exposing its storage; during active unwind this is a second panic under R-ERR-0008. Under unwind strategy the same stack algorithm performs thread-root cleanup. If a first panic begins in a thread-local drop after normal entry return, cleanup first completes the failing instance’s remaining subobject and resource duties under R-ERR-0008, then destroys any staged return value exactly once, then drops the remaining Live instances by that stack algorithm, and only then forms and commits the panic outcome. A panic in either later duty is the second panic and aborts. Abrupt thread/process termination and an external C thread not completed via R runtime are not required to perform such drops.
+
+<a id="R-OBJ-0009"></a>
+
+**R-OBJ-0009** — Safe access to a mutable object with static storage is allowed only through atomic operation or safe synchronized abstraction; direct reading, writing or borrowing requires `unsafe`. Direct access to an immutable static object from a possibly concurrent context requires its type to be Sync. Access to the current R `thread_local` instance is safe because it is not shared, unless the type access itself requires unsafe. Thus a static `rc` or `weak rc` handle cannot be reached from safe spawned-thread code.
+
+<a id="R-OBJ-0010"></a>
+
+**R-OBJ-0010** — Module object and block `static` object constant-initialized during initialization owning module in textual source order, even if control never enters the containing block. In normal module destruction, they dropped in reverse order. Their initialization is not lazy and cannot panic.
+
+<a id="R-OBJ-0011"></a>
+
+**R-OBJ-0011** — A reference-counted allocation contains storage for exactly one T, one strong count and one weak-liveness count. Construction initializes T and initializes both counts to one before any handle exists; it does not by itself perform inter-thread publication. T is initialized while the strong count is nonzero. The irrevocable one-to-zero transition reserves the sole destruction or `try_unwrap` move-out duty; T remains initialized through that operation as required by R-AM-0005, then only its uninitialized storage may remain. The weak-liveness count accounts for all explicit weak handles and one implicit control-block duty while T is alive or its final cleanup is pending. Counter width is at least `usize`; no counter may wrap.
+
+<a id="R-OBJ-0012"></a>
+
+**R-OBJ-0012** — A module declaration may carry the attribute `@deny_panic_alloc`, written before `module` and taking no argument. In a translation unit whose module declaration carries it, and in every translation unit when the implementation’s deny-panic-allocation translation option is selected, each `new`, `new arc` and `new rc` expression, and each call of a standard library operation whose Library inventory declares that it panics on allocation failure, requires `R-DIAG-ALLOC-001`. Library R-LIB-0007 leaves `new` as the only such allocation in R 0.1, so the policy diagnoses no library call until an inventory declares one. The policy changes neither the profile, the type system, the generated code nor the meaning of an accepted program; recoverable allocation through `std.alloc::try_new` and the checked `throws std.alloc::alloc_error` operations remains available. The attribute on any other declaration requires `R-DIAG-SYN-002`.
+
+<a id="initialization"></a>
+
+## 11. Initialization and destruction
+
+### 11.1 Initialization
+
+<a id="R-INIT-0001"></a>
+
+**R-INIT-0001** — Each object declaration shall perform exactly one complete initialization before the name enters the scope. There is no Safe Uninitialized Declaration.
+
+<a id="R-INIT-0002"></a>
+
+**R-INIT-0002** — A scalar initializer is evaluated and value-converted to the declared destination value type. When the declared object type has outermost object `const`, that destination is the corresponding unqualified T; successful initialization then establishes the `const T` object. Nested access kinds, including shared borrow/slice `const`, are not removed. Narrowing, sign-changing and float-to-integer conversions require explicit `as`. When an unsuffixed integer literal, or immediate unary `-` applied to one, is the complete source expression for a statically known R integer destination, it is contextually typed as that destination type when its mathematical value is representable. This applies to object or subobject initialization, including aggregate, array, enum/outcome payload and atomic initialization; the right operand of simple assignment; a by-value argument; and an ordinary return operand. It does not propagate inward through a larger expression and does not choose between multiple candidate destinations under R-STMT-0011. An unrepresentable literal requires `R-DIAG-CONST-001`; the compiler shall not first give it the default type from R-LEX-0010 and then perform a narrowing conversion.
+
+<a id="R-INIT-0003"></a>
+
+**R-INIT-0003** — An array initializer `{ e1, ... }` maps elements from left to right. The number of elements shall not exceed the array length. Omitted elements receive a default value only if the element type is default-initializable. Each explicit element has the array element type as its initialization context, so for example `u8[3] bytes = { 0xcb, 0x48, 0xcd };` uses R-TYPE-0011/R-INIT-0002 and needs no integer suffixes.
+
+<a id="R-INIT-0004"></a>
+
+**R-INIT-0004** — A struct initializer uses `{ .field = expression, ... }`. A field may not appear more than once. Explicit field expressions are evaluated in source order, and an omitted field requires a declared initializer or a type with a default value (R-INIT-0005). Naming an unknown field or omitting another field requires a diagnostic. All explicit expressions are first evaluated into fully initialized temporaries in source order; the values of the omitted fields are then evaluated in declaration order, and fields are initialized in declaration order from the corresponding temporary or value.
+
+The last item of a struct initializer may be a struct update `...base`, as in `Point { .x = 0, ...origin }`. `base` is an expression of the struct type, evaluated once after the explicit field expressions, and each omitted field takes the corresponding field of `base` instead of a declared initializer. A Copy field is copied and a Move field moved; after the new value is initialized, the fields of `base` that explicit values replace are dropped, and the rest of `base` is consumed without a drop of the whole. A named Move base requires `move` (R-OWN-0003), and a Copy base place stays usable. A base of another type requires `R-DIAG-TYPE-001`; a base whose type has a user drop, and `...base` in an initializer that is not a struct initializer, require `R-DIAG-INIT-002`.
+
+A field declaration may end with `= initializer`, as in `u32 retries = 3;`. The initializer is a value of the field type in the module of its aggregate: it names module items as a function body of that module does and names no local of the code that initializes the aggregate. It is checked once at the declaration; for a generic aggregate whose field type depends on a parameter, in each instance whose initialization uses it. It is evaluated anew for every initialization that omits the field, including `Type {}` and the other default values of R-INIT-0005; its checked errors are errors of that initialization and propagate or are caught there (R-ERR-0001), and a diagnostic of such a use, such as an undeclared checked error, is reported at the initialization. A failure destroys the temporaries and fields initialized before it as R-INIT-0006 destroys them on a panic, in reverse order. An initializer does not make its field optional in JSON input unless `@json(optional)` says so (R-JSON-0001). An initializer whose type is not the field type requires `R-DIAG-TYPE-001`.
+
+<a id="R-INIT-0005"></a>
+
+**R-INIT-0005** — Default-initializable: numeric zero, `false`, U+0000, nullable pointer `null`, `o::none`, array/struct only with recursive default-initializability and a struct only when no field declares an initializer. Non-null pointer, a user-declared enum without a `@default` variant and owning resource is not default-initializable. The canonical `array<u8>`/`bytes` type is the sole owning-resource exception: its empty initializer and resulting state are fixed by R-TYPE-0030.
+
+A type has a default value when it is default-initializable, when it is a struct each of whose fields declares an initializer or has a type with a default value, when it is an enum with a `@default` variant whose payload, if any, has a default value, or when it is a fixed array of such an element type. The default value of such a struct is that of `Type {}`: the initializers and defaults of its fields evaluated in declaration order (R-INIT-0004); of such an enum, its `@default` variant with the default value of its payload; of such an array, the default value of each element in index order. An omitted field or array element, `core::take` (R-OWN-0019) and an optional JSON field (R-JSON-0001) use it; evaluating it may throw the checked errors of the initializers it evaluates. The attribute `@default` precedes one variant of an enum or error enum; a second `@default` in one enum requires `R-DIAG-NAME-002`, and another attribute on a variant `R-DIAG-SYN-002`. Interface schema 31 records `initializer=true` on a field that declares an initializer and `default=true` on the `@default` variant.
+
+<a id="R-INIT-0006"></a>
+
+**R-INIT-0006** — Under unwind strategy, if aggregate initialization panics after initialization of a portion of its subobjects, already initialized subobjects shall be dropped in reverse order; the containing object never begins its lifetime. If panic occurs during evaluation of an explicit struct field expression, previously created expression temporaries drop in reverse source order and no field is yet initialized. If panic occurs in declaration-order field initialization, initialized fields drop in reverse declaration order, then not-yet-consumed temporaries in reverse source order. Under abort strategy, R-ERR-0005 terminates without additional R drops.
+
+### 11.2 Assignment and destruction
+
+<a id="R-INIT-0007"></a>
+
+**R-INIT-0007** — Simple assignment `=` first calculates the destination place exactly once (base, indices and required checks from left to right), without reading or changing the stored value, and creates an internal non-owning destination capability with storage slot, provenance, subobject path and, for initialized destination, its current object; then fully computes the RHS. Capability is not an ordinary competitive borrower: an owner or exclusive borrow used specifically for the destination designator may be used to perform the commit. Prior to commit, the storage slot and all capabilities on which access depends, shall remain valid and not be moved, dropped, reassigned, reused or deallocated; initialized destination identity shall remain live. Overlapping write, move or drop destination is prohibited during RHS. The usual reading of initialized destination and shared reborrow for calculating RHS are allowed if they end before commit. There must be no other usable overlapping borrowing in the commit point; otherwise diagnostic is required. After that, the former initialized destination value drops, if it was initialized, and the new value copy/move-initializes; moved destination is thereby reinitialized without drop. Panic/RHS failure does not change initialized/moved state or stored destination value, but side effects destination/RHS evaluation are retained.
+
+<a id="R-INIT-0008"></a>
+
+**R-INIT-0008** — Objects shall be destroyed in the reverse order of completion of their successful initialization in each scope. `return`, `throw`, `break`, `continue`, checked-error propagation and unwinding shall drop all exited automatic scopes. A transfer crossing a `finally` first stages its payload, drops the exited try/catch scope, executes that finally, and only then continues through outer scopes under R-ERR-0002.
+
+<a id="R-INIT-0009"></a>
+
+**R-INIT-0009** — Special declaration `drop(T* self) { ... }` may be defined exactly once in the module defining complete struct or payload enum T. An imported, opaque or fieldless enum type shall not have user drop. Parameter shall be named `self` and have exact non-null, non-const exclusive borrow type `T*`; its region is inferred from the call. The body implicitly returns `void`. It shall not move `self`, retain a borrow derived from `self` beyond the drop call, or execute destruction of the same object more than once.
+
+<a id="R-INIT-0010"></a>
+
+**R-INIT-0010** — Destruction of a fully initialized array destroys every element exactly once in reverse index order. If an element destruction first panics under unwind strategy, destruction continues with the remaining lower-index elements; a second panic aborts under R-ERR-0008. Under abort strategy, the first panic performs no further drops under R-ERR-0005. Destruction struct performs user drop body, then fields in reverse declaration order. Destruction tagged enum after user body destroys payload active variant. Unique owning pointer drops pointee, then releases allocation. Destruction of a strong `arc` or `rc` handle releases one strong reference and follows R-OWN-0011 on the last reference; destruction of a weak handle releases only its weak control-block reference. Destruction of `o` or any closed standard outcome schema named by R-STMT-0006 destroys the active alternative’s payload exactly once using its ordinary recursive drop glue; a fieldless active alternative destroys no payload.
+
+<a id="R-INIT-0011"></a>
+
+**R-INIT-0011** — Statement `drop expression;` may early destroy named initialized Move value; place becomes moved and shall be reinitialized prior to reuse. Explicit drop of any Copy value is prohibited as meaningless.
+
+<a id="R-INIT-0012"></a>
+
+**R-INIT-0012** — Initialization of `atomic T`, including any `ai8`, `ai16`, `ai32`, `ai64`, `aisize`, `au8`, `au16`, `au32`, `au64`, or `ausize` spelling, accepts exactly one non-atomic T value with no implicit narrowing and establishes initial modification-order value before publication. A complete unsuffixed integer literal or its immediate unary-minus form receives contextual base type T under R-INIT-0002, so `au32 flags = 0;` is valid. This is initialization-only conversion, not ordinary T/atomic T conversion. Atomic object shall thereafter be accessed only by `core` atomic operations; ordinary assignment, increment and compound assignment are forbidden. Move-initialization atomic value is the separate exception R-INIT-0013.
+
+<a id="R-INIT-0013"></a>
+
+**R-INIT-0013** — `move` of `atomic T` or aggregate containing it is allowed only when, at the move linearization point, the compiler proves exclusive access, no active borrowing and no current concurrent reachability of the source. Prior publication is not by itself disqualifying after a standardized acquire operation has exclusively claimed the item, completion outcome or allocation and removed every concurrent access path. This admits the exact acquire-and-move paths of receive, explicit/implicit join and successful `try_unwrap`; it does not admit a move while any concurrent path remains. Each atomic component snapshots through a representation-safe atomic load with `relaxed` ordering; backend shall not replace it with a non-atomic access. Relaxed snapshot creates no synchronizes-with edge. Destination component is initialized with that value as its first modification and therefore has a fresh modification order. For containing aggregate components transfer recursively in declaration/element order, followed by source whole-object lifetime ends. If proof is not available, `R-DIAG-MOVE-003` is required; ordinary atomic loads and stores shall use `core` operation and ordering.
+
+<a id="R-INIT-0014"></a>
+**R-INIT-0014** — A source simple assignment shall not unconditionally replace an
+initialized whole automatic local or value parameter. This requires
+`R-DIAG-USE-002`, even if the previous value was read, forwarded or explicitly
+acknowledged; a new value in straight-line code shall have a new local name.
+
+A runtime conditional arm, switch arm, loop body/increment or catch handler permits
+replacement of a binding declared outside that control region. A binding declared
+inside the region receives no permission from that enclosing region. An ordinary
+nested block, unsafe block, try body, finally body, compile-time selection or constant
+`if` condition does not grant this permission. Compound assignment, increment and
+decrement remain explicit updates under R-EXPR-0013. This rule does not prohibit
+writes to fields, elements or through pointers, whole reinitialization of moved
+storage, or output initialization and publication under R-FUNC-0022. A second
+source assignment to an initialized private output obeys this same rule. It does not replace
+object constness or exclusive-access checks.
+
+
+<a id="ownership-moves"></a>
+
+## 12. Ownership and moves
+
+<a id="R-OWN-0001"></a>
+
+**R-OWN-0001** — At any time, a non-null `own T*` shall have exactly one owner. The owner is responsible for dropping the pointee and deallocating its storage unless ownership is moved.
+
+<a id="R-OWN-0002"></a>
+
+**R-OWN-0002** — `move place` requires an initialized named whole-object place. For a Copy type it performs an ordinary value read, including the usual access checks and removal of outermost object `const`; the source remains initialized and usable. For a Move type the place shall be mutable and have no active borrow. The operation creates a value of the same type and changes the source object to `moved` without dropping it; the source lifetime ends after successful value transfer as specified by R-AM-0005.
+
+<a id="R-OWN-0003"></a>
+
+**R-OWN-0003** — Named Move value in by-value initializer, assignment, argument, return or variant payload shall be written with `move`. Temporary Move value can be transferred without a keyword, as it does not have a reusable name.
+
+<a id="R-OWN-0004"></a>
+
+**R-OWN-0004** — Use of a moved place, a second move, moving a borrowed place, or leaving a scope with a partially initialized object requires a diagnostic.
+
+<a id="R-OWN-0005"></a>
+
+**R-OWN-0005** — R 0.1 permits a move only of a whole object. Extraction of a field shall use a method-like free function that accepts the whole owner and returns the required values. The only payload-pattern exception is extraction of the active payload under R-STMT-0010. When the selected alternative has a payload, the applicable extraction first consumes the whole payload-bearing value and transfers that payload exactly once; a fieldless alternative transfers no payload.
+
+<a id="R-OWN-0006"></a>
+
+**R-OWN-0006** — Full assignment reinitializing a moved local begins a new lifetime with a new identity. A destroyed static or thread object cannot be reinitialized.
+
+<a id="R-OWN-0007"></a>
+
+**R-OWN-0007** — Conversion of `own T*` to a borrow does not transfer ownership. Converting that borrow with `borrow as raw T*` or `borrow as raw const T*` is the exact non-owning raw-exposure form of R-EXPR-0019 and R-SAFETY-BORROW-RAW; the original owner shall remain alive and immobile throughout all accesses through the raw pointer. `core::release(move owner)` under R-UNSAFE-0008 is the distinct consuming operation that transfers the allocation and deallocation duty to its returned raw pointer.
+
+<a id="R-OWN-0008"></a>
+
+**R-OWN-0008** — Unique `own` links remain acyclic by construction in safe code. Strong `arc` or `rc` links may form a cycle; the cycle keeps every involved strong count above zero and therefore leaks its values and control blocks. Such a leak is defined behavior, not UB. A back edge that shall not keep a value alive shall use the matching weak form.
+
+<a id="R-OWN-0009"></a>
+
+**R-OWN-0009** — Dereferencing a non-null unique owning pointer, or using `->`, grants exclusive access to its pointee without consuming the owner only when the owner value itself is available through usable exclusive access. Shared or const access to an owner attenuates the right to shared pointee access and does not permit mutation or movement of the pointee. A nullable owner requires the non-null proof of R-BORROW-0005 and R-BORROW-0015. A borrow created from an owner or its subobject shall not outlive the pointee; the owner shall not be moved, dropped, or reassigned while such a borrow is usable. An ordinary read through the owner does not move the pointee.
+
+<a id="R-OWN-0010"></a>
+
+**R-OWN-0010** — Dereference or `->` through `arc T` or `rc T` produces shared access to T and never exclusive access. The pointee shall not be moved out. Ordinary assignment through that access is ill-formed even when the strong count is observed as one. Mutation of shared state shall use an exclusive borrow returned by the uniqueness APIs or a standardized interior-mutable synchronization type. Every borrow of T or a subobject derived through a strong shared owner is bounded by a borrow of the exact owner handle used to derive it. That handle shall not be moved, dropped or reassigned while the derived borrow is usable; creation or retention of another clone does not extend the borrow or substitute a different handle identity.
+
+<a id="R-OWN-0011"></a>
+
+**R-OWN-0011** — `std.arc::clone(&owner)` and `std.rc::clone(&owner)` are the only safe operations that create an additional strong handle from an existing strong handle; R-OWN-0012 separately defines creation from a weak handle. Clone increments the matching strong count and leaves `owner` usable. Dropping the last strong handle performs an irrevocable one-to-zero transition before it drops T exactly once, then releases the implicit weak-liveness duty. The control block is deallocated only after the last explicit weak reference and that implicit duty are released. If dropping T initiates a first unwind, cleanup still releases the implicit duty once before propagation. A second panic during active unwind instead follows the immediate-abort rule R-ERR-0008; no later cleanup is promised after that abort begins.
+
+<a id="R-OWN-0012"></a>
+
+**R-OWN-0012** — `std.arc::downgrade(&owner)` and `std.rc::downgrade(&owner)` create a matching weak handle. `std.arc::upgrade(&weak)` atomically, and `std.rc::upgrade(&weak)` non-atomically, returns `o::some` containing a new strong handle exactly when the strong count is nonzero; otherwise it returns `o::none`. The last-release or successful-unwrap transition to zero linearizes before T destruction or move-out begins, so an upgrade concurrent with either cleanup cannot resurrect T. Cloning a weak handle is likewise explicit through `std.arc::clone_weak` or `std.rc::clone_weak`.
+
+<a id="R-OWN-0013"></a>
+
+**R-OWN-0013** — Strong and weak handles are Move-only. Assignment, argument passing, return and aggregate initialization follow the ordinary explicit `move` rules and do not change a reference count merely because the source is moved. A reference-count increment is never an implicit copy, conversion, parameter action or return action.
+
+<a id="R-OWN-0014"></a>
+
+**R-OWN-0014** — `std.arc::get_mut(&owner)` or `std.rc::get_mut(&owner)` returns a nullable exclusive borrow of T only when the caller exclusively borrows the strong handle and no other strong or explicit weak handle exists. The test shall be linearizable against clone, downgrade, upgrade and drop. Failure returns null and does not modify counts or T.
+
+<a id="R-OWN-0015"></a>
+
+**R-OWN-0015** — `std.arc::try_unwrap(move owner)` or `std.rc::try_unwrap(move owner)` returns the `unwrapped(T value)` alternative of its module’s `try_unwrap_result<T>` only when the consumed handle is the sole strong handle; otherwise it returns `shared(owner)` without changing the strong count. The success transition shall be linearizable against weak upgrade. Explicit weak handles may remain; they subsequently fail to upgrade and keep only the control block alive. T is moved out and is not dropped in its former allocation. After the move completes, the operation releases the implicit weak-liveness duty exactly once, retires T storage, and deallocates the block exactly when no explicit weak handle remains. Staging the successful outcome, including unwind during that staging, shall not lose or duplicate this cleanup duty.
+
+<a id="R-OWN-0016"></a>
+
+**R-OWN-0016** — The `std.arc`/`std.rc` operations `strong_count`, `weak_count` and `ptr_eq` do not transfer ownership. Count results are instantaneous observations and shall not be used as synchronization or as proof that a later uniqueness operation succeeds. `weak_count` reports explicit weak handles and excludes the implicit weak-liveness duty. It shall retry or mask any internal locked sentinel and never expose that sentinel as a count. `ptr_eq` is true exactly for strong handles whose control-block allocation identities match.
+
+<a id="R-OWN-0017"></a>
+
+**R-OWN-0017** — The strong count and number of explicit weak handles shall each not exceed half the maximum value representable by `usize`, rounded down. The physical weak-liveness counter may additionally contain the one implicit duty of R-OBJ-0011; an internal locked sentinel is not a count. Before strong clone, weak clone, downgrade or upgrade would exceed the applicable limit, it shall cause `reference_count_overflow` panic without changing a count or creating a handle. Destruction shall never underflow; underflow can arise only from an unsafe or external contract violation and is UB.
+
+<a id="R-OWN-0018"></a>
+
+**R-OWN-0018** — `arc`, `rc`, either weak form, `array`, `list`, `dict`, `task` and every standard resource have no C ABI representation. They shall not occur at any nesting depth of an `extern "C"` signature, including as a raw-pointer pointee, or recursively in an `@repr(C)` aggregate. A managed token adapter exposes only `raw const void*`, never a managed layout. A separately verified imported opaque C handle remains valid for its external C object but is not a managed-owner token. Exposing a borrowed raw pointer to T does not transfer a strong reference and requires the original strong owner to remain alive; an externally retained reference requires the unsafe balanced adapter of R-FFI-0060.
+
+<a id="R-OWN-0019"></a>
+
+**R-OWN-0019** — `core::replace(T* destination, T replacement) -> T` safely exchanges an initialized place with a prepared value. T shall be a supported Copy or Move value, outermost-unqualified and unborrowed under R-GEN-0002; void, never and atomic storage are excluded. The destination shall be a non-null exclusive borrow to mutable storage. Ordinary access, aliasing and expression evaluation rules remain in force. A named Move replacement requires `move`; Copy replacement preserves its source. The operation evaluates its operands once, prepares the replacement before changing the destination, returns the old value and leaves the destination initialized. It exposes no uninitialized intermediate place, invokes no user drop and performs no heap allocation. Subsequent destruction of either value follows ordinary cleanup and resource contracts. Preparing a replacement in a preceding checked call leaves the destination unchanged when that call fails. Neither operation supplies an atomic exchange or synchronization.
+
+`core::take(T* destination) -> T` performs the same exchange with the R default value of T (R-INIT-0005). That default shall be provable at definition time; no new default constructor or zero-filled owner representation is introduced. A default that evaluates field initializers is prepared before the exchange, so a checked error it throws leaves the destination unchanged and is an error of the `take` call. For example, taking `o<T>` leaves `o::none`, taking a number leaves zero, and taking `bytes` leaves an empty byte owner. A non-null owner or owning string requires `replace` with an explicit prepared replacement. These operations do not permit extraction of stored ordinary borrows, slices or runtime string views, or movement from arbitrary fields without replacement. An enclosing aggregate remains fully initialized throughout.
+
+`core::swap(T* first, T* second) -> void` exchanges the values of two initialized places of one T under the type requirements of `core::replace`. Both operands are non-null exclusive borrows to mutable storage and stay active until the exchange, so borrowing one place twice is the ordinary aliasing violation `R-DIAG-BORROW-001`. The operation evaluates both operands once, drops nothing, invokes no user code and performs no heap allocation; both places remain initialized. Two elements of one slice are exchanged by `std.slice::swap` (Library R-SLIB-SLICE-0002).
+
+<a id="R-OWN-0020"></a>
+
+**R-OWN-0020** — `core::clone(const T* value) -> T` produces an independent value equal to the value that `value` designates, without changing it. The argument is a non-null shared or exclusive borrow, and T proves the `clone` capability of R-TYPE-0033:
+
+- a Copy T is copied; the copy keeps the provenance of every view it holds and the call has no checked error;
+- `std.string::string`, `std.fs::path`, `array<U>`, `list<U>`, `o<U>`, `own U*`, a fixed array and a tuple copy their contents element by element in order, and `dict<K, V>` copies its entries in insertion order, when every component is cloneable;
+- `arc U`, `rc U` and their weak forms produce another handle to the same allocation under R-OWN-0011 and R-OWN-0012;
+- a nominal struct, enum or error is cloneable when its defining module declares the associated hook `T T::clone(const T* value)`: a safe, synchronous, non-protected definition whose throws list is empty or exactly `std.alloc::alloc_error`; a generic type declares the hook with the schema parameters as under R-FUNC-0009.
+
+A T that is not Copy shall be unborrowed; a generic parameter declares `clone & unborrowed`, and `copy` implies `clone`. Every other type, including tasks, atomics, dyn interfaces, standard resources and a nominal type without a hook, requires `R-DIAG-TYPE-001`, and a second hook requires `R-DIAG-NAME-002`. A clone of a value that is not Copy may throw only `std.alloc::alloc_error`: on failure every component already built is destroyed exactly once in reverse order, no result exists and the source is unchanged. A structural clone of a self-nesting type would recurse with the data and requires `R-DIAG-STACK-001`; the static call graph (R-FUNC-0004) and the resource contracts (R-FUNC-0019) include every clone hook that the copied structure calls. A clone of a value that is not Copy allocates and has no `@noalloc` or `@nonblocking` proof. Interface schema 31 records the `clone` hook of a type and the `clone` constraint of a generic parameter.
+
+<a id="borrowing-lifetimes"></a>
+
+## 13. Borrowing and lifetimes
+
+### 13.1 Borrow creation
+
+<a id="R-BORROW-0001"></a>
+
+**R-BORROW-0001** — Address expression `&place` is context-dependent: target type `const T*` creates a shared borrow, and target type `T*` creates an exclusive borrow. If the target type does not determine the borrow kind unambiguously, a diagnostic is required; an exclusive borrow is not selected implicitly by default. The receiver of a method call takes its borrow kind from the declared receiver form of R-FUNC-0014 instead.
+
+<a id="R-BORROW-0002"></a>
+
+**R-BORROW-0002** — A shared borrow permits reads and further shared reborrows but not mutation or movement of the overlapping original place. An exclusive borrow permits reads and mutation and excludes every other overlapping access. If an exclusive-borrow or exclusive-slice value is itself available only through a shared or const path, its right is attenuated to shared pointee or element access; that path cannot be used for mutation, move, or creation of an exclusive reborrow.
+
+<a id="R-BORROW-0003"></a>
+
+**R-BORROW-0003** — The number of shared borrows is unbounded. For one memory location, either any number of shared borrows with no write access or exactly one usable exclusive borrow is permitted.
+
+<a id="R-BORROW-0004"></a>
+
+**R-BORROW-0004** — A reborrow may not have a lifetime longer than the original borrow. An exclusive reborrow suspends use of the parent borrow for the entire lifetime of that reborrow.
+
+<a id="R-BORROW-0005"></a>
+
+**R-BORROW-0005** — Dereference nullable safe indirection (`borrow` or `own`) requires prior flow-sensitive proof of `p != null`; otherwise constraint violation. `null` dereference via raw pointer violates unsafe contract and is UB.
+
+### 13.2 Lifetime inference
+
+<a id="R-BORROW-0006"></a>
+
+**R-BORROW-0006** — The lifetime of a borrow begins when `&` or a reborrow is evaluated and ends after its last potential use, but no later than the end of the binding’s scope. The implementation shall use control-flow-graph-based non-lexical lifetime analysis.
+
+<a id="R-BORROW-0007"></a>
+
+**R-BORROW-0007** — A borrow shall not outlive its source object identity. Returning a borrow to an automatic local, storing it in a longer-lived object, or capturing it in a thread that can outlive the source requires a diagnostic.
+
+<a id="R-BORROW-0008"></a>
+
+**R-BORROW-0008** — Every borrow-bearing input occurrence introduces a fresh hidden region variable. For every borrow, slice, ordinary `str`, guard, scoped handle or compound containing one that flows to an output, the compiler shall derive an origin set from all reachable return paths. The output is usable only while every source in that set remains valid and while all applicable alias restrictions hold. A program-storage root has the distinguished program region and adds no caller-owned source. An automatic local in an escaping origin set requires `R-DIAG-BORROW-002`.
+
+<a id="R-BORROW-0009"></a>
+
+**R-BORROW-0009** — Source signatures never spell region variables. An exported function definition with a borrow-bearing output shall publish the inferred input-origin mapping in its interface fingerprint. A declaration without a body shall obtain and exactly match that mapping from the resolved definition or imported interface; a source-only declaration with no such definition cannot declare a borrow-bearing output. For example, the first output is tied to `values`, while the second is conservatively bounded by both `left` and `right`:
+
+```r
+const i32* first(const i32[] values) {
+    return &values[0];
+}
+
+const i32* choose(const i32* left, const i32* right, bool take_left) {
+    if (take_left == true) {
+        return left;
+    } else {
+        return right;
+    }
+}
+```
+
+An output depends on a borrow or slice input either through the storage that input designates, as a borrow of that storage or a view reached from it through an exclusive borrow or slice, an owner or a container held there, or only through what that storage holds: a view read from it, or an element or subrange of a shared slice or ordinary `str` held there (R-BORROW-0021). A call maps a dependency of the second kind to what the argument holds rather than to the argument: while the output is live, the storage the argument designates may be borrowed again, written, moved or destroyed, and what it held stays borrowed. For example, `take` returns a subrange of the slice its decoder holds, so `head` and `rest` are live together:
+
+```r
+struct Decoder { const u8[] input; usize at; };
+
+const u8[] take(Decoder* this, usize n) {
+    const u8[] part = this->input[this->at..this->at + n];
+    this->at += n;
+    return part;
+}
+
+usize both(const u8[] data) {
+    Decoder d = Decoder {.input = data, .at = 0usize};
+    const u8[] head = take(&d, 1usize);
+    const u8[] rest = take(&d, 2usize);
+    return len(head) + len(rest);
+}
+```
+
+Interface schema 31 exports a `borrow_contract` for the normal result and each nominal checked error, including generic definitions and closed instances. Its origins are `none` (no borrow), `static`, an exact zero-based set of input parameters, whose `held=(...)` lists the inputs it depends on only through what their designated storage holds, or `conservative_inputs` when a symbolic contract requires all potentially borrowing inputs. `stores=(...)` lists, for each target parameter, the inputs stored into the storage it designates, with `held=(...)` as above. `projections=union` bounds every nested field, array element and active payload by that origin union; it grants no independent lifetime or disjointness for different projections. Copying a descriptor never makes its storage the referent’s owner. Generic substitution preserves these bounds and projected alias checks; unborrowed instantiations remove borrow obligations, not ownership checks. A union with an unknown source stays conservative. Rethrow and checked-error propagation preserve each error’s own bound. Provenance is compile-time metadata and changes no layout or carrier ABI. Source definitions remain required for importing generic bodies; an interface record alone cannot prove a body-less borrowed output.
+
+<a id="R-BORROW-0010"></a>
+
+**R-BORROW-0010** — U+0027 apostrophe is not a standalone punctuator and never introduces a type relation, region name or identifier. It occurs only as the opening and closing delimiter of one complete character literal.
+
+### 13.3 Provenance and aliasing
+
+<a id="R-BORROW-0011"></a>
+
+**R-BORROW-0011** — Borrow provenance contains source identity and permitted range. A field borrow is restricted to that field; a slice borrow is restricted to the half-open element range `[begin,end)`. Disjoint fields or proven-disjoint slice ranges may have exclusive borrows at the same time.
+
+<a id="R-BORROW-0012"></a>
+
+**R-BORROW-0012** — There is no safe pointer arithmetic over borrows. Indexing or subslice creates proven derived borrowing that preserves provenance.
+
+<a id="R-BORROW-0013"></a>
+
+**R-BORROW-0013** — Converting exclusive borrow to shared borrow is allowed and freezes mutation for shared lifetime. Reverse conversion is prohibited.
+
+<a id="R-BORROW-0014"></a>
+
+**R-BORROW-0014** — Borrow and raw pointer shall not be used to access the object after moving, destruction or storage reuse, even if the numeric address matched.
+
+<a id="R-BORROW-0015"></a>
+
+**R-BORROW-0015** — Condition `p != null` establishes non-null fact only on its true edge; `p == null` on false edge. Assignment to p, passing exclusive borrow of p or control-flow merge with an unproven path invalidates the fact; move or drop p also terminates the ability to use the fact for the original place. The implementation shall perform this minimum flow-sensitive refinement for nullable borrow and owning-pointer dereference.
+
+<a id="R-BORROW-0016"></a>
+
+**R-BORROW-0016** — Hidden input region variables are universally quantified by the function interface. Output origin expressions are derived from value flow, not textual type equality. Region variables are compiler metadata: they are not identifiers, do not declare runtime objects and cannot be referenced by source code.
+
+<a id="R-BORROW-0017"></a>
+
+**R-BORROW-0017** — The distinguished program region covers the entire program execution. It may be proven for a borrow only when the storage root is a static, thread-independent immutable object; immutable backing data designated by a `constexpr str`; or an external object whose verified safety contract proves immutability, program-long provider loading and storage duration. Every borrow-bearing component of a compound value is proven independently; this does not extend the duration of the containing object. An automatic local or thread-local instance never has the program region.
+
+<a id="R-BORROW-0018"></a>
+
+**R-BORROW-0018** — Every compound value, including a named struct or enum, fixed array, `array`, `list`, `dict`, `o` or standard schema, that contains a borrow, slice, ordinary `str`, guard, scoped handle or recursively borrow-bearing component receives hidden region parameters in compiler metadata. Construction infers them from component origins; copy, move, assignment, argument and return preserve or shorten them under R-BORROW-0021. Neither a nominal aggregate nor a built-in or standard type constructor writes those parameters in source. A `constexpr str` component carries no caller-owned region. An owning pointer `own T*`, a strong owner `arc T` or `rc T` and a weak owner receive the hidden region parameters of their payload T, as a compound containing T does; `new` and `std.alloc::try_new` infer them from the payload. The payload of an owner is storage that owner reaches: a place reached through it, as `node->word`, is a projection of the owner, and borrowing that place borrows the owner. The handles of a shared owner, strong or weak, share the regions of their allocation, fixed when it is constructed: `clone`, `downgrade`, `upgrade` and `try_unwrap` keep them, and a view stored into the payload through `get_mut` shall have only those regions, otherwise `R-DIAG-BORROW-002` is required. A payload adopted with `core::adopt` or reconstructed with `from_raw` has no known regions, so its T shall not be borrow-bearing: it contains no borrow, slice, ordinary `str`, guard, lock outcome carrying one, scoped handle, container iterator or entry reference, and a T that depends on a generic parameter shall be proven `unborrowed` by the constraints of its definition (R-TYPE-0033); otherwise a diagnostic is required.
+
+<a id="R-BORROW-0019"></a>
+
+**R-BORROW-0019** — Each borrow-bearing input occurrence is independent unless value flow or a containing value relates it to another occurrence. Local region constraints are inferred from initializer and uses and shall not exceed any source region. Exported and local source types use the same region-free spelling; only interface metadata differs.
+
+A function may store a view that one input contributes into the storage a borrow or slice parameter designates, as `feed` below stores `chunk` into the tokens of its parser. Its contract then records the store: the target parameter and each input stored there, with whether only what that input's designated storage holds is stored (R-BORROW-0009). A call applies the store: the storage the target argument designates, and the storage the exclusive views held there designate, hold the views of the stored arguments from the call on, as after a store in the caller itself; a caller that passes its own parameter as the target records the store in its own contract. A target argument whose designated storage is not known requires `R-DIAG-BORROW-002`. Until the function returns, the storage an input designates stays borrowed after a view of it is stored this way: an exclusive view excludes every other access to that storage and a shared view excludes writing it. A view of automatic storage, of unknown storage or of the storage the target designates is not stored into such storage, and a holder passed by value is no target.
+
+```r
+struct Parser { array<str> tokens; };
+
+void feed(Parser* this, str chunk) throws std.array::push_error<str> {
+    std.array::push(&this->tokens, chunk);
+}
+```
+
+A borrow of the storage a parameter designates shall not be stored into that storage: the caller's object would then carry a region naming its own storage, which lengthens that region (R-BORROW-0021); `R-DIAG-BORROW-002` is required.
+
+<a id="R-BORROW-0020"></a>
+
+**R-BORROW-0020** — Address-of and safe borrowed construction shall designate an existing non-temporary object or its live subobject. Borrowing a value temporary, or member/index whose storage root is such temporary, is a constraint violation; R 0.1 has no temporary lifetime extension. A string-literal expression produces a non-place `constexpr str` descriptor value by R-ARRAY-0006; the descriptor has no address identity, and applying address-of directly to it is a constraint violation. For a byte index of any ordinary or `constexpr str` descriptor, including a descriptor value temporary, the storage root is the designated backing byte rather than the descriptor object. Its region is the carried ordinary-`str` region or the program region for `constexpr str`. Such a byte place may be shared-borrowed under R-EXPR-0021 but shall not be exclusively borrowed.
+
+<a id="R-BORROW-0021"></a>
+
+**R-BORROW-0021** — If the compiler proves a source region outlives a required use region, a shared borrow, shared slice or ordinary `str` may be coerced or reborrowed to that shorter use while preserving provenance. Shortening an exclusive borrow or slice creates an exclusive reborrow, suspends the parent under R-BORROW-0004 and does not copy the value. A region may never be lengthened. `o`/`array`/`list`/`dict` allow this coercion recursively only through contained shared borrow/slice/`str` positions; they remain invariant through exclusive positions, and other type constructors remain otherwise invariant unless another rule states.
+
+A shared borrow, shared slice or ordinary `str` held in storage keeps its region when it is read, so an element or subrange reached through it, as `this->items[i]`, lies in that region rather than in the region of the storage it is read from; a place reached through an exclusive borrow or slice held in storage stays within the region of that storage.
+
+<a id="R-BORROW-0022"></a>
+
+**R-BORROW-0022** — A module-scope, `static` or `thread_local` object containing a borrow or slice is valid only when its initializer proves the program region for every such component; otherwise `R-DIAG-BORROW-002` is required. Ordinary `str` remains forbidden there; program-image text shall use `constexpr str`. A module or block-static descriptor intended for direct safe immutable access shall use `const constexpr str` under R-OBJ-0009; a non-`const` static descriptor requires the same synchronization or `unsafe` access as any other mutable static object.
+
+<a id="R-BORROW-0023"></a>
+
+**R-BORROW-0023** — Each `thread_scope` creates one fresh hidden scope region. Every `std.thread::scoped_join_handle<R throws E...>` created directly within that block carries this region in compiler metadata. Nested scopes create distinct regions. No scoped handle, borrow-bearing argument or returned value tied to a scope region may escape its block.
+
+<a id="R-BORROW-0025"></a>
+
+**R-BORROW-0025** — Borrow contracts retain separate input dependencies for each statically identifiable output component, including structure fields, fixed-array elements and active payloads. Returned values and checked-error payloads carry these dependencies through calls, rethrow, generic substitution and control-flow joins. Selecting one output component selects only its proven dependencies. Disjoint mutable projections retain their ordinary alias checks. A join unions possible origins for each component; incomplete or dynamic projections conservatively retain the enclosing dependencies. No source-level lifetime parameters or runtime provenance tables are introduced. Interface 16 serializes canonical component paths and input dependencies, independently of source discovery order.
+
+<a id="R-BORROW-0024"></a>
+
+**R-BORROW-0024** — An ordinary async frame shall not capture an ordinary borrow, slice or runtime `str`, including recursively contained views, or keep such a value live across await. Views may be used entirely between suspension points. The asynchronous main’s `args` parameter is startup input; its last use precedes the first suspension unless data is copied into owners. A standard async operation accepting a call-bounded view establishes an independent retain or copy before returning a successfully started task, unless the library declares it scoped: such an operation holds the view as a loan of the enclosing task group under R-STMT-0017.
+
+An `@scoped async` function is the exception governed by R-STMT-0017: Send views may be captured and kept live across suspension because the enclosing task group retains their storage until child cleanup is acknowledged. This does not make a non-Send view Send, allow a borrowed completion result/error, or relax ordinary alias and access checks. Results and completion errors continue to require Send and unborrowed; generic signatures must prove those properties at definition.
+
+<a id="expressions-conversions"></a>
+
+## 14. Expressions and conversions
+
+### 14.1 Value categories
+
+<a id="R-EXPR-0001"></a>
+
+**R-EXPR-0001** — Expressions have the type and category `place`, `value` or `never`. Reading a Copy place produces a value. When only the place has outermost object `const`, the produced value has the corresponding unqualified T; nested access kinds are preserved. Reading a Move place by value requires `move`, and R-TYPE-0008 forbids moving out of an outermost-`const` object.
+
+<a id="R-EXPR-0002"></a>
+
+**R-EXPR-0002** — Parentheses do not change type or value category. Member access with `.` requires an aggregate place or value. `->` abbreviates `(*p).field` and requires a usable non-null borrow, unique owner or strong reference-counted owner, or a raw dereference in an unsafe context. Access through an owner is subject to R-OWN-0009.. R-OWN-0010 and does not consume the owner.
+
+### 14.2 Arithmetic
+
+<a id="R-EXPR-0003"></a>
+
+**R-EXPR-0003** — Integer promotions transform `i8`, `u8`, `i16`, and `u16` into `i32`. For other mixed integer operands, the usual arithmetic conversions are used: a higher rank is chosen with the same signedness; for different signedness - signed type, if it represents all values unsigned, otherwise unsigned type with no lower rank. Fixed ranks increase with width. `isize`/`usize` share one rank placed above fixed integer of the same width and below any wider fixed integer; this is the tie-break when widths coincide. Before promotions for a binary integer arithmetic, bitwise, or comparison operator other than a shift, if exactly one complete operand is an unsuffixed integer literal or its immediate unary-minus form and the other operand has an R integer type, the literal is contextually typed as that other type when representable. Otherwise its R-LEX-0010 default type is used. A shift count never determines the type or width of its left operand; therefore `1u64 << shift` retains the suffix when a 64-bit left operand is required. An unsuffixed literal right shift-count is converted to `usize` by R-EXPR-0007.
+
+<a id="R-EXPR-0004"></a>
+
+**R-EXPR-0004** — Mixed floating arithmetic converts integer to the floating operand type. If any floating operand is `f64`, common type is `f64`; otherwise it is `f32`. Simple assignment, argument, and return conversion do not allow narrowing without `as`, even if the arithmetic conversion does.
+
+<a id="R-EXPR-0005"></a>
+
+**R-EXPR-0005** — Unsigned `+`, `-`, `*` and unary `-` are computed by modulo 2^N. Signed operation with a result outside the representable range causes `integer_overflow` panic. In constant expression, the same case requires compile-time diagnostic.
+
+<a id="R-EXPR-0006"></a>
+
+**R-EXPR-0006** — Integer `/` or `%` with zero divisor causes `division_by_zero` panic. Signed `MIN / -1` causes `integer_overflow`; otherwise quotient truncates toward zero, remainder has a sign dividend and satisfies `a == q*b + r`.
+
+<a id="R-EXPR-0007"></a>
+
+**R-EXPR-0007** — A shift count is converted to `usize`; a count greater than or equal to the bit width causes the `invalid_shift` panic. Unsigned left shift modulo 2^N; signed left shift panic if the mathematical result is unrepresentable. Right shift of unsigned values zero-fills; right shift of signed values is arithmetic and rounds to negative infinity.
+
+<a id="R-EXPR-0008"></a>
+
+**R-EXPR-0008** — Bitwise operators for all R integer types, including `isize` and `usize`, are permitted after integer promotions. Their two’s-complement/unsigned binary representation defines `~`, `&`, `|` and `^` without padding/trap representations. C ABI integer operands follow the separate target-dependent restriction R-EXPR-0024.
+
+### 14.3 Comparison and logic
+
+<a id="R-EXPR-0009"></a>
+
+**R-EXPR-0009** — Numeric operands of `==`, `!=`, `<`, `<=`, `>`, and `>=` use the usual arithmetic conversions and produce `bool`. For a floating comparison involving NaN, `!=` produces true and every other comparison, including `==`, produces false. `char` supports all comparisons by scalar value; `bool` and fieldless values of one enum type support only `==` and `!=`.
+
+<a id="R-EXPR-0010"></a>
+
+**R-EXPR-0010** — `&&`, `||`, and `!` accept only `bool`. `&&` does not evaluate its RHS when its LHS is false; `||` does not evaluate its RHS when its LHS is true.
+
+<a id="R-EXPR-0011"></a>
+
+**R-EXPR-0011** — Pointer equality is allowed between compatible values of one pointer category (`borrow`, `own` or `raw`) with the same nullability or after explicit safe widening to nullable. Nullable pointer may be compared to `null`. Equality owning pointers observes address/identity without copy, move or ownership transfer. Ordering, subtraction and arithmetic borrows/owners are prohibited; raw analogues require unsafe.
+
+### 14.4 Assignment, increment and conditional expression
+
+<a id="R-EXPR-0012"></a>
+
+**R-EXPR-0012** — Assignment operators have type `void` and are only allowed as an expression statement or first/iteration clause `for`. Chained assignment and assignment value are prohibited.
+
+<a id="R-EXPR-0013"></a>
+
+**R-EXPR-0013** — Compound assignment `x op= y` calculates destination place x once, reads its current Copy value, then calculates y, performs arithmetic/checks 14.2, and at commit point writes the converted result. For a fixed R integer or non-Boolean C ABI integer destination, this final conversion is intrinsic to the compound operator and requires no `as`: an unsigned destination reduces the mathematical result modulo 2^N, while a signed destination panics with `integer_overflow` if the result is not representable. Every arithmetic, division and shift check precedes the commit. For a C ABI destination, N, signedness and range are those recorded in the target manifest. Other destination types require a non-narrowing simple-assignment conversion. This compound-operator exception does not relax initialization, simple assignment, argument or return conversion. The RHS mutation of x, if permitted at all, does not change the left value already read. `++`/`--` is available only mutable integer place, evaluate that place once, use the same signed-panic or unsigned-modulo `+/- 1` semantics and have type `void`. Compound assignment holds the storage-slot/provenance portion of R-INIT-0007 capability: required root storage cannot be moved, dropped, reused or deallocated during RHS, and conflicting borrowings shall end before commit, but an otherwise legal overlapping RHS write is permitted and is overwritten by the result based on the saved left value.
+
+<a id="R-EXPR-0014"></a>
+
+**R-EXPR-0014** — Conditional expression `condition ? a : b` uses the explicit `condition-expression` of Annex A and always produces a value, never a place. A Copy place arm is read under R-EXPR-0001 before common-type determination, so outermost object `const` is removed. Arms shall then have identical value type or a single value-preserving common type. A named Move place arm requires explicit `move`; only the selected Move arm is evaluated and transferred.
+
+The condition is evaluated exactly once. A true condition evaluates only `a`; a false condition evaluates only `b`. Both arms are type-checked and contribute checked effects even when the condition is constant. Ownership states of reachable arms join under the same rules as `if` (R-OWN-0004). The operator associates to the right; its arms use the ordinary expression rules.
+
+A conditional expression is a fork. It shall not occur at any depth within a call argument or a return operand: an argument of a function, method, `format` or awaited call, the operand of `panic`, a value operand of a standard type call, or the operand of `return` in a statement or switch clause. The selected value shall first initialize a named object, or the fork shall be written as `if`. Thus `return (count == 0) ? 1 : 2;` requires `R-DIAG-FLOW-001`, while `i32 status = (count == 0) ? 1 : 2;` followed by `return status;` is accepted.
+
+```r
+constexpr str message = (exists == true)
+    ? "output archive already exists"
+    : "cannot atomically publish output archive";
+```
+
+### 14.5 Conversions
+
+<a id="R-EXPR-0015"></a>
+
+**R-EXPR-0015** — Implicit conversions are limited to: integer promotion; exact integer widening without sign change; `f32` to `f64`; mutable-to-shared borrow; non-null-to-nullable; `never` to any; exact array-to-slice borrow at explicit `&`; `constexpr str` to ordinary `str` carrying the program region; `str` to `const u8[]` while preserving the inferred region and forgetting the UTF-8 invariant; and an exact error, or a value of an error with descendants, to an ancestor error, as a value of the ancestor's family (R-AGG-0011). The conversion set into `constexpr str` contains only identity; ordinary `str`, byte-slice, allocated-text and foreign-storage values therefore retain their own types. Reverse byte-slice-to-str conversion follows checked R-ARRAY-0007 and is not implicit. The two string conversion edges in this rule shall not be chained in any implicit conversion sequence or common-type determination; each operand may traverse at most one edge. Thus both `const u8[] bytes = "abc";` and selecting a common byte-slice type between a literal and a byte slice require `R-DIAG-TYPE-001`. Source shall first initialize a named ordinary string, then initialize the byte slice from that name.
+
+<a id="R-EXPR-0016"></a>
+
+**R-EXPR-0016** — For the numeric and character cases admitted by this section, `value as Type` performs checked conversion. Out-of-range integer destination, NaN-to-integer, infinity-to-integer, and invalid Unicode scalar cause `invalid_conversion` panic; in constant expression, diagnostic. Floating destination follows R-EXPR-0017 and does not use integer range failure.
+
+<a id="R-EXPR-0017"></a>
+
+**R-EXPR-0017** — Float-to-integer `as` truncates towards zero after range check. Integer-to-float may round ties-to-even and never panic; loss of precision is allowed only because conversion is explicit. `f32 as f64` is exact; `f64 as f32` rounds ties-to-even, yields signed infinity on finite overflow and uses gradual underflow, while NaN remains with unspecified payload/sign.
+
+<a id="R-EXPR-0018"></a>
+
+**R-EXPR-0018** — Enum-to-integer and integer-to-enum conversions are available via `as` only fieldless `@repr(C)` enum; invalid discriminant reverse conversion causes panic. There are no Tagged Enum conversions.
+
+<a id="R-EXPR-0019"></a>
+
+**R-EXPR-0019** — Cast between raw pointers, borrow/raw, pointer/integer, raw constancy change and reinterpretation representation are unsafe operations. A raw pointer conversion keeps or adds nullability: a nullable raw pointer converts only to a nullable raw pointer type, null converts to null, and a nullable source with a non-null target requires `R-DIAG-TYPE-001`.
+
+### 14.6 Calls, indexing and constant expressions
+
+<a id="R-EXPR-0020"></a>
+
+**R-EXPR-0020** — A function or method call may occur in an expression, including another call’s argument, an initializer, a return or throw operand. The callee and value arguments are evaluated once in source order; nested expressions complete before the next argument. Only the selected conditional or short-circuit branch is evaluated; a conditional expression shall not occur within an argument (R-EXPR-0014). Temporary owners remain tracked through calls, checked failures and cancellation and are destroyed exactly once. A named Move argument still requires `move`.
+
+Calling an async function eagerly starts a `task<T throws E...>` and can immediately throw `std.async::start_error`. R-FUNC-0010 reserves a named Move argument without consuming it until successful start. Earlier completed nested calls are not rolled back; a fresh temporary that cannot be transferred is destroyed. Explicitly nested `move` through a synchronous call consumes its source according to that call’s own contract.
+
+<a id="R-EXPR-0021"></a>
+
+**R-EXPR-0021** — `a[i]` for a fixed array, `array<T>`, slice, ordinary `str` or `constexpr str` converts `i` to `usize` with a range check and then checks `i < len(a)`. Failure causes the `bounds` panic; a compile-time provably invalid index requires a diagnostic. An array or slice index designates its element subject to the source access kind. An `array<T>` index designates the corresponding live T in its owned buffer and creates the same inferred borrow relationship as `std.array::get` or `get_mut`; the last use of each element or slice borrow precedes every structural mutation listed by R-LIB-0019. A string index designates an immutable `u8` byte in its backing storage; reading it produces that byte, and only a shared borrow of that place is permitted. For an array or slice, including `array<T>`, `a[lo..hi]` additionally checks `lo <= hi <= len(a)` and produces the corresponding slice. String subscripting by a range is not defined in R 0.1; source shall first weaken or convert the string to a byte slice under R-EXPR-0015.
+
+<a id="R-EXPR-0022"></a>
+
+**R-EXPR-0022** — Constant expression may contain literals, visible const objects whose initializer is recursively a constant expression, fieldless enum values, variants of tagged enumerations and options with constant payloads, associated constants (R-TYPE-0050), reflection constants, `sizeof`, `alignof`, pure operators without allocation, borrow, mutable access or panic, and translation-time calls (R-EXPR-0032). Cyclic const reference, a potential panic of an operator or a panic during the evaluation of a translation-time call makes expression ill-formed.
+
+<a id="R-EXPR-0032"></a>
+
+**R-EXPR-0032** — A translation-time call is a call of a translation-time evaluable function (R-FUNC-0023) whose arguments are constant expressions or shared borrows of const objects whose values are constant expressions. It is evaluated during translation by the rules of the abstract machine with the widths, layouts and conversions of the selected target (R-TYPE-0004, R-OBJ-0004), independently of the host and of the translation environment, and its value is the value of the call; a string result designates the program-image bytes of a string literal (R-TYPE-0028). Where a constant expression is required (an array bound, a constant generic argument, an enumerator value, a case label, the initializer of a module, `static` or `thread_local` object and every other operand this document requires to be constant) a panic during the evaluation, or a checked error that no `try` of the evaluated calls catches, requires `R-DIAG-CONST-003`, exceeding the documented translation-time evaluation limits (R-IDB-010) requires `R-DIAG-LIMIT-001`, and a call of a function that is not evaluable or with an argument that is not constant requires `R-DIAG-CONST-002` naming the first reason along the call chain. The checked errors of such a call are not checked effects of the enclosing function (R-ERR-0001): the evaluation completes or the translation fails. Elsewhere the call is replaced by its value when the evaluation completes within those limits without creating or changing an owner and the value fits the documented substitution limit; otherwise it executes at run time with its ordinary behavior, because a panic, a thrown error, an allocation or its cost is observable there. A call of a `void` function is not replaced. A `const` module or `static` object that is not `thread_local` may hold owners that its initializer computes during translation: they are part of the program image, which provides their storage, so they are never allocated, grown or released at run time, and a dictionary among them keeps the index of Library R-LIB-0021 under the predefined contract of an integer, `bool`, `char`, fieldless enumeration or string key; any other object that would hold such an owner requires `R-DIAG-INIT-001`. A module-scope declaration may need a translation-time value computed from functions that are checked later; the implementation computes such values before it checks the declarations that use them, and a cycle among them requires `R-DIAG-CONST-002`.
+
+<a id="R-EXPR-0023"></a>
+
+**R-EXPR-0023** — `expression as void` explicitly discards a value after evaluating the operand once. A Copy operand is read normally and leaves its source usable. A Move operand is consumed under the ordinary rules: a named owner requires `move`, and its temporary is destroyed exactly once, including user drop and nested cleanup. No extra copy or allocation is introduced. Operand effects, drop effects, panics and checked errors retain their ordinary obligations; the conversion cannot bypass task-resolution rules. It acknowledges `@must_use` without weakening ownership or access checks. Explicit `drop` of Copy remains forbidden. APIs with no meaningful result should return `void`; a result that callers may legitimately ignore is declared `@discardable` (R-FUNC-0021).
+
+<a id="R-EXPR-0024"></a>
+
+**R-EXPR-0024** — Arithmetic between C ABI integer types uses promotions, ranks and usual arithmetic conversions of selected C17 ABI, but R overflow, division and shift checks apply before generated C operation. Compound assignment and increment/decrement final conversion use the manifest width, signedness and range under R-EXPR-0013. Arithmetic on `c_float`, `c_double` or `c_long_double` is available only when target manifest records an IEC operation mapping; otherwise it requires checked `std.c` helper or explicit conversion. Mixing any C ABI numeric type with fixed R numeric type requires explicit `as` conversion. Bitwise operation on unsigned C ABI integer is defined; on signed C ABI integer it is available only when manifest proves two’s-complement without padding/trap representation compatible with R-EXPR-0008, otherwise a checked `std.c` helper or explicit unsigned conversion is required.
+
+<a id="R-EXPR-0025"></a>
+
+**R-EXPR-0025** — Floating unary `+`/`-` and binary `+`, `-`, `*`, `/` follow R-TYPE-0006 at common type selected by R-EXPR-0004. Floating division by zero produces IEC infinity or NaN and does not use integer `division_by_zero` panic; `%`, bitwise and shift operators do not accept floating operands.
+
+<a id="R-EXPR-0026"></a>
+
+**R-EXPR-0026** — Immediate expression `-L`, where L is a signed-suffixed integer literal whose mathematical magnitude is exactly one greater than positive maximum of that suffix type, directly forms its minimum value and is well-formed. This exception does not apply through parentheses, macro (none exist), constant name or any other operator; larger magnitude remains `R-DIAG-CONST-001`. An unsuffixed immediate unary-minus initializer instead receives its destination type directly under R-INIT-0002 and is checked by its mathematical signed value.
+
+<a id="R-EXPR-0027"></a>
+
+**R-EXPR-0027** — When the exact parameter type of a direct function call is `const u8[]`, argument initialization additionally admits one contextual read-only byte-view conversion from any of these sources: identity from `const u8[]`; the ordinary mutable-to-shared conversion from `u8[]`; `str`; `constexpr str`; a place of type `array<u8>` or its exact `bytes` alias; or a place of fixed-array type `u8[N]`. The direct `constexpr str` case is one contextual edge and does not chain the two ordinary string conversions restricted by R-EXPR-0015.
+
+The result is the existing `const u8[]` type, not a new wrapper or owner. It designates exactly the source bytes and length: the UTF-8 byte length for either string type, the live element count for `array<u8>`/`bytes`, and N for `u8[N]`. Forming the view does not allocate, copy, move or consume the source. An owner or fixed-array source therefore appears without `move` and is shared-borrowed for the call. The temporary slice descriptor exists only for argument initialization and the call; its byte provenance and inferred borrow origin remain those of the source storage. A returned or otherwise derived borrow declared by the callee interface consequently remains tied to that original source and extends the corresponding shared borrow to its last use.
+
+This contextual conversion is considered only after a callee and its exact parameter type have been resolved. It does not create overload resolution, does not select among callees, and does not apply to object initialization, assignment, return, conditional common-type selection or any element type other than `u8`. The independent ordinary `str` to `const u8[]` conversion of R-EXPR-0015 remains available in its stated contexts.
+
+<a id="R-EXPR-0028"></a>
+
+**R-EXPR-0028** — A formatted literal has an adjacent contextual `f` prefix: `f"hello {name}"`. Elsewhere `f` remains an identifier. Ordinary strings keep their existing type and escape rules. Adjacent ordinary and formatted literals form one formatting expression if at least one literal is formatted. Only formatted parts interpret slots, and slots never cross literal boundaries. `{{` and `}}` emit literal braces. A brace produced by an escape is text, not syntax.
+
+A named slot is a local or parameter name, including `this`, followed by zero or more field projections using `.` or `->`. Calls, indexing, arbitrary expressions, and `move` are not slot syntax. A positional slot is a decimal index starting at 1. Slots may repeat or appear in any order. Positional projections and empty slots are ill-formed. `receiver.format(arguments)` is a compiler formatting expression: the receiver shall be a formatted literal sequence or a local `std.format::format`; on another place whose type satisfies `core::Format` the suffix is the method of R-TYPE-0046. It returns an owned `std.string::string`; each positional index must have an argument and every explicit argument must be used. Arguments obey R-EXPR-0020. This primitive is permitted in runtime expressions, including returns, conditional arms, and aggregate payloads; it does not introduce general method calls or variadic R functions. Formatting borrows owner arguments and rejects `move` arguments.
+
+A formatted literal initializes a local `std.format::format` when that type is explicitly declared; otherwise it produces `std.string::string` and requires all positional arguments immediately. `.format()` is valid without positional slots. Templates are restricted to automatic local storage: no parameters, returns, fields, containers, generic arguments, or static/module objects. Their compiler-known schema comes from the literal or a moved local template. Templates are Move-only; compatible moves retain the schema, and incompatible assignments are ill-formed. Rendering does not consume or change a template, and successive calls may have different argument types when each use satisfies its slot specifications.
+
+Template creation snapshots each distinct named path once, in first-appearance order. Numeric, Boolean, character, and constexpr-string terminal values are copied. Runtime `str` and string-owner terminal values are copied into owned UTF-8 storage. No source owner is moved, and only the terminal field value is captured. Later source changes or destruction do not affect the template. For a direct literal `.format` expression, snapshots are completed first, then arguments are evaluated once left-to-right, then parts are rendered in template order. Repeated indexes reuse the evaluated value; inserted text is never parsed as formatting syntax. Snapshot storage is unborrowed; Send/Sync and liveness across await follow the captured concrete types.
+
+Creation and rendering each introduce checked `std.alloc::alloc_error`, even when an allocation can be optimized away. Allocation failure destroys partial captures, output, and owned temporaries exactly once, preserving source owners and an existing template. A formatted result has no implicit borrowed `str` or `constexpr str` conversion or temporary lifetime extension. Existing staged async Move rules apply.
+
+Built-in values are runtime/constexpr `str`, `std.string::string`, `char`, Boolean R/C types, and R/C integer and floating types. Text is inserted exactly, characters use UTF-8, and Booleans use `true`/`false`. Integers default to decimal; floats use the canonical std.format representation. A value of any other type that satisfies `core::Format` (R-TYPE-0046), including a type parameter bound by it, is formatted by its implementation or standard formatting into text that the slot inserts, and a borrow formats the value it designates. Aggregates, enums and errors without an implementation, bytes, pointers, and unproven generic parameters have no formatting contract; Copy/POD constraints alone do not establish one.
+
+An optional slot specification follows `:`: integer `d`, `x`, `X`, `b`, or `o`; floating fixed fractional precision `.N`; and an optional positive decimal minimum width, with leading `0` for zero fill. Examples are `8`, `8x`, `08X`, `10.2`, and `010.2`. Width and precision are usize constants (precision may be zero). No dynamic specification is permitted. A width alone applies to every value: it pads the inserted text on the left with spaces to that many Unicode scalar values. Integer presentations, fractional precision and zero fill are numeric specifications: they reject text, Boolean, character and other `core::Format` operands; integer presentations reject floating operands and fractional precision rejects integers. Width includes the sign and decimal point, never truncates, and defaults to leading spaces. Zero padding follows a minus sign. Radix output has no prefix, uppercase applies only to `X`, and negative integers use sign and magnitude. Fixed precision rounds the exact binary value to nearest decimal, ties to even, preserving trailing zeros and negative zero; `.0` has no decimal point. Formatting is locale-independent and preserves the floating environment. `inf`, `-inf`, and `nan` retain their spellings and always use space padding. Output-size overflow raises `std.alloc::alloc_error::size_overflow`. Malformed slots, incompatible types, invalid constants, and invalid template storage require `R-DIAG-FORMAT-001` (with existing syntax, name, ownership, and checked-effect diagnostics where applicable).
+
+<a id="R-EXPR-0029"></a>
+
+**R-EXPR-0029** — `a in b` and `a not in b` are membership tests of type `bool`; `in` binds like a relational operator and is non-associative, and `not` is an identifier that is recognized only immediately before `in`. A membership test is a condition leaf under R-STMT-0002 and an ordinary `bool` operand elsewhere. When `b` is a range `lo..hi`, the test is `a >= lo && a < hi` over one integer or `char` type, and `a` is evaluated once before the lower bound. The upper bound is evaluated only if the lower comparison succeeds. Otherwise `b` names a place, or a non-null borrow of a place, whose type is `dict<K, V>` or implements `core::Contains` (R-TYPE-0046); then `a` names a place of the key or item type and the test is `std.dict::contains(&b, &a)` or `b.contains(&a)` respectively, with both operands borrowed shared for the duration of the test. Any other right operand, a left operand that is not a place, and a type mismatch require `R-DIAG-TYPE-001`.
+
+<a id="R-EXPR-0031"></a>
+
+**R-EXPR-0031** — `match (value) { case pattern if (condition): expression; ... }` evaluates its input once and produces the selected arm’s value. A guard is optional. An arm may end in an unconditional `throw` statement instead of an expression; the arm then has type `never`. Patterns are constants, `_`, read-only named bindings, `move name`, nested `variant Type::Name(pattern)` and named-field patterns `{ .field = pattern }`, where a field of a tuple is named by its element index, as in `{ .0 = a, .1 = move b }` (R-TYPE-0052); omitted fields are wildcards. A bare name binds; a parenthesized named constant is a constant pattern. An optional `default:` arm is a wildcard. The contextual identifier `match` remains usable as an ordinary name. A `str` or `constexpr str` input takes string literal patterns compared byte for byte, and the input of a `core::CaseMatcher` implementation takes constants of its `Label` type that its `matches` tests (R-TYPE-0046); such patterns never cover their domain, arms are tested in order, and a repeated label requires `R-DIAG-SWITCH-001`.
+
+Coverage is exhaustive over constructor combinations. Guards never establish coverage; open scalar domains require a wildcard. Tests and guards run before any payload transfer, and inspect only active payloads. Move bindings require an owned temporary or an explicitly moved input. Decomposition transfers every active component to tracked storage; unnamed owners are also destroyed. A value with a user drop cannot be decomposed, but a whole leaf with a drop can be moved. The prohibition on arbitrary moves through fields and borrows is unchanged. Arms have one common contextual or inferred result type; `never` arms do not contribute continuing ownership state. Arm-local borrowed storage cannot escape. Selected arms may contain calls and await expressions. Unselected arms have no runtime side effects. Coverage expansion obeys compiler nesting and specialization limits. Variant patterns cover nominal enum/error declarations and the built-in option/result forms. Opaque native standard-library outcomes retain their established typed switch projection; they do not expose an addressable nominal payload layout to match.
+
+<a id="R-EXPR-0030"></a>
+
+**R-EXPR-0030** — A collection expression builds a standard container from its elements. `[e1, e2, ...]` and `[element for (T name in iterable) ...]` are array expressions; `{k1: v1, k2: v2, ...}` and `{key: value for (T name in iterable) ...}` are dict expressions. A collection expression has no type of its own: it appears only where a contextual type is known, and that type shall be `array<T>` for an array expression or `dict<K, V>` for a dict expression; every element, key and value is evaluated with the element, key or value type as its context and shall have exactly that type. `[]` is the empty array expression; `{}` remains an aggregate initializer, and a dict expression has at least one entry. The expression evaluates as if a hidden local were initialized with `std.array::create::<T>()` or `std.dict::create::<K, V>()`, each element were appended with `std.array::push`, each entry inserted with `std.dict::insert` in source order (a later entry with an equal key replaces the earlier value, which is dropped), and the hidden local were moved into the result; the checked effects of those standard calls (`std.array::push_error<T>`, `std.dict::insert_error<K, V>`) are effects of the expression and follow R-ERR-0001. A comprehension consists of one element or entry followed by one `for` clause and any number of further `for` and `if` clauses; each `for` clause has the header forms and semantics of a range-for (R-STMT-0014), its loop variable is visible in the later clauses and in the element, each `if` clause is a condition under R-STMT-0002 that skips the current iteration when false, and the element is evaluated once per surviving iteration. A collection expression may be an argument or return operand when a complete contextual collection type is available (R-EXPR-0020, R-STMT-0005); a missing or mismatching destination type, a mismatching element type and an element type without a value representation require `R-DIAG-TYPE-001`.
+
+<a id="static-reflection"></a>
+
+<a id="R-REFL-0001"></a>
+
+**R-REFL-0001** — Static reflection of a fieldless enumeration `T` is provided by the compiler-recognized `core` forms `core::enum_count::<T>()`, `core::enum_min::<T>()`, `core::enum_max::<T>()` and `core::enum_variants::<T>()`, which are reflection constants folded at translation time, and by `core::enum_name(value)`, `core::enum_ordinal(value)`, `core::enum_at::<T>(index)` and `core::enum_from_name::<T>(name)`, which select at run time. `enum_count` is the number of declared variants as `usize`; `enum_min` and `enum_max` are the variants with the least and the greatest discriminant in the signedness of the underlying type; `enum_variants` is the array `T[N]` of every variant in declaration order. `enum_name(value)` is the declared name of the variant a `T` value holds, as `constexpr str`, and `enum_ordinal(value)` its zero-based declaration index as `usize`; `enum_at(T, index)` takes a `usize` and yields `o::some` of the variant at that declaration index or `o::none` at or beyond the count; `enum_from_name(T, name)` takes a `str` and yields `o::some` of the variant whose declared name equals the name byte for byte, or `o::none`. A reflection constant is a constant expression (R-EXPR-0022); the four selections are calls, and `core::enum_name` and `core::enum_ordinal` may be evaluated at translation time (R-FUNC-0023). An enumeration form whose type operand is not a fieldless enumeration, or whose value operand does not have such a type, requires `R-DIAG-TYPE-001`. When the type operand or the operand type names a generic parameter, the requirement is checked and the constant is folded at each instantiation (R-TYPE-0043); `enum_variants` requires a concrete enumeration.
+
+<a id="R-REFL-0002"></a>
+
+**R-REFL-0002** — `core::variant_count::<T>()` is the reflection constant number of the variants of a tagged union `T` (an enumeration with payload variants, including an `error` declaration) as `usize`, and `core::variant_name(const T* value)` selects at run time the declared name of the active variant of the tagged union that the shared borrow designates, as `constexpr str`. An operand that is not a tagged union requires `R-DIAG-TYPE-001`; a generic parameter is checked at instantiation as in R-REFL-0001.
+
+<a id="R-REFL-0003"></a>
+
+**R-REFL-0003** — `core::type_name::<T>()` is the reflection constant canonical spelling of a complete type as `constexpr str`: primitive types by their keyword; `str`, `constexpr str`, `void` and `never` as written; a struct or enumeration as `module.path::Name` and a generic instance as `module.path::Name<arguments>` with the arguments spelled recursively and separated by `", "`; `const T` and `atomic T` as written; borrows as `const T*` and `T*` with a trailing `?` when nullable; slices as `const T[]` and `T[]`; fixed arrays as `T[N]`; `own T*`, `raw T*`, `raw const T*`, `arc T`, `rc T`, `weak arc T` and `weak rc T`; containers as `array<T>`, `list<T>` and `dict<K, V>`; `o<T>` and `task<T>`; a standard type by its qualified name followed by its type arguments; a raw function type as `raw fn(P, ...) -> R`. A type that cannot be spelled in source is spelled by its implementation-defined name. `core::field_count::<T>()` is the reflection constant number of the fields of a struct `T` as `usize`, and `core::field_name::<T>(index)` the declared name of the field at the zero-based declaration `index`, an integer constant expression, as `constexpr str`; an operand that is not a complete struct requires `R-DIAG-TYPE-001`, and an index at or beyond the field count requires `R-DIAG-CONST-001`. A generic parameter is checked at instantiation as in R-REFL-0001.
+
+<a id="R-REFL-0004"></a>
+
+**R-REFL-0004** — `core::target_name()` is the target triple of the selected target manifest and `core::profile_name()` the name of the selected library profile (R-CONF-G005), both `constexpr str` fixed at translation time; either form takes no argument. Every form of R-REFL-0001..R-REFL-0004 is available in every profile, allocates nothing, panics only through the Core checks of its operands and introduces no run-time type metadata (R-TYPE-0039): the selections are lowered to direct comparisons of the enumeration value, the active tag or the name bytes against translation-time tables.
+
+<a id="static-conditions"></a>
+
+### 14.3 Static conditions
+
+<a id="R-META-0001"></a>
+
+**R-META-0001** — `@if (predicate) { ... }`, optionally followed by `@else { ... }` or `@else @if (predicate) { ... }`, selects a branch at translation time. It is a statement in a function body or an external declaration containing external declarations. It is not an expression or an attribute of a field, parameter or declaration. Both branches must be syntactically valid. An inactive closed branch creates no declarations, checked effects, cleanup, executable code or link dependency. Each selected statement block retains its ordinary lexical scope. Imports remain in the translation-unit preamble. Static conditions do not change a function signature or introduce overloads or specialization.
+
+<a id="R-META-0002"></a>
+
+**R-META-0002** — Predicates use `&&`, `||`, `!` and parentheses with the ordinary Boolean precedence, but are separate from runtime expressions. The closed vocabulary is `Type is Type` for canonical type identity, `Type is Trait`, `Type is fn(P...) -> R`, and `Type is capability` for a capability of R-TYPE-0033. A trait name follows the existing visibility and qualification rules. `core::profile is profile-name` compares the selected profile against `freestanding`, `allocation`, `hosted`, `hosted-thread` or `hosted-native-async`; unknown profile names are errors. `core::target is "target-triple"` compares the selected target triple exactly. A constant condition is one condition leaf of R-STMT-0002 (`true`, `false`, an explicit comparison or a membership test) whose operands are constant expressions (R-EXPR-0022), including translation-time calls (R-EXPR-0032); an atom is a type predicate exactly when its type is followed by `is`. The condition is a required constant evaluated at translation time: a panic requires `R-DIAG-CONST-003`, exceeding the translation-time evaluation limits requires `R-DIAG-LIMIT-001` and an operand that is not constant requires `R-DIAG-CONST-002`. Module conditions may use profile and target predicates, constant conditions and their Boolean combinations. A module constant condition is evaluated before the declarations it selects exist: it may use any declaration outside its own branches, including one selected by another module condition, and a name declared only in its own branches is unresolved. There is no runtime evaluation, probing of arbitrary member names or user-extensible predicate vocabulary. An unresolved predicate or incompatible branch assumptions require `R-DIAG-META-001`; ordinary name, type and visibility diagnostics also apply to its operands.
+
+<a id="R-META-0003"></a>
+
+**R-META-0003** — A generic definition checks every branch whose predicate remains dependent. A predicate directly naming a type parameter refines that parameter within the branch: positive identity supplies the exact type, and a positive capability or trait supplies its existing contract. Negative facts permit nested predicates to be resolved but grant no operations. Conjunction combines facts; disjunction grants only facts proved for every alternative, including `pod` implying `copy & unborrowed`. Neither disjunction nor absence of a capability supplies an unrelated capability. Constraints on composite dependent types are not inferred backwards onto their arguments. A constant condition that names a constant generic parameter or the layout of a type parameter, or calls a generic function whose generic arguments depend on them, remains dependent and refines nothing. A comparison of `len(T...)` for a pack `T` with an integer constant, combined by `&&`, `||` and `!`, refines the length of `T` within the branch it selects, including the negation of a single comparison in the other branch (R-TYPE-0053). Its operands are checked in the definition; whether such a call is translation-time evaluable (R-FUNC-0023) is checked for each instantiation with the closed callee. Facts and refined type identities are isolated from other branches, definitions and instantiations. Continuing branches obey the existing ownership-join rules; a value consumed on a reaching branch cannot be used after the join. Instantiation evaluates the checked predicate with canonical arguments, including a dependent constant condition with the diagnostics of R-META-0002 for that instantiation, and clones only the selected branch and its local storage. The inactive branch is not instantiated. Resource contracts check all dependent branches of the definition and the selected closed operations.
+
+<a id="statements-flow"></a>
+
+## 15. Statements and control flow
+
+<a id="R-STMT-0001"></a>
+
+**R-STMT-0001** — A block `{ ... }` creates a scope. Declarations and statements may be interleaved. The empty statement `;` is permitted. An expression statement requires `void` or `never` (which ends its reachable path), an explicit discard conversion under R-EXPR-0023, or a direct call of a `@discardable` function under R-FUNC-0021. Significant values additionally obey R-FUNC-0020.
+
+<a id="R-STMT-0002"></a>
+
+**R-STMT-0002** — `if` and `while` accept the `condition-expression` defined in Annex A. Every `if` branch, optional `else` branch, and `while` body shall be an explicit `{ ... }` block. A condition leaf is `true`, `false`, an explicit comparison, or a membership test (R-EXPR-0029); conditions may combine such leaves with `&&` and `||`. A loop body may execute zero or more times.
+
+The condition of `if` or `while` may instead be a pattern test `value is pattern`, where `is` is a contextual word and the pattern is a `match` pattern (R-EXPR-0031). A pattern test is the whole condition; inside another condition or anywhere else it requires `R-DIAG-SYN-001`. The value is evaluated once per test. A place is tested where it is, and any other value, including `move place`, initializes a hidden object of the statement. When the pattern matches, its bindings exist only in the `if` block or in the loop body: a binding without `move` designates the matched part read-only while it is used, and `move name` moves the part out of the hidden object, which it requires (R-EXPR-0031). The hidden object is destroyed at the end of the selected block, or before the `else` block or the end of the loop when the pattern does not match. `while` evaluates and tests the value anew before each iteration and ends at the first mismatch, as in `while (queue.next() is variant o::some(move item)) { ... }`.
+
+<a id="R-STMT-0003"></a>
+
+**R-STMT-0003** — `for (init; condition; iteration)` evaluates `init` once, then the explicit `condition-expression` before each iteration, followed by the body block and the iteration expression. The condition shall be present. The scope of a declaration in `init` includes the condition, iteration expression, and body.
+
+<a id="R-STMT-0004"></a>
+
+**R-STMT-0004** — `break` is permitted only in a loop or `switch` and exits the innermost such construct. `continue` is permitted only in a loop and proceeds to the iteration clause of a `for` loop or to the loop condition. All automatic objects in exited scopes are dropped as specified by 11.2.
+
+A `while`, `for` or range-for statement may carry a label, as in `outer: for (...) { ... }` (Annex A). Within its body `break name;` leaves, and `continue name;` continues, the loop labeled `name` from any nesting of loops and `switch` statements: the jump leaves every scope between with its drops and traverses each finally whose protected region it exits (R-STMT-0009), and a `switch` clause may end with `break name;`. Labels are a name space of their own, visible in the body of their loop only. A name that labels no enclosing loop requires `R-DIAG-FLOW-001`, a label that repeats the label of an enclosing loop requires `R-DIAG-NAME-002`, and a labeled jump out of a finally clause is invalid as R-ERR-0003 specifies.
+
+<a id="R-STMT-0005"></a>
+
+**R-STMT-0005** — `return;` is permitted in a `void` function. A non-void function returns an expression or a contextual braced aggregate initializer. Calls, constructors and awaits may compose directly in that operand under R-EXPR-0020 and R-STMT-0012; a conditional expression shall not occur within it (R-EXPR-0014). The expression value-converts to the declared result using R-EXPR-0015; narrowing requires explicit `as`. Named Move results require `move`. The result is fully initialized and copied or moved before function locals are destroyed. R-STMT-0013 defines the equivalent implicit transfer at the closing brace of a void function.
+
+<a id="R-STMT-0006"></a>
+
+**R-STMT-0006** — A `switch` expression shall have an integer, `char`, fieldless-enum, tagged-enum, `o` or closed standard outcome type. It may also have type `str` or `constexpr str`, whose labels are string literals compared byte for byte, or the type of a `core::CaseMatcher` implementation, whose labels are constants of its `Label` type that its `matches` tests (R-TYPE-0046); such a switch evaluates its value once, tests the labels in clause order and executes the clause of the first label that matches, its labels shall be distinct values and it shall have a `default` clause, and a label of another type requires `R-DIAG-TYPE-001`. Closed standard outcomes are exactly the public schemas whose finite variant sets the normative R Standard Library Specification 0.1 explicitly fixes as ordinary ownership-preserving outcomes under R-SLIB-GEN-0005. Each schema’s library rule fixes its qualified path, generic arguments, variants, payloads and capabilities; an implementation shall not add another schema or variant. Case labels shall be unique, and at most one `default` clause is permitted. An integer or `char` switch shall have a `default` clause; every fieldless/tagged enum, o or closed-outcome switch shall list every possible variant or have a `default` clause. An unsuffixed integer literal that is the complete case pattern is contextually typed as the integer switch type when representable; otherwise `R-DIAG-CONST-001` is required.
+
+<a id="R-STMT-0007"></a>
+
+**R-STMT-0007** — Each `case` or `default` label is followed by a statement sequence without mandatory `{}`. The clause itself establishes an implicit lexical scope. A clause may end in an explicit transfer: `break;`, a contextually valid `continue;`, `return ...;`, `throw ...;`/`throw;`, or, for a non-final clause, `fallthrough;`. Normal completion of a clause at the next label or at the closing `}` leaves the switch like `break;`. `fallthrough;` shall be the last top-level statement of its clause. The target clause shall not bind a payload, and no live local or borrow may cross the edge. Initialized locals of the source clause are dropped before the transfer.
+
+<a id="R-STMT-0008"></a>
+
+**R-STMT-0008** — The tagged case pattern `case variant Type::Variant(binding):` tests the variant and, by default, creates a borrow binding to its payload. The keyword `variant` shall also introduce a fieldless enum, `o` or closed standard outcome pattern so that the pattern is unambiguous with a constant expression. A standard-outcome pattern uses the qualified schema path without its type arguments, for example `variant std.thread::join_result::returned(value)`; the scrutinee supplies those arguments. A fieldless alternative has no binding and a payload alternative has its one binding. For a standard variant whose payload has multiple named fields, that one binding designates the aggregate payload and the fields fixed by the R Standard Library Specification 0.1 are selected through it. `move binding` is permitted only when switching over a whole payload-bearing value written with outer `move`.
+
+<a id="R-STMT-0009"></a>
+
+**R-STMT-0009** — Structured control transfer uses `break;`, `continue;`, `return ...;`, `throw ...;`, `throw;`, and `fallthrough;` in the contexts defined by R-STMT-0004 through R-STMT-0007 and R-ERR-0001..0003. Every such transfer leaves scopes only through their boundaries, traverses each active `finally` whose protected region the transfer exits, and performs the drops required by R-INIT-0008. A transfer whose target remains inside a protected region does not execute that region’s finally.
+
+<a id="R-STMT-0010"></a>
+
+**R-STMT-0010** — The switch scrutinee is evaluated exactly once. Here outer `move` means the whole scrutinee, ignoring parentheses, is unary `move place`; a nested move in a larger expression does not qualify. Without outer `move`, a tagged-enum, `o` or closed standard outcome place is not consumed: the switch holds a shared borrow until switch exit, and a payload binding without `move` has the corresponding shared borrow type. Any non-place payload-bearing scrutinee materializes in a hidden switch-owned object: a Move result transfers ownership, while a Copy result copy-initializes the object. The hidden object’s lifetime covers every clause; payload bindings borrow that object rather than the original temporary, and the object is dropped on switch exit. For a Move scrutinee, `switch (move place)` requires a named, initialized, whole value of a tagged-enum, o or closed standard outcome type; it consumes the place into a hidden temporary. For a Copy scrutinee, `move` performs the ordinary copy specified by R-OWN-0002 and preserves the source; it does not consume a Copy payload. A `move binding` of a Copy payload copies it and preserves the scrutinee. For a Move payload, `move binding` transfers the active payload from an outer Move switch temporary. A successful transfer first initializes the binding as the sole cleanup owner of the payload, then changes the whole hidden switched object to `moved`; its storage is later released without a user drop and without dropping the payload again. This is the sole whole-object pattern exception to R-OWN-0005; no partially initialized shell remains. The binding follows ordinary Move rules: if it remains initialized, it is dropped once on normal or unwinding exit; if ownership is transferred, cleanup responsibility transfers under R-AM-0010 and no local drop occurs. `move binding` is invalid when the scrutinee type has a user drop because the drop body requires the complete active payload. Outer `move` applied to a non-place or already moved place is a constraint violation.
+
+<a id="R-STMT-0011"></a>
+
+**R-STMT-0011** — A `try` statement consists of one try block, one or more typed catch clauses optionally followed by one finally clause, or one finally clause without catches. Catch types within the statement shall be distinct. A catch binding is a new initialized local owning the exact selected error payload. A finally clause has no access to locals declared inside the try block or a sibling catch; it may access enclosing-scope objects. Detailed selection, propagation, rethrow, cleanup and effect rules are R-ERR-0001..0003.
+
+<a id="R-STMT-0012"></a>
+
+**R-STMT-0012** — `await move task_name` and `await function(arguments)` are suspension expressions available inside async functions. They may compose with calls, operators, conditions, return operands and automatic initializers. A complete await statement requires logical result `void`, or the call form of a `@discardable` async function, whose result is then discarded under R-FUNC-0021. The named form consumes one initialized task observation and requires `move`. The call form requires a direct named, qualified or method call returning `task<T throws E...>`, including standard and inferred generic calls. It materializes one hidden task and consumes it automatically. Call arguments are evaluated once; immediate call errors precede the await, while completion errors are observed at await. Named Move sources survive a failed start under R-FUNC-0010. The result is initialized only after successful completion. Hidden storage obeys the ordinary borrow, Send and cleanup rules. `await task_name` and `await move function(arguments)` remain invalid. Await is prohibited in synchronous functions, module/static initializers and anywhere inside `finally`. Group readiness expressions follow R-STMT-0017 and R-STMT-0018.
+
+<a id="R-STMT-0013"></a>
+
+**R-STMT-0013** — Reaching the closing brace of a function body on a reachable path is permitted when the declared logical return type is `void`. It is exactly equivalent to executing `return;`; both forms leave and destroy scopes exactly alike. This rule also uses the logical return type of an `async` function. An explicit final `return;` remains valid in either form but is semantically redundant. Every reachable path of any other declared return type shall end in an explicit value return or have type `never`; reaching its closing brace requires `R-DIAG-FLOW-001`.
+
+<a id="R-STMT-0017"></a>
+
+**R-STMT-0017** — `task_scope(capacity) name { statements }` creates a bounded task group in an async function outside finally. Capacity is a compile-time integer in 1..65536. In a generic function it may be spelled over constant generic parameters (R-TYPE-0047), directly or through constant locals; it is then a constant of each instance, and an instance whose capacity lies outside that range requires `R-DIAG-ASYNC-001` naming the instance. The name is contextual block-local compiler storage, not a first-class value. Nested groups have independent regions. Each task started directly in the body is supervised by its innermost group; moving an observation to another group is forbidden. A full group reports `std.async::start_error::scope_full` before preparing a task or committing named Move arguments. Completion alone does not free a slot while its observation remains unconsumed; a detached member frees its slot once it is terminal and its outcome has been destroyed.
+
+The zero-argument attribute `@scoped` is allowed once on an async function, never on an extern declaration. Such a function is callable only while a task group is active. Borrow-bearing arguments must be Send and originate in storage enclosing the group body; body-local storage, unknown origins and escaping observations are rejected. A consuming `await move member` that observes the member’s terminal outcome ends the loans of that member; after a consuming cancel or detach, or while an observation stays unconsumed, the group’s loans persist until an all-members barrier or group exit acknowledges child payload cleanup. Shared loans allow shared reads; exclusive loans exclude parent accesses. Start failure restores the pre-start loan and ownership state.
+
+A standard asynchronous operation that the R Standard Library Specification declares scoped is called like a `@scoped async` function: only while a task group is active, with its view arguments as loans of that group subject to the same origin, Send, shared and exclusive rules. Its loan ends only when the native backend has acknowledged completion or cancellation and can no longer access the viewed storage; that moment is the publication of the operation’s outcome, which the consuming await observes and the all-members barrier and the group exit await. The viewed storage is never copied or retained by the operation, and a failed start holds no loan.
+
+`await name.first(&a, &b, ...)` borrows initialized named members and returns the zero-based index of the first terminal member in argument order. `await name.all()` waits until all members have completed cleanup. These are readiness barriers: they do not consume results or observe completion errors. Individual `await move member` does that. Group observations cannot escape through returns, aggregates, heap allocation, closures or ordinary call arguments. Consuming cancel and `std.async::detach(move member)` are allowed and do not end supervision: a detached member keeps running under its group, `await name.all()` and the group exit wait for it, the group exit cancels it while it still runs, its returned value or checked error is destroyed once unobserved, and an unobserved panic reaches the configured panic handler (R-FUNC-0012). Deadline-bounded waits, `name.cancel_all()` and the select statement follow R-STMT-0018.
+
+Every exit, including return, checked error, break, continue and parent cancellation, cancels unconsumed members and waits for terminal acknowledgement before closing the group and destroying enclosing borrowed storage. Unobserved completion payloads are destroyed once under ordinary task cancellation policy. The compiler’s mandatory drain may suspend and ignores further parent cancellation; this does not permit source await inside finally. Supervision is independent of the sole observation handle. No new source-level task ABI or boxing is introduced; bounded entry storage belongs to the parent frame.
+
+<a id="R-STMT-0018"></a>
+
+**R-STMT-0018** — Inside a task group (R-STMT-0017), `await name.first_until(deadline, &a, &b, ...)` and `await name.all_until(deadline)` bound the readiness barriers `first` and `all` by a deadline of type `std.time::instant` on the monotonic clock; another deadline type requires `R-DIAG-TYPE-001`. `first_until` has type `o<usize>`: the zero-based argument index of the first terminal member, or `o::none` when the deadline passed first. `all_until` has type `bool`, `true` when all members completed cleanup before the deadline. Both require a value context (`R-DIAG-USE-001`) and check readiness before the deadline, so a ready group never reports a deadline that has already passed. Like `first` and `all`, they consume no observation, observe no completion error and end no loan; the deadline ends only the wait. Among several terminal members, `first`, `first_until` and select choose the lowest argument or clause index.
+
+`await name.vacancy()` waits until the group has a free slot and has type `void`; `await name.vacancy_until(deadline)` bounds that wait by a deadline of type `std.time::instant`, has type `bool`, `true` when a slot was free before the deadline, and requires a value context (`R-DIAG-USE-001`). A slot is free when no member holds it: a member holds its slot until it is terminal and its observation is consumed or detached (R-STMT-0017), so a full group whose members all run or stay unobserved has no vacancy. Readiness is checked before the deadline, a vacancy wait takes no other argument (`R-DIAG-ASYNC-001`), and, like the readiness barriers, it consumes no observation, observes no completion error and ends no loan.
+
+`name.cancel_all()` is a `void` call that requests cancellation of every member of the group whose observation is unconsumed, including select-pending members, and consumes those observations like `std.async::cancel(move member)`. It does not wait: supervision, slots and loans persist until terminal acknowledgement, which `await name.all()` or the group exit observes, and a repeated call finds nothing more to consume. Another operation name or an argument requires `R-DIAG-ASYNC-001`. The completion payload of a cancelled member, including a checked error, is destroyed once unobserved. Cancellation, whether requested or performed by the group exit, is no evidence that the external effects of the member did not happen.
+
+`select (name) { clauses }` waits in the named enclosing group until a listed member is terminal or its deadline passes, then executes exactly one clause. A member clause `case T binding = await move member:`, `case auto binding = await move member:` or, for a member whose result is `void`, `case await move member:` names an initialized member of that group once. The clause `case until (deadline):` appears at most once and takes a `std.time::instant`. At least one member clause is required. Clause statements and terminators follow the switch clauses of R-STMT-0006: `break` leaves the select, and `fallthrough` requires `R-DIAG-FLOW-001`. Any other clause form, a member of another group, a repeated member or a missing member clause requires `R-DIAG-ASYNC-001`; a member that may already be consumed requires `R-DIAG-MOVE-002`; another deadline type requires `R-DIAG-TYPE-001`. `select` and `until` are contextual: `select` begins the statement only when a parenthesized name and `{` follow it.
+
+The deadline is evaluated once; the select then waits like `first_until` over its members in clause order, or like `first` without an until clause. The clause of the selected member consumes it with `await move` under R-STMT-0012, so a completion error of that member propagates from the clause; the until clause runs when the deadline passed first and consumes nothing. A select never cancels. Every listed member the executed clause does not consume keeps running and holds its slot and loans. After the select, a listed member that is consumed on some paths only is select-pending: those paths are not inconsistent under R-OWN-0004, naming the member requires `R-DIAG-MOVE-002`, and only `name.cancel_all()` or the group exit, which cancels it under R-STMT-0017, resolves it and destroys its outcome unobserved. A program that needs the completion errors of the other members awaits them inside the clauses.
+
+Bounded waits, vacancy waits, `cancel_all` and select start no task and take no slot; a bounded wait and the until clause end no later than the deadline of the waiting task (R-STMT-0019). A passing deadline changes no member, loan or Move state, and parent cancellation during such a wait takes the cancellation path of R-STMT-0017.
+
+<a id="R-STMT-0019"></a>
+
+**R-STMT-0019** — `deadline (value) block` gives the statements of the block a deadline in an async function outside finally; elsewhere it requires `R-DIAG-ASYNC-001`. The value has type `std.time::instant` on the monotonic clock or `o<std.time::instant>`, whose `o::none` adds no deadline; another type requires `R-DIAG-TYPE-001`. `deadline` is contextual: it begins the statement only when a parenthesized expression and `{` follow it.
+
+Every task has a deadline, possibly none. The value is evaluated once before the block; while the block executes, the deadline of the executing task is the earlier of its previous deadline and the value, so a nested block can shorten the deadline but never extend it. Every exit from the block, whether by completion, `break`, `continue`, `return`, a checked error, a panic or cancellation, restores the previous deadline as a finally clause would (R-STMT-0009). A task receives at its start the deadline of the task that starts it and keeps it: this covers async calls, members of task groups and standard asynchronous operations started while the block executes, whereas a task started before the block keeps its own deadline even when it is awaited inside the block.
+
+The deadline bounds operations, not computation: the block interrupts no statement and cancels no task. A standard asynchronous operation takes the earlier of its own deadline argument, which a call may omit, and the deadline of the task that starts it (Library R-SLIB-ASYNC-0008); an expired deadline therefore yields the `timed_out` error of the operation, not `cancelled`. The waits `first_until`, `all_until` and `vacancy_until` and a select with an until clause (R-STMT-0018) end no later than the deadline of the waiting task; waits without a deadline, `await` itself, the timers `sleep_for` and `sleep_until` and the asynchronous channel receive (Library R-LIB-0016) are not bounded by it. A deadline block starts no task and takes no slot.
+
+<a id="R-STMT-0020"></a>
+
+**R-STMT-0020** — `budget (value) block` gives the statements of the block a budget in an async function outside finally; elsewhere it requires `R-DIAG-ASYNC-001`. The value has type `std.alloc::limits` (Library R-SLIB-ALLOC-0003), whose fields `bytes` and `tasks` hold the limits of the budget, `o::none` setting no limit of that kind; another type requires `R-DIAG-TYPE-001`. `budget` is contextual: it begins the statement only when a parenthesized expression and `{` follow it.
+
+Every task has a budget, possibly none. The value is evaluated once before the block; while the block executes, the budget of the executing task is a new budget with the limits of the value nested in its previous budget, and every exit from the block restores the previous budget as for a deadline (R-STMT-0019). A task receives at its start the budget of the task that starts it and keeps it.
+
+Each allocation of the runtime that code executing a task makes, through `new` or a standard operation, is charged to the budget of the task and to every budget that budget is nested in, and stays charged until its release, wherever and whenever the release happens; a reallocation charges or returns the difference to the budgets of the allocation, and an allocation made without a budget stays without one. The bytes charged to a budget never exceed its byte limit: an allocation that would exceed it fails as `std.alloc::alloc_error::budget_exhausted` (Library R-LIB-0004), and a `new` that fails so causes the `allocation_failure` panic (R-OBJ-0006). Likewise every task that runs an async function, a call or a member of a task group, counts from its start until it ends under the budget of the task that starts it and every budget that budget is nested in; a start beyond a task limit throws `std.async::start_error::budget_exhausted` before the task is prepared. Standard asynchronous operations count no task, and work that `std.async::blocking` runs on its threads is charged to no budget. When the implementation cannot record a budget, every allocation and start of the block fails as if the budget were exhausted.
+
+<a id="R-STMT-0021"></a>
+
+**R-STMT-0021** — In an async function outside a finally clause, `for (T name in &source) block` is an asynchronous for when `source` names a local object or parameter of type `std.sync::receiver<U>`, or of a type that implements `core::AsyncIterator` and neither `core::Iterator` nor `core::LendingIterator` (R-TYPE-0046). Each iteration borrows `source` anew and awaits its next item: for a receiver the asynchronous receive of Library R-LIB-0016, whose item type is `U`; otherwise the scoped `next` of the implementation, started as a member of the innermost task group with the borrow as its loan, which the await ends (R-STMT-0017), and whose item type is `Item`. The loop ends at the first `o::none`; otherwise the payload moves into `name`, whose type shall be the item type unless `auto` is written, and the block executes. `break`, `continue` and `return` follow R-STMT-0004, the loop creates no hidden object that outlives an iteration, and an error of a start or of `next` leaves the loop as from any await. The form outside an async function or inside finally requires `R-DIAG-ASYNC-001`, and so does a `core::AsyncIterator` source without an enclosing task group (R-STMT-0017); a source that is not a named local object or parameter requires `R-DIAG-TYPE-001`, as does a mismatching loop variable type (R-STMT-0014).
+
+<a id="R-STMT-0022"></a>
+
+**R-STMT-0022** — A destructuring declaration `auto (first, second) = pair;` evaluates its initializer once. The initializer shall be a tuple (R-TYPE-0052) with as many elements as the declaration has names; otherwise `R-DIAG-TYPE-001` is required. The declaration declares one local per name, in order, in the enclosing block or `switch` clause, each of the type of its element and initialized from it: a Copy element is copied and a Move element moved. A tuple place of a Move type requires `move` (R-OWN-0003) and is consumed without a drop of the emptied tuple; a Copy tuple place is copied and stays usable. The names follow R-NAME-0004 in that scope. A declaration of more than 64 names requires `R-DIAG-LIMIT-001`, and one that is not directly a statement of a block or clause requires `R-DIAG-TYPE-001`.
+
+<a id="R-STMT-0014"></a>
+
+**R-STMT-0014** — `for (T name in iterable) block` declares the loop variable `name` of type `T`, or of the item type when `auto` is written, and executes the block once per item; `break` and `continue` follow R-STMT-0004, and the hidden objects the loop creates are dropped when it ends; a `for` clause of a comprehension (R-EXPR-0030) has the same header forms. The iterable is one of the following. A range `lo..hi` of one integer type: `name` takes every value from `lo` up to but excluding `hi`, both bounds are evaluated once before the loop, `T` is that integer type, and assigning to `name` does not affect the iteration. A borrowed sequence `&place` of type `[T; N]`, `T[]`, `const T[]` or `array<T>`: the sequence is borrowed for the whole loop and indexed in order; the loop variable is `const T*` (also for `auto`), `T*` through an exclusive borrow of the sequence, or a copied `T` of a Copy element type, and each element borrow follows the borrow rules. A borrowed `list<T>` or `dict<K, V>`: the container is iterated through its standard cursor, and the loop variable is `const T*` or `std.dict::entry_ref<K, V>`. A standard cursor or a `core::Iterator` implementation (R-TYPE-0046) given by value, as a Move value written with `move` or produced by a call, or advanced in place through an exclusive borrow: every iteration calls `next`, the loop ends at the first `o::none`, and the loop variable receives each payload by value, so its type shall be the item type. A `core::LendingIterator` implementation (R-TYPE-0046) of a type that implements no `core::Iterator` is advanced in the same forms, and each item it returns borrows the iterator until the next advance (R-TYPE-0045), so keeping an item past its iteration requires `R-DIAG-BORROW-001`. In an async function a borrowed `std.sync::receiver<T>` or `core::AsyncIterator` implementation is advanced by the asynchronous for of R-STMT-0021. Any other iterable and a mismatching loop variable type require `R-DIAG-TYPE-001`; a named Move iterator written without `move` or `&` requires `R-DIAG-MOVE-001`.
+
+<a id="functions"></a>
+
+## 16. Functions and calling semantics
+
+<a id="R-FUNC-0001"></a>
+
+**R-FUNC-0001** — A function declaration contains a return type, a name, a typed parameter list, an optional `async` marker, an optional `throws` clause, and an optional body. The throws clause is part of the function type and every declaration/definition compatibility and interface fingerprint. Empty `()` denotes exactly zero parameters; the last parameter may be variadic under R-FUNC-0018. `(void)` is not a native R parameter-list spelling, and an old-style unspecified parameter list does not exist.
+
+<a id="R-FUNC-0002"></a>
+
+**R-FUNC-0002** — A parameter is passed by value. A Copy argument is copied; a named Move argument requires `move`. A borrow or slice parameter transfers limited access rights without transferring ownership.
+
+<a id="R-FUNC-0003"></a>
+
+**R-FUNC-0003** — A function body with a non-void return type shall return a value on every reachable path unless that path has type `never`. Reaching the end of a `void` function has exactly the semantics fixed by R-STMT-0013. A checked throw is a terminating path only when its type is caught outside that point or belongs to the function’s declared throws set.
+
+<a id="R-FUNC-0004"></a>
+
+**R-FUNC-0004** — A native R function or method may share its module name or owner/member name with declarations having distinct canonical value-parameter lists or arities. Outermost object const, parameter names, return types, checked errors, visibility, unsafe and async markers do not distinguish overloads. Aliases denote the same type. Generic parameters are compared by position; constraints do not distinguish identical parameter lists. Compatible prototypes and definitions still denote one member. C declarations, callback entry points and closed key/JSON hooks do not form overload sets. Default arguments are not available; variadic parameters follow R-FUNC-0018.
+
+Selection uses argument types and arity, without the expected result. Literals use their ordinary R types. Prefer one exact parameter match; otherwise require one candidate accepting the existing argument conversions. Multiple remaining candidates or no candidate require R-DIAG-TYPE-001. A variadic candidate checks each packed argument against its element type, or checks the forwarded slice for a spread. A candidate with a pack (R-TYPE-0053) accepts any number of arguments after its fixed parameters and binds the pack to the tuple of their types; a spread of a tuple or a pack selects no overload. No numeric ranking, constraint preference or implicit user conversion is introduced. Method receivers follow R-FUNC-0014. Selection does not evaluate operands or commit moves, borrows or checked effects; only the selected call is lowered, once, and only its errors apply. Generic bodies resolve calls at definition time from their constraints; instantiation preserves that selected declaration. Names imported from different modules remain ambiguous. Overload members have deterministic canonical identities in interface schema 24 and in the ordering of generated function symbols.
+
+The static call graph of the program’s R functions, including drop hooks reached through owned storage, `std.sync::call_once`/`get_or_init` initializers and asynchronous starts, shall be acyclic except for the cycles of functions with `@recursion` that R-FUNC-0026 permits; a call through a dyn interface reaches the implementation of every member of the interface (R-TYPE-0051), and any other recursive call chain requires `R-DIAG-STACK-001`. An aggregate type may reach itself through owned storage along `own`, `arc` and `rc` owners, `o` options, fixed arrays, the elements of `array` and `list`, the values of `dict` and by-value struct or enum members, nested in any order; a self-reaching route through a `dict` key, a standard type, a `task` or an atomic requires `R-DIAG-STACK-001`, and so does a derived JSON encoder or decoder of a self-nesting aggregate. Destruction of a self-nesting aggregate follows R-INIT-0010 (user drop body first, then members in reverse declaration order, elements from the last one down, each pointee or element before its owner is released) with a stack depth independent of the number and nesting of the owned values. From the measured frames of the target, an implementation shall derive a static worst-case stack bound for every entry into R code (the hosted entry point, each spawned thread entry, each asynchronous step or helper gate, each `call_once` initializer and each entry from C) and shall reject a program whose bound exceeds the target’s entry stack budget. At run time that bound is checked once at each such entry against the remaining stack of the current thread; a failed check causes the `stack_exhaustion` panic or documented termination, never memory UB, and calls between R functions carry no further check.
+
+For a literal `null` argument, `null_t` is an exact match; nullable pointer parameters are compatible conversions. A typed nullable pointer argument selects its pointer overload even if its value is null. Other types and computed expressions are rejected by a `null_t` parameter. Without an exact match, two nullable pointer candidates remain ambiguous. The literal `null` supplies no generic type inference candidate. Other arguments may determine the type of a nullable pointer parameter; the call then applies the ordinary null conversion and argument rules. A candidate with an uninferred type parameter is not viable. A generic function may explicitly declare a `null_t` parameter alongside independently inferred value parameters.
+
+<a id="R-FUNC-0005"></a>
+
+**R-FUNC-0005** — `unsafe` function may contain unsafe operations without an nested unsafe block, but calling such a function itself is unsafe operation. Signature shall document the safety contract.
+
+<a id="R-FUNC-0006"></a>
+
+**R-FUNC-0006** — A function returning a Move value transfers its ownership to the caller. A function returning a borrow shall satisfy the lifetime relationships of section 13; a returned borrow derived from local or by-value parameter storage is prohibited.
+
+<a id="R-FUNC-0007"></a>
+
+**R-FUNC-0007** — An unambiguous closed safe R function name in a value position creates a function item: a Copy value with a nominal type identifying that exact function, no captures, and no runtime function pointer. It can be stored with `auto`, converted to a function type (R-TYPE-0054), passed to a generic callable parameter, or returned through a matching `opaque` contract. A generic function closed by `name::<arguments>` (R-TYPE-0036) and a method or associated function named `Owner::name` or `Owner<args>::name` are closed names; a method item takes its receiver as its first parameter, so `auto get = Point::get;` is called as `get(&point)`. An open generic name, unresolved overload family, unsafe or C function, variadic function, or a method selected through a receiver without a call does not form a function item. A synchronous item satisfies matching `shared`, `mut` and `once` callable modes; an async item satisfies only `async fn once`. Parameter and result types, checked errors and resource guarantees follow R-TYPE-0044. `item(args)` and `item.call(args)` evaluate the item before the arguments and call the original function. They preserve its storage identity, borrow contract, checked errors, cleanup, async-start transaction and static call-graph edge. Creating or copying an item neither calls the function nor allocates an environment.
+
+`raw fn(P...) -> R` function pointers exist only for C FFI; the nullable form is `raw fn?(P...) -> R`. Calls through either form are unsafe; R-FUNC-0004 includes every matching `@callback` function as a potential target (R-FFI-0025). A function item does not implicitly convert to a raw pointer. The compiler-recognized designator contexts `std.thread::spawn`, `std.thread::spawn_scoped`, `std.sync::call_once`, `std.sync::call_once_force` and `std.sync::get_or_init` retain their exact contracts under R-LIB-0010/R-LIB-0015. A raw C function type never carries checked errors.
+
+<a id="R-FUNC-0008"></a>
+
+**R-FUNC-0008** — Hosted program shall define exactly one exported entry point having one of the forms `i32 main()`, `i32 main(const str[] args)`, `async i32 main()` or `async i32 main(const str[] args)`. The asynchronous forms require the `hosted-native-async` profile. In test mode the implementation adds the entry point (R-FUNC-0025). The runtime creates the process executor and supplies an owned immutable argument snapshot before starting an asynchronous root. After required dynamic-provider readiness succeeds and before any R static object is initialized, every hosted launch shall convert every supplied native process argument by the target mapping in R-IDB-022 to well-formed UTF-8 without replacement, truncation or byte substitution and reserve one owned immutable startup snapshot, whether or not the selected main form receives `args`. The snapshot is never empty. Its element zero is the converted native argument-zero spelling when the host supplies one; otherwise the runtime synthesizes the target-documented well-formed UTF-8 executable spelling. Every later element corresponds in order and byte-for-byte to one remaining converted native argument. The runtime first validates representability and computes the required size for the complete vector, including a synthesized element zero, without materializing an R `str`; only after all elements pass does it reserve and populate the single snapshot backing allocation. If an argument is not representable, the runtime reports the allocation-free pre-main category `argument_encoding_failure`; if snapshot backing cannot be reserved, it reports `allocation_failure`. In either case it uses the emergency diagnostic path, terminates abruptly with the distinct category-specific R-IDB-022 status, and shall not initialize an invalid `str`, initialize an R static object or invoke `main`. The source `args` slice may be used during initial execution but, under R-BORROW-0024, shall be copied into owned storage before its value remains needed across an `await`. `str` is a distinct UTF-8-invariant refinement type with the same runtime representation and read-only byte access as `const u8[]`, not the same type identity; conversions follow R-EXPR-0015 and R-ARRAY-0007. Returned i32 maps to environment status according to target documentation. If the runtime cannot reserve the executor or root frame, no R main-body instruction executes; it reports the exact `allocation_failed` or `runtime_stopping` start-error category through the configured panic handler or its allocation-free emergency path, then terminates abruptly with a target-documented nonzero status. Because no root task became live, this path performs no R static/module destruction. None of the four `main` forms may explicitly declare `throws`. Each has the following implicit closed exact nominal checked-error set:
+
+`core::utf8_error`, `std.alloc::alloc_error`, `std.async::start_error`, `std.bits::read_error`, `std.bytes::bytes_error`, `std.c::runtime_error`, `std.c::string_error`, `std.convert::parse_error`, `std.convert::range_error`, `std.env::env_error`, `std.error::error`, `std.format::format_error`, `std.fs::fs_error`, `std.fs::path_error`, `std.io::io_error`, `std.math::math_error`, `std.net::address_error`, `std.net::net_error`, `std.process::process_error`, `std.string::boundary_error`, `std.string::string_error`, `std.sync::barrier_error`, `std.thread::thread_error`, `std.time::duration_error`, `std.time::time_error`.
+
+Only these Copy families without owned payloads may reach the program boundary. Their scalar diagnostic fields do not carry ownership. The ownership-bearing closed families `std.alloc::new_error<T>`, `std.array::push_error<T>`, `std.dict::insert_error<K,V>` and `std.list::push_error<T>`, every user-defined error and every other error type still require a matching catch before that boundary. The compiler-generated C17 entry shall handle each admitted type by a named, statically checked branch and consume its payload exactly once; Copy-only destruction has no observable drop action. It shall convert the error without allocation to the portable domain/code representation of R-SLIB-ERR-0002/0003, obtain its name through `std.error::name`, and write domain, name, code and native_code through the emergency diagnostic sink. It shall not call `std.error::diagnostic`. An unrecognized carrier tag or error type is an internal code-generation integrity failure, not a documented termination status. Panic bypasses this checked-error boundary.
+
+R-IDB-023 reserves a target-documented status range for this boundary, separate from application statuses permitted by R-IDB-007. The four i32 forms are retained; no void entry form is introduced. This makes a permitted application return distinguishable from a boundary error by process status alone. An out-of-range returned value shall produce an allocation-free `invalid_main_status` diagnostic and the dedicated reserved status, followed by normal termination; it shall never silently truncate to success or to another application status. The target shall document that status and the application range. Existing programs returning permitted application statuses retain their behavior.
+
+<a id="R-FUNC-0009"></a>
+
+**R-FUNC-0009** — The defining module of a complete nominal K may provide its dictionary key contract through exactly the associated definitions `u64 K::hash(const K* value)` and `bool K::equal(const K* left, const K* right)`. The pair is indivisible: defining only one, using `unsafe` or `extern`, using another signature, adding `protected`, or defining either outside the module that defines K is a constraint violation. The qualified names are associated operations and are methods with a shared receiver under R-FUNC-0013, not overloads, virtual methods or implicit operators; `K::equal` does not enable `left == right`. The pair inherits K’s visibility without a separate source marker. For an exported K, both definitions and their verified effect summary are part of its module interface fingerprint.
+
+Both operations shall terminate for every valid input and shall depend only on the logical values reachable through their shared-borrow parameters. Their complete permitted transitive effect set is: reading literals, constants and parameter-reachable immutable subobjects; local computation; and calls to `core::hash`, `core::key_equal` or the corresponding associated key operations of component types. The compiler shall diagnose any statically present effect outside that closed set, including any checked throw or call with a nonempty throws set. `K::equal` shall be an equivalence relation, and whenever it returns true, both operands shall produce the same `K::hash` value. These semantic requirements make repeated lookup deterministic; a program whose associated definitions violate them is non-conforming.
+
+The hooks of a generic K repeat the parameters of its schema and their constraints; the pair may add capability constraints, such as `key`, to the parameters. An instance of K whose arguments do not prove them has neither hook and no key contract. The clone hook of R-OWN-0020 may add constraints in the same way. `@derive(key)` defines the pair (R-AGG-0012).
+
+<a id="R-FUNC-0010"></a>
+
+**R-FUNC-0010** — In `async T operation(P...) throws E...`, T is the logical return type and E…​ is the canonical checked completion-error set used to type-check the body; source return and throw statements behave exactly as in a synchronous function. The declaration shall not have `extern` linkage. Calling it initiates a two-phase start transaction, produces `task<T throws E...>`, and itself has the additional immediate checked effect `std.async::start_error`. Within such a start, a named Move operand is permitted only when its complete argument expression is the direct form `move place`; nesting a named Move in an aggregate, constructor or other argument expression requires `R-DIAG-MOVE-003`. The callee and arguments are evaluated left to right under R-EXPR-0020; every ordinary effect occurs at its specified point, but evaluation of a direct named `move place` argument stages that source without changing its initialized ownership state and establishes an exclusive staged-move reservation over the source and every overlapping place until the transaction ends. A later argument shall not read, write, borrow, move or re-stage overlapping storage; violation requires `R-DIAG-BORROW-001`. Under unwind strategy, a panic during argument evaluation releases every staged-move reservation, leaves every such named source initialized and performs ordinary temporary cleanup. Under abort strategy it terminates under R-ERR-0005 without any additional R cleanup. After successful evaluation, the implementation validates and reserves all frame and executor resources without committing a named Move operand. It then either throws `std.async::start_error::allocation_failed` or `std.async::start_error::runtime_stopping`, in which case the body has not run and every named Move argument remains initialized and unchanged, or atomically converts every staged-move reservation into its move, commits all argument transfers, publishes and returns the task. Every failed start releases all staged-move reservations before exposing its error. A committed task is eager: its body becomes eligible to execute independently before the caller next observes it. Each temporary created while preparing a failed call remains owned by its ordinary full expression and is destroyed by R-AM-0010.
+
+<a id="R-FUNC-0011"></a>
+
+**R-FUNC-0011** — An asynchronous frame owns every committed by-value parameter and every local whose lifetime crosses a suspension. Each such value is destroyed exactly once in the ordinary reverse-scope order after it ceases to be live, after terminal result transfer, or during cancellation cleanup. The parameter types of a user `async` function, every checked error payload and every local live across `await` shall satisfy R-BORROW-0024. A value that the `hosted-native-async` executor can transfer between threads shall be Send; its compiler-generated frame metadata records and verifies that requirement. A `std.sync` lock guard is neither Send nor unborrowed, so it shall not remain live across `await` (`R-DIAG-ASYNC-001`); the diagnostic names `std.async::mutex` or `std.async::rw_lock` of R-SLIB-ASYNC-0013, whose guards may. The runtime shall not expose a partially initialized frame or execute the body before the successful start commit.
+
+<a id="R-FUNC-0012"></a>
+
+**R-FUNC-0012** — `await move task_name` or `await function(arguments)` waits logically for the task without blocking an executor thread. If incomplete, it suspends the current async frame and arranges its continuation; if complete, or when resumed, it consumes the unique observation right. For `task<T throws E...>` with non-void T it initializes the destination local directly from returned T; completion with E transfers that exact error at the await point and therefore shall be caught or included in the enclosing function’s throws set. For `task<void throws E...>` the successful statement has no value. Under unwind, an observed task panic is re-raised at the await point after the completed frame’s required cleanup; under abort, the originating panic has already terminated the process.
+
+`std.async::cancel(move operation)` consumes any task, explicitly requests target-native cancellation and relinquishes observation. `std.async::detach(move operation)` consumes any task and relinquishes observation without requesting cancellation. Ordinary implicit drop is permitted only for an effect-free `task<T>` and requests cancellation. An effectful task is a must-resolve value: every normal, return, break, continue and checked- throw path shall consume it by await, explicit cancel or explicit detach, including through an enclosing finally. Panic unwind and cancellation of the containing frame may force cleanup and are not successful source-level resolution. In every case runtime ownership keeps the frame, native resources, buffers and handles alive until the single terminal completion required by R-AM-0014. A detached or cancellation-race returned value or checked-error payload is dropped exactly once; an unobserved panic is delivered to the configured panic handler. Cancellation of a containing async frame first obtains terminal/native acknowledgement from every current native operation or awaited child for which it requests cancellation. Only after that acknowledgement does it execute every active finally exactly once from inner to outer and perform frame drops before terminal publication. A cancellation arriving while finally executes is latched and cannot interrupt or repeat it. `await` is prohibited in finally, while explicit cancel remains permitted.
+
+<a id="R-FUNC-0013"></a>
+
+**R-FUNC-0013** — A method is declared as `Ret Owner::name(receiver, parameters)` in the module that defines the complete nominal Owner, or as a member of a trait or of an implementation. The receiver is the first parameter, is named `this` and has exactly one of the forms `const Owner*`, `Owner*` and `Owner`; inside a trait or an implementation `Self` spells the owner. A declaration without a receiver is an associated function of its owner. For a generic owner the method’s `@generic` header repeats the owner’s parameters and normalized constraints as its prefix under R-TYPE-0037, and further method parameters follow them; `Owner<args>::name(arguments)` supplies that prefix from the owner spelling, so an associated function of a generic owner needs no value parameter that mentions it. A method name shall differ from every field and variant name of its owner and from the predeclared intrinsic names. A method has no C linkage, is not a `@callback` target and may be `unsafe` or `async`. `protected` applies to an inherent method and is not permitted on a trait or implementation member; an inherent method otherwise inherits the visibility of its owner. The associated key and JSON operations of R-FUNC-0009 and R-JSON-0001 are methods with their existing closed contracts.
+
+<a id="R-FUNC-0014"></a>
+
+**R-FUNC-0014** — `receiver.name(arguments)` and `receiver->name(arguments)` call the method `name` of the receiver’s owner type, with the receiver as its first argument. A shared receiver borrows the place shared, an exclusive receiver borrows it exclusively and requires a mutable place, and a consuming receiver takes the value, so that a named Move receiver requires `move`. The `->` form requires a non-null borrow of the owner and does not accept a consuming receiver. When the name selects a field of the owner, the expression is member access followed by the call of R-FUNC-0007 instead. The method-call suffix is the last postfix suffix of its expression unless the method is declared `@chain` (R-FUNC-0024). Its arguments and result compose under R-EXPR-0020 and R-STMT-0005. An associated function is called only through its qualified name. On a borrow of a dyn interface the method is the prototype its contract provides, and the call reaches the implementation of the member the borrow was converted from (R-TYPE-0051). Otherwise the call is a direct call of the resolved definition and enters the static call graph of R-FUNC-0004 as one edge.
+
+Registered standard methods are alternate spellings of their standard operations, with identical access, checked errors and ownership. Both standard and ordinary methods may appear in nested runtime expressions under their existing receiver and access contracts. No free function becomes an extension method implicitly. A consuming named receiver is written `(move owner).method(…​)`; the parentheses are method syntax and do not change R-FUNC-0010 startup transactions. Direct method calls may follow await under R-STMT-0012.
+
+<a id="R-FUNC-0015"></a>
+
+**R-FUNC-0015** — `fn [attributes] [shared|mut|once] Ret name(parameters) [move(names)] [throws E...] block` inside a block declares a named lambda with a unique nominal closure type and a `call` method. The synchronous signature follows R-TYPE-0044, including borrowed inputs, results and checked errors. A lambda is not an expression, argument or module declaration, and cannot be unsafe. Its name enters scope after the declaration; it cannot call itself. The ordinary static call graph includes its body. Closure types are not source-spellable; values are held by the lambda name, an `auto` local or a constrained generic parameter. A closure is Copy exactly when all captures are Copy.
+
+A lambda may be defined inside an ordinary, async or generic function. Generic lambda bodies are checked at definition even if unused; captures and the private environment schema are substituted with the enclosing schema at instantiation. Their identities, cleanup and generated functions remain deterministic. A synchronous closure can borrow for local processing inside async code, but a live borrow cannot cross suspension.
+
+`async fn` declares an async lambda. Only `once` is permitted, implicitly when omitted. Its environment is transferred transactionally and obeys Send and unborrowed, as do parameters, the result and completion-error payloads. An unlisted borrowed capture fails these requirements. Start-error preserves named Move arguments, including the consuming receiver; success commits them to the task. Completion, cancellation and environment cleanup use the ordinary async rules. Contextual mode words remain valid type names; a mode is recognized before a complete result type and lambda name.
+
+<a id="R-FUNC-0016"></a>
+
+**R-FUNC-0016** — A lambda body refers to the locals and parameters of the enclosing body by name; every such free name is a capture and becomes a field of the closure environment. A name listed in `move(names)` is captured by value: the declaration consumes the named local or parameter under R-OWN-0003, and the body accesses the captured value according to its call mode. Copy captures remain initialized in the enclosing body. A by-value capture of a borrow retains its pointee type and provenance; it does not borrow or dereference the pointer variable. Any other capture is a borrow formed at the declaration: exclusive when the body assigns to the name, increments or decrements it, takes its address or calls a method on it, and shared otherwise. Explicit `shared` forms only shared capture borrows, and mutation through its const environment is rejected. The environment holds those borrows for as long as the lambda name is live, so the borrow rules of section 13 apply between the declaration and the last use of the name. A name declared inside the lambda body hides the enclosing name throughout its block; a capture hides every module-level name of the same spelling inside the body; a name that the enclosing body cannot resolve is not a capture. A lambda may capture another lambda and the enclosing `this`.
+
+<a id="R-FUNC-0017"></a>
+
+**R-FUNC-0017** — `name(arguments)`, where `name` designates a closure local, parameter or capture, or a parameter of a type constrained under R-TYPE-0044, through a value or a borrow, calls the method `call` of the closure type with the environment as its receiver: shared for `shared`, exclusively for `mut`, and by value for `once`. When no lambda mode is written, it is mutable if any captured value is written or any capture is exclusive, shared otherwise. A named Move closure with a consuming receiver requires `(move name).call(arguments)`; its environment is consumed and destroyed exactly once, and a later use fails. A Copy closure follows ordinary Copy rules even with `once`: `move` copies it and preserves the source. Consuming a closure does not permit arbitrary moves from its captured fields; R-OWN-0019 provides replacement and optional take. A generic thread entry is inferred from its value arguments by the ordinary structural inference rules. Task and thread startup reserve named Move arguments and commit their transfer only after successful start under R-FUNC-0010. The call is direct under R-FUNC-0014 and its arguments compose under R-EXPR-0020. Closure creation and synchronous invocation introduce no indirect call, function pointer or heap allocation; captures and body operations retain their own effects. Async invocation has the ordinary task-start allocation and cleanup effects. Interface schema 31 writes callable constraints structurally, including mode, parameter types and result, and omits synthetic callable traits and implementations from exported trait records.
+
+<a id="R-FUNC-0018"></a>
+
+**R-FUNC-0018** — `T... name` as the last parameter of an ordinary R function declares a variadic parameter of type `const T[]`; `T` shall be a complete value type other than `void` that contains no exclusive borrow or exclusive slice, so runtime `str`, shared borrows, shared slices and aggregates holding them may be packed, and the function shall not be generic, `async`, `extern "C"` or a `@callback`; in a generic function, `T... name` where `T` is a pack declares the pack parameter of R-TYPE-0053. The declaration and every compatible redeclaration spell the parameter identically, and the variadic form is part of the function type and of the interface fingerprint. A call passes the fixed parameters first; the remaining arguments, zero or more, are the packed arguments: each is evaluated with `T` as its context and shall have type `T`, a named Move argument is written with `move` under R-OWN-0003, and the packed arguments initialize, in order, a hidden fixed array `[T; n]` of the caller whose shared slice is passed for `name`; `n = 0` passes an empty slice. The hidden array lives until the call returns and is then dropped, so the result of the call shall not borrow the storage of `name` (`R-DIAG-BORROW-002`); a result that carries only what the elements view (R-TYPE-0045) borrows the packed arguments, and for a spread the elements of its operand. Alternatively the last argument is a spread `...operand`, where `operand` is an expression that designates a `const T[]` or `T[]` slice, an `array<T>` or a fixed array of `T`; a spread forwards that sequence as a shared slice without copying, follows exactly the fixed arguments and is permitted in no other call; a spread of a tuple or a pack follows R-TYPE-0053. A spread of a slice, an array or a fixed array to a non-variadic parameter, a spread that is not the only packed argument, a packed argument of another type, a variadic parameter of a function of an excluded kind and an element type with an exclusive borrow or slice require `R-DIAG-TYPE-001`. This rule does not introduce C variadic functions: R-FUNC-0004 and R-FFI-0005 are unchanged.
+
+<a id="R-FUNC-0019"></a>
+
+**R-FUNC-0019** — The argument-free function attributes `@noalloc` and `@nonblocking` are independent, transitive resource contracts. They are permitted on ordinary and async functions, methods, generic functions, drop hooks and imported C functions. Each attribute occurs at most once; compatible redeclarations carry identical contracts. They do not change the calling convention, layout or ownership.
+
+`@noalloc` requires proof that execution does not allocate heap storage. `@nonblocking` requires proof that execution does not wait on an OS thread, including allocator, synchronization and opaque runtime operations that may block. Neither contract implies the other, purity, bounded execution time, real-time scheduling or absence of panic. They cover normal execution and recoverable error paths; terminal panic diagnostics and process termination are outside these contracts.
+
+The proof follows callees (through a dyn interface, the implementation of every member, R-TYPE-0051), associated hooks, implicit and explicit destruction, replacement cleanup and checked-error exits, including catch/finally paths. An unannotated R callee is analyzed from its body. Generic definitions are checked even without instantiation; a Copy constraint excludes user destruction but grants no resource promise for other operations. The compiler may conservatively include all runtime branches and all cleanup of owned types; a runtime `if (false)` does not suppress an effect obligation. Unknown effects are not proved absent. A standard operation is admitted only by its audited compiler resource registry; a new or unregistered operation remains unknown.
+
+For async functions, `@noalloc` checks the body and its cleanup, not the caller’s launch wrapper. Launch allocation is checked at the call site even when the async callee is annotated. Executor registration, await and cancellation require their own proof. The current mutex-based executor and frame cleanup do not establish `@nonblocking`; merely being async supplies no such guarantee. Atomic operations likewise do not establish lock freedom on every target.
+
+A resource annotation on a C import is an explicit obligation of the trusted FFI boundary, not a compiler proof of unseen C code. The existing safety and ABI checks remain mandatory. An exact named C call uses that contract. A raw function value whose signature has no resource contract remains unknown, even when a particular assignment happened to name an annotated function. R callback definitions are checked from their bodies and C-entry wrappers. Hosted entry attachment and detachment can lock and do not prove nonblocking execution; possible thread-local cleanup is included in the allocation proof.
+
+A failed proof requires `R-DIAG-RESOURCE-001` for `@noalloc` or `R-DIAG-RESOURCE-002` for `@nonblocking`, with the violating call or cleanup chain. Interface schema 31 exports `noalloc=true/false` and `nonblocking=true/false` for functions and generic schemas and includes them in fingerprints. These flags describe declared contracts, not inferred promises for unannotated code. Binary ABI and standard-library C symbols are unchanged.
+
+Callable and raw C signatures may carry the same argument-free attributes immediately after `fn`. Their declared guarantees cover invocation and closure-environment destruction. A compatible signature can forget either guarantee, but cannot strengthen it; all other signature and access rules remain in force. Generic callable constraints use those promises during definition checking. A lambda’s attributes are checked against its body and captures' cleanup, including checked exits. Raw imports remain trusted and R callbacks include their boundary wrappers in the proof.
+
+<a id="R-FUNC-0020"></a>
+**R-FUNC-0020** — The argument-free `@must_use` attribute marks a named function's result or a
+nominal struct, enum or error type as significant. It is permitted on generic declarations,
+associated functions, async functions and C imports, but not on fields, parameters,
+variables, drop hooks or a lambda header. A function must produce a value (an async
+function produces a task); a synchronous void function requires at least one output
+parameter under R-FUNC-0022, and a never function cannot carry it. Repeated
+attributes and incompatible redeclarations require a diagnostic.
+
+A non-void call result saved in a local, an awaited result, and a value of a
+`@must_use` type are significant. Each successful initialization or permitted
+assignment creates a separate use obligation. On each reachable normal path it shall
+be acknowledged before an overlapping replacement or the end of its storage scope;
+otherwise `R-DIAG-USE-001` is required. A later value's use does not acknowledge an
+earlier value. A read, including a read by a constant expression during translation such as
+an array bound or a static condition (R-EXPR-0022, R-META-0002), a projection, borrow, move,
+forwarding, return, explicit destruction or `as void` acknowledges a value. Updating a component uses an ordinary
+aggregate result as storage; replacing the entire local still requires acknowledgement.
+Implicit normal-scope cleanup does
+not. Branches, loops and finally clauses preserve this distinction. Ignoring a call
+expression directly remains subject to R-STMT-0001 and R-FUNC-0021.
+
+Exceptional unwinding and task cancellation may destroy storage before the result is
+used; no additional acknowledgement is required on these paths. Panic terminates its
+path under its existing termination contract. An ordinary early return, break or continue
+does not waive the obligation. An error
+caught inside the binding's scope does not waive an obligation on still-live storage.
+A failed producer creates no new result. Results created by a finally body are checked
+normally within that body's own scope. Await acknowledges the task and creates an
+independent obligation for its saved non-void result. Generic definitions are checked
+even when uninstantiated. Significance is preserved by result conversion and conditional
+result selection; it is not an application-level handling protocol or a linear obligation
+propagated through arbitrary copies and wrappers. The attribute does not follow erased
+raw function signatures. Copy/Move, borrow checking and task-resolution rules remain
+mandatory. R-INIT-0014 independently forbids unconditional local replacement.
+Interface schema 31 records `must_use=true`; omission means false.
+
+<a id="R-FUNC-0021"></a>
+
+**R-FUNC-0021** — The argument-free `@discardable` attribute marks a named function’s result as ignorable at the call site. It is permitted where `@must_use` is permitted on a function: generic declarations, associated functions and methods, trait prototypes, async functions and C imports; it is not permitted on nominal types, fields, parameters, variables, drop hooks, callable constraints or a lambda header. The function shall produce a non-void logical result or be a synchronous void function with at least one output parameter; for an async function the logical result is the awaited result, not the task. `@discardable` together with `@must_use` on one function, a `@discardable` result of a `@must_use` type (including an output parameter type), repeated attributes and incompatible redeclarations require a diagnostic. An implementation inherits the attribute from its trait prototype.
+
+An expression statement that is a direct named, qualified or method call of a `@discardable` function, and an await statement whose call form names a `@discardable` async function, evaluate the call once and destroy the result exactly as `as void` under R-EXPR-0023. Nothing else is relaxed: checked errors, panics, borrow checking, Copy/Move and effectful-task resolution keep their obligations, and no task is discarded by the attribute. The permission does not follow the value into a local, an operator operand, a conditional, a callable constraint or a raw function signature; those remain subject to R-STMT-0001 and R-EXPR-0023, and a local initialized from a `@discardable` call is an ordinary local. Interface schema 31 records `discardable=true`; omission means false.
+
+<a id="R-FUNC-0022"></a>
+**R-FUNC-0022** — `out T name` declares an output parameter of a synchronous R
+function. The corresponding argument is spelled `out place`. `out` is contextual
+in these two positions; it is not a general type constructor or an ordinary input
+borrow. `T` shall be a complete, inhabited, mutable, unborrowed value type. The mode
+is part of the function, trait and callable signature and is preserved by generic
+substitution and module interfaces. Async functions and C boundaries do not accept
+this parameter mode, and an output parameter cannot be variadic. In an argument
+list the contextual marker precedes a destination beginning with a name or `*`;
+parenthesized subexpressions may occur inside that destination.
+
+The callee starts with a private uninitialized `T` local. Reading or projecting it
+before whole-value initialization is ill-formed. Every successful return, including
+fallthrough of a void body, shall initialize every output. Reassignment and Move obey
+the ordinary ownership rules. The output remains private through all active finally
+clauses. A successful return transfers all outputs to the caller, replacing and
+ordinarily destroying previous destination values. Destination expressions are evaluated
+once, in argument order; overlapping outputs and conflicting input borrows are rejected.
+
+A checked exceptional return destroys all initialized private outputs and publishes
+none of them. Caller destinations retain their prior initialization and ownership
+states. This rule does not roll back other external effects. Panic follows the existing
+termination contract and introduces no unwinding. Each successfully delivered output
+creates a significant-result obligation. For outputs to local storage, the compiler
+shall track each successful write separately through branches, loops, catches and
+finally. Before another overlapping write or leaving scope, each reachable normal path shall
+acknowledge that value with a read, borrow, move, forwarding, explicit drop or `as void`.
+Implicit normal-scope destruction is insufficient. Exceptional unwinding, panic and
+cancellation follow the exclusions in R-FUNC-0020. Publishing a private output at successful return
+forwards the value. Writes through a caller-provided mutable borrow or into non-local
+storage forward it to that storage's owner. The analysis is conservative: unrelated
+condition correlations and equality of runtime indices need not be proved; reading or
+explicitly discarding the containing value acknowledges its outputs. A failed call
+creates no new obligation and does not erase an earlier one.
+
+At a named call, `@discardable` permits ignoring the outputs; this permission is not
+carried by a function item, opaque callable or callable constraint. It cannot override
+an output type's `@must_use`. Interface schema 31 represents the mode as `(out T)`.
+An ordinary mutable pointer has no out contract. R-ERR-0003 continues to prohibit an
+error escaping finally.
+
+<a id="R-FUNC-0023"></a>
+
+**R-FUNC-0023** — A function is translation-time evaluable when its checked body proves that a call with known arguments has no effect outside the call; no attribute declares it. Such a function is a synchronous, safe R function with a body, not an import, C export, callback, lambda body, trait prototype or compiler-made body other than a conversion of `std.string`; it has no output parameter; each of its checked errors has a constant value type or is a standard error of the owner operations below (`std.alloc::alloc_error`, `std.array::push_error<T>`, `std.list::push_error<T>`, `std.dict::insert_error<K,V>`, `std.string::string_error`, `std.string::boundary_error` or `std.math::math_error`); its parameters have constant value types or are shared or exclusive borrows or slices of them, and its result has a constant value type or is `void`. The constant value types are the integer types including the C ABI integer types, the floating types whose format is IEC 60559 binary32 or binary64 (R-TYPE-0006), `bool`, `char`, fieldless enumerations, `str` and `constexpr str`, fixed arrays of constant value types, structs and tagged enumerations without a `drop` function whose fields and payloads have constant value types, including the family of an error (R-AGG-0011), `o<T>` of a constant value type, and the standard owners `array<T>`, `list<T>`, `dict<K,V>` and `std.string::string` whose elements, keys and values have constant value types, K being an integer, floating, `bool`, `char`, fieldless enumeration, string or `std.string::string` type. After generic closing the body contains only: local objects of those types, borrows or slices of them and options of such borrows; blocks, `if`, `while`, `for`, range `for` over integers and owners, `switch` with constant or variant labels, `match`, `break`, `continue` and `return`; `throw` and `try` with `catch` and `finally`; literals, enumerators, variants, `sizeof`, `alignof` and `len`; reads of its parameters and locals, of module constants and of `const` module objects of constant value types; element, field, payload and dereference places, borrows and slices of its storage; operators, conversions among integer, floating, `char`, `bool` and enumeration types, and the views of a string as `str` or as its bytes; assignments and compound assignments to its storage; aggregate and array initializers; `panic`; `core::wrapping_*`, `core::saturating_*`, `core::enum_name` and `core::enum_ordinal`; the exact operations `abs`, `floor`, `ceil`, `trunc`, `round`, `copy_sign`, `min`, `max`, `next_after`, `is_finite`, `is_infinite`, `is_nan`, `is_normal` and `sign_bit` of `std.math` over those floating types, and their correctly rounded `sqrt` and `remainder`, whose domain errors are thrown as `std.math::math_error`; the owner operations of Library R-LIB-0019 to R-LIB-0023 and R-SLIB-STRING-0001 to R-SLIB-STRING-0003 other than `capacity` and `std.string::from_bytes`; and calls of evaluable functions. Any other operation keeps the function a run-time function, including access to an object with static or thread storage duration other than a constant, other allocation, `own`, `arc` and `rc` owners, floating values of another format, the other `std.math` operations, formatting, `unsafe`, raw pointers, atomic and volatile access, callable values, tasks, `await`, threads, I/O and other standard operations; a call of a run-time function has the same effect. Allocation does not fail during translation, where the limits of R-IDB-010 bound it instead, so a clause for an allocation error is not taken there, and the capacity of an owner, which follows the run-time growth policy, is not observed. Evaluability is a property of the whole call chain; interface schema 31 exports it as `consteval=true` (R-MOD-0006).
+
+<a id="R-FUNC-0024"></a>
+
+**R-FUNC-0024** — The argument-free `@chain` attribute marks a method whose call may be continued by further postfix suffixes of the same expression, as in `Options::create().with_port(9000u16).with_capacity(128usize)`. It is permitted on a synchronous method with a receiver whose result is neither `void` nor `never`, including a generic method, a trait prototype and an implementation member; on any other function, and when repeated, it requires `R-DIAG-SYN-002`. An implementation inherits the attribute from its trait prototype, and on an implementation of a prototype without it the attribute requires `R-DIAG-TRAIT-001`; a prototype and a definition that disagree require `R-DIAG-NAME-002`.
+
+A suffix after the call of any other method, including a standard method, a callable field and a function item, requires `R-DIAG-SYN-001`; the parenthesized receiver `(a.f()).g()` remains available for every method. A continued call means exactly its parenthesized form: the call completes, with its checked errors and panics, before the next suffix is evaluated; its result is a temporary that a consuming receiver takes by value, a borrowing receiver still requires a place (R-BORROW-0020), and a borrow result continues through `->`. Through a trait constraint or a dyn interface the permission of the prototype applies. The attribute changes neither the signature, checked errors, borrow contract and ownership of the method nor the obligations of R-FUNC-0020. In an asynchronous frame a temporary consuming receiver is evaluated into a hidden object of the frame like any argument, and the last call of a chain may be awaited (R-STMT-0012). Interface schema 31 records `chain=true`; omission means false.
+
+<a id="R-FUNC-0025"></a>
+
+**R-FUNC-0025** — The attribute `@test` marks a test function: a module-scope function without receiver, parameters, generic parameters or C linkage whose result type is `void`, synchronous or asynchronous. `@test(expect = E)` names an error type `E` whose catch (R-ERR-0003) can receive an error that the function declares, and `@test(allocations)` is permitted on a synchronous test function. The attribute on any other declaration, repeated, or with another argument requires `R-DIAG-SYN-002`. Otherwise a test function is an ordinary function of its module.
+
+Test mode translates a program to run its tests. The implementation selects it on request, such as with `r-front --test`, and it requires the `hosted-native-async` profile. In test mode the entry module shall not declare a function named `main` (`R-DIAG-FLOW-001`); the implementation adds to it the entry point `async i32 main()` of R-FUNC-0008, which imports `std.test` and `std.console` and runs the test functions of the entry module one after another in declaration order, a synchronous one by a call and an asynchronous one by `await`, printing for each the lines of Library R-SLIB-TEST-0002: `test NAME ... ` and the outcome. A test passes when it returns, or with `expect = E` when it throws an error that the catch of `E` receives. It fails when it throws a `std.test::failure` (its message), a member of `std.error::fault` (its portable name) or another error it declares (the name of its type), and with `expect` when it returns. A passing test with `allocations` then runs once for each allocation attempt N of its passing run, with attempt N failing (Library R-SLIB-TEST-0003), and fails when such a run fails otherwise than by throwing `std.alloc::alloc_error`. After the last test the entry prints the summary and returns zero when every test passed and one otherwise. A panic in a test ends the program as it ends any program. A diagnostic of the code added for a test is reported at the attribute of that test, and one of the rest of the entry point at the start of the module.
+
+<a id="R-FUNC-0026"></a>
+
+**R-FUNC-0026** — The attribute `@recursion(depth = N)`, where `N` is a decimal integer literal without suffix from 1 to 65535, bounds the activations of a synchronous R function, method or generic function with a body. Repeated or with another argument it requires `R-DIAG-SYN-002`, on a declaration with C linkage the diagnostic of R-FFI-0050, and on an `async` function `R-DIAG-ASYNC-001`; a prototype and the definition of the function carry the same attribute (R-NAME-0004). The function shall list `core::recursion_error` in its throws list (`R-DIAG-EFFECT-001`). `core::recursion_error` is a Copy, Send+Sync standard error struct (R-TYPE-0012) with the single public field `usize depth`; it is not in the implicit error set of `main` (R-FUNC-0008).
+
+On each thread at most N activations of the function exist at once, and each instance of a generic function counts its own. A call that finds N activations of the function on its thread throws `core::recursion_error` with `depth` N before the body runs: the arguments the call received are destroyed as on any throw and no statement of the body executes. Every exit of an activation, by return or by throw, ends it. The bound is not part of the type of the function: a call through a function value or a dyn member reaches the same bound. A function with the attribute is not translation-time evaluable (R-FUNC-0023), because `core::recursion_error` is not a constant value type.
+
+A cycle of the static call graph (R-FUNC-0004) is permitted when every function on it has the attribute. A cycle through any other function keeps `R-DIAG-STACK-001`; the dispatch of a function value or a dyn interface, a drop, clone or format hook, a `call_once` initializer and an asynchronous start never carry it, so asynchronous recursion is not available. In the static stack bound of R-FUNC-0004, a strongly connected set C of such functions counts N(m) frames of each member m, plus the larger of the largest frame of C (the refused activation) and the deepest bound of a callee outside C; the bound of every entry that reaches C includes it. The resource contracts of R-FUNC-0019 hold for the functions of such a cycle when they hold for the body of each of them.
+
+<a id="aggregates"></a>
+
+## 17. Structures, enumerations and tagged unions
+
+### 17.1 Structures
+
+<a id="R-AGG-0001"></a>
+
+**R-AGG-0001** — `struct Tag { fields };` defines complete nominal type. `Tag` enters the aggregate type-name space immediately after its declaration identifier and before the field body, so permitted self-references write the bare name. Each field has a unique name and shall have a complete non-void type when the closing brace is reached. Direct recursive value fields are forbidden; recursion through a pointer or managed-owner indirection is permitted subject to R-TYPE-0025.
+
+`error Name { members };` defines a nominal error type. A body of semicolon-terminated fields has struct form; a body of comma-separated enum variants has enum form. Mixing forms is ill-formed. An empty body has struct form. Variant discriminants, `Variant<T>`, `Variant { fields }` and an optional `: underlying-type` follow the enum rules; an underlying type requires a nonempty variant body. Form is determined by member grammar, independently of type-name lookup. `error` is a contextual declaration word only before a declaration name followed by `{` or `:`; it remains an identifier in all other positions, including a type name, variable name and `std.error::error`. `error struct` and `error enum` are not declaration forms. Name registration, imports, visibility, attributes, field access, representation, Copy/Move, `drop`, borrowing and Send/Sync follow the corresponding struct or enum rules. Apart from the inheritance of R-AGG-0011, errors introduce no base type, implicit conversion or additional POD/payload restriction. Generic error declarations follow R-TYPE-0031 through R-TYPE-0040. A catch selects the error or its nearest ancestor (R-ERR-0003). Error declaration names are registered before parsing bodies and are available to local and qualified references before their declaration.
+
+<a id="R-AGG-0002"></a>
+
+**R-AGG-0002** — Member access on an aggregate place produces the corresponding field place and preserves effective outermost object `const` from the aggregate path or field declaration. Member access on an aggregate value is valid by value only for a Copy field and produces the field value with outermost object `const` removed under R-TYPE-0008/R-EXPR-0001. A Move field cannot be extracted from an aggregate value under R-OWN-0005. Protected fields may be accessed only in the defining module. A borrow of a field carries field provenance and cannot be used after whole-object move or drop. `value.N` and `pointer->N`, where `N` is a decimal integer literal without sign, suffix or leading zero, select element `N` of a tuple (R-TYPE-0052); an index outside the tuple requires `R-DIAG-NAME-001`.
+
+<a id="R-AGG-0003"></a>
+
+**R-AGG-0003** — Struct equality is not implicit. Program shall compare fields explicitly or call library function; padding never participates in R value.
+
+### 17.2 Enumerations
+
+<a id="R-AGG-0004"></a>
+
+**R-AGG-0004** — Fieldless enum syntax may specify fixed integer representation: `enum Color : u8 { RED = 1, GREEN = 2 };`. `Color` enters the aggregate type-name space immediately after its declaration identifier and before the variant body. Discriminant constant shall be unique and representable; first omitted discriminant is zero, each later omitted value is predecessor plus one. Without `: type`, semantic underlying type is `i32` and every discriminant shall be representable in it. Non-representable implicit/explicit value requires `R-DIAG-CONST-001`.
+
+<a id="R-AGG-0005"></a>
+
+**R-AGG-0005** — Without `@repr(C)`, fieldless enum layout opaque, but discriminant values stable. With `@repr(C)`, underlying type shall be a supported `c_*` integer type and every value representable by corresponding C enum contract.
+
+<a id="R-AGG-0006"></a>
+
+**R-AGG-0006** — Payload enum is a tagged union:
+
+```r
+error ParseError {
+    i32 code;
+};
+
+enum ParseResult {
+    OK(i32),
+    ERROR(ParseError)
+};
+```
+
+It stores exactly one active variant and optional payload. Untagged unions and reading inactive payload are absent from safe R.
+
+<a id="R-AGG-0007"></a>
+
+**R-AGG-0007** — The head immediately followed by a braced aggregate initializer is a constructor context rather than an ordinary expression-name context. It shall resolve to exactly one visible complete struct type, in bare or module-qualified form, or to exactly one visible struct-like payload variant qualified through its defining enum. The former initializes the struct under R-INIT-0004; the latter initializes the tag and named payload fields atomically with rollback drops. A name resolving only to an ordinary value/function, opaque type, fieldless variant, or parenthesized-payload variant cannot head a braced constructor. R-AGG-0010 separately permits an unheaded braced initializer only as the complete operand of `throw`. An unresolved or ambiguous constructor head requires `R-DIAG-NAME-001`; a uniquely resolved but inadmissible kind requires `R-DIAG-TYPE-001`. Parenthesized constructor `ParseResult::OK(value)` initializes one payload atomically; a fieldless variant is named without parentheses or braces.
+
+<a id="R-AGG-0008"></a>
+
+**R-AGG-0008** — Tagged enum layout is opaque unless a separately specified `@repr(C, tag=Type)` form is used. R 0.1 does not standardize that form; therefore payload enums shall not cross C ABI by value.
+
+<a id="R-AGG-0009"></a>
+
+**R-AGG-0009** — Enum declaration is exactly one class. It is fieldless iff every variant is bare or has `= constant`; only this class may have `: underlying-type` or numeric discriminants. If any variant has parenthesized or struct-like payload, the declaration is a payload enum: `: underlying-type` and every `= constant` are forbidden, while a bare variant is a zero-payload variant. Mixing classes requires `R-DIAG-TYPE-001`. Built-in `o::none` and `o::some` constructors obtain the missing type parameter only from one expected `o<T>` type. Each payload expression initializes the selected component subobject under R-INIT-0002; an outermost object `const` on that component is established only after conversion to its unqualified destination value type. Without a unique expected type, construction requires `R-DIAG-TYPE-001`.
+
+<a id="R-AGG-0010"></a>
+
+**R-AGG-0010** — A complete unheaded braced operand `throw { ... };` is permitted only when the statically permitted outgoing checked-error set at that point contains exactly one type. That sole candidate shall be a complete error type with struct form, and the operand is checked against it under R-INIT-0004. An empty set or a set containing more than one type requires `R-DIAG-TYPE-001`, even when the operand’s field shape would initialize only one of the candidates. The exact members of one family count as the one error at its root, and the root of the standard errors counts as none (R-AGG-0011). The selected error object is constructed directly in hidden propagation storage, so no intermediate payload object, copy or move exists. Field expressions are evaluated in source order under R-EXPR-0020 and have the rollback-drop behavior of R-INIT-0004. An explicitly headed `throw Error { ... };` uses the ordinary aggregate constructor and shall name one permitted outgoing error type. A fieldless or parenthesized-enum error uses its ordinary named expression or constructor as the `throw` operand. A named Move error operand requires `throw move error;`; a temporary transfers implicitly under R-AM-0010. Construction completes before exited locals are dropped or any finally is entered.
+
+<a id="R-AGG-0011"></a>
+
+**R-AGG-0011** — `error Name : Parent { fields };` declares an error whose parent is `Parent`, a visible non-generic error declared with a field list; a generic error has no parent and is not a parent. A parent name that designates no visible error requires `R-DIAG-NAME-001`, and a parent that is not such an error, an error that is its own ancestor and a generic error with a parent require `R-DIAG-TYPE-001`. The fields of the parent, in order, precede the fields the declaration lists, their names shall differ (R-NAME-0004), and an initializer names all of them flat: `net_error {.code = 5, .port = 80u16}`. An error with descendants and its descendants form its family, which is closed when the program is built. An object, parameter, field, element or result whose declared type names an error with descendants holds any member of the family: a tag and inline storage for the largest member without heap storage, Copy, Send or Sync exactly when every member is, whose drop destroys the held member. A literal `Name { ... }` and an `auto` object keep the exact error. The fields of the error are read through such a value; they are not assigned or moved through it. The members of a family hold no borrow, slice, runtime `str` or type containing one; such a member requires `R-DIAG-TYPE-001`. The library error `std.error::fault` is the root of the standard errors (Library R-SLIB-ERR-0004): its family has no member of its own and it has no fields. Interface schema 31 records `parent=` for an error with a parent and writes the type of such a value as `(error_family T)`.
+
+<a id="R-AGG-0012"></a>
+
+**R-AGG-0012** — `@derive(capability, ...)` before a module-scope struct, enum or error declaration adds the listed capabilities from the closed set `clone`, `equal`, `ordered`, `key` and `format`, each named once:
+
+- `equal` implements `std.cmp::Equal`: two values are equal when they hold the same variant and their fields or payloads are equal in declaration order;
+- `ordered` implements `std.cmp::Ordered`: fields compare lexicographically in declaration order, variants by declaration index rather than enumerator value and then by payload;
+- `key` defines the hash and equal hooks of R-FUNC-0009 through `core::hash` and `core::key_equal` of the fields, or of the variant index and its payload;
+- `clone` makes the structural clone of R-OWN-0020 available: fields and payloads are cloned in declaration order;
+- `format` implements `core::Format` (R-TYPE-0046): a struct or error is written `Name { field: value, ... }`, or `Name {}` without fields, and an enum as the name of its variant, `name(payload)` or `name { field: value, ... }`, each field and payload by its own formatting.
+
+The implementations and hooks are declarations of the defining module: they are checked and translated as written ones and recorded in its interface, and interface schema 31 also lists the capabilities as `derived=`. A generic type adds the capability to each of its type parameters, as a constraint of the implementation (R-TYPE-0042) or of the hooks (R-FUNC-0009), so that an instance has it exactly when its arguments prove it. An error with a parent derives over the fields of its parent first (R-AGG-0011). A module that derives equal or ordered imports `std.cmp` as `import std.cmp;` does. Every field and payload whose type does not depend on a type parameter shall implement the trait, satisfy `core::Format`, prove `key`, or be cloneable and, unless the type is Copy, unborrowed; otherwise `R-DIAG-TRAIT-001` names the first member that does not. Another name, a repeated name, an empty list and a second `@derive` require `R-DIAG-SYN-002`, as do a derivation of equal, ordered, key or format inside a static condition or outside module scope and a derivation for a C aggregate. An implementation or hook that the program also declares for a derived capability requires the duplicate diagnostic of that declaration, and a clone hook of a type that derives clone requires `R-DIAG-NAME-002`. An error with descendants holds any member of its family and does not derive, which requires `R-DIAG-TYPE-001`; its members may derive. A diagnostic inside a derived implementation or hook is reported at the capability name, at most once per capability.
+
+<a id="arrays-slices-strings"></a>
+
+## 18. Arrays, slices and strings
+
+<a id="R-ARRAY-0001"></a>
+
+**R-ARRAY-0001** — Array value owns exactly N elements. Array never implicitly decays to pointer. Copy/move/drop applies to whole array in increasing order for initialization and reverse order for rollback/destruction.
+
+<a id="R-ARRAY-0002"></a>
+
+**R-ARRAY-0002** — `&array` in slice context creates slice of all N elements; `array[lo..hi]` creates slice of selected range. Mutable slice requires exclusive borrow; immutable slice shared borrow.
+
+<a id="R-ARRAY-0003"></a>
+
+**R-ARRAY-0003** — Slice value consists abstractly of provenance-bearing start, length and access kind. Empty slice is valid and may have implementation-selected internal start; safe code cannot observe or dereference it.
+
+<a id="R-ARRAY-0004"></a>
+
+**R-ARRAY-0004** — `len` is a predeclared non-shadowable compiler intrinsic. `len(x)` returns `usize`: N for a fixed array, the number of live elements for `array<T>`, the number of live nodes for `list<T>`, the number of live entries for `dict<K,V>`, the stored length for a slice, or the UTF-8 byte length for a string. It accepts no other type and evaluates x exactly once. Bounds are half-open; one-past index is permitted only as an empty subslice endpoint, never for element access. A place operand is observed through a shared borrow for the duration of the intrinsic and is neither copied nor moved.
+
+<a id="R-ARRAY-0005"></a>
+
+**R-ARRAY-0005** — `str` is a distinct immutable refinement of `const u8[]` whose bytes shall be well-formed UTF-8. It has the same representation and byte access, but not type identity. Boundary-safe iteration decodes Unicode scalars; byte indexing returns u8 and shall not claim character boundary semantics. `constexpr str` has those representation, UTF-8 and access properties plus the program-storage guarantees of R-TYPE-0028.
+
+<a id="R-ARRAY-0006"></a>
+
+**R-ARRAY-0006** — After escape processing and adjacent-literal concatenation, a string literal produces one `constexpr str` value whose immutable UTF-8 bytes are embedded in the program image. For each complete R program emission, the implementation shall collect the literal sequences in the declarations selected for emission from its reachable module closure and create exactly one application-global canonical immutable program-image backing-storage region for each unique exact complete post-escape byte sequence in that set. Sequence equality includes both length and every byte. Every emitted literal occurrence with the same sequence shall designate that same canonical region, including occurrences lowered through synchronous and asynchronous functions. The sequence-to-region mapping shall be deterministic for identical compiler inputs; this does not require the numeric load address to be stable across executions. A sequence shall not be represented as a suffix or any other subrange of a region associated with a different sequence. The empty sequence shall designate the canonical program-lifetime sentinel required by R-TYPE-0028. Runtime selection among literal-derived values preserves type `constexpr str`. Embedded zero bytes are allowed. C NUL termination shall be requested explicitly through `std.c` conversion, which may allocate or validate.
+
+<a id="R-ARRAY-0007"></a>
+
+**R-ARRAY-0007** — `core::utf8_error` is a Copy, Send+Sync struct with the single public field `usize index`. The exact checked conversion operation is `core::validate_utf8(const u8[] source) -> str throws core::utf8_error`. It allocates nothing, does not panic, validates the complete slice according to RFC 3629 and reports the byte index at which the first invalid sequence begins. On success, the inferred origin of the returned `str` is the source slice and the value is a shared view of exactly the validated bytes. Mutable `u8[]` is not automatically `str`; passing it to this operation creates a shared reborrow and freezes mutation of those bytes until last use of the returned `str`. Failure creates no `str` and does not mutate source.
+
+<a id="errors-panic"></a>
+
+## 19. Error handling and panic behavior
+
+<a id="R-ERR-0001"></a>
+
+**R-ERR-0001** — Recoverable failures shall use checked errors declared after the parameter list as `throws E1, E2`; optional absence shall use `o<T>`. Neither null nor panic shall encode an expected error. A call with a nonempty throws set is valid only when each possible error is selected by an enclosing typed catch or belongs to the enclosing function’s declared throws set. The outgoing set of a statement is the union of uncaught call, await, join, explicit throw and rethrow effects, canonicalized under R-TYPE-0012. No implicit error conversion, allocation or user code is performed during propagation.
+
+For the strict C17 mapping, every nonempty normalized checked-error set has one flat carrier containing a `uint32_t` tag and one union shared by the logical success value and all error payloads. Success has tag zero; error tags start at one in ascending canonical error-type-key order. A generated throwing R-to-R function returns through an explicit output-carrier parameter. It fully initializes the selected payload before publishing the tag, and it does not construct nested carriers. The compiler interface record contains the logical value type, normalized error set, complete tag table and a layout hash bound to the selected target manifest. An async declaration records its immediate start carrier separately from its task-completion carrier. Checked propagation uses ordinary branches; C++ exceptions, `setjmp` and `longjmp` are not used. Errors of one call that reach the same destination through the same cleanup, the caller or one catch whose family holds them, may share one branch: a relay moves the payload of the active member into the destination carrier or family value before it publishes the destination tag, and drops, finally bodies and moves occur as on separate branches.
+
+<a id="R-ERR-0002"></a>
+
+**R-ERR-0002** — `throw operand;` evaluates its operand exactly once and transfers the resulting exact named error type into hidden propagation storage before dropping exited locals. When the operand is a value of an error with descendants (R-AGG-0011), the transferred error is the exact member it holds, so `throw;` and `throw move failure;` keep the concrete type. A named Move operand requires `move`; a temporary transfers implicitly. Direct braced construction follows R-AGG-0010. `throw;` is valid only within the lexical body of a catch and rethrows the current value of the nearest catch binding. For a Move error it consumes that binding; use after a prior move/drop, or a path on which it is not definitely initialized, requires a diagnostic. It bypasses all later sibling catches of the same try and may be selected only by a nested or outer try.
+
+`throw (condition) operand;` is shorthand for `if (condition) { throw operand; }`. The parentheses are mandatory, and the condition follows the same syntax, typing and evaluation rules as an `if` condition, including short-circuit evaluation. It is evaluated exactly once. If false, execution continues without evaluating or moving the operand or constructing an error payload. If true, the ordinary throw rules above apply. The conditional form introduces no additional lexical scope. Its operand has the same expression, contextual aggregate typing and checked-effect requirements as an ordinary throw, even when the condition is constant false. A parenthesized operand without a second operand, `throw (error);`, remains an unconditional throw. Existing postfix projections and casts on that operand remain part of the ordinary operand. A conditional throw without `else` in a switch clause is a case-body statement, so the clause still requires its explicit terminator for the false path.
+
+`throw (condition) first else second;` is shorthand for `if (condition) { throw first; } else { throw second; }`. It evaluates the condition exactly once and evaluates and transfers only the selected operand. Both operands follow the ordinary expression, ownership, contextual aggregate and checked-effect rules independently, including when the condition is constant. They may have different complete nominal error types; each shall be caught or declared as usual. An unheaded aggregate in either arm follows the existing inference rules and is not inferred from the opposite arm. There is one semicolon after the second operand. Both paths transfer control, so this form is also a switch clause terminator and completes a function path. The `else` arm is permitted only with an explicit throw condition and requires an operand; it is not a bare rethrow.
+
+A checked transfer crossing a try/finally boundary first owns one fully initialized pending error payload, drops locals exited before the boundary, executes each applicable finally from inner to outer, and then transfers that same payload to the selected catch binding or caller. At every point there is exactly one cleanup owner; propagation never copies a Move error or drops it twice.
+
+<a id="R-ERR-0003"></a>
+
+**R-ERR-0003** — A try statement executes its try block once. On a checked error, the innermost try that has a catch for the error or one of its ancestors (R-AGG-0011) selects, among those catches, the one of the nearest ancestor, the error's own type first; catch types are distinct, and sibling source order does not affect the choice or create a conversion. The selected payload move-initializes the catch binding, as a value of the family of the catch type when that type has descendants. Errors produced by a catch are not considered by its sibling catches. A try with no matching catch propagates the original error.
+
+The optional finally executes exactly once after normal try completion, after the selected catch, and before any pending return, break, continue, unmatched error, rethrow or panic unwind continues. Try/finally without catches intercepts no error. Nested finally clauses execute from inner to outer. A finally may leave only through its closing brace: a `return`, `throw`, rethrow, or loop/switch transfer targeting outside it is invalid, and its residual checked-error set shall be empty. A nested try wholly inside finally may handle all of its own checked errors, and a loop transfer whose target is also wholly inside finally is permitted. `await` is prohibited anywhere in finally; explicit non-throwing task cancellation is permitted. Thus finally cannot replace or suppress a pending completion. Return/error payloads are staged before finally and remain live for borrow and move checking until the original transfer resumes.
+
+Strict C17 lowering maintains exactly one logical hidden pending-completion record for each active structured transfer. Its reason is normal completion, return, checked error, break, continue, fallthrough, cancellation or panic unwind, together with the corresponding initialized payload or target when one exists. A function or async frame may therefore contain a bounded stack of these records whose capacity is derived from the statically known lexical finally nesting. Starting a distinct transfer in a nested try/finally while a finally body is executing pushes one record. Chaining the same transfer through successive outer finally clauses neither pushes nor duplicates its record. Terminal dispatch consumes and pops that record exactly once. A Move payload has one owning record and is neither copied nor duplicated.
+
+Every edge leaving a protected region first selects its reason, performs the drops required to reach the next protected-region boundary, traverses that region’s one shared finally body and then continues the original transfer. An object declared outside that protected region is not implicitly dropped before its finally runs; it enters the finally in its current state and remains initialized unless that finally explicitly moves or drops it. If the transfer also exits the object’s scope, any still-initialized object is dropped only after that finally and before the next outer boundary or terminal transfer. Thus nested exits alternate boundary-local drops and finally bodies from inner to outer without exposing a dropped outer object to a finally that may name it. An async frame stores the pending stack and active finally stack across runtime cancellation cleanup; it publishes terminal completion only after the applicable finally bodies and frame drops finish.
+
+<a id="R-ERR-0004"></a>
+
+**R-ERR-0004** — `panic(message)` accepts str, never returns and begins panic with category `explicit`. Runtime checks use stable categories: `bounds`, `integer_overflow`, `division_by_zero`, `invalid_shift`, `invalid_conversion`, `allocation_failure`, `reference_count_overflow`, `scoped_thread_panic`, `once_poisoned`, `thread_local_lifetime`, `stack_exhaustion` and `contract_violation`. `link_load_failure` is a pre-main runtime termination category governed by R-FFI-0037 rather than a catchable R panic. `argument_encoding_failure` is likewise the pre-main runtime termination category of R-FUNC-0008 rather than a catchable R panic. `allocation_failure` reported while reserving the R-FUNC-0008 startup snapshot is also a non-catchable pre-main category; the same spelling remains the catchable panic category for later R runtime checks.
+
+<a id="R-ERR-0005"></a>
+
+**R-ERR-0005** — Panic strategy is implementation-defined as `abort` or `unwind`. Abort performs no additional R drops or finally execution. Unwind drops initialized automatic objects in reverse order and executes active finally clauses inner-to-outer until the program boundary; typed catch clauses select only checked errors and never catch panic. A panic beginning in finally while any non-panic completion is pending replaces that pending completion; any initialized return or checked-error payload is dropped exactly once as unwind cleanup. This panic-channel replacement is not an outgoing checked or structured-control edge of the finally clause. A panic beginning in finally while panic unwind is already active is a second panic and aborts under R-ERR-0008.
+
+<a id="R-ERR-0006"></a>
+
+**R-ERR-0006** — Panic escaping `extern "C"` boundary, panic during active panic drop, or failure of panic runtime shall call abort. This behavior is defined and shall not unwind through C frames lacking explicit interoperability support.
+
+<a id="R-ERR-0007"></a>
+
+**R-ERR-0007** — Diagnostic text may vary, but code, primary source span and normative rule identifier shall be emitted for every required diagnostic.
+
+<a id="R-ERR-0008"></a>
+
+**R-ERR-0008** — If a first panic begins during ordinary destruction under unwind strategy, every remaining initialized subobject and mandatory non-throwing resource-release duty of that destruction continues exactly once in its prescribed order as unwind cleanup. This includes fields after a user drop, an active variant payload, remaining array elements, and allocation, control-block or runtime-state release. Destruction already begun is not repeated. Any second panic causes abort. Under abort strategy, the first panic aborts and performs no further R drops.
+
+<a id="R-ERR-0009"></a>
+
+**R-ERR-0009** — A panic reaching the initial thread remains uncaught and terminates the process after that thread’s unwind. Under unwind strategy, a panic reaching the root of a spawned R thread terminates that thread after its automatic and thread-local drops; its owned report becomes `panicked` in `std.thread::join_result`. If detached, the report is delivered to the runtime panic hook and then destroyed without terminating other threads. If the first panic begins in a thread-local drop after entry returned normally, the current failing TLS destruction completes its R-ERR-0008 duties, the staged return value is dropped exactly once, the remaining TLS stack is dropped under R-OBJ-0008, and only then does the completion outcome become that panic report. If the first panic instead begins while destroying a detached unobserved returned payload, its report is delivered to the panic hook and no join result exists. Under abort strategy, any panic aborts the whole process and no join result is produced. Delivery to the runtime panic hook is a mandatory non-throwing runtime duty; failure of the hook is panic-runtime failure and aborts under R-ERR-0006. A second panic while unwinding still aborts under R-ERR-0008.
+
+<a id="unsafe"></a>
+
+## 20. Unsafe operations and safety contracts
+
+<a id="R-UNSAFE-0001"></a>
+
+**R-UNSAFE-0001** — Unsafe operation is permitted only lexically inside `unsafe { ... }` or body of `unsafe` function. Unsafe context does not disable type checking, move checking, initialization, scope or automatic drops.
+
+<a id="R-UNSAFE-0002"></a>
+
+**R-UNSAFE-0002** — Complete closed list of unsafe operations R 0.1: raw pointer deref/index/arithmetic; raw pointer ordering/subtraction; call unsafe/C function; pointer/integer conversion; borrow-to/from-raw conversion; owner-to-raw exposure; cast between distinct raw pointer types or change of raw constness; managed-owner raw-token exposure/reconstruction; borrow/slice from raw construction parts; access any imported external object; access mutable R static; representation transmute; volatile; manual allocation adoption/release; assume assertion.
+
+<a id="R-UNSAFE-0003"></a>
+
+**R-UNSAFE-0003** — Each unsafe function declaration shall have `@safety("CONTRACT-ID", "preconditions")` with machine-readable identifier and human-readable preconditions immediately before the declaration. Empty contract is forbidden.
+
+<a id="R-UNSAFE-0004"></a>
+
+**R-UNSAFE-0004** — When performing safety contract unsafe operation shall have Annex E semantics and shall not create UB in a safe caller. A breach of contract may cause UB immediately or later; implementation is not required to detect the breach.
+
+<a id="R-UNSAFE-0005"></a>
+
+**R-UNSAFE-0005** — `unsafe` shall not be used to suppress required diagnostic, non-closed list of operations, including use-after-move, duplicate name, invalid grammar or incompatible by-value ABI.
+
+<a id="R-UNSAFE-0006"></a>
+
+**R-UNSAFE-0006** — Safe abstraction, internally using unsafe, shall provide contract for all inputs permitted by its safe signature. This abstraction is non-conforming regardless of caller behavior.
+
+<a id="R-UNSAFE-0007"></a>
+
+**R-UNSAFE-0007** — `source as D` is the sole source form of standard representation transmute in R 0.1. It is selected only when no numeric, fieldless-enum, pointer, borrow or raw conversion defined by R-EXPR-0016..R-EXPR-0019 applies. Source and target types shall be Copy and recursively contain no owner, exclusive borrow/slice, atomic value or user drop. A target type shall not be `constexpr str`, its `const`-qualified form, or recursively contain either form; R-TYPE-0028 permits no transmute origin for such a value. Source and target sizes shall be equal statically. Violating these type restrictions requires `R-DIAG-TYPE-003`; satisfying them does not remove the target-validity safety contract R-SAFETY-TRANSMUTE in Annex E.
+
+<a id="R-UNSAFE-0008"></a>
+
+**R-UNSAFE-0008** — Every profile provides these exact compiler-recognized unsafe `core` operations as closed intrinsic families:
+
+- `unsafe core::slice_from_raw_parts(raw const T*? pointer, usize length) -> const T[]`;
+- `unsafe core::slice_from_raw_parts_mut(raw T*? pointer, usize length) -> T[]`;
+- `unsafe core::slice_from_raw_parts_in(A anchor, raw const T*? pointer, usize length) -> const T[]`;
+- `unsafe core::slice_from_raw_parts_in_mut(A anchor, raw T*? pointer, usize length) -> T[]`;
+- `unsafe core::volatile_load(raw const T* address) -> T`;
+- `unsafe core::volatile_store(raw T* address, T value) -> void`;
+- `unsafe core::assume(bool condition) -> void`.
+
+Every allocation-supporting profile additionally provides:
+
+- `unsafe core::adopt(raw T* pointer) -> own T*`;
+- `unsafe core::release(own T* owner) -> raw T*`.
+
+For either slice operation, T is selected from the raw-pointer pointee and shall be an outermost-unqualified, complete, sized, inhabited non-`void` value type. The result is a descriptor over exactly length consecutive T elements; it allocates and copies no element. It carries a fresh hidden region constrained by all uses of that result. The unsafe caller shall establish storage lifetime, initialization and the shared or exclusive alias permission of R-SAFETY-SLICE-PARTS for that complete inferred region; the raw pointer supplies no borrow origin and extends no storage lifetime. Length zero produces the ordinary empty-slice value of R-ARRAY-0003 and is the only case that permits a null pointer.
+
+The anchored forms `core::slice_from_raw_parts_in` and `core::slice_from_raw_parts_in_mut` make the same descriptor under the same pointer, length and element rules, but carry the region of their anchor instead of a fresh one. The anchor A of the shared form is a borrow `const U*` or `U*`, a slice `const U[]` or `U[]`, or a `str`; the anchor of the mutable form is an exclusive borrow `U*` or a mutable slice `U[]`. A written `&place` anchor borrows the place shared for the shared form and exclusively for the mutable form. The anchor is not evaluated and supplies only its region, so it shall be a place, a field or dereference of one, or a borrow of one; a call, an index or any other computation as anchor requires `R-DIAG-TYPE-001`. The result carries the borrow origin of the anchor: it may be stored, returned (R-BORROW-0007) and held wherever a borrow derived from the anchor could, and the borrow rules keep the referent of the anchor live, unmoved and, for the mutable form, otherwise unused while the result is live. The unsafe caller shall establish R-SAFETY-SLICE-PARTS for that anchored region: the elements remain live, initialized and correctly aliased while the referent of the anchor is live and unmoved, which the object holding the address typically guarantees by owning the storage and releasing it only in its drop.
+
+For either volatile operation, T is selected from the raw-pointer pointee and shall be an outermost-unqualified, complete, sized, inhabited Copy value type that recursively contains no safe borrow, slice, `str`, `constexpr str`, managed owner, atomic value, standard resource or user drop. Load returns the one value read; store copies value and performs the one write. They create no atomic or synchronization edge.
+
+For `core::adopt` and `core::release`, T is selected from the pointer or owner and shall be an outermost-unqualified, complete, sized, inhabited non-`void` value type. Adopt accepts the non-null exact base pointer of one allocation holding one initialized T and transfers its existing drop and compatible-deallocation duty into the returned unique owner under R-SAFETY-ADOPT; it does not allocate or construct another T. Release consumes the unique owner, suppresses its R drop and returns that same base pointer with the duty transferred to the caller under R-SAFETY-RELEASE. A named owner argument therefore requires `move` under R-FUNC-0002.
+
+`core::assume` has the R-SAFETY-ASSUME effect. None of these nine operations allocates or panics; violating an applicable Annex E safety contract is UB rather than a recoverable result.
+
+<a id="concurrency"></a>
+
+## 21. Concurrency and memory model
+
+### 21.1 Threads and data-race freedom
+
+<a id="R-MEM-0001"></a>
+
+**R-MEM-0001** — Execution may contain multiple threads only through hosted standard library or C FFI. Each thread has sequenced-before order; inter-thread happens-before is the transitive closure of sequenced-before and synchronizes-with edges defined in this section and standardized synchronization APIs.
+
+<a id="R-MEM-0002"></a>
+
+**R-MEM-0002** — Safe R program shall be data-race-free. Potential transfer or sharing, for which compiler cannot establish required capabilities, requires diagnostic; data race can arise only from unsafe contract violation.
+
+<a id="R-MEM-0003"></a>
+
+**R-MEM-0003** — A type is `Send` if its value may transfer ownership to another thread; it is `Sync` if a shared borrow of its value may be used concurrently. `bool`, `char`, fixed R numeric types `i8`, `u8`, `i16`, `u16`, `i32`, `u32`, `i64`, `u64`, `isize`, `usize`, `f32`, `f64`, and every target-supported C ABI scalar numeric type listed by R-FFI-0002 are Send+Sync. Fieldless enums, ordinary `str`, `constexpr str` and `atomic T` are likewise Send+Sync. `own T*` is Send iff T Send and Sync iff T Sync. Shared borrow `const T*` and shared slice `const T[]` are Send+Sync iff T Sync. Exclusive borrow `T*` and exclusive slice `T[]` are Send iff T Send and Sync iff T Sync, with shared-path attenuation required by R-BORROW-0002. An instance containing a borrow outside the distinguished program region may transfer only through R-MEM-0015, which statically joins it before source reuse. `arc T` and `weak arc T` are Send+Sync iff T is both Send and Sync. `rc T` and `weak rc T` are neither Send nor Sync regardless of T.
+
+<a id="R-MEM-0004"></a>
+
+**R-MEM-0004** — Fixed array, `array<T>`, `list<T>`, `dict<K,V>`, `o`, struct and tagged enum derive Send/Sync iff all possible elements, keys, fields and variant payloads do. Raw pointers and raw C function pointers are neither Send nor Sync in safe code, despite their Copy status. Standard thread, synchronization and channel types have the capabilities specified by the R Standard Library Specification 0.1. R 0.1 has no user-written capability implementation; an FFI wrapper that asserts a capability is unsafe and shall document lifetime, ownership and synchronization.
+
+### 21.2 Atomics and ordering
+
+<a id="R-MEM-0005"></a>
+
+**R-MEM-0005** — Initialization is the first modification of an atomic object. All later stores and read-modify-write operations on that object form one total modification order consistent with happens-before. RMW reads the immediately preceding modification and appends exactly one modification atomically. Available orderings: relaxed, acquire, release, acq\_rel, seq\_cst.
+
+<a id="R-MEM-0006"></a>
+
+**R-MEM-0006** — Release operation synchronizes-with acquire operation that reads its value or a value from its release sequence. Release sequence is the maximal contiguous modification-order subsequence headed by release store/RMW, followed by modifications from the same thread and any atomic RMW modifications. Seq\_cst operations additionally participate in one total order consistent with happens-before and every affected modification order. Relaxed alone creates no synchronizes-with edge.
+
+<a id="R-MEM-0007"></a>
+
+**R-MEM-0007** — Allowed ordering is: load — relaxed/acquire/seq\_cst; store — relaxed/release/seq\_cst; exchange/other RMW — any of five. Compare-exchange failure may be relaxed/acquire/seq\_cst, never release/acq\_rel, and shall not be stronger than success: relaxed→relaxed, acquire→relaxed|acquire, release→relaxed, acq\_rel→relaxed|acquire, seq\_cst→relaxed|acquire|seq\_cst. Invalid constant ordering requires `R-DIAG-ATOMIC-001`; runtime-selected invalid ordering panics before any atomic read or modification.
+
+<a id="R-MEM-0008"></a>
+
+**R-MEM-0008** — Atomic operations are indivisible for the atomic object and shall not cause data race. Whether they are lock-free is implementation-defined and queryable. Signal-handler semantics are outside R 0.1.
+
+<a id="R-MEM-0009"></a>
+
+**R-MEM-0009** — Compiler shall not introduce a data race, tear atomic access or remove observable synchronization. Mapping to C17 atomics shall preserve R order.
+
+<a id="R-MEM-0010"></a>
+
+**R-MEM-0010** — Memory location is storage of one scalar object or one distinct non-overlapping scalar subobject. Two accesses conflict when their byte ranges overlap and at least one writes; atomic and non-atomic access to the same location also conflict. Conflicting accesses by different threads shall be happens-before ordered unless both are compatible atomic operations. Otherwise behavior can arise only from unsafe/external contract violation and is a data race per R-TERM-0013.
+
+<a id="R-MEM-0011"></a>
+
+**R-MEM-0011** — Successful `std.thread::spawn` or `std.thread::spawn_scoped` contains an abstract publication event sequenced after evaluation of its caller-side arguments and before the first action of the new thread; that publication synchronizes-with the first child action. Child execution may begin before `spawn` returns. When spawn throws `std.thread::thread_error`, no publication occurs, no child exists and entry was not called. After the target’s thread-local drops, publication of its committed completion outcome is a release operation. Every explicit or implicit join and every detached outcome-cleanup duty performs an acquire operation observing that publication before it inspects, moves or destroys the outcome; the publication synchronizes-with that acquire. Each successful spawn creates one private completion/runtime-handle state and exactly one last-reference release duty. That state remains live through both the target runtime reference, the sole outcome observation/cleanup right and every scoped revoked-handle tombstone reference and scoped supervisor-registration liveness reference required by R-MEM-0016. Only after the target reference ends, that right has moved the outcome through explicit join, staged it through implicit scoped join, or completed detached outcome destruction/hook delivery, and every such tombstone and registration reference has ended does the duty release completion storage and the underlying runtime/OS thread resource exactly once. It never releases them earlier; unwind cleanup retains this mandatory non-throwing duty under R-ERR-0008. Completion/runtime-reference transitions and `std.thread::thread` descriptor identity/runtime- reference transitions are linearizable. Every earlier release of a reference to either state synchronizes-with the last-reference acquire step that precedes release of the corresponding storage or runtime resource. The last action of the abstract thread-completion path, including normal thread-local drops and any required detached-outcome destruction/hook delivery, synchronizes-with successful return from explicit/implicit `join` or runtime’s normal-termination completion wait for a detached thread. C-origin thread edges exist only through verified C synchronization and attachment contract.
+
+<a id="R-MEM-0012"></a>
+
+**R-MEM-0012** — Atomic load shall read a value written by initialization or an actual modification of the same object. Coherence shall satisfy all four cases: (a) modification W happens-before modification X only if W precedes X in modification order; (b) if load L reads W and L happens-before modification X, W precedes X; (c) if modification W happens-before load L, L reads W or a later modification; and (d) if load A happens-before load B, B shall not read a modification earlier than the one A read. For seq\_cst load B let A be the last seq\_cst modification of that object preceding B in the single seq\_cst order. B reads A or a non-`seq_cst` modification X for which X does not happen-before A; if no A exists, B reads some non-`seq_cst` modification. This choice shall also satisfy (a)..(d). A non-atomic read in a data-race-free execution observes the unique latest happens-before write to its location. The directed causality relation formed by sequenced-before, synchronizes-with and reads-from shall not justify a value through a cycle without an originating initialization/modification; out-of-thin-air values are forbidden.
+
+### 21.3 Thread creation, transfer and lexical scope
+
+<a id="R-MEM-0013"></a>
+
+**R-MEM-0013** — Safe `spawn(entry, arguments...)` and `spawn_scoped(entry, arguments...)` accept only a direct module-level safe R function designator and one exactly typed argument expression for each entry parameter. Every by-value argument shall be Send. Except for R-MEM-0015, every direct or nested borrow-bearing component transferred in a borrow, slice, `str` or scoped handle shall have the program region; this restriction does not apply to `constexpr str`, which contains no runtime-storage lifetime. A shared borrow or shared slice requires its pointee/element Sync. A named Move argument is permitted only as the complete direct form `move place`; a nested named Move in an aggregate, constructor or other argument expression requires `R-DIAG-MOVE-003`. Either spawn form is one two-phase creation transaction: evaluating a direct named `move place` argument stages that source without changing its initialized ownership state and establishes an exclusive staged-move reservation over the source and every overlapping place until the transaction ends. A later argument shall not read, write, borrow, move or re-stage overlapping storage; violation requires `R-DIAG-BORROW-001`. The implementation reserves the complete child and completion state, and a successful creation atomically converts every reservation into its move, commits every staged transfer and then publishes the child. On creation failure no child exists, entry is not invoked, every staged-move reservation is released, every named Move source remains initialized and unchanged, and every temporary staged for the operation is destroyed exactly once by its ordinary full expression. Under unwind strategy, a panic during argument evaluation likewise releases every reservation and performs ordinary temporary cleanup; under abort strategy R-ERR-0005 terminates without additional R cleanup.
+
+<a id="R-MEM-0014"></a>
+
+**R-MEM-0014** — A successful unscoped `std.thread::spawn` transfers the staged arguments to the child and returns the sole `std.thread::join_handle<R throws E...>`, where R is the entry return type and E…​ its canonical checked-error set. R and every E shall be Send, or R may be `void`. The child invokes entry exactly once. Its returned R or thrown E is moved into the handle completion state. `join(move handle)` waits: a checked E is transferred from that state and thrown at the join point, while normal completion returns exactly one `std.thread::join_result<R>`: `completed` for void, `returned(R)` for a value, or `panicked(report)` under unwind strategy. Joining consumes the handle; no completion can be observed twice.
+
+<a id="R-MEM-0015"></a>
+
+**R-MEM-0015** — Statement `thread_scope { body }` creates a fresh hidden thread region. `spawn_scoped` used directly in that region may transfer arguments with direct or nested borrow, slice or ordinary `str` components whose inferred regions include the thread region, and scoped handles bound to exactly that same region; every other staging, exact-parameter, Send and failure rule of R-MEM-0013 still applies. A shared borrow, shared slice or ordinary `str` requires the referenced pointee/element Sync; an exclusive borrow or slice requires its pointee/element Send and suspends parent access until region completion, except for the early-release proof below. R and every checked error shall be Send, or R may be `void`; the returned handle type is `std.thread::scoped_join_handle<R throws E...>`. No scoped handle, argument component or returned value bound to the thread region may escape it. Successful explicit join may end suspension from an exclusive input borrow or slice early only when flow-sensitive move analysis tracks the exact originating scoped handle through local whole-handle moves to that join. Passing that handle to any other function or child, embedding it, or dropping it loses the early-release proof; a handle later returned from such a transfer does not restore identity proof in R 0.1, so suspension continues to region completion. On successful creation the compiler attaches the borrow-origin identity directly to the returned handle. Direct local whole-handle moves preserve that identity and do not count as embedding. Passing or embedding the handle through any other function or child loses the proof. When spawn throws, no handle exists and suspension from a staged exclusive argument ends when the failed two-phase transaction releases its staged access, before the checked error is transferred to the caller; named Move sources remain unchanged under R-MEM-0013. Even with exact-handle proof, suspension continues while the returned value contains a lifetime-bearing component derived from the input. Any such direct or nested borrow, slice or ordinary `str`, including one in an aggregate, preserves the ordinary access suspension through its last use.
+
+<a id="R-MEM-0016"></a>
+
+**R-MEM-0016** — Every successful `spawn_scoped` registers its child with the scope supervisor immediately. That registration owns one non-observing liveness reference to completion storage independently of the handle until the scope-close sweep releases it as specified below. Every scoped child is joined before any exit from its `thread_scope`, including `return`, `break`, `continue`, checked throw and unwind. An explicitly joined child yields its `join_result`; a scoped-handle drop transfers its observation right to the supervisor for automatic join and never detaches the child. An implicit exit performs three ordered phases before ordinary destruction of the region’s remaining automatic objects. First, the scope supervisor waits for target execution of every successfully spawned child not already explicitly joined to finish, in reverse order of successful `spawn_scoped`, without accessing or destroying any unconsumed outcome. Second, before staging any outcome, the supervisor establishes sole ownership of every still-unconsumed scoped outcome observation/cleanup right: it retains a right already transferred by handle drop and claims every other right from its live handle, including a handle nested at any depth in an automatic object or committed child outcome. Every live handle value whose right is claimed becomes revoked and retains one non-observing tombstone reference to completion storage: its later destruction only releases that reference exactly once, and it cannot observe, join or register the target again. That tombstone keeps the revocation state readable through destruction of the handle shell and cannot keep the target execution or outcome alive. The supervisor then visits all registrations in reverse successful-spawn order. For an already Consumed outcome it releases only the registration reference. For every claimed right it performs the R-MEM-0011 acquire, stages the outcome and then releases that registration reference. Thus every registration reference is released exactly once only after phase-one target waiting and the required state inspection or outcome staging. Third, those staged outcomes are consumed in that same reverse order. An unobserved `returned(R)` payload is dropped exactly once. A scoped handle with a nonempty checked- error set is must-resolve and shall have been explicitly joined on every normal or checked- transfer path; the supervisor therefore observes such a completion only during forced panic/cancellation cleanup, where its unobservable error payload is destroyed exactly once after the acquire edge. Panic reports are retained in their encounter order until all staged outcomes have been consumed; no report is delivered or destroyed during that traversal. If the parent was already unwinding, or a first unwind begins while destroying a Returned payload in the third phase, every remaining outcome is consumed in the fixed order as unwind cleanup; afterward every retained child report is delivered to the panic hook and destroyed in encounter order, and the original panic continues. A second panic aborts under R-ERR-0008. Only when third-phase cleanup completes without a parent unwind may retained reports cause exactly one `scoped_thread_panic`: the first report encountered in reverse successful-spawn order is used for that escalation, every later report is delivered to the hook in encounter order, and all reports are destroyed before escalation begins. Thus all child target executions and scope claims complete before any implicit payload-drop, ordinary region-local destruction or scoped-child escalation panic begins. Abort-strategy panic behavior remains governed by R-ERR-0005/R-ERR-0009.
+
+<a id="R-MEM-0017"></a>
+
+**R-MEM-0017** — An unscoped join handle is Move-only. Every unscoped handle may be explicitly detached. Dropping an effect-free handle has the same non-blocking effect as detach: either operation transfers the sole current-or-future outcome-cleanup duty to the runtime and the target continues. When the outcome exists, that duty first performs the acquire required by R-MEM-0011 and then runs as one root task in an attached runtime cleanup context with a fresh live R thread-local set; it never runs in a context whose thread-local teardown has already begun. The concrete cleanup-context identity and scheduling are unspecified by R-USB-011. An unobserved returned payload or checked-error payload is destroyed exactly once, and an unobserved panic report is delivered to the panic hook and destroyed exactly once. A handle with a nonempty checked-error set is must-resolve and shall be consumed by join or explicit detach on every normal or checked- transfer path; implicit normal drop is invalid. Under unwind strategy, any first panic in this cleanup root task, including during payload destruction or its own thread-local teardown, is treated as a detached thread-root panic under R-ERR-0009: remaining initialized thread-local objects are dropped under R-OBJ-0008, and the owned report is delivered to the hook and destroyed exactly once; a second panic aborts under R-ERR-0008. Under abort strategy, the first panic aborts immediately under R-ERR-0005/R-ERR-0009 without a report or further R drops. The context’s last action is part of the abstract completion path of R-MEM-0011 and precedes passage of the R-AM-0013 quiescence drain that includes its duty. Detach never cancels a thread and does not weaken normal-termination draining. Thread scheduling, relative start order and fairness are otherwise unspecified; ownership and happens-before rules do not depend on a particular schedule.
+
+<a id="R-MEM-0018"></a>
+
+**R-MEM-0018** — Spawn publication and the explicit/implicit join or detached normal-termination completion edges of R-MEM-0011 are the only implicit memory edges created by thread lifecycle. Moving a value to a thread does not clone it; returning a value from a thread does not make it Copy. An `arc` clone changes lifetime ownership but does not by itself publish later writes to T. Concurrent mutation of T remains legal only through atomics or a standardized synchronized interior-mutable object.
+
+### 21.4 Locks, notification and message passing
+
+<a id="R-MEM-0019"></a>
+
+**R-MEM-0019** — Successful `mutex<T>` lock acquisition synchronizes-with the preceding unlock of that mutex and grants one Move-only exclusive guard. The guard provides the only safe mutable access to T while held. Explicit unlock or guard destruction releases the mutex exactly once. A portable mutex guard is neither Send nor transferable to another thread; recursive acquisition by its holder returns the guardless `would_deadlock` alternative, not UB.
+
+<a id="R-MEM-0020"></a>
+
+**R-MEM-0020** — If a thread begins unwinding while holding an exclusive mutex or write guard, poison is marked before or atomically with that guard’s release and is release-published by the unlock. For each mutex, acquisition, release and poison transitions are linearizable in one per-lock history consistent with happens-before; an rw\_lock poison transition participates in the history of R-MEM-0021. Every acquisition that obtains a guard after the poisoned release observes the mark and returns `poisoned(G)`; same-thread conflict and nonblocking contention retain the precedence of R-LIB-0014. Poison is advisory and the outcome still owns the guard, so the caller may inspect or repair T. A panic while holding only a read guard does not poison an `rw_lock`. Poison state never permits unsynchronized access.
+
+<a id="R-MEM-0021"></a>
+
+**R-MEM-0021** — `rw_lock<T>` permits either one exclusive write guard or any number of shared read guards. All acquisition and release transitions for one rw\_lock are linearizable in one state history consistent with happens-before. Writer unlock synchronizes-with each subsequent successful reader or writer acquisition ordered after it in that history. A successful writer acquisition following a completed reader epoch synchronizes-with every reader-guard release in that epoch; release of the last reader closes the epoch. Any acquisition by a thread already holding any guard for that same rw\_lock returns `would_deadlock` before blocking. Reader/writer preference and fairness are otherwise unspecified.
+
+<a id="R-MEM-0022"></a>
+
+**R-MEM-0022** — `condvar` wait consumes a mutex guard, atomically releases that mutex and enqueues the caller, then blocks and reacquires the same mutex before returning a new guard. For each condition variable, every atomic release-and-enqueue, notify operation and transition of a waiter from enqueued to eligible-to-wake participates in one total order consistent with happens-before. `notify_one` makes exactly one waiter enqueued at its order point eligible if any exists: it selects the earliest still-enqueued waiter in that total order. `notify_all` makes every waiter enqueued at its order point eligible. A notification is not remembered when none is enqueued. A wait may also become eligible spuriously, so the protected predicate shall be tested in an explicit loop. Eligibility precedes mutex reacquisition; notification by itself creates no synchronizes-with edge, and protected-state visibility comes from that mutex reacquisition. Use of one condition variable with a different mutex after its first wait causes `contract_violation` before releasing the supplied guard.
+
+<a id="R-MEM-0023"></a>
+
+**R-MEM-0023** — All arrivals of one reusable `barrier` are linearizable in a per-barrier history partitioned into generations of its configured participant count. The arrival that is last in a generation closes and releases that generation and returns `leader`; every earlier arrival in it returns `follower`. Every pre-arrival action in that generation happens-before every successful return from that generation. `once` has exactly the abstract states Uninitialized, Running, Completed and Poisoned. An invocation from Uninitialized changes it to Running; every concurrent `call_once` or `call_once_force` waits for that attempt. Normal completion changes Running to Completed, after which both operations return without invoking their designator; that completion synchronizes-with every such return. If the initializer throws a declared checked E, the operation moves that exact payload to its caller, publishes no completion, release-restores Uninitialized and sets no poison; a waiter acquires that restoration before retrying. This rule also applies to a forced attempt that began in Poisoned: a checked error restores Uninitialized rather than preserving panic poison. Under unwind strategy, a failed attempt remains Running until its panic has left the initializer invocation after automatic cleanup, then release-publishes Poisoned; it publishes no successful-completion state and does not roll back initializer side effects. Every operation that observes, re-evaluates or claims from that Poisoned state first performs acquire. Under abort strategy, the first panic aborts before a failure state is observable. `call_once` on Poisoned panics with `once_poisoned` without invocation. On Poisoned, competing `call_once_force` callers shall claim serially: the winner changes Poisoned to Running and invokes once, while the others wait and then evaluate the resulting state again. Another failed unwind attempt follows the same Running-to-Poisoned publication protocol; normal completion establishes Completed. `once_lock<T>` has exactly Uninitialized, Running and Initialized(T) states. `get` never waits and returns absence in the first two states and a shared borrow only in Initialized. `get_or_init` returns the existing borrow without invocation in Initialized; from Uninitialized it changes the state to Running and invokes once. A normal initializer return publishes Initialized(T). A declared checked E publishes no T, release-restores Uninitialized, sets no poison and transfers E to the caller after that restoration; a waiter acquires it before retrying. Under unwind strategy, panic keeps Running until the panic has left the initializer invocation after automatic cleanup, then release-publishes Uninitialized; every operation that observes, re-evaluates or claims that release-restored state performs acquire first. An implementation may perform the same acquire on an initial Uninitialized state. Under abort strategy, the panic aborts before restored Uninitialized is observable. Competing `get_or_init` or `set` operations encountering Running wait and then evaluate the resulting state again. `set` publishes its staged T and returns `stored` from Uninitialized, or returns `occupied(T)` with that staged T from Initialized. These competing transitions are linearizable. `once_lock` is not poisoned, and successful publication synchronizes-with every operation that observes the initialized T.
+
+<a id="R-MEM-0024"></a>
+
+**R-MEM-0024** — An asynchronous channel and a bounded synchronous channel are multi-producer, single-consumer queues. A sender(T) is explicitly cloneable; the sole receiver(T) is Move-only and not Sync. Sending passes T by value under R-FUNC-0002: a named Move T requires `move`, whereas a named Copy T is copied. Failure returns the staged T in the error outcome; for Move T it is the same transferred owner and for Copy T the source remains unchanged. Successful receipt transfers the staged value once, and successful send publishes that item with a release operation. The receive operation or queued-value destruction duty that claims the item performs an acquire before moving or destroying T; the send synchronizes-with that acquire.
+
+<a id="R-MEM-0025"></a>
+
+**R-MEM-0025** — sender creation, cloning and destruction, receiver creation and destruction, and every send or receive operation are linearizable in one per-channel abstract history consistent with happens-before; each result reflects channel state at its operation’s linearization point. A successful capacity-zero send and its matching receive share one paired transfer point. Values from one sender are received in successful-send linearization order; ordering between distinct senders before linearization is unspecified. The asynchronous form is conceptually unbounded but may return allocation failure with the unsent value. The bounded form blocks when full; capacity zero is a rendezvous requiring a matching receive. After all senders are destroyed, a receiver drains queued items and then observes disconnection. When the queue is empty and at least one sender is live, `recv` waits and `try_recv` returns `empty`; when it is empty and no sender is live, both return `disconnected`. When a value is available, either receive operation returns `received(T)` before any disconnect result. While the receiver side is live, `sync_send` waits on a full bounded queue and `try_send` returns `full(T)`; capacity zero is full unless a matching receive can accept the value. A connected asynchronous send that enqueues returns `sent` unless it returns `allocation_failed(T)` before enqueue; a connected bounded send that enqueues or completes a rendezvous returns `sent`. Destruction of the receiver or its creation right wakes blocked senders and every later or awakened send returns `disconnected(T)`. Destruction of the last sender wakes a blocked receiver. Destroying the receiver or the unconsumed receiver-creation right synchronously owns one drop duty for each queued value. The duties are sub-duties of that destruction, execute in its current attached R context and are all attempted in FIFO order of the abstract queue before destruction returns normally or propagates its first panic; no background channel-cleanup duty remains. Under unwind strategy a first drop panic continues with all later queued duties in that FIFO order, then propagates after they have been attempted, while a second panic aborts. Abort strategy follows R-ERR-0005, and no value whose drop has begun is dropped again. Initial queue/control-block allocation failure creates no channel and is returned by the channel constructor. After disconnect cleanup, and only when no factory, receiver, sender endpoint, blocked operation, queued value or queued-value drop duty remains, one last-reference duty releases the queue/control-block storage exactly once; no endpoint destruction releases that storage earlier.
+
+<a id="R-MEM-0026"></a>
+
+**R-MEM-0026** — `unpark(thread)` makes at most one token available to the target thread and performs a release operation. All `unpark` operations and token-consuming `park` operations for one target are in one total token order consistent with happens-before. A consuming `park` performs an acquire operation and synchronizes-with every `unpark` after the preceding consuming `park`, or from the start if none, and before itself in that token order, including releases coalesced into the same available token. Calls may return spuriously; a spurious return is absent from the token order, consumes no token and performs no acquire. Multiple unparks before consumption coalesce to one token. Sleep and yield create no synchronizes-with edge and provide no fairness guarantee.
+
+<a id="R-MEM-0027"></a>
+
+**R-MEM-0027** — Deadlock, livelock, starvation and priority inversion are not data races and do not create UB. Except for operations whose contracts return `would_deadlock`, an implementation is not required to detect them. Destruction of a locked synchronization object, a live channel endpoint with invalid internal state, or a live thread runtime object can occur in safe code only after its ownership rules prove no outstanding use.
+
+<a id="R-MEM-0028"></a>
+
+**R-MEM-0028** — `arc` strong and weak counters are atomic lifetime metadata. Clone uses a checked relaxed increment. Strong and weak release use release decrement and an acquire fence before the thread observing the last reference drops T or deallocates the control block. Weak upgrade uses a checked compare-exchange from nonzero strong count, with acquire success and relaxed failure. `try_unwrap` uses an acq\_rel transition from one to zero. Every earlier strong release on an allocation synchronizes-with both the acquire step of an operation that later reserves or observes its last-strong transition before T is moved or dropped and a later successful `arc get_mut` uniqueness acquire. Every earlier explicit or implicit weak release synchronizes-with the acquire step that observes the last weak-liveness reference before control-block deallocation; every earlier explicit weak release also synchronizes-with a later successful `arc get_mut` uniqueness acquire. These operations shall be linearizable and shall never transiently wrap or resurrect a zero strong count.
+
+<a id="R-MEM-0029"></a>
+
+**R-MEM-0029** — Reference-count atomics protect allocation lifetime only. They grant no mutable access to T and are not a substitute for publication of T’s later non-atomic writes. `rc` performs the same abstract state transitions with ordinary sequenced non-atomic counters; its unconditional non-Send/non-Sync status prevents safe concurrent reachability.
+
+<a id="R-MEM-0030"></a>
+
+**R-MEM-0030** — Standard synchronization operations create only the edges explicitly stated in this section. Failed try-lock, failed channel operation, count observation, sleep and yield create no synchronizes-with edge. A condition-variable notification, whether or not it makes a waiter eligible, creates no such edge by itself; the associated mutex release/acquisition supplies protected-state visibility. Implementations may use stronger internal ordering but shall not expose a weaker result.
+
+<a id="R-MEM-0031"></a>
+
+**R-MEM-0031** — `task<T throws E...>` is Send iff T and every E are Send and is never Sync. Successful start publishes every committed argument with release semantics, and the task’s first execution observes them with acquire semantics. Terminal completion publishes its returned value, checked error or panic report with release semantics; successful `await` observes that completion with acquire semantics before moving the result, transferring the error or re-raising the panic. Detached-result cleanup makes the same acquire observation before accessing or destroying the outcome. A cancellation request alone creates no synchronizes-with edge; terminal acknowledgement uses the completion edge.
+
+<a id="modules"></a>
+
+## 22. Modules and visibility
+
+<a id="R-MOD-0001"></a>
+
+**R-MOD-0001** — `module a.b;` assigns canonical module path. Path components are identifiers. Module path and source file mapping is implementation-defined and shall be documented by build system. The top-level module paths `core` and `std`, and every descendant of either path, are reserved to the implementation. A program may import those modules but shall not declare or define them.
+
+<a id="R-MOD-0002"></a>
+
+**R-MOD-0002** — `import a.b;` makes exported names available only by qualified path `a.b::name`. `import a.b::{x, y};` imports selected names unqualified. Wildcard imports are not available. Modules provided by the selected profile under the reserved `core` and `std` roots are predeclared, and their exact qualified names may be used without an import. Selective import remains available for their ordinary exported identifiers, but compiler-recognized standard-owner operations, standard parametric type constructors and standard type-operand calls shall retain the exact qualified spelling required by Annex A and cannot be imported unqualified. A module under the `std` root may be supplied as R source shipped by the implementation and named in its library map (Library section 21): a program imports it with `import std.name;` like any other module, importing it from a profile below the least profile the map names requires `R-DIAG-PROFILE-001`, its exported traits, types, functions and methods resolve like those of any imported module, and its generic aggregates are spelled `std.name::Type<arguments>` under Annex A.4.
+
+<a id="R-MOD-0003"></a>
+
+**R-MOD-0003** — Import is semantic dependency, not textual inclusion; comments, protected names, macros (which do not exist) and lexical state do not cross the boundary.
+
+<a id="R-MOD-0004"></a>
+
+**R-MOD-0004** — Module dependency cycle requires diagnostic. Imported modules initialise in deterministic topological order; ties break by Unicode code-point order canonical module path. Destruction uses exact reverse order.
+
+<a id="R-MOD-0005"></a>
+
+**R-MOD-0005** — An exported signature shall use only exported complete types and shall carry complete compiler-inferred region metadata required by section 13, except `void` in positions permitted by R-TYPE-0007. An exported opaque type declared by a non-protected `extern "C"` block may occur recursively only behind raw pointer or raw C function pointer boundary; it is never complete by value. Changing an exported type, layout contract, discriminants, exported const value, asynchronous marker, drop/Copy/Send/Sync property or safety contract is ABI/API change.
+
+<a id="R-MOD-0006"></a>
+
+**R-MOD-0006** — Separate translation shall validate imported interface fingerprint including language version and document revision, declaration visibility, canonicalized target-independent type identity, exported constant values, drop/Copy/Send/Sync properties, asynchronous declarations, translation-time evaluability, the source definitions that generic instances and translation-time values depend on, and exported rule set; mismatch requires diagnostic, not best-effort linkage.
+
+<a id="R-MOD-0007"></a>
+
+**R-MOD-0007** — Canonical module path names exactly one module node in the selected build graph. Duplicate definitions, missing imported path or resolution of one path to multiple source/interface identities require `R-DIAG-MOD-001`; search-path order shall not choose silently. Every import edge records the unique resolved interface identity in module fingerprint.
+
+<a id="c-interoperability"></a>
+
+## 23. C interoperability
+
+### 23.1 `extern "C"` blocks and ABI types
+
+<a id="R-FFI-0001"></a>
+
+**R-FFI-0001** — `extern "C" { declarations }` declares symbols, types and compile-time constants supplied by an external C ABI. It does not define storage, execute C preprocessor or import names not explicitly declared in the block.
+
+<a id="R-FFI-0013"></a>
+
+**R-FFI-0013** — Language string following `extern` shall contain exactly `C`. Every function/object declaration inside block is an import. Function body and external object initializer are forbidden; only `@c_constant` has R initializer. The contained names belong to the R module interface by default; `protected extern "C" { ... }` keeps them inside the defining module. Neither form defines or re-exports the external C symbols.
+
+<a id="R-FFI-0002"></a>
+
+**R-FFI-0002** — R predeclares distinct ABI types `c_char`, `c_schar`, `c_uchar`, `c_short`, `c_ushort`, `c_int`, `c_uint`, `c_long`, `c_ulong`, `c_llong`, `c_ullong`, `c_bool`, `c_wchar`, `c_wint`, `c_int8`, `c_uint8`, `c_int16`, `c_uint16`, `c_int32`, `c_uint32`, `c_int64`, `c_uint64`, `c_intptr`, `c_uintptr`, `c_intmax`, `c_uintmax`, `c_float`, `c_double`, `c_long_double`, `c_size` and `c_ptrdiff`; `std.c` provides conversions/utilities. Fixed R integer shall not be assumed C-compatible without target proof. Availability of optional typedef-backed types, including `c_wint`, follows R-TYPE-0023 and target manifest.
+
+<a id="R-FFI-0014"></a>
+
+**R-FFI-0014** — C `void` maps to R `void`; object pointer `void*` maps to `raw void*?` or non-null `raw void*` according to contract, and C `const void*` analogously maps to `raw const void*?` or `raw const void*`. C `_Bool` maps to `c_bool`, never directly to R `bool` at ABI boundary. An empty parameter list `()` in an R `extern "C"` declaration means exactly zero C parameters and is verified or emitted as the C prototype form `(void)`; R never exposes C’s old-style unspecified-parameter form. An R `never` result of an imported function, a callback or a raw C function type is the C `void` result of a function that does not return; a return from such a C function violates its safety contract.
+
+<a id="R-FFI-0003"></a>
+
+**R-FFI-0003** — An `extern "C"` function declaration and every raw C function type shall have no `async` marker and no checked-error set; `throws` is not a C ABI mechanism. A C object pointer parameter shall be represented as a compatible raw pointer with explicit constness and nullability. A safe borrow or slice, ordinary `str`, `constexpr str`, unique/shared/weak owner, `atomic`, `array`, `list`, `dict`, `task`, `o`, payload enum or standard resource type shall not occur at any nesting depth of a C signature, including as the pointee of a raw pointer. A managed-token adapter exposes only `raw const void*`; spellings such as `raw (arc T)*` and `raw (rc T)*` are invalid. An ordinary separately verified imported opaque C handle may represent only its external C object and is not a managed-owner token. Every legitimate C pointer level shall be explicit; for example C `T **` may map to `raw (raw T*?)*`.
+
+<a id="R-FFI-0004"></a>
+
+**R-FFI-0004** — Allowed by-value C ABI types: C ABI scalars, raw pointers, raw C function pointers, `@repr(C)` fieldless enums and `@repr(C)` structs recursively composed only of allowed types or fixed C ABI arrays. Every aggregate/enum passed by value shall be trivially Copy, have no user drop and recursively contain no R destruction obligation. Top-level array parameter or return is forbidden because C adjusts/forbids it. Slice, ordinary `str`, `constexpr str`, own, arc, rc, weak owner, borrow, atomic, array, list, dict, task, standard synchronization/thread/channel type, o and payload enum are forbidden by value and as a recursive field of an `@repr(C)` aggregate.
+
+<a id="R-FFI-0005"></a>
+
+**R-FFI-0005** — C variadic `...` may occur only after at least one fixed parameter in imported function declaration. Call is unsafe; each variadic argument shall be an allowed promoted C ABI scalar or raw pointer after explicit conversion. `c_float` shall become `c_double`; `c_bool` and every C integer/fieldless-enum type whose target rank does not exceed `c_int` shall become `c_int` if it represents all source values, otherwise `c_uint`. Fixed R types, aggregates and any unpromoted scalar are rejected. R function shall not define `...`.
+
+### 23.2 External types and constants
+
+<a id="R-FFI-0015"></a>
+
+**R-FFI-0015** — `opaque struct Name;` inside `extern "C"` declares an incomplete nominal C type and introduces bare `Name` into the aggregate type-name space immediately after the declaration identifier. It may occur only behind raw pointer/function-pointer boundaries. `sizeof`, `alignof`, field access, construction, by-value passing, `new`, safe borrow, unique or managed owning form, and drop for an opaque type require `R-DIAG-FFI-003`.
+
+<a id="R-FFI-0016"></a>
+
+**R-FFI-0016** — `@c_type(name = "CName", kind = "typedef")` maps an R aggregate type name to a C typedef. Kinds `"struct"`, `"union"` and `"enum"` map to corresponding C tag name. CName shall be one ASCII C identifier, shall not be a C17 keyword and is additionally governed by R-FFI-0057. `"union"` is allowed only for opaque R declaration; a complete C union requires wrapper functions.
+
+<a id="R-FFI-0017"></a>
+
+**R-FFI-0017** — Complete struct/fieldless enum declared inside `extern "C"` shall carry `@repr(C)` and `@c_type`, use only types permitted by R-FFI-0004 and match verified C declaration. Struct field name, count, order, type, qualifiers, size, alignment and offset shall match a complete normalized member inventory; layout assertions alone are insufficient because an omitted C member may occupy apparent R padding. For fieldless enum, underlying representation and every R-declared variant name and value shall correspond one-for-one to a complete normalized C enumerator inventory; C declaration order need not match, but an omitted, additional or aliased C enumerator is a mismatch. A C enum that cannot satisfy R’s unique-discriminant rule shall instead be mediated as its compatible C integer plus verified constants or by a C shim. Different signedness, qualifier or ABI-significant property is mismatch.
+
+<a id="R-FFI-0018"></a>
+
+**R-FFI-0018** — A declaration with `@c_constant(name = "C_NAME") const CTYPE NAME = constant-expression;` mirrors a C integer enum constant or object-like integer macro without importing a symbol. Top-level `const` is mandatory; CTYPE shall be a supported C ABI integer or fieldless enum type, C\_NAME a non-keyword ASCII C identifier, and initializer a representable integer constant-expression; reserved spellings follow R-FFI-0057. It has no address or storage. Header/ABI verification shall match both mathematical value and normalized type of the C expanded expression, including integer rank, signedness and corresponding enum identity when expression itself has enum type. In C17 a bare enumerator has type `int`; a macro cast to an enum retains that enum type. A merely representable value of a different C type is a mismatch. Floating, string, pointer and aggregate C constants require target-generated ABI accessor support or an external C function shim and are not `@c_constant` forms in R 0.1.
+
+<a id="R-FFI-0019"></a>
+
+**R-FFI-0019** — C bit-fields, flexible array members, packed/anonymous aggregate members, vector/complex types, variable-length arrays, complete unions, C `_Atomic`, variadic function-pointer types, `restrict` and `volatile`-qualified ABI types are not directly expressible. Library integration shall expose opaque type plus C wrapper/verified bridge or a separately standardized ABI type rather than guess layout or erase qualifier.
+
+<a id="R-FFI-0020"></a>
+
+**R-FFI-0020** — Function-like macros, `_Generic`, inline-only functions and preprocessor conditionals are not importable symbols. Bindings shall use a C shim with an external C function or an independently verified R constant.
+
+### 23.3 Imported functions, objects and callbacks
+
+<a id="R-FFI-0021"></a>
+
+**R-FFI-0021** — Imported function prototype shall exactly match C return type, parameter count/order/types, variadic status and default C calling convention. Parameter names are documentary. C array parameters shall be declared as raw pointers because C adjusts them to pointer types. `extern "C"` R 0.1 supports only target default C calling convention. Header-specific non-default convention shall be exposed by an externally supplied C shim with default C ABI; otherwise required by `R-DIAG-FFI-001`.
+
+<a id="R-FFI-0022"></a>
+
+**R-FFI-0022** — `TYPE name;` inside `extern "C"` imports a C object symbol. `thread_local TYPE name;` imports C `_Thread_local` object. External object never starts R ownership and is never automatically dropped.
+
+<a id="R-FFI-0023"></a>
+
+**R-FFI-0023** — Reading, writing, taking address of or borrowing an imported C object is unsafe. Even `const` object access requires contract that library is loaded, initialization completed, representation valid and concurrent mutation excluded. `thread_local` additionally refers only to current attached thread.
+
+<a id="R-FFI-0024"></a>
+
+**R-FFI-0024** — An `extern "C"` function definition exports one C-callable symbol. It shall have only R-FFI-0004 signature types, no captures or general R calling convention, and shall have `@safety` describing obligations of foreign caller. It shall carry `@callback` if its name is converted to raw function pointer.
+
+<a id="R-FFI-0012"></a>
+
+**R-FFI-0012** — C callback into R shall use a compatible exported `extern "C"` function. C caller shall ensure R runtime is initialized and current thread is either already attached or eligible for temporary attachment by the entry trampoline. Trampoline per R-FFI-0055 attaches before R body. Caller shall also satisfy lifetime, aliasing and representation contracts for all raw arguments. Panic at this boundary aborts per R-ERR-0006.
+
+<a id="R-FFI-0025"></a>
+
+**R-FFI-0025** — In expected matching `raw fn(...) -> R` context, name of exported C function bearing `@callback` may convert to raw function pointer without unsafe operation. Missing `@callback`, mismatched prototype or calling convention requires `R-DIAG-FFI-005`; calling through resulting pointer remains unsafe.
+
+<a id="R-FFI-0026"></a>
+
+**R-FFI-0026** — If C may retain a pointer, callback or userdata after call returns, the declaration safety contract shall state retention duration and release event. R borrow with shorter lifetime shall not be passed; owner transfer requires explicit release/adoption protocol.
+
+<a id="R-FFI-0027"></a>
+
+**R-FFI-0027** — Weak imports, symbol interposition promises, versioned symbol syntax and runtime `dlopen`/`dlsym` are not part of `extern "C"` R 0.1. Missing required symbol shall not be represented by null function pointer; optional APIs need a separately specified dynamic-loading wrapper.
+
+### 23.4 External library binding and link manifest
+
+<a id="R-FFI-0028"></a>
+
+**R-FFI-0028** — Optional singleton block attribute `@link(name = "logical-name", kind = "kind")` associates all symbol declarations in the block with exactly one provider library. Logical name identifies a target-manifest entry and shall not be interpreted as path, filename or linker option. Additional link dependencies belong only to that manifest entry. A logical link name consists of one or more nonempty segments separated by exactly one ASCII U+002E FULL STOP, U+005F LOW LINE or U+002D HYPHEN-MINUS. Each segment begins with an ASCII lowercase letter and continues with zero or more ASCII lowercase letters or decimal digits. Its encoded length is one through 255 bytes. This syntax is the R-FFI logical-link-name syntax used by library manifest queries.
+
+<a id="R-FFI-0029"></a>
+
+**R-FFI-0029** — Link kind shall be one of: `"static"` (archive incorporated at link), `"dynamic"` (load-time shared library plus any import library), `"framework"` (target framework exporting C ABI) or `"system"` (toolchain-owned stable system library). Unsupported kind/target combination requires diagnostic.
+
+<a id="R-FFI-0030"></a>
+
+**R-FFI-0030** — Absence of `@link` selects exactly the target manifest’s implicit C runtime link entry as provider for symbol inventory, header roots and ABI-record roots. Such block may import only symbols and use only evidence owned by that entry. Third-party header/ABI evidence requires explicit `@link` even when block declares only types or constants and imports no symbol. The implementation shall not search arbitrary host libraries to satisfy an undeclared symbol, choose evidence roots or infer provider from link success.
+
+<a id="R-FFI-0031"></a>
+
+**R-FFI-0031** — Link manifest entry shall contain at least: logical name; kind; target triple and C ABI identity; compile/link artifact identities; header/ABI record roots; library version; content digest for non-system artifacts; dependency logical names; runtime deployment identity for dynamic/framework artifact; and all feature-test definitions used by ABI verification. It shall also contain the normalized export/re-export symbol inventory claimed for direct imports. Each inventory entry records C source identifier, exact target linkage spelling, function/data/TLS kind, strong/weak status, defining artifact/provider identity and explicit re-export chain. Target identity incorporates floating-environment choice R-IDB-020 and every extra control affecting values, flags or traps.
+
+<a id="R-FFI-0032"></a>
+
+**R-FFI-0032** — Physical paths, search directories, import-library names, sonames, install names, DLL names, framework roots and linker options belong only to build manifest. `@link` and `@abi` accept logical identifiers, while `@header` accepts only relative include spelling constrained by R-FFI-0039. Physical/absolute source value is a constraint violation. Relative manifest paths resolve from manifest location.
+
+<a id="R-FFI-0033"></a>
+
+**R-FFI-0033** — Library resolution shall use selected target triple, sysroot and C ABI; host fallback is forbidden during cross-compilation. Artifact architecture, object format and ABI mismatch require `R-DIAG-LINK-001` before executable emission.
+
+<a id="R-FFI-0034"></a>
+
+**R-FFI-0034** — Same logical library/kind selected by multiple extern blocks with identical manifest identity coalesces. Same logical name resolving to different value of any normalized identity field — including kind, version, digest, target, ABI, feature macros, roots, dependency/runtime identity or symbol inventory — in one program requires `R-DIAG-LINK-002`.
+
+<a id="R-FFI-0035"></a>
+
+**R-FFI-0035** — Manifest dependency graph determines deterministic link order. Dependency shall follow its dependent where target static linker requires it. Unresolvable static cycle requires diagnostic unless manifest describes a target link-group mechanism whose result is deterministic.
+
+<a id="R-FFI-0036"></a>
+
+**R-FFI-0036** — Each imported symbol shall occur in selected provider’s declared export/re-export inventory (or documented implicit runtime inventory) and resolve to that provider identity. Same external spelling in multiple imports is permitted only for the same normalized defining provider or one explicit re-export chain, unless target manifest proves a provider-specific binding mechanism. Missing or kind-mismatched inventory entry, multiple provider claims or unresolved symbol requires `R-DIAG-LINK-003`; dependency/host search shall not silently choose a different same-spelled symbol.
+
+<a id="R-FFI-0037"></a>
+
+**R-FFI-0037** — Dynamic/framework dependency shall remain loaded from before module initialization through completion of all R drops. Required-provider loading and required-symbol readiness are the first pre-main phase of R-AM-0002. Their failure shall terminate before native argument conversion, `main` or module initializers with category `link_load_failure`; process status is implementation-defined and documented.
+
+### 23.5 Header and ABI verification
+
+<a id="R-FFI-0038"></a>
+
+**R-FFI-0038** — Every non-empty `extern "C"` block shall carry at least one `@header("logical/header.h")` or `@abi("logical-abi-record")`. Absence requires `R-DIAG-FFI-006`; linking alone is not proof of prototype/layout compatibility.
+
+<a id="R-FFI-0039"></a>
+
+**R-FFI-0039** — `@header` names a header relative to roots of the provider selected by `@link` or R-FFI-0030. It shall not be absolute, contain `.`/`..` path component, backslash, NUL or platform drive prefix. Header is compiled only by ABI verifier with exact target compiler, sysroot, language mode and feature-test definitions; it does not inject tokens/names into R.
+
+<a id="R-FFI-0040"></a>
+
+**R-FFI-0040** — `@abi` names, relative to ABI-record roots of the provider selected by `@link` or R-FFI-0030, an immutable generated ABI record containing target, C implementation identity/options, sysroot, feature macros, complete normalized manifest/provider/artifact identity, header digests, declaration/member inventories, layouts, constants and typed symbol inventory. Any identity/digest mismatch requires fresh generation, not best-effort reuse. If one block supplies both `@header` and `@abi`, fresh header-derived declarations/layout/constants shall agree with record, and manifest-derived provider/symbol facts shall agree separately; neither source overrides the other.
+
+<a id="R-FFI-0041"></a>
+
+**R-FFI-0041** — ABI verifier shall check every imported function prototype and calling convention, global object type/TLS status, `@repr(C)` size/alignment/field offset and complete member inventory, complete one-to-one imported enum enumerator inventory and representation, `@c_constant` mathematical value plus normalized expanded-expression type/rank/ signedness, C type-name mapping and typed required symbol/provider. Complete by-value aggregate or enum requires an immutable normalized inventory produced by the selected compiler AST/ABI generator. `@header` alone is sufficient only if the verifier produces and records an equivalent complete inventory; `sizeof`, `_Alignof`, `offsetof` and type assignments alone are not sufficient proof.
+
+<a id="R-FFI-0042"></a>
+
+**R-FFI-0042** — Header verification shall use a generated C17 translation unit with the declared headers, `_Static_assert` for values/layout and warnings-as-errors type assignments for functions/objects, plus compiler-derived normalized declaration inventory whenever R-FFI-0041 requires it. Inventory extraction is data generation, not permission to accept a language extension in generated bridge. Any mismatch or inability to prove a required property requires `R-DIAG-FFI-004`.
+
+<a id="R-FFI-0043"></a>
+
+**R-FFI-0043** — Header order is source `@header` order; repeated identical header coalesces. Required feature macros shall come from manifest and be part of its identity; R source shall not define preprocessor macros.
+
+<a id="R-FFI-0044"></a>
+
+**R-FFI-0044** — Library manifest identity, headers/ABI record digests, verified declarations, `@fenv` assertions and every exported C function shall enter module interface/build fingerprint. Change requires re-verification and relink of affected dependency graph.
+
+<a id="R-FFI-0009"></a>
+
+**R-FFI-0009** — C headers are not parsed as R and `#include` is absent. They are verification evidence only. Binding generator may produce explicit R declarations, but generated output is reviewed/versioned source subject to the same rules.
+
+### 23.6 Layout, symbol names and exports
+
+<a id="R-FFI-0006"></a>
+
+**R-FFI-0006** — `@repr(C)` struct shall match field order, size, alignment and padding of equivalent C17 struct on selected target. Bit-fields, flexible array members, anonymous members and packed layout are not expressible in R 0.1.
+
+<a id="R-FFI-0007"></a>
+
+**R-FFI-0007** — `@link_name("symbol")` selects imported C identifier; `@export_name("symbol")` selects exported C identifier. String shall match ASCII C identifier pattern `[A-Za-z_][A-Za-z0-9_]*`, shall not be a C17 keyword and is additionally governed by R-FFI-0057. Multiple compatible imports may name the same external symbol only under single-provider rule R-FFI-0036; every exported definition name shall be unique in linked program. Arbitrary linker spellings require an external C shim.
+
+<a id="R-FFI-0045"></a>
+
+**R-FFI-0045** — Without `@link_name`/`@export_name`, imported/exported C symbol name is its R identifier encoded as ASCII and shall itself be a valid C identifier; it shall also satisfy R-FFI-0007 and R-FFI-0057. Non-ASCII R identifier therefore requires the corresponding explicit valid C-identifier name. Backend emits/calls that actual C identifier. No C++ mangling, assembler label alias, prefix/suffix or Windows decoration guessing is performed.
+
+<a id="R-FFI-0046"></a>
+
+**R-FFI-0046** — R 0.1 exports C functions only. Exported global objects, TLS, linker aliases and symbol-version scripts require a later ABI extension or C shim.
+
+<a id="R-FFI-0008"></a>
+
+**R-FFI-0008** — Exported function shall not let panic cross C boundary; runtime shall abort per R-ERR-0006. It shall not expose R-owned lifetime unless API uses paired raw handle functions with documented ownership contract.
+
+### 23.7 Unsafe boundary and safe wrappers
+
+<a id="R-FFI-0010"></a>
+
+**R-FFI-0010** — Every imported C function is unsafe and shall have `@safety("CONTRACT-ID", "preconditions")`. `unsafe` keyword in extern block is optional documentary redundancy; call requires unsafe context. A reviewed R wrapper may be safe only when its signature/checks establish every precondition.
+
+<a id="R-FFI-0011"></a>
+
+**R-FFI-0011** — `core::adopt(pointer)` and `core::release(move owner)` under R-UNSAFE-0008 are the exact operations for transferring one compatible single-T allocation duty across this boundary. Adopting C allocation as `own T*` requires proof of unique ownership, initialized valid T, compatible allocator/deallocator and alignment. Releasing R owner to C consumes owner and suppresses automatic drop only once.
+
+<a id="R-FFI-0047"></a>
+
+**R-FFI-0047** — NUL-terminated C string is a raw byte sequence, not ordinary R `str` or `constexpr str`. Conversion shall validate non-null/range/terminator and chosen encoding; passing R string to C shall provide stable NUL-terminated storage for complete retention time.
+
+<a id="R-FFI-0048"></a>
+
+**R-FFI-0048** — C `longjmp`, foreign exception, signal callback, process termination, allocator mismatch, callback after unload and C data race across live R frame are outside ordinary call contract and shall be explicitly excluded or mediated by a C shim. They shall not cross R scopes containing live Move objects.
+
+<a id="R-FFI-0049"></a>
+
+**R-FFI-0049** — Safe wrapper shall validate return discriminants, lengths, error codes, pointer nullability, ownership, library lifetime and every API-specific invariant before constructing safe R value. C scalar machine-representation limits follow R-FFI-0056. Link/ABI verification does not replace these runtime safety checks. Address of an existing safe R object may be passed for C output only if contract guarantees a valid initialized representation on every return path; otherwise output shall use unchecked ABI storage and R-FFI-0056 gate.
+
+<a id="R-FFI-0050"></a>
+
+**R-FFI-0050** — FFI attribute scopes are closed: `@link`, `@header`, `@abi` on extern block; `@link_name` on imported symbol; `@safety` on imported or exported C function; `@fenv` on imported C function; `@repr`, `@c_type` on C type; `@c_constant` on verified constant; `@export_name`, `@callback` on exported C function. `@header` is repeatable; `@link` and `@abi` are singleton per block, and every declaration-scoped FFI attribute is singleton on its declaration. Misplaced, duplicated-singleton or unknown FFI attribute requires `R-DIAG-FFI-003`.
+
+<a id="R-FFI-0051"></a>
+
+**R-FFI-0051** — Named attribute argument may occur once; required names and value types shall match attribute definition. Positional forms are allowed only where shown (`@header("...")`, `@abi("...")`, `@link_name("...")`, `@export_name("...")`, `@safety("...", "...")`, `@fenv("preserve")`, `@repr(C)`).
+
+<a id="R-FFI-0052"></a>
+
+**R-FFI-0052** — Logical library and ABI-record identifier shall match ASCII pattern `[A-Za-z0-9][A-Za-z0-9_.+-]{0,254}`. Header spelling is a non-empty portable ASCII relative include spelling whose non-empty `/`-separated components each match `[A-Za-z0-9_.+-]+`; it is resolved only against manifest header roots and a filename suffix is not required. Empty, `.` or `..` component, backslash, NUL, drive/absolute prefix are invalid. Invalid `@link` name has primary `R-DIAG-LINK-001`; invalid `@abi`/`@header` name has `R-DIAG-FFI-003`.
+
+<a id="R-FFI-0053"></a>
+
+**R-FFI-0053** — Platform loader may execute external library initialization before R module initialization and finalization after R drops. Such code is outside R abstract machine but shall satisfy external-code contract: it shall not access an uninitialized/destroyed R object, unwind into R or race with R without synchronization.
+
+<a id="R-FFI-0054"></a>
+
+**R-FFI-0054** — Outside an extern block, `extern "C"` is valid only on a non-`protected` function definition satisfying R-FFI-0024. A protected definition, body-less prototype, object declaration or any other top-level `extern` use is a constraint violation; imports shall be written inside verified `extern "C"` block.
+
+<a id="R-FFI-0055"></a>
+
+**R-FFI-0055** — C-origin thread entering any exported `extern "C"` R function shall be attached by entry trampoline or explicit `std.c` protocol before any R execution, whether or not declaration bears `@callback`. Attachment has per-thread owner and nesting depth. Entry on already attached thread increments depth and shall not detach an outer explicit/R-created context. A trampoline-created temporary attachment detaches only after its outermost C-origin entry returns; explicit attachment persists until explicit detach. Detach at depth zero requires no live R frame/borrow/value retained by that attachment generation and performs its R thread-local drops exactly once. While runtime and module remain live, a later entry on the same C thread may create a fresh temporary attachment generation with fresh thread-local instances. Failure to establish a required temporary attachment aborts before safe R argument materialization or exported body. Provider shall stop and join future entry sources before R module destruction; entry after runtime shutdown or provider/module unload violates external contract.
+
+<a id="R-FFI-0056"></a>
+
+**R-FFI-0056** — Value entering R by value from C shall first occupy an internal unchecked ABI slot. Backend shall recursively validate non-null pointers/function pointers, R-declared enum discriminants and every nested `@repr(C)` field carrying such a semantic invariant before constructing ordinary R value. C ABI `c_bool`, `c_char`, `c_wchar` and `c_wint` are already C semantic values and are not checked as R bool/Unicode char. A noncanonical/trap machine representation that cannot be read through its correct C type is foreign-C UB before portable R ingress and requires target-specific external shim if mediation is needed. Invalid detectable imported return/object read causes `contract_violation` panic; invalid argument to an exported `extern "C"` entry aborts before exported R body per R-ERR-0006. This gate does not replace API-specific length, ownership, aliasing or error-code checks.
+
+<a id="R-FFI-0057"></a>
+
+**R-FFI-0057** — Any spelling emitted by backend as a C identifier shall not be a C17 keyword. Exported C identifier shall not belong to an identifier class reserved to the C implementation by ISO C17 7.1.3. Imported symbol or type spelling in a reserved class shall not be redeclared by generated code: it requires declaration from a verified `@header` and a dedicated bridge that includes that header and exposes a unique non-reserved private name. An ABI record alone does not authorize such redeclaration; without the header-compatible bridge user shall provide an external default-C-ABI shim. A `@c_constant` substituted solely from verified ABI record emits no C identifier and is unaffected by the redeclaration restriction.
+
+<a id="R-FFI-0058"></a>
+
+**R-FFI-0058** — Change of floating-point environment made by imported C code shall not affect a later R floating operation and R-generated flags shall not leak into C. Before every outbound C-ABI call, whether direct import or call through raw C function pointer, boundary saves host environment and establishes canonical C-entry environment: `FE_DFL_ENV`, `FE_TONEAREST`, all supported standard exception flags clear, default trap/non-stop state, and manifest-normalized extra controls such as gradual-underflow mode. It restores exact saved R host environment on every normal return. Every C-origin entry into an exported `extern "C"` R function saves exact foreign rounding, flags, trap and extra state, establishes the same canonical environment before R code, and restores the foreign state on normal return. R 0.1 does not expose inherited or persistent foreign fenv across calls; API requiring it shall use one external C shim enclosing all dependent C operations. Target manifest selects R-IDB-020; a proven immutable already-canonical environment may use no-op. If no mechanism exists, only a direct import with machine-readable R-FFI-0059 assertion is accepted; raw C function-pointer calls and every exported `extern "C"` definition require `R-DIAG-FFI-001`. An implementation using a verified external isolation shim shall classify it as R-IDB-020 verified runtime-helper mode rather than unavailable fallback. Failure to save or establish canonical state before outbound C causes `contract_violation` panic without the call only if host state was unchanged or exact restoration succeeded; otherwise it shall abort immediately. Failure to restore after foreign execution, or any save/establish/restore failure at a C-origin entry boundary, shall abort before further R/C execution.
+
+<a id="R-FFI-0059"></a>
+
+**R-FFI-0059** — Optional singleton `@fenv("preserve")` on imported C function is a machine-readable external-contract assertion that function neither observes nor changes rounding mode, exception flags, trap state or any manifest-listed extra floating control. Absence means `may_change_or_observe`. On R-IDB-020 unavailable target only direct imported function declaration bearing `preserve` is permitted; call through arbitrary raw C function pointer and every exported `extern "C"` definition are rejected with `R-DIAG-FFI-001`. False `preserve` assertion violates external safety contract and is UB. Any other value/scope requires `R-DIAG-FFI-003`.
+
+<a id="R-FFI-0060"></a>
+
+**R-FFI-0060** — A C library may retain one shared-R strong ownership obligation only through an unsafe adapter around matching `std.arc::into_raw` or `std.rc::into_raw`. The exported non-null C representation is `raw const void*`; conversion to and from the internal `raw const (T)*` is an explicit unsafe zero-offset object-pointer conversion that preserves allocation identity. Copying pointer bits creates no obligation. Each retain shall create one R strong clone and one additional `into_raw` obligation; each release shall reconstruct and drop exactly one obligation. All obligations shall be released before defining-module/runtime shutdown unless the runtime keeps that module, its drop glue and allocator live through the last obligation. An `arc` obligation may cross C threads only when T is Send+Sync and the C transfer establishes required synchronization. An `rc` obligation never crosses its originating R thread; on a C-origin thread it may survive calls only within the same live explicit attachment generation and cannot survive a temporary attachment. Every C-origin managed-token adapter shall attach through R-FFI-0055 or an equivalent trampoline before pointer reconstruction, count mutation or R drop; attachment/fenv failure aborts before token or count state changes, and temporary detach occurs only after no reconstructed R value is live. Forged, repeated, wrong-family, wrong-T, late or wrong-thread/generation use violates the unsafe external contract. A raw pointer borrowed from T without a strong obligation may be retained only while a separately documented owner remains live.
+
+<a id="standard-library"></a>
+
+## 24. Integration with the R standard library
+
+<a id="R-LIBREF-0001"></a>
+
+**R-LIBREF-0001** — The R Standard Library Specification 0.1 named by R-REF-0005 is the normative companion library standard for this language revision. It owns the complete `R-LIB-0001` through `R-LIB-0024` rules moved from the earlier combined draft and every `R-SLIB-...` rule. A reference in this document to one of those identifiers resolves to that companion document.
+
+<a id="R-LIBREF-0002"></a>
+
+**R-LIBREF-0002** — Compiler-recognized standard types, constructors, qualified names, outcome variants and type-operand calls are syntactically admitted only by Annex A. Their exact signatures, ownership, allocation, panic, cancellation, deadline and error contracts are defined by the companion library standard. A library edition shall not add source syntax or weaken any Core ownership, borrow, evaluation-order, Send/Sync, FFI or diagnostic requirement.
+
+<a id="R-LIBREF-0003"></a>
+
+**R-LIBREF-0003** — The selected target profile determines which standard modules are available. `hosted-native-async` requires the `std.async` runtime and the complete native asynchronous I/O surface; a target lacking any mandatory backend, cancellation or deadline capability shall reject that profile during selection. Generated application code remains strict C17, while verified target-specific asynchronous adapters remain inside the runtime boundary described by Annex F.
+
+<a id="implementation-limits"></a>
+
+## 25. Implementation limits
+
+<a id="R-LIMIT-0001"></a>
+
+**R-LIMIT-0001** — Implementation may impose finite documented limits but shall accept at least: 127 nested blocks; 127 declarator/type nesting levels; 127 parameters and arguments; 1023 struct fields; 1023 enum variants; 4095 identifiers with external/module linkage per program; 4095 bytes in one string literal after concatenation; 127 imported modules per module; 256 significant Unicode scalars per identifier; 127 non-empty `extern "C"` blocks per module; 1023 C declarations per block; 127 logical libraries per program; and 255 UTF-8 bytes per logical library/header/ABI-record name.
+
+<a id="R-LIMIT-0002"></a>
+
+**R-LIMIT-0002** — Source file of at least 1 MiB, module graph of at least 1024 modules and array object of at least 65535 bytes shall be supported when target address space can represent them.
+
+<a id="R-LIMIT-0003"></a>
+
+**R-LIMIT-0003** — Exceeding implementation limit shall produce `R-DIAG-LIMIT-001` at translation time if input was received completely. Silent miscompilation, wraparound counters or uncontrolled recursion are non-conforming.
+
+<a id="R-LIMIT-0004"></a>
+
+**R-LIMIT-0004** — Runtime stack/heap exhaustion shall cause defined panic or documented process termination without executing invalid memory access. Exact resource quantities remain environmental, not language limits.
+
+<a id="R-LIMIT-0005"></a>
+
+**R-LIMIT-0005** — Conforming implementation shall expose machine-readable target manifest containing actual limits, `usize` width, endian, alignments, panic strategy, atomic lock-free properties, C compiler/ABI identity, selected profile and, when applicable, the R-IDB-021 native asynchronous backend record.
+
+<a id="bounded-implementation-0-1"></a>
+
+### 25.1 Callable and provenance implementation boundaries (informative)
+
+The reference compiler lowers checked and async closures, closures inside generic functions, and synchronous generic borrowed representations through its ordinary HIR, MIR and C17 paths. Interface schema 31 records resource, significant-result, discardable-result and borrow-origin contracts. Normal results and each checked error have separate region bounds; nested projections conservatively share the corresponding union.
+
+These contracts do not serialize executable generic bodies: source definitions remain required across modules. A standalone source prototype cannot supply missing borrowed output provenance. Borrowed captures and views do not become Send or unborrowed and cannot stay live across await outside a task-group loan or transfer to an unscoped task/thread. Callable resource contracts do not make async launch, allocator internals or the current mutex-based executor allocation-free or nonblocking. `@must_use` is an unread-binding check, not a linear protocol, and `@discardable` relaxes only the statement-position discard of its own result. Target/profile and implementation limits remain applicable; an unsupported construct requires a diagnostic rather than unchecked lowering.
+
+Translation-time evaluation (R-FUNC-0023, R-EXPR-0032) interprets the checked HIR of the reference compiler. Its documented limits are 4000000 evaluation steps and 64 MiB of values per evaluation; a value of more than 256 scalar elements is not substituted inside a function body, while a module or static object holds a value of any size as one static initializer. A module-scope declaration that needs such a value is checked after a discovery pass over the same sources has computed it; the same pass computes the constant conditions of module `@if` (R-META-0002) before declarations are selected, the computed formulas of generic instances closed at module scope (R-TYPE-0047) and the associated constants that module-scope declarations use before implementations are checked (R-TYPE-0050). Each pass computes the values that the previous ones made available; a program whose module-scope values still grow after 32 passes requires `R-DIAG-LIMIT-001`. A `long double` of the target whose format is not binary64 stays a run-time value, and a dictionary with floating or `std.string::string` keys is not frozen into the program image. Interface schema 31 records the value of an exported object as a canonical term of its checked initializer, so that a changed exported const value (R-MOD-0005) changes the interface.
+
+<a id="annex-a"></a>
+
+## Annex A — Normative EBNF grammar
+
+### A.1 Notation
+
+In the grammar below the terminal is enclosed in quotation marks, `[ X ]` stands for optional X, `{ X }` stands for zero or more repetitions, `X, Y` stands for sequence, `X | Y` stands for choice, and `;` completes production. Precedence from higher to lower: grouping/postfix `[]`/`{}`; comma sequence; choice `|`. Choice associates left only for notation and does not change generated alternatives. Inside the quoted EBNF terminal metacharacter `\` escapes only `\` and `"`: `\\` denotes one U+005C and `\"` one U+0022; otherwise code points literal. `identifier`, literals are lexical terminals. Whitespace and comments separate tokens. Semantic constraints in the main text supplement the grammar. `quotation-mark` denotes U+0022. `unicode-XID-Start`, `unicode-XID-Continue` and `unicode-scalar-except-...` terminals are meta-terminals defined by R-LEX-0001, R-LEX-0006 and specified Unicode version, not omitted productions.
+
+<a id="R-GRAM-A001"></a>
+
+**R-GRAM-A001** — The implementation shall accept each token sequence derived from this grammar and satisfying the constraints, and shall reject in strict mode each sequence not derived from the grammar.
+
+### A.2 Lexical grammar
+
+```ebnf
+identifier          = identifier-start, { identifier-continue } ;
+identifier-start    = "_" | unicode-XID-Start ;
+identifier-continue = unicode-XID-Continue ;
+binary-digit        = "0" | "1" ;
+octal-digit         = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" ;
+decimal-digit       = octal-digit | "8" | "9" ;
+hex-digit           = decimal-digit | "a" | "b" | "c" | "d" | "e" | "f"
+                    | "A" | "B" | "C" | "D" | "E" | "F" ;
+decimal-digits      = decimal-digit, { [ "_" ], decimal-digit } ;
+hex-digits          = hex-digit, { [ "_" ], hex-digit } ;
+
+decimal-literal     = decimal-digit, { [ "_" ], decimal-digit }, [ integer-suffix ] ;
+binary-literal      = "0b", binary-digit, { [ "_" ], binary-digit }, [ integer-suffix ] ;
+octal-literal       = "0o", octal-digit, { [ "_" ], octal-digit }, [ integer-suffix ] ;
+hex-literal         = "0x", hex-digit, { [ "_" ], hex-digit }, [ integer-suffix ] ;
+integer-literal     = decimal-literal | binary-literal | octal-literal | hex-literal ;
+integer-suffix      = "i8" | "u8" | "i16" | "u16" | "i32" | "u32"
+                    | "i64" | "u64" | "isize" | "usize" ;
+
+floating-literal    = decimal-float | hexadecimal-float ;
+decimal-float       = decimal-digits, ".", decimal-digits, [ decimal-exponent ], [ float-suffix ]
+                    | decimal-digits, decimal-exponent, [ float-suffix ] ;
+hexadecimal-float   = "0x", hex-digits, [ ".", [ hex-digits ] ], binary-exponent, [ float-suffix ] ;
+decimal-exponent    = ( "e" | "E" ), [ "+" | "-" ], decimal-digits ;
+binary-exponent     = ( "p" | "P" ), [ "+" | "-" ], decimal-digits ;
+float-suffix        = "f32" | "f64" ;
+
+character-literal   = "'", character-element, "'" ;
+string-literal      = quotation-mark, { string-element }, quotation-mark ;
+formatted-literal   = "f", quotation-mark, { format-element }, quotation-mark ;
+format-element      = unicode-scalar-except-double-quote-backslash-newline-braces
+                    | escape-sequence | "{{" | "}}" | format-slot ;
+format-slot         = "{", ( format-path | format-index ), [ ":", format-spec ], "}" ;
+format-path         = identifier, { ( "." | "->" ), identifier } ;
+format-index        = decimal-digit, { decimal-digit } ;
+format-spec         = format-width, [ format-presentation ] | format-presentation ;
+format-width        = decimal-digit, { decimal-digit } ;
+format-presentation = "d" | "x" | "X" | "b" | "o"
+                    | ".", decimal-digit, { decimal-digit } ;
+format-sequence     = { string-literal }, formatted-literal,
+                      { string-literal | formatted-literal } ;
+format-suffix       = ".", "format", "(", argument-list, ")" ;
+character-element   = unicode-scalar-except-quote-backslash-newline | escape-sequence ;
+string-element      = unicode-scalar-except-double-quote-backslash-newline | escape-sequence ;
+escape-sequence     = "\\\\" | "\\\"" | "\\'" | "\\n" | "\\r" | "\\t" | "\\0"
+                    | "\\x", hex-digit, hex-digit
+                    | "\\u{", hex-digit, { hex-digit }, "}" ;
+```
+
+U+005F is already a member of Unicode `XID_Continue`, so no separate continuation alternative is required.
+
+Keywords include all words from R-LEX-0008 and all primitive/type words:
+
+```
+bool char i8 u8 i16 u16 i32 u32 i64 u64 isize usize ai8 ai16 ai32 ai64 aisize au8 au16 au32 au64 ausize f32 f64 str constexpr
+o array list dict task async await catch finally throw throws fn opaque dyn
+c_char c_schar c_uchar c_short c_ushort c_int c_uint c_long c_ulong
+c_llong c_ullong c_bool c_wchar c_wint c_int8 c_uint8 c_int16 c_uint16
+c_int32 c_uint32 c_int64 c_uint64 c_intptr c_uintptr c_intmax c_uintmax
+c_float c_double c_long_double c_size c_ptrdiff
+```
+
+### A.3 Translation units and declarations
+
+```ebnf
+translation-unit    = [ module-declaration ], { import-declaration }, { external-declaration } ;
+module-declaration  = { attribute }, "module", module-path, ";" ;
+module-path         = identifier, { ".", identifier } ;
+import-declaration  = "import", module-path,
+                      [ "::", "{", identifier, { ",", identifier }, [ "," ], "}" ], ";" ;
+
+external-declaration = static-if-declaration | { attribute },
+                       ( generic-header, { attribute },
+                         ( [ "protected" ], ( aggregate-declaration | function-declaration )
+                         | impl-declaration | drop-definition )
+                       | [ "protected" ], ( aggregate-declaration | function-declaration
+                                          | module-object-declaration | extern-block
+                                          | trait-declaration )
+                       | impl-declaration | drop-definition ) ;
+
+static-if-declaration = "@", "if", "(", static-predicate, ")", static-declarations,
+                        [ "@", "else", ( static-declarations | static-if-declaration ) ] ;
+static-declarations = "{", { external-declaration }, "}" ;
+static-predicate    = static-conjunction, { "||", static-conjunction } ;
+static-conjunction  = static-atom, { "&&", static-atom } ;
+static-atom         = "!", static-atom | "(", static-predicate, ")"
+                    | type, "is", ( type | generic-constraint )
+                    | "core", "::", "profile", "is", static-profile
+                    | "core", "::", "target", "is", string-literal
+                    | static-value-condition ;
+static-value-condition = "true" | "false"
+                    | condition-value-expression, comparison-operator,
+                      condition-value-expression
+                    | membership-expression ;
+static-profile      = "freestanding" | "allocation" | "hosted" | "hosted-thread"
+                    | "hosted-native-async" ;
+
+generic-header      = "@", "generic", "<", generic-parameter,
+                      { ",", generic-parameter }, ">" ;
+generic-parameter   = identifier, [ "..." ], [ ":", generic-constraint,
+                      { "&", generic-constraint } ]
+                    | "const", constant-parameter-type, identifier
+                    | identifier, "::", identifier, ":", generic-constraint,
+                      { "&", generic-constraint } ;
+constant-parameter-type = "i8" | "i16" | "i32" | "i64" | "isize" | "u8" | "u16" | "u32"
+                    | "u64" | "usize" | "bool" ;
+generic-constraint  = "copy" | "pod" | "send" | "sync" | "key" | "error" | "unborrowed"
+                    | "json_encode" | "json_decode" | "errors" | "clone" | trait-application
+                    | callable-constraint ;
+trait-name          = identifier | module-path, "::", identifier | core-trait-name ;
+trait-application   = trait-name, [ "<", type, { ",", type }, ">" ] ;
+core-trait-name     = "core", "::", ( "Iterator" | "Contains" ) ;
+callable-constraint = [ "async" ], "fn", { callable-resource-attribute }, [ callable-mode ],
+                      "(", [ callable-parameters ], ")", "->", type, [ callable-throws ] ;
+callable-parameters = parameter-type, { ",", parameter-type }, [ "..." ] ;
+callable-resource-attribute = "@", ( "noalloc" | "nonblocking" ) ;
+callable-throws     = "throws", "(", type, { ",", type }, ")" ;
+callable-mode       = "shared" | "mut" | "once" ;
+
+attribute           = "@", identifier, [ "(", [ attribute-argument,
+                      { ",", attribute-argument } ], ")" ] | json-attribute ;
+attribute-argument  = [ identifier, "=" ], attribute-value ;
+attribute-value     = identifier | integer-literal | string-literal | type ;
+
+json-attribute      = "@", "json", "(", [ json-argument,
+                      { ",", json-argument } ], ")" ;
+json-argument       = ( "name" | "case" ), "=", string-literal
+                    | "skip" | "omitempty" | "omitzero" | "string" | "embed"
+                    | "optional" | "omitnone" | "default", "=", json-default ;
+json-default        = [ "-" ], ( integer-literal | floating-literal )
+                    | character-literal | string-literal | "true" | "false"
+                    | identifier | qualified-name ;
+
+aggregate-declaration = struct-declaration | enum-declaration | error-declaration ;
+error-declaration   = "error", identifier, [ ":", aggregate-type-name ], "{",
+                      { field-declaration }, "}", ";"
+                    | "error", identifier, [ ":", enum-underlying-type ], "{",
+                      enum-variant, { ",", enum-variant }, [ "," ], "}", ";" ;
+struct-declaration  = "struct", identifier, "{", { field-declaration }, "}", ";" ;
+field-declaration   = { attribute }, [ "protected" ], type, identifier,
+                      [ "=", initializer ], ";" ;
+
+enum-declaration    = "enum", identifier, [ ":", enum-underlying-type ], "{",
+                      enum-variant, { ",", enum-variant }, [ "," ], "}", ";" ;
+enum-variant        = { attribute }, identifier, [ "=", constant-expression ]
+                    | { attribute }, identifier, "(", type, ")"
+                    | { attribute }, identifier, "{", field-declaration,
+                      { field-declaration }, "}" ;
+
+module-object-declaration = [ "thread_local" ], type, identifier, "=", initializer, ";" ;
+object-declaration  = [ storage-specifier ], ( type | "auto" ), identifier, "=",
+                      initializer, ";"
+                    | destructuring-declaration ;
+destructuring-declaration = "auto", "(", identifier, { ",", identifier }, ")", "=",
+                            initializer, ";" ;
+storage-specifier   = "static" | "thread_local" ;
+initializer         = expression | aggregate-initializer | dict-expression ;
+aggregate-initializer = "{", [ initializer-item, { ",", initializer-item }, [ "," ] ], "}"
+                      | "{", { initializer-item, "," }, spread-argument, [ "," ], "}" ;
+initializer-item    = initializer | ".", identifier, "=", initializer ;
+dict-expression     = "{", dict-entry, { ",", dict-entry }, [ "," ], "}"
+                    | "{", dict-entry, comprehension-for, { comprehension-clause }, "}" ;
+dict-entry          = expression, ":", expression ;
+
+function-declaration = [ "unsafe" ], [ "async" ], [ "extern", string-literal ],
+                       ( type | opaque-result ), function-name, "(", parameter-list, ")",
+                       [ throws-clause ],
+                       ( ";" | block ) ;
+opaque-result       = "opaque", "(", opaque-contract, { "&", opaque-contract }, ")" ;
+opaque-contract     = generic-constraint | identifier, "=", type ;
+function-name       = identifier | method-name ;
+method-name         = ( aggregate-type-name | generic-type ), "::", identifier ;
+parameter-list      = [ receiver-parameter, { ",", parameter }
+                      | parameter, { ",", parameter } ] ;
+parameter           = ( "out", type | type, [ "..." ] | [ "const" ], "null_t" ), identifier ;
+parameter-type      = [ "out" ], type ;
+receiver-parameter  = [ "const" ], self-type, "*", "this" | self-type, "this" ;
+self-type           = "Self" | aggregate-type-name | generic-type ;
+
+trait-declaration   = "trait", identifier, [ ":", generic-constraint,
+                      { "&", generic-constraint } ], "{", { trait-member }, "}", ";" ;
+trait-member        = trait-method-declaration | associated-type-declaration
+                    | associated-constant-declaration ;
+trait-method-declaration = { attribute }, [ "unsafe" ], [ "async" ], type, identifier,
+                      "(", parameter-list, ")", [ throws-clause ], ( ";" | block ) ;
+associated-type-declaration = "type", identifier, [ associated-type-parameters ],
+                              [ ":", generic-constraint, { "&", generic-constraint } ], ";" ;
+associated-type-parameters = "<", associated-type-parameter,
+                             { ",", associated-type-parameter }, ">" ;
+associated-type-parameter = identifier, [ ":", generic-constraint,
+                            { "&", generic-constraint } ] ;
+associated-constant-declaration = "const", constant-parameter-type, identifier,
+                                  [ "=", expression ], ";" ;
+impl-declaration    = "impl", trait-application, "for", type, "{",
+                      { impl-member }, "}", ";" ;
+impl-member         = impl-method-definition | associated-type-binding
+                    | associated-constant-binding ;
+impl-method-definition = { attribute }, [ "unsafe" ], [ "async" ], type, identifier,
+                      "(", parameter-list, ")", [ throws-clause ], block ;
+associated-type-binding = "type", identifier, [ "<", identifier, { ",", identifier }, ">" ],
+                          "=", type, ";" ;
+associated-constant-binding = "const", constant-parameter-type, identifier, "=", expression,
+                              ";" ;
+throws-clause       = "throws", error-type, { ",", error-type } ;
+error-type          = aggregate-type-name | generic-type | standard-parametric-type ;
+
+drop-definition     = "drop", "(", borrow-type, identifier, ")", block ;
+
+extern-block        = "extern", string-literal, "{", { c-declaration }, "}" ;
+c-declaration       = { attribute },
+                      ( c-function-declaration | c-object-declaration
+                      | c-constant-declaration | c-opaque-declaration
+                      | struct-declaration | enum-declaration ) ;
+c-function-declaration = [ "unsafe" ], type, identifier, "(",
+                         c-parameter-list, ")", ";" ;
+c-object-declaration = [ "thread_local" ], type, identifier, ";" ;
+c-constant-declaration = type, identifier, "=", constant-expression, ";" ;
+c-opaque-declaration = "opaque", "struct", identifier, ";" ;
+c-parameter-list    = [ parameter, { ",", parameter }, [ ",", "..." ] ] ;
+```
+
+`extern` string literal shall contain exactly `C` in R 0.1. Function definition inside extern block is prohibited; an `extern "C"` definition is exported by default and shall not be `protected`.
+
+### A.4 Types
+
+```ebnf
+type                = direct-type | borrow-type | dyn-borrow-type | owning-pointer-type
+                    | shared-owner-type | weak-owner-type | raw-pointer-type
+                    | array-type | slice-type | constexpr-string-type | atomic-type
+                    | raw-function-type | function-type | "(", type, ")"
+                    | tuple-type ;
+tuple-type          = "(", type, ",", type, { ",", type }, ")"
+                    | "(", { type, "," }, identifier, "...", ")" ;
+
+direct-type         = [ "const" ], direct-value-type ;
+direct-value-type   = type-atom | option-type
+                    | container-type | task-type | standard-direct-type
+                    | standard-parametric-type ;
+type-atom           = primitive-type | predefined-type-name | aggregate-type-name | generic-type
+                    | "str" | "void" | "never" | "Self" | associated-type-projection ;
+associated-type-projection = ( "Self" | identifier ), "::", identifier,
+                             [ "<", generic-argument, { ",", generic-argument }, ">" ] ;
+predefined-type-name = "bytes" ;
+aggregate-type-name = identifier | module-path, "::", identifier ;
+generic-type        = aggregate-type-name, "<", generic-argument, { ",", generic-argument }, ">" ;
+generic-argument    = type | constant-expression ;
+explicit-generic-arguments = "::", "<", explicit-generic-argument,
+                             { ",", explicit-generic-argument }, ">" ;
+explicit-generic-argument  = generic-argument
+                           | "throws", "(", [ type, { ",", type } ], ")" ;
+pointer-pointee     = type-atom | container-type | standard-parametric-type
+                    | "(", type, ")" ;
+sequence-element    = type-atom | "(", type, ")" ;
+managed-pointee     = type-atom | dyn-type | "(", type, ")" ;
+
+borrow-type         = [ "const" ], pointer-pointee, "*", [ "?" ] ;
+dyn-borrow-type     = [ "const" ], dyn-type, "*", [ "?" ] ;
+dyn-type            = "dyn", "(", opaque-contract, { "&", opaque-contract }, ")" ;
+owning-pointer-type = "own", ( pointer-pointee | dyn-type ), "*", [ "?" ] ;
+shared-owner-type   = ( "arc" | "rc" ), managed-pointee ;
+weak-owner-type     = "weak", shared-owner-type ;
+raw-pointer-type    = "raw", [ "const" ], pointer-pointee, "*", [ "?" ] ;
+
+array-type          = [ "const" ], sequence-element, "[", constant-expression, "]",
+                      { "[", constant-expression, "]" } ;
+slice-type          = [ "const" ], sequence-element, "[", "]" ;
+constexpr-string-type = [ "const" ], "constexpr", "str" ;
+
+option-type         = "o", "<", type, ">" ;
+task-type           = "task", "<", type, [ throws-clause ], ">" ;
+container-type      = "array", "<", type, ">"
+                    | "list", "<", type, ">"
+                    | "dict", "<", type, ",", type, ">" ;
+standard-direct-type = "std", ".", "async", "::", "start_error" ;
+standard-parametric-type = standard-effect-type
+                         | standard-one-type-name, "<", type, ">"
+                         | standard-two-type-name, "<", type, ",", type, ">" ;
+standard-effect-type = "std", ".", "thread", "::",
+                       ( "join_handle" | "scoped_join_handle" ),
+                       "<", type, [ throws-clause ], ">" ;
+standard-one-type-name = "core", "::", "atomic_compare_exchange_result"
+                       | "std", ".", "alloc", "::", "new_error"
+                       | "std", ".", "json", "::", ( "decoder" | "reader" | "detached" )
+                       | "std", ".", ( "arc" | "rc" ), "::", "try_unwrap_result"
+                       | "std", ".", "thread", "::", "join_result"
+                       | "std", ".", "sync", "::",
+                         ( "mutex" | "rw_lock" | "lock_result" | "try_lock_result"
+                         | "read_lock_result" | "try_read_lock_result"
+                         | "write_lock_result" | "try_write_lock_result"
+                         | "mutex_guard" | "rw_read_guard" | "rw_write_guard"
+                         | "once_lock" | "set_result" | "channel" | "sync_channel"
+                         | "sender" | "sync_sender" | "receiver" | "send_result"
+                         | "try_send_result" | "recv_result" | "try_recv_result" )
+                       | "std", ".", "array", "::", "push_error"
+                       | "std", ".", "list", "::", ( "push_error" | "iter" ) ;
+standard-two-type-name = "std", ".", "dict", "::",
+                         ( "insert_error" | "iter" | "entry_ref" ) ;
+atomic-type         = "atomic", atomic-base-type
+                    | "ai8" | "ai16" | "ai32" | "ai64" | "aisize"
+                    | "au8" | "au16" | "au32" | "au64" | "ausize" ;
+raw-function-type   = "raw", "fn", { callable-resource-attribute }, [ "?" ],
+                      "(", function-type-parameters, ")", "->", type ;
+function-type       = [ "async" ], "fn", { callable-resource-attribute },
+                      "(", [ parameter-type, { ",", parameter-type } ], ")",
+                      "->", type, [ callable-throws ] ;
+function-type-parameters = [ function-parameter-type,
+                           { ",", function-parameter-type } ] ;
+function-parameter-type = non-void-direct-type | borrow-type | owning-pointer-type
+                        | shared-owner-type | weak-owner-type
+                        | raw-pointer-type | array-type | slice-type
+                        | constexpr-string-type
+                        | atomic-type | raw-function-type
+                        | "(", function-parameter-type, ")" ;
+non-void-direct-type = [ "const" ], non-void-direct-value-type ;
+non-void-direct-value-type = non-void-type-atom | option-type
+                           | container-type | task-type | standard-direct-type
+                           | standard-parametric-type ;
+non-void-type-atom  = primitive-type | predefined-type-name | aggregate-type-name | generic-type
+                    | "str" | "never" | "Self" ;
+
+primitive-type      = integer-type | floating-type | "bool" | "char" | c-abi-type ;
+integer-type        = "i8" | "u8" | "i16" | "u16" | "i32" | "u32"
+                    | "i64" | "u64" | "isize" | "usize" ;
+enum-underlying-type = integer-type | c-integer-type ;
+floating-type       = "f32" | "f64" ;
+atomic-base-type    = integer-type | "bool" | atomic-raw-pointer-type ;
+atomic-raw-pointer-type = "raw", [ "const" ], pointer-pointee, "*", "?" ;
+c-integer-type      = "c_char" | "c_schar" | "c_uchar" | "c_short" | "c_ushort"
+                    | "c_int" | "c_uint" | "c_long" | "c_ulong" | "c_llong"
+                    | "c_ullong" | "c_wchar" | "c_wint"
+                    | "c_int8" | "c_uint8" | "c_int16" | "c_uint16"
+                    | "c_int32" | "c_uint32" | "c_int64" | "c_uint64"
+                    | "c_intptr" | "c_uintptr" | "c_intmax" | "c_uintmax"
+                    | "c_size" | "c_ptrdiff" ;
+c-abi-type          = "c_char" | "c_schar" | "c_uchar" | "c_short" | "c_ushort"
+                    | "c_int" | "c_uint" | "c_long" | "c_ulong" | "c_llong"
+                    | "c_ullong" | "c_bool" | "c_wchar" | "c_wint"
+                    | "c_int8" | "c_uint8" | "c_int16" | "c_uint16"
+                    | "c_int32" | "c_uint32" | "c_int64" | "c_uint64"
+                    | "c_intptr" | "c_uintptr" | "c_intmax" | "c_uintmax"
+                    | "c_float" | "c_double" | "c_long_double"
+                    | "c_size" | "c_ptrdiff" ;
+```
+
+### A.5 Statements
+
+```ebnf
+statement           = block | object-declaration | lambda-declaration
+                    | expression-statement | if-statement | switch-statement | while-statement | for-statement
+                    | for-in-statement | labeled-loop-statement | static-if-statement | deadline-statement
+                    | budget-statement
+                    | thread-scope-statement | task-scope-statement | select-statement | jump-statement
+                    | drop-statement | await-object-declaration | await-statement | try-statement
+                    | throw-statement | unsafe-block ;
+block               = "{", { statement }, "}" ;
+expression-statement = [ expression ], ";" ;
+if-statement        = "if", "(", statement-condition, ")", block,
+                      [ "else", block ] ;
+statement-condition = condition-expression | pattern-test ;
+pattern-test        = condition-value-expression, "is", match-pattern ;
+static-if-statement = "@", "if", "(", static-predicate, ")", block,
+                      [ "@", "else", ( block | static-if-statement ) ] ;
+while-statement     = "while", "(", statement-condition, ")", block ;
+labeled-loop-statement = identifier, ":", ( while-statement | for-statement
+                                          | for-in-statement ) ;
+for-statement       = "for", "(", [ for-init ], ";", condition-expression, ";",
+                      [ expression ], ")", block ;
+for-init            = object-declaration-no-semicolon | expression ;
+for-in-statement    = "for", "(", ( type | "auto" ), identifier, "in", iterable, ")", block ;
+iterable            = expression | expression, "..", expression ;
+object-declaration-no-semicolon = [ storage-specifier ], ( type | "auto" ), identifier, "=",
+                                  initializer ;
+lambda-declaration  = [ "async" ], "fn", { callable-resource-attribute }, [ callable-mode ],
+                      type, identifier, "(", parameter-list, ")",
+                      [ "move", "(", identifier, { ",", identifier }, ")" ], [ throws-clause ], block ;
+await-object-declaration = type, identifier, "=", await-operation, ";" ;
+await-statement     = await-operation, ";" ;
+await-operation     = "await", ( "move", identifier | await-call ) ;
+await-call          = ( identifier | qualified-primary ), [ explicit-generic-arguments ],
+                      "(", argument-list, ")"
+                    | primary-expression, { postfix-suffix }, method-call-suffix ;
+
+switch-statement    = "switch", "(", expression, ")", "{",
+                      { switch-clause }, "}" ;
+switch-clause       = case-clause | default-clause ;
+case-clause         = "case", case-pattern, ":",
+                      { case-body-statement }, [ clause-terminator ] ;
+case-pattern        = constant-expression
+                    | "variant", ( qualified-name | standard-container-variant-name
+                                 | standard-owner-variant-name
+                                 | standard-async-variant-name ),
+                      [ "(", [ ( identifier | "move", identifier ) ], ")" ] ;
+default-clause      = "default", ":",
+                      { case-body-statement }, [ clause-terminator ] ;
+
+case-body-statement = static-if-statement | block | object-declaration | expression-statement
+                    | if-statement | switch-statement | while-statement
+                    | for-statement | for-in-statement | labeled-loop-statement
+                    | thread-scope-statement | task-scope-statement | select-statement
+                    | drop-statement | await-object-declaration | await-statement | try-statement
+                    | unsafe-block | conditional-throw-statement | deadline-statement
+                    | budget-statement ;
+clause-terminator   = "break", [ identifier ], ";" | "continue", [ identifier ], ";"
+                    | "return", [ return-operand ], ";"
+                    | "throw", [ throw-operand ], ";"
+                    | conditional-throw-else-statement
+                    | "fallthrough", ";" ;
+
+jump-statement      = "break", [ identifier ], ";" | "continue", [ identifier ], ";"
+                    | "return", [ return-operand ], ";" ;
+return-operand      = expression | aggregate-initializer ;
+try-statement       = "try", block,
+                      ( catch-clause, { catch-clause }, [ finally-clause ]
+                      | finally-clause ) ;
+catch-clause        = "catch", "(", error-type, identifier, ")", block ;
+finally-clause      = "finally", block ;
+throw-statement     = "throw", [ throw-operand ], ";"
+                    | conditional-throw-statement | conditional-throw-else-statement ;
+conditional-throw-statement = "throw", "(", condition-expression, ")",
+                              throw-operand, ";" ;
+conditional-throw-else-statement = "throw", "(", condition-expression, ")",
+                                   throw-operand, "else", throw-operand, ";" ;
+throw-operand       = expression | aggregate-initializer ;
+drop-statement      = "drop", expression, ";" ;
+thread-scope-statement = "thread_scope", block ;
+task-scope-statement = "task_scope", "(", constant-expression, ")", identifier, block ;
+deadline-statement  = "deadline", "(", expression, ")", block ;
+budget-statement    = "budget", "(", expression, ")", block ;
+select-statement    = "select", "(", identifier, ")", "{", select-clause, { select-clause },
+                      "}" ;
+select-clause       = "case", select-branch, ":",
+                      { case-body-statement }, [ clause-terminator ] ;
+select-branch       = ( type | "auto" ), identifier, "=", await-operation
+                    | await-operation
+                    | "until", "(", expression, ")" ;
+unsafe-block        = "unsafe", block ;
+```
+
+<a id="R-GRAM-A003"></a>
+
+**R-GRAM-A003** — Productions `if-statement`, `while-statement`, `for-statement`, `thread-scope-statement`, `deadline-statement` and `budget-statement` consume explicit blocks. Block delimiters form branch/loop boundaries directly in parse tree; optional `else` belongs to the single preceding completed `if-statement` production. Productions `case-clause`, `default-clause` and `select-clause` instead end at their explicit terminator or, without one, before the next label or the closing brace, and form implicit lexical scopes.
+
+=== A.6 Expressions
+
+Levels are written from less precedence to more. Assignment is non-associative; other binary levels are left-associative, conditional right-associative.
+
+```ebnf
+expression          = assignment-expression ;
+assignment-expression = conditional-expression,
+                      [ assignment-operator, conditional-expression ] ;
+assignment-operator = "=" | "+=" | "-=" | "*=" | "/=" | "%="
+                    | "&=" | "|=" | "^=" | "<<=" | ">>=" ;
+
+conditional-expression = logical-or-expression
+                       | condition-expression, "?", expression, ":",
+                         conditional-expression ;
+
+condition-expression    = condition-or-expression ;
+condition-or-expression = condition-and-expression,
+                          { "||", condition-and-expression } ;
+condition-and-expression = condition-primary, { "&&", condition-primary } ;
+condition-primary       = "true" | "false"
+                        | condition-value-expression, comparison-operator,
+                          condition-value-expression
+                        | membership-expression
+                        | "(", condition-expression, ")" ;
+membership-expression   = shift-expression, [ "not" ], "in",
+                          ( shift-expression | range-expression ) ;
+range-expression        = shift-expression, "..", shift-expression ;
+comparison-operator     = "==" | "!=" | "<" | "<=" | ">" | ">=" ;
+condition-value-expression = condition-bitwise-or-expression ;
+condition-bitwise-or-expression = condition-bitwise-xor-expression,
+                                  { "|", condition-bitwise-xor-expression } ;
+condition-bitwise-xor-expression = condition-bitwise-and-expression,
+                                   { "^", condition-bitwise-and-expression } ;
+condition-bitwise-and-expression = shift-expression, { "&", shift-expression } ;
+
+logical-or-expression   = logical-and-expression, { "||", logical-and-expression } ;
+logical-and-expression  = bitwise-or-expression, { "&&", bitwise-or-expression } ;
+bitwise-or-expression   = bitwise-xor-expression, { "|", bitwise-xor-expression } ;
+bitwise-xor-expression  = bitwise-and-expression, { "^", bitwise-and-expression } ;
+bitwise-and-expression  = equality-expression, { "&", equality-expression } ;
+equality-expression     = relational-expression, { ( "==" | "!=" ), relational-expression } ;
+relational-expression   = shift-expression, { ( "<" | "<=" | ">" | ">=" ), shift-expression }
+                        | membership-expression ;
+shift-expression        = additive-expression, { ( "<<" | ">>" ), additive-expression } ;
+additive-expression     = multiplicative-expression, { ( "+" | "-" ), multiplicative-expression } ;
+multiplicative-expression = cast-expression, { ( "*" | "/" | "%" ), cast-expression } ;
+cast-expression         = unary-expression, { "as", type } ;
+
+unary-expression      = postfix-expression
+                      | ( "+" | "-" | "!" | "~" | "*" | "&" | "++" | "--" ), unary-expression
+                      | "move", unary-expression | await-operation
+                      | "sizeof", "(", type, ")"
+                      | "alignof", "(", type, ")"
+                      | "new", type,
+                        ( "(", expression, ")" | aggregate-initializer ) ;
+
+postfix-expression    = primary-expression, { postfix-suffix },
+                        [ method-call-suffix, { postfix-suffix | method-call-suffix } ] ;
+method-call-suffix    = ( "." | "->" ), identifier, [ explicit-generic-arguments ],
+                        "(", argument-list, ")" ;
+postfix-suffix        = format-suffix | "(", argument-list, ")"
+                      | "[", expression, "]"
+                      | "[", [ expression ], "..", [ expression ], "]"
+                      | ".", ( identifier | integer-literal )
+                      | "->", ( identifier | integer-literal )
+                      | "++" | "--" ;
+argument-list         = [ argument, { ",", argument } ] ;
+argument              = expression | spread-argument | out-argument | pack-expansion ;
+pack-expansion        = identifier, "..." ;
+out-argument          = "out", expression ;
+spread-argument       = "...", expression ;
+
+primary-expression   = format-sequence | identifier, [ explicit-generic-arguments ]
+                     | qualified-primary, [ explicit-generic-arguments ]
+                     | literal | "true" | "false" | "null"
+                     | "(", expression, ")" | tuple-expression | aggregate-constructor | panic-call
+                     | standard-type-call-expression | reflection-constant-expression
+                     | collection-expression | match-expression
+                     | associated-constant-name ;
+associated-constant-name = "Self", "::", identifier ;
+match-expression     = "match", "(", expression, ")", "{", match-arm, { match-arm }, "}" ;
+match-arm            = "case", match-pattern, [ "if", "(", condition-expression, ")" ],
+                       ":", ( expression, ";" | throw-statement )
+                     | "default", ":", ( expression, ";" | throw-statement ) ;
+match-pattern        = identifier | "move", identifier | constant-expression
+                     | "variant", qualified-primary, [ "(", match-pattern, ")" | match-fields ]
+                     | match-fields ;
+match-fields         = "{", [ match-field, { ",", match-field }, [ "," ] ], "}" ;
+match-field          = ".", ( identifier | integer-literal ), "=", match-pattern ;
+tuple-expression     = "(", expression, ",", { expression, "," },
+                       ( expression | spread-argument ), ")" ;
+collection-expression = "[", [ expression, { ",", expression }, [ "," ] ], "]"
+                      | "[", expression, comprehension-for, { comprehension-clause }, "]" ;
+comprehension-clause  = comprehension-for | comprehension-if ;
+comprehension-for     = "for", "(", ( type | "auto" ), identifier, "in", iterable, ")" ;
+comprehension-if      = "if", "(", condition-expression, ")" ;
+qualified-primary    = qualified-name | standard-json-qualified-name | standard-owner-qualified-name
+                     | standard-container-qualified-name
+                     | standard-async-qualified-name ;
+qualified-head       = identifier | "o" ;
+qualified-name       = qualified-head, { ".", identifier }, "::", identifier,
+                       { "::", identifier }
+                     | generic-type, "::", identifier ;
+standard-json-qualified-name = "std", ".", "json", "::", ( "null" | "array" )
+                             | "std", ".", "json", "::", "value_kind", "::", ( "null" | "array" ) ;
+standard-owner-qualified-name = "std", ".", ( "arc" | "rc" ), "::",
+                                ( "clone" | "clone_weak" | "downgrade" | "upgrade"
+                                | "get_mut" | "try_unwrap" | "strong_count"
+                                | "weak_count" | "ptr_eq" | "into_raw" | "from_raw" )
+                              | standard-owner-variant-name ;
+standard-owner-variant-name = "std", ".", ( "arc" | "rc" ), "::",
+                              "try_unwrap_result", "::", ( "unwrapped" | "shared" ) ;
+standard-container-qualified-name = "std", ".", "array", "::",
+                                    ( "create" | "with_capacity" | "capacity"
+                                    | "reserve" | "push" | "pop" | "remove"
+                                    | "get" | "get_mut" | "as_slice"
+                                    | "as_slice_mut" | "clear" )
+                                  | "std", ".", "array", "::", "push_error", "::",
+                                    "allocation_failed"
+                                  | "std", ".", "list", "::",
+                                    ( "create" | "push_front" | "push_back"
+                                    | "insert_before" | "insert_after"
+                                    | "front" | "back" | "front_mut" | "back_mut"
+                                    | "get" | "get_mut" | "remove"
+                                    | "pop_front" | "pop_back" | "clear"
+                                    | "iter" | "next" )
+                                  | "std", ".", "list", "::", "push_error", "::",
+                                    "allocation_failed"
+                                  | "std", ".", "dict", "::",
+                                    ( "create" | "with_capacity" | "reserve" | "insert"
+                                    | "contains" | "get" | "get_mut" | "remove"
+                                    | "clear" | "iter" | "next" )
+                                  | "std", ".", "dict", "::", "insert_error", "::",
+                                    "allocation_failed" ;
+standard-container-variant-name = "std", ".", "array", "::", "push_error", "::",
+                                  "allocation_failed"
+                                | "std", ".", "list", "::", "push_error", "::",
+                                  "allocation_failed"
+                                | "std", ".", "dict", "::", "insert_error", "::",
+                                  "allocation_failed" ;
+standard-async-qualified-name = "std", ".", "async", "::", ( "cancel" | "detach" )
+                              | standard-async-variant-name ;
+standard-async-variant-name = "std", ".", "async", "::", "start_error", "::",
+                              ( "allocation_failed" | "runtime_stopping" | "scope_full"
+                              | "budget_exhausted" ) ;
+aggregate-constructor = aggregate-constructor-head, aggregate-initializer ;
+aggregate-constructor-head = identifier | qualified-name | generic-type ;
+panic-call           = "panic", "(", expression, ")" ;
+standard-type-call-expression = "std", ".", "sync", "::", "channel",
+                                [ "::", "<", type, ">" ], "(", ")"
+                              | "std", ".", "sync", "::", "sync_channel",
+                                [ "::", "<", type, ">" ], "(", expression, ")"
+                              | "std", ".", "sync", "::", "once_lock",
+                                [ "::", "<", type, ">" ], "(", ")"
+                              | "std", ".", "async", "::", "broadcast",
+                                [ "::", "<", type, ">" ], "(", expression, ")"
+                              | "std", ".", "array", "::", "create",
+                                [ "::", "<", type, ">" ], "(", ")"
+                              | "std", ".", "array", "::", "with_capacity",
+                                [ "::", "<", type, ">" ], "(", expression, ")"
+                              | "std", ".", "list", "::", "create",
+                                [ "::", "<", type, ">" ], "(", ")"
+                              | "std", ".", "dict", "::", "create",
+                                [ "::", "<", type, ",", type, ">" ], "(", ")"
+                              | "std", ".", "dict", "::", "with_capacity",
+                                [ "::", "<", type, ",", type, ">" ], "(", expression, ")"
+                              | "core", "::", ( "enum_at" | "enum_from_name" ),
+                                "::", "<", type, ">", "(", expression, ")" ;
+reflection-constant-expression = "core", "::",
+                                 ( "enum_count" | "enum_min" | "enum_max" | "enum_variants"
+                                 | "variant_count" | "field_count" | "type_name" ),
+                                 "::", "<", type, ">", "(", ")"
+                               | "core", "::", "field_name",
+                                 "::", "<", type, ">", "(", constant-expression, ")" ;
+literal              = integer-literal | floating-literal | character-literal | string-literal ;
+constant-expression  = conditional-expression ;
+
+call-free-expression = call-free-assignment-expression ;
+call-free-assignment-expression = call-free-conditional-expression,
+                                  [ assignment-operator,
+                                    call-free-conditional-expression ] ;
+call-free-conditional-expression = call-free-logical-or-expression
+                                 | call-free-condition-expression, "?",
+                                   call-free-expression, ":",
+                                   call-free-conditional-expression ;
+call-free-condition-expression = call-free-condition-or-expression ;
+call-free-condition-or-expression = call-free-condition-and-expression,
+                                    { "||", call-free-condition-and-expression } ;
+call-free-condition-and-expression = call-free-condition-primary,
+                                     { "&&", call-free-condition-primary } ;
+call-free-condition-primary = "true" | "false"
+                            | call-free-condition-value-expression,
+                              comparison-operator,
+                              call-free-condition-value-expression
+                            | "(", call-free-condition-expression, ")" ;
+call-free-condition-value-expression = call-free-condition-bitwise-or-expression ;
+call-free-condition-bitwise-or-expression = call-free-condition-bitwise-xor-expression,
+                                            { "|", call-free-condition-bitwise-xor-expression } ;
+call-free-condition-bitwise-xor-expression = call-free-condition-bitwise-and-expression,
+                                             { "^", call-free-condition-bitwise-and-expression } ;
+call-free-condition-bitwise-and-expression = call-free-shift-expression,
+                                             { "&", call-free-shift-expression } ;
+call-free-logical-or-expression = call-free-logical-and-expression,
+                                  { "||", call-free-logical-and-expression } ;
+call-free-logical-and-expression = call-free-bitwise-or-expression,
+                                   { "&&", call-free-bitwise-or-expression } ;
+call-free-bitwise-or-expression = call-free-bitwise-xor-expression,
+                                  { "|", call-free-bitwise-xor-expression } ;
+call-free-bitwise-xor-expression = call-free-bitwise-and-expression,
+                                   { "^", call-free-bitwise-and-expression } ;
+call-free-bitwise-and-expression = call-free-equality-expression,
+                                   { "&", call-free-equality-expression } ;
+call-free-equality-expression = call-free-relational-expression,
+                                { ( "==" | "!=" ),
+                                  call-free-relational-expression } ;
+call-free-relational-expression = call-free-shift-expression,
+                                  { ( "<" | "<=" | ">" | ">=" ),
+                                    call-free-shift-expression } ;
+call-free-shift-expression = call-free-additive-expression,
+                             { ( "<<" | ">>" ), call-free-additive-expression } ;
+call-free-additive-expression = call-free-multiplicative-expression,
+                                { ( "+" | "-" ),
+                                  call-free-multiplicative-expression } ;
+call-free-multiplicative-expression = call-free-cast-expression,
+                                      { ( "*" | "/" | "%" ),
+                                        call-free-cast-expression } ;
+call-free-cast-expression = call-free-unary-expression, { "as", type } ;
+call-free-unary-expression = call-free-postfix-expression
+                           | ( "+" | "-" | "!" | "~" | "*" | "&" | "++" | "--" ),
+                             call-free-unary-expression
+                           | "move", call-free-unary-expression
+                           | "sizeof", "(", type, ")"
+                           | "alignof", "(", type, ")"
+                           | "new", type,
+                             ( "(", call-free-expression, ")"
+                             | call-free-aggregate-initializer ) ;
+call-free-postfix-expression = call-free-primary-expression,
+                               { call-free-postfix-suffix }, [ method-call-suffix ] ;
+call-free-postfix-suffix = format-suffix | "[", call-free-expression, "]"
+                         | "[", [ call-free-expression ], "..",
+                           [ call-free-expression ], "]"
+                         | ".", ( identifier | integer-literal )
+                         | "->", ( identifier | integer-literal )
+                         | "++" | "--" ;
+call-free-primary-expression = format-sequence | identifier | call-free-qualified-primary
+                             | literal | "true" | "false" | "null"
+                             | "(", call-free-expression, ")"
+                             | call-free-aggregate-constructor
+                             | reflection-constant-expression | associated-constant-name ;
+call-free-qualified-primary = qualified-name | standard-json-qualified-name | standard-owner-qualified-name
+                            | standard-container-qualified-name
+                            | standard-async-qualified-name ;
+call-free-aggregate-constructor = aggregate-constructor-head,
+                                  call-free-aggregate-initializer ;
+call-free-initializer = call-free-expression | call-free-aggregate-initializer ;
+call-free-aggregate-initializer = "{",
+    [ call-free-initializer-item, { ",", call-free-initializer-item }, [ "," ] ], "}" ;
+call-free-initializer-item = call-free-initializer
+                           | ".", identifier, "=", call-free-initializer ;
+```
+
+<a id="R-GRAM-A002"></a>
+
+**R-GRAM-A002** — Comma token is used by productions `argument-list`, initializers, enum variants and selected imports as separator. Expression productions consume operands through named operators and terminate before separator comma.
+
+<a id="annex-b"></a>
+
+## Annex B — Required diagnostics
+
+Each line defines a stable diagnostic code. Implementation may add notes/suggestions, but shall emit code and normative rule anchor.
+
+| Code | Conditions | Basic rules |
+| --- | --- | --- |
+| `R-DIAG-LEX-001` | Malformed UTF-8, forbidden scalar/BOM | R-LEX-0001..0003 |
+| `R-DIAG-LEX-002` | Unterminated/invalid comment or literal/escape | R-LEX-0004, R-LEX-0012..0014 |
+| `R-DIAG-LEX-003` | Invalid identifier or non-NFC spelling | R-LEX-0006..0008 |
+| `R-DIAG-LEX-004` | Unknown/forbidden whitespace, character or punctuator, including `#` | R-LEX-0004, R-LEX-0015..0016 |
+| `R-DIAG-SYN-001` | Token sequence not derivable from Annex A | R-GRAM-0001, R-GRAM-0005, R-STMT-0002 |
+| `R-DIAG-SYN-002` | Unknown/malformed/misplaced non-FFI attribute | R-GRAM-0007, R-AGG-0012, R-FUNC-0026 |
+| `R-DIAG-ASYNC-001` | Invalid async declaration, task type/frame, await context or task lifecycle operation | R-TYPE-0029, R-BORROW-0024, R-STMT-0012, R-STMT-0017..0021, R-FUNC-0010..0012, R-FUNC-0026, R-MEM-0031, R-TYPE-0054 |
+| `R-DIAG-ALLOC-001` | Panicking allocation under the deny-panic-allocation policy | R-OBJ-0012 |
+| `R-DIAG-PROFILE-001` | Selected profile or mandatory native capability is unavailable | R-CONF-0005, R-LIBREF-0003, R-CONF-G005 |
+| `R-DIAG-NAME-001` | Unresolved, ambiguous or inaccessible name | R-NAME-0003, R-AGG-0007, R-FUNC-0016, R-TYPE-0050, R-TYPE-0054 |
+| `R-DIAG-NAME-002` | Duplicate declaration/definition | R-NAME-0004, R-NAME-0010, R-TYPE-0045, R-TYPE-0050, R-OWN-0020, R-AGG-0012, R-STMT-0004 |
+| `R-DIAG-NAME-003` | Forbidden shadowing | R-NAME-0009 |
+| `R-DIAG-NAME-004` | Invalid visibility or storage specifier | R-NAME-0007..0008 |
+| `R-DIAG-INIT-001` | Missing initializer or non-constant static initializer | R-NAME-0005..0008, R-NAME-0011 |
+| `R-DIAG-INIT-002` | Invalid aggregate initializer, missing non-default field | R-INIT-0003..0005 |
+| `R-DIAG-TYPE-001` | Type mismatch, invalid access/implicit conversion/enum form/managed owner/standard type/key contract/`constexpr str`, checked-error type/set or catch | R-TYPE-0007..0008, R-TYPE-0012, R-TYPE-0014..0017, R-TYPE-0025..0030, R-OBJ-0006, R-INIT-0002, R-INIT-0012, R-EXPR-0004, R-EXPR-0013..0015, R-EXPR-0021, R-EXPR-0024, R-STMT-0011, R-FUNC-0009, R-ERR-0002..0003, R-AGG-0007, R-AGG-0009..0010, R-LIB-0019..0023, R-FUNC-0013..0017, R-TYPE-0041, R-TYPE-0043..0046, R-NAME-0011, R-STMT-0014, R-STMT-0021, R-EXPR-0029, R-EXPR-0030, R-FUNC-0018, R-REFL-0001..0004, R-TYPE-0036, R-TYPE-0050..0051, R-STMT-0018..0020, R-OWN-0019..0020, R-AGG-0012, R-TYPE-0054, R-TYPE-0055, R-INIT-0004, R-STMT-0022 |
+| `R-DIAG-EFFECT-001` | Unhandled checked effect or forbidden propagation from finally | R-ERR-0001..0003, R-FUNC-0026 |
+| `R-DIAG-EFFECT-002` | Invalid error category, throw operand, rethrow or ambiguous inferred error type; nominal types require an `error` declaration | R-TYPE-0012, R-ERR-0002..0003, R-AGG-0001 |
+| `R-DIAG-EFFECT-003` | Duplicate entry in a throws set or duplicate catch type | R-TYPE-0012, R-ERR-0003 |
+| `R-DIAG-USE-001` | Unused significant value or invalid result contract | R-FUNC-0020, R-FUNC-0021, R-FUNC-0022, R-STMT-0018 |
+| `R-DIAG-USE-002` | Unconditional replacement of a local value | R-INIT-0014 |
+| `R-DIAG-RESOURCE-001` | Heap-allocation absence cannot be proved | R-FUNC-0019 |
+| `R-DIAG-RESOURCE-002` | Nonblocking execution cannot be proved | R-FUNC-0019 |
+| `R-DIAG-META-001` | Unresolved static predicate or incompatible branch assumptions | R-META-0001, R-META-0002, R-META-0003 |
+| `R-DIAG-TYPE-002` | Non-Boolean operand of `!`, `&&`, or `\|\|` | R-EXPR-0010 |
+| `R-DIAG-TYPE-003` | Invalid explicit conversion, transmute or unsafe core-intrinsic type | R-EXPR-0016..0019, R-EXPR-0023, R-UNSAFE-0007..0008 |
+| `R-DIAG-CONST-001` | Literal/constant overflow, division by zero, invalid shift/conversion | R-LEX-0010..0011, R-TYPE-0011, R-INIT-0002, R-EXPR-0005..0007, R-EXPR-0016, R-EXPR-0026, R-STMT-0006, R-AGG-0004, R-REFL-0003 |
+| `R-DIAG-CONST-002` | Expression required to be constant is not constant | R-EXPR-0022, R-EXPR-0032, R-FUNC-0023, R-META-0002 |
+| `R-DIAG-CONST-003` | Translation-time evaluation panics or throws | R-EXPR-0032, R-META-0002 |
+| `R-DIAG-MOVE-001` | Named Move value consumed without `move` | R-OWN-0003, R-OWN-0013, R-EXPR-0014, R-STMT-0014 |
+| `R-DIAG-MOVE-002` | Use/double-move of moved or destroyed place | R-AM-0007, R-OWN-0004, R-STMT-0018 |
+| `R-DIAG-MOVE-003` | Partial/atomic/payload move, nested staged-call move, move while borrowed or invalid reinitialization | R-INIT-0013, R-OWN-0002, R-OWN-0005..0006, R-STMT-0010, R-FUNC-0010, R-MEM-0013 |
+| `R-DIAG-BORROW-001` | Conflicting shared/exclusive borrow, staged-move reservation overlap, or mutable access to immutable storage | R-TYPE-0008, R-BORROW-0002..0004, R-BORROW-0020, R-EXPR-0021, R-FUNC-0010, R-FUNC-0016, R-MEM-0013, R-OWN-0010, R-OWN-0014, R-LIB-0019..0023, R-OWN-0019, R-TYPE-0055 |
+| `R-DIAG-BORROW-002` | Borrow escapes, applies address-of to a non-place, uses a temporary storage root, crosses async suspension, or violates a lifetime relation | R-BORROW-0007..0010, R-BORROW-0016..0024, R-FUNC-0018, R-TYPE-0045 |
+| `R-DIAG-BORROW-003` | Ambiguous borrow kind or nullable safe dereference unproven | R-BORROW-0001, R-BORROW-0005 |
+| `R-DIAG-DROP-001` | Invalid drop definition/call or destructor state | R-INIT-0009..0011 |
+| `R-DIAG-BOUNDS-001` | Compile-time provable invalid index/range | R-EXPR-0021 |
+| `R-DIAG-FLOW-001` | Missing return, unhandled checked effect, invalid throw/rethrow, jump/fallthrough or finally transfer, conditional expression in a call argument or return operand | R-STMT-0003..0013, R-STMT-0018, R-FUNC-0003, R-FUNC-0008, R-ERR-0001..0003, R-EXPR-0014 |
+| `R-DIAG-SWITCH-001` | Duplicate/non-exhaustive/invalid switch/pattern | R-STMT-0006..0010 |
+| `R-DIAG-UNSAFE-001` | Unsafe operation outside unsafe context | R-UNSAFE-0001..0002 |
+| `R-DIAG-UNSAFE-002` | Missing/empty safety contract | R-UNSAFE-0003 |
+| `R-DIAG-STACK-001` | Recursive call chain or recursive ownership under the static stack discipline | R-FUNC-0004, R-FUNC-0007, R-FUNC-0026, R-OWN-0020, R-TYPE-0054 |
+| `R-DIAG-TRAIT-001` | Incomplete, mismatched, orphan or duplicate trait implementation, unbound associated type or constant | R-TYPE-0041..0042, R-TYPE-0045..0046, R-TYPE-0050..0051, R-AGG-0012, R-TYPE-0055 |
+| `R-DIAG-MEM-001` | Potential data race, invalid Send/Sync transfer or escaped scoped-thread/task capability | R-MEM-0002..0004, R-MEM-0010..0031, R-LIB-0010..0017 |
+| `R-DIAG-ATOMIC-001` | Invalid constant memory ordering | R-MEM-0007 |
+| `R-DIAG-MOD-001` | Invalid import, module identity/cycle or interface mismatch | R-MOD-0001..0007 |
+| `R-DIAG-FFI-001` | Non-ABI-compatible scalar/signature/layout, checked effect or boundary capability | R-TYPE-0022..0024, R-OWN-0018, R-FFI-0002..0006, R-FFI-0017, R-FFI-0021, R-FFI-0058 |
+| `R-DIAG-FFI-002` | Invalid variadic argument or C symbol attribute | R-FFI-0005, R-FFI-0007, R-FFI-0045, R-FFI-0057 |
+| `R-DIAG-FFI-003` | Opaque/unsupported C declaration or invalid FFI form/attribute | R-FFI-0015..0020, R-FFI-0050..0052, R-FFI-0054, R-FFI-0057, R-FFI-0059 |
+| `R-DIAG-FFI-004` | Header or ABI-record verification mismatch | R-FFI-0039..0044 |
+| `R-DIAG-FFI-005` | Callback/function-pointer signature mismatch | R-FFI-0012, R-FFI-0024..0026 |
+| `R-DIAG-FFI-006` | Non-empty extern block lacks `@header` or `@abi` | R-FFI-0038 |
+| `R-DIAG-LINK-001` | Missing/incompatible target library manifest or artifact | R-FFI-0028..0033 |
+| `R-DIAG-LINK-002` | Conflicting library identity or unresolved static dependency cycle | R-FFI-0034..0035 |
+| `R-DIAG-LINK-003` | Missing/ambiguous/wrong-provider required symbol or load dependency | R-FFI-0036..0037, R-CMAP-0031 |
+| `R-DIAG-FORMAT-001` | Invalid formatting slot, specification, operand type, or template storage | R-EXPR-0028 |
+| `R-DIAG-JSON-001` | Invalid JSON field contract or unavailable conversion schema | R-JSON-0001 |
+| `R-DIAG-LIMIT-001` | Documented implementation limit exceeded | R-LIMIT-0001..0003, R-EXPR-0032, R-META-0002, R-STMT-0022 |
+<a id="R-DIAG-0001"></a>
+
+**R-DIAG-0001** — After any required diagnostic implementation shall not emit an executable marked conforming. Recovery AST/IR shall retain poisoned state so that subsequent code generation does not use guessed semantics.
+
+<a id="R-DIAG-0002"></a>
+
+**R-DIAG-0002** — For each code Annex B conformance suite shall contain at least one negative program; for each basic feature, a positive counterpart.
+
+<a id="annex-c"></a>
+
+## Annex C — Implementation-defined behavior
+
+This directory is closed to R 0.1. Each conforming target manifest shall specify a choice for each line; another implementation-defined choice requires a new version of the standard.
+
+| ID | Choice | Mandatory documentation |
+| --- | --- | --- |
+| `R-IDB-001` | Width `usize`/`isize`: 32 or 64 | Width, ranges, corresponding C types |
+| `R-IDB-002` | Byte order raw object representation | Little, big or mixed with full description |
+| `R-IDB-003` | Default R aggregate layout | Size/alignment/field-offset algorithm per target |
+| `R-IDB-004` | Module path to source mapping | Canonical roots, case sensitivity, separator rules |
+| `R-IDB-005` | Panic strategy | `abort` or `unwind`; status and diagnostic sink |
+| `R-IDB-006` | Stack exhaustion response | Panic category or immediate documented termination |
+| `R-IDB-007` | Hosted process status mapping | Mapping i32 `main` result to environment |
+|`R-IDB-023` |Implicit main error process statuses |Application and reserved ranges, exhaustive portable-domain mapping, invalid_main_status status and allocation-free diagnostic sink |
+| `R-IDB-008` | C17 implementation and ABI | Compiler identity/version, data model, calling convention |
+| `R-IDB-009` | `c_*` scalar representations/availability | Size, alignment, signedness, IEC format/rounding/operation support and optional exact-width typedefs |
+| `R-IDB-010` | Actual implementation limits | Every limit at or above section 25 minima |
+| `R-IDB-011` | Atomic lock-free properties | For each supported atomic type |
+| `R-IDB-012` | Allocation maximum/alignment | Maximum object, default allocator and OOM action |
+| `R-IDB-013` | Thread scheduling facilities | Available thread profile and scheduling guarantees, if any |
+| `R-IDB-014` | External symbol spelling constraints | Accepted character set, maximum length, collision policy |
+| `R-IDB-015` | Lone CR source handling warning class | Warning code and whether warnings fail strict build policy |
+| `R-IDB-016` | Implicit C runtime import set | Exact symbols usable without `@link` for target/profile |
+| `R-IDB-017` | Dynamic `link_load_failure` termination | Process status and diagnostic sink before `main` |
+| `R-IDB-018` | Dynamic loader deployment policy | How manifest runtime identity is installed/resolved without host fallback |
+| `R-IDB-019` | Pointer/integer exposure support | Supported address widths and provenance-restoration API, or unsupported |
+| `R-IDB-020` | C-boundary floating-environment isolation | Immutable canonical state, working C17 save/canonicalize/restore, verified runtime helper, or unavailable contract-only fallback; all extra controls and failure behavior |
+| `R-IDB-021` | Native asynchronous backend | Backend identity/version, executor model, cancellation acknowledgement and deadline facilities, plus filesystem adapter-lane count, admission list and cancellation matrix; unavailable when `hosted-native-async` cannot be implemented completely |
+| `R-IDB-022` | Native process argument mapping | Exact native-to-Unicode/UTF-8 conversion, representable domain, element-zero source or zero-argument executable-spelling synthesis, and emergency diagnostic sink plus distinct nonzero process status for each of `argument_encoding_failure` and startup-snapshot `allocation_failure`; values shall agree with R-SLIB-IDB-0010 |
+
+<a id="R-IDB-0001"></a>
+
+**R-IDB-0001** — Implementation-defined choice shall be stable for one target manifest. Changing it invalidates interface fingerprints and requires full rebuild.
+
+<a id="annex-d"></a>
+
+## Annex D — Unspecified behavior
+
+This catalogue is also closed. All options remain defined and safe.
+
+| ID | Unspecified choice | Permitted options |
+| --- | --- | --- |
+| `R-USB-001` | Numeric addresses of objects/allocations | Any suitably aligned non-overlapping placement |
+| `R-USB-002` | Padding byte values | Any values; safe R cannot observe them |
+| `R-USB-003` | NaN payload/sign after operation | Any quiet NaN allowed by operand format |
+| `R-USB-004` | Which allocation request fails first | Any request consistent with available resources |
+| `R-USB-005` | Thread interleaving | Any interleaving consistent with happens-before |
+| `R-USB-006` | Order among concurrent relaxed atomics | Any values allowed by memory model/modification order |
+| `R-USB-007` | Diagnostic wording and secondary spans | Any wording retaining required code, primary span and rule ID |
+| `R-USB-008` | Internal start representation of empty slice | Null or aligned non-dereferenceable sentinel |
+| `R-USB-009` | C padding received through valid FFI | Any C-provided bytes; not observable as R value |
+| `R-USB-010` | Formatting of panic report | Any target-appropriate format preserving category |
+| `R-USB-011` | Attached runtime context chosen for detached-outcome cleanup | Any fresh live cleanup context satisfying R-MEM-0017; never a context after thread-local teardown begins |
+
+<a id="R-USB-0001"></a>
+
+**R-USB-0001** — Implementation shall not use an unspecified choice to alter deterministic expression order, drop order, runtime check point or required result.
+
+<a id="annex-e"></a>
+
+## Annex E — Unsafe operations and safety contracts
+
+### E.1 General rule
+
+<a id="R-SAFETY-0001"></a>
+
+**R-SAFETY-0001** — Every unsafe operation below has all listed preconditions. Caller shall establish them for the complete duration stated. Violating any one precondition produces UB; satisfying all yields the defined effect.
+
+### E.2 Closed operation table
+
+| Contract ID | Operation | Safety contract and defined effect |
+| --- | --- | --- |
+| `R-SAFETY-RAW-DEREF` | Read/write through `raw T*` | Pointer is non-null, aligned, provenance-valid for a live initialized T, within bounds; read has no conflicting exclusive/write access; write additionally targets mutable storage with exclusive effective access. Effect equals typed T access. |
+| `R-SAFETY-RAW-ARITH` | Raw `p + n`, `p - n`, indexing | p points to element or one-past a live array object; mathematical result remains from first element through one-past; offset is representable. One-past result shall not be dereferenced. Effect preserves allocation provenance. |
+| `R-SAFETY-RAW-DIFF` | Raw pointer subtraction/order | Both pointers have provenance of the same live array, including one-past, and difference is representable in isize. Effect is element difference or array order. |
+| `R-SAFETY-RAW-CAST` | Cast raw object pointer type/change raw constness | Source is null or carries preserved allocation identity/byte offset; target uses a manifest-compatible C object-pointer representation. Effect preserves null, identity and offset but creates no borrow, alignment, effective-type or mutation permission. Any later access independently satisfies R-SAFETY-RAW-DEREF; removing `const` never makes immutable storage writable. |
+| `R-SAFETY-RAW-BORROW` | `pointer as const T*` or `pointer as T*` | Raw pointer satisfies deref contract for entire declared lifetime; shared/exclusive alias rule is established before creation and maintained until borrow ends. Effect creates corresponding provenance-bearing borrow. |
+| `R-SAFETY-BORROW-RAW` | `borrow as raw const T*` or `borrow as raw T*`, including a borrow derived from an owner | Source object remains live and unmoved through every raw access; raw access never exceeds source permission or range. Effect exposes pointer without extending lifetime. |
+| `R-SAFETY-PTR-INT` | Pointer/integer conversion | Target manifest supports exposed addresses; integer round-trip uses unmodified sufficiently wide `usize`, allocation remains live, and implementation API restores provenance. Arbitrary integer is not dereferenceable without an independently established platform mapping. |
+| `R-SAFETY-SLICE-PARTS` | `core::slice_from_raw_parts(pointer, length)` or `core::slice_from_raw_parts_mut(pointer, length)`, or the anchored `core::slice_from_raw_parts_in(anchor, pointer, length)` or `core::slice_from_raw_parts_in_mut(anchor, pointer, length)` | For length greater than zero, pointer is non-null and identifies length consecutive initialized aligned T elements; byte size is representable. The shared form has no conflicting write or exclusive access, and the mutable form has exclusive access, for the complete fresh inferred result region, or for an anchored form while the referent of the anchor is live and unmoved. For length zero, pointer is null or a valid aligned sentinel and is never dereferenced. Effect creates exactly the corresponding slice descriptor without copying an element or extending storage lifetime. |
+| `R-SAFETY-TRANSMUTE` | `source as D` representation transmute | Source/target satisfy R-UNSAFE-0007 Copy-only, no-`constexpr str`-target restriction and equal size; copied bits are a valid initialized target value; operation does not fabricate borrow provenance, expose padding as value or create invalid enum/bool/char/pointer. Source remains an ordinary Copy value. |
+| `R-SAFETY-VOLATILE` | `core::volatile_load(address)` or `core::volatile_store(address, value)` | Address is non-null, valid and aligned for one live initialized T object and the exact access width; store additionally designates writable storage. The target device permits the access and concurrent semantics are externally synchronized. Effect performs exactly one observable volatile read or write of T; it is not atomic synchronization. |
+| `R-SAFETY-ADOPT` | `core::adopt(pointer)` | Pointer is the exact non-null aligned base pointer of one live allocation containing one initialized T, created by the implementation-documented allocator compatible with standard unique-owner drop and deallocation. No other owner, drop duty or deallocator duty exists. Effect creates `own T*` over the same object and transfers its exact drop and deallocation duty to R without allocating or constructing another T. |
+| `R-SAFETY-RELEASE` | `core::release(move owner)` | Owner is one live unique owner, and the recipient accepts its exact T drop, allocation and compatible-deallocator contract and will discharge each duty exactly once. Effect consumes owner without drop or deallocation, returns the exact non-null allocation base as `raw T*`, keeps T initialized and transfers every duty to the caller. |
+| `R-SAFETY-SHARED-INTO-RAW` | Convert `arc T` or `rc T` strong owner into raw token | Owner is one valid initialized strong owner and is consumed exactly once. Effect suppresses that handle’s drop without changing the strong count and returns the exact non-null stable base pointer to T as `raw const (T)*`. It creates one abstract outstanding obligation for (runtime, allocation identity, family, T). Copying raw pointer bits does not copy the obligation; a raw shared read does not consume it. Each separately executed `into_raw`, including one applied to a clone, creates one obligation even when returned pointer bits are equal. An `rc` obligation remains on its originating R thread and, for a C-origin thread, its attachment generation. |
+| `R-SAFETY-SHARED-FROM-RAW` | Reconstruct `arc T` or `rc T` from raw token | Pointer is the exact base pointer returned by `into_raw` of the same family and T, possibly after a provenance-preserving object-pointer/`void`-pointer round trip; at least one unmatched obligation for that tuple exists; runtime, defining module, drop glue and allocator domain remain live. Cross-thread `arc` use additionally requires T Send+Sync and a verified transfer/synchronization contract. `rc` requires its originating R thread and, for C-origin execution, the same live explicit attachment generation. Effect consumes exactly one obligation and recreates one strong owner without changing the count. A pointer copy creates no obligation. A forged, interior, wrong-family or wrong-T pointer, over-consumption, or repetition after the last obligation violates this unsafe contract and is UB. |
+| `R-SAFETY-ASSUME` | `core::assume(condition)` | Condition is true at this execution point for all abstract-machine states. Effect supplies fact to optimizer; false is immediate UB. |
+| `R-SAFETY-EXTERN-CALL` | Call imported C function/function pointer | Associated library is loaded and remains loaded; symbol/function pointer is non-null and has verified compatible prototype/calling convention; all C/application preconditions, lifetimes, nullability, initialization, effective types and thread rules hold; C does not unwind/longjmp across boundary or retain data beyond declared contract; floating environment is isolated per R-FFI-0058. |
+| `R-SAFETY-EXTERN-OBJECT` | Read/write/address imported C object | Required symbol is resolved, library initialization completed, object/TLS representation is valid for declared type, access is permitted by C declaration and all external/concurrent accesses are excluded or synchronized for full operation. |
+| `R-SAFETY-EXTERN-CALLBACK` | C invokes exported R callback | Function pointer/prototype/calling convention match; R runtime is initialized; current thread is already attached or may be temporarily attached by the entry trampoline; every argument and pointed range satisfies R validity for complete callback; callback code remains loaded; no foreign unwind or longjmp crosses callback. |
+| `R-SAFETY-EXTERN-RETAIN` | C retains pointer, callback or userdata | Every retained allocation/code object remains live, stable and correctly synchronized until documented release callback/event; any transferred owner has exactly one receiver; no R borrow expires or owner drops earlier. |
+| `R-SAFETY-CSTRING` | Use NUL-terminated C string | Pointer is non-null unless API permits null; readable range contains a terminator before declared bound; bytes meet required encoding; buffer remains stable for complete call/retention time; mutable destination has sufficient writable capacity. |
+| `R-SAFETY-MUT-STATIC` | Access mutable R static storage | R initialization is complete and all conflicting thread/interrupt/signal accesses are excluded or synchronized. Effect is ordinary typed access; imported external objects use R-SAFETY-EXTERN-OBJECT instead. |
+
+<a id="R-SAFETY-0002"></a>
+
+**R-SAFETY-0002** — Contract attribute syntax shall be `@safety("CONTRACT-ID", "preconditions")`. Standard contracts may cite table IDs; project-defined unsafe function shall use globally unique identifier and complete preconditions rather than merely state “caller is responsible”.
+
+<a id="R-SAFETY-0003"></a>
+
+**R-SAFETY-0003** — Inline assembly, direct compiler intrinsic not standardized here, setjmp/longjmp across live R objects and foreign exception unwinding through R frames are not unsafe operations R 0.1; they are unsupported extensions.
+
+<a id="annex-f"></a>
+
+## Annex F — Normative mapping to ISO C17
+
+### F.1 Mapping principle
+
+<a id="R-CMAP-0001"></a>
+
+**R-CMAP-0001** — C17 backend shall generate strictly conforming C17 plus a runtime that reproduces R abstract machine. It shall not rely on signed overflow, invalid shift, null/invalid dereference, unsequenced side effects, inactive union reads, misalignment, out-of-bounds pointer arithmetic, data races or strict-aliasing UB for any conforming safe R execution.
+
+<a id="R-CMAP-0002"></a>
+
+**R-CMAP-0002** — Generated C shall compile in strict mode equivalent to `-std=c17 -pedantic` without compiler extensions. Target-specific ABI adaptation shall be isolated in configured headers validated by static assertions.
+
+### F.2 Type mapping
+
+| R type | Preferred C17 representation | Required condition |
+| --- | --- | --- |
+| `bool` | `_Bool` | Generated R creates only 0/1; unreadable foreign trap representation is outside portable ingress |
+| `i8..i64` | `int8_t..int64_t` | Exact typedef exists; otherwise conforming fixed-width emulation |
+| `u8..u64` | `uint8_t..uint64_t` | Exact width, no padding |
+| `isize` | `ptrdiff_t` or exact signed type | Width matches target manifest |
+| `usize` | `size_t` or exact unsigned type | Represents all object sizes |
+| `char` | `uint32_t` | Every construction validates Unicode scalar range |
+| `f32`, `f64` | `float`, `double` | Only if IEC 60559 semantics match; otherwise runtime/software representation |
+| `c_*` scalar | Corresponding C fundamental/standard typedef | Exact selected target C ABI; optional typedef shall exist |
+| Borrow/raw pointer | C object pointer | R metadata/checks preserve lifetime, range, provenance, nullability |
+| Opaque extern struct | Incomplete C tag or typedef | Only raw pointer use; `@c_type` selects spelling kind |
+| `raw fn(P...) -> R` | C function pointer | Exact C prototype and calling convention |
+| `own T*` | T pointer plus static ownership state | Exactly one cleanup path; representation not public ABI |
+| `arc T` | One non-null pointer to private atomic control block | Strong/weak protocol R-CMAP-0032..0034; never a C ABI type |
+| `rc T` | One non-null pointer to private thread-local control block | Plain checked counts; static non-Send/non-Sync enforcement |
+| `weak arc T`, `weak rc T` | Same-family control-block pointer | Never dereferenced; block outlives T until last weak release |
+| `T[N]` | C array or wrapper struct | No decay visible to R; element order preserved |
+| `T[]` | Generated `{ T *data; size_t len; }` | Not C ABI unless explicit wrapper contract |
+| `array<T>` | Private `{ T *data; size_t len; size_t capacity; }`-equivalent owner | Contiguous storage, fallible growth and reverse-order destruction satisfy R-LIB-0019; never a C ABI type |
+| `list<T>` | Private owner of doubly linked stable nodes | Node identity and address stability satisfy R-LIB-0022..R-LIB-0023; never a C ABI type |
+| `dict<K,V>` | Private entry sequence plus power-of-two sparse index table | Insertion order and exact linear-probing/load-factor invariants satisfy R-LIB-0020..R-LIB-0021; never a C ABI type |
+| `str` | Generated `{ const uint8_t *data; size_t len; }` | UTF-8 invariant and ordinary borrow lifetime are preserved |
+| `constexpr str` | Same descriptor, pointing only into immutable program-image bytes or the program-lifetime empty sentinel | UTF-8 and program-long backing storage are proven; descriptor has no runtime-storage drop |
+| R struct | Generated C struct | Field order preserved; generated padding/layout private |
+| Fieldless enum | Fixed integer wrapper | Reject invalid discriminants before safe R |
+| Payload enum | Tag plus C union/struct storage | Read only active variant; cleanup switches on tag |
+| `o<T>` | Tag plus payload storage | Niche optimizations allowed only when unobservable and ABI-private |
+| Function completion for `T throws E...` | Private tag plus T/error-alternative storage | Not a source value type; checked propagation and exactly-once cleanup are preserved |
+| `task<T throws E...>` | Private pointer/handle to executor-owned frame and completion state | Unique observation right, checked completion, cancellation lifetime and R-MEM-0031 edges are preserved; never a C ABI type |
+| `atomic T` | Matching `_Atomic` type or locked runtime | C memory order at least as strong as R order |
+| Standard thread/sync/channel/container resource | Private generated wrapper around runtime state | Move/drop and borrow state tracked; no public C ABI representation |
+
+<a id="R-CMAP-0003"></a>
+
+**R-CMAP-0003** — Fixed-width typedef absence shall not cause substitution by a different-width C type. Implementation shall emulate or report target unsupported.
+
+### F.3 Expressions and checks
+
+<a id="R-CMAP-0004"></a>
+
+**R-CMAP-0004** — Backend shall linearize R left-to-right evaluation into C temporaries/statements; it shall not place multiple R side effects into C expression whose evaluation order is unspecified or unsequenced.
+
+<a id="R-CMAP-0005"></a>
+
+**R-CMAP-0005** — Signed addition/subtraction/multiplication shall be range-checked before performing signed C operation or computed in proven safe unsigned/runtime form. Compiler overflow builtins may not be required by portable output.
+
+<a id="R-CMAP-0006"></a>
+
+**R-CMAP-0006** — Division shall guard zero and signed MIN/-1 before C `/` or `%`. Shift shall guard count before shift; signed left shift shall use checked arithmetic; signed right shift shall be implemented independently of C implementation choice.
+
+<a id="R-CMAP-0007"></a>
+
+**R-CMAP-0007** — Array/slice access shall check R bounds before C address formation, unless compiler proves bounds from R semantics. It shall not form an out-of-range C pointer speculatively on a path where R operation panics.
+
+<a id="R-CMAP-0008"></a>
+
+**R-CMAP-0008** — Checked cast shall validate range/NaN/infinity before C cast. Generated C shall never execute a floating-to-integer conversion outside C range. A representation transmute shall copy the source object representation with `memcpy` or an equivalent compiler operation into distinct target storage, then expose D only after the R-SAFETY-TRANSMUTE validity contract is established. Generated C shall not use union or pointer type-punning, treat padding as an R value, or violate C effective-type rules.
+
+<a id="R-CMAP-0009"></a>
+
+**R-CMAP-0009** — Nullable pointer check shall dominate C dereference. Borrow/raw metadata may erase only after compiler has proved all lifetime/alias constraints. A raw-parts intrinsic constructs only the ordinary pointer-and-length slice descriptor and performs no element access; its nullable zero-length pointer remains subject to the empty-slice mapping of R-ARRAY-0003. Volatile load or store lowers to exactly one access through an appropriately volatile-qualified C lvalue of compatible T, or to one separately verified runtime primitive with the same width and observable effect; the backend shall not duplicate, merge or remove that access. `core::adopt` and `core::release` preserve the exact base pointer and change only the R ownership/drop obligation; neither operation allocates, constructs, drops or deallocates T. `core::assume` requires no C runtime side effect on a contract-satisfying execution and requires no non-C17 construct in generated application C.
+
+### F.4 Drop and control flow
+
+<a id="R-CMAP-0010"></a>
+
+**R-CMAP-0010** — Backend shall emit one logically unique cleanup action for every initialized Move object on each normal/early/unwind edge. Initialization flags or structured cleanup blocks shall prevent double drop after move.
+
+<a id="R-CMAP-0011"></a>
+
+**R-CMAP-0011** — The backend may use internal C cleanup labels and jumps, provided that they do not enter a scope across a C variably modified object, skip initialization, or change R drop or evaluation order.
+
+<a id="R-CMAP-0012"></a>
+
+**R-CMAP-0012** — Payload enum C union may be accessed only through member matching current tag and effective type. Backend shall not type-pun; `memcpy` may copy only Copy representations with all validity invariants re-established.
+
+### F.5 Translation and validation
+
+<a id="R-CMAP-0013"></a>
+
+**R-CMAP-0013** — Generated identifiers shall avoid C reserved identifier classes, be unique after target linker truncation and not depend on Unicode C identifiers.
+
+<a id="R-CMAP-0014"></a>
+
+**R-CMAP-0014** — Generated translation units shall include only standard C17 headers plus versioned R runtime headers. Dedicated ABI verifier/bridge translation unit may include only headers selected through verified manifest and shall itself compile in strict C17 mode. Such header remains compatibility evidence, not a semantic source that injects C declarations into R.
+
+<a id="R-CMAP-0015"></a>
+
+**R-CMAP-0015** — Conformance shall compile generated C with selected production C17 compiler and warnings treated as errors. When available for target, it shall add an independent C17 compiler and ASan/UBSan; concurrent subset additionally uses TSan or equivalent race validation. Each compiler has its own manifest and repeats R-CMAP-0024 ABI verification. Unavailable tool shall be recorded with a documented substitute or explicit validation limitation; absence does not relax language semantics.
+
+<a id="R-CMAP-0016"></a>
+
+**R-CMAP-0016** — If target C makes a pointer value indeterminate after deallocation, backend shall preserve separate allocation identity/offset metadata for R raw equality and shall not evaluate an indeterminate C pointer merely to implement R-TYPE-0021.
+
+### F.6 External C libraries
+
+<a id="R-CMAP-0017"></a>
+
+**R-CMAP-0017** — Each imported function/object shall use exactly one compatible C17 declaration path. Direct path emits one `extern` declaration with selected `@link_name` as actual C identifier and is allowed only when identifier is non-reserved and no header-owned type spelling is required. Bridge path of R-CMAP-0026 obtains actual declaration from verified header and exposes a unique private bridge declaration to generated R translation unit; it shall not also redeclare the actual symbol there. Neither path shall generate a definition or tentative definition of the actual imported entity. Bridge may define only its private forwarding helper prescribed by R-CMAP-0026 and shall introduce no automatic or mirrored storage for imported object.
+
+<a id="R-CMAP-0018"></a>
+
+**R-CMAP-0018** — `@c_type` shall select C typedef/tag spelling without embedding arbitrary source tokens. Opaque type produces only compatible incomplete declaration. For complete `@repr(C)` struct or enum, backend shall either use the exact header-owned declaration through the verified include/bridge or emit from ABI record the complete normalized declaration one-for-one when every emitted identifier may legally be declared. It shall never emit a subset declaration, and a complete enum emission shall contain every verified enumerator with its verified name and value; enumerator order may differ as permitted by C17 compatibility. Reserved or otherwise header-owned spelling requires the header-compatible bridge of R-FFI-0057/R-CMAP-0026.
+
+<a id="R-CMAP-0019"></a>
+
+**R-CMAP-0019** — `@c_constant` shall substitute verified R constant and shall not emit symbol reference. A verifier translation unit shall compare it to header/ABI integer value with `_Static_assert` and shall obtain/check compatible expanded- expression type, rank and signedness through C17 type probes plus normalized compiler inventory. Cross-target record shall retain exact type, enum identity if any, rank, signedness and mathematical value.
+
+<a id="R-CMAP-0020"></a>
+
+**R-CMAP-0020** — Every exported `extern "C"` function shall use a C ABI entry trampoline or equivalent boundary stub whenever thread attachment, panic barrier, representation validation or fenv isolation is required, whether or not declaration bears `@callback`. C-visible entry shall not let R unwind cross C and shall preserve exact function type.
+
+<a id="R-CMAP-0021"></a>
+
+**R-CMAP-0021** — Imported external/TLS object access shall compile to actual symbol access only inside unsafe operation after any required runtime library guard. C object shall not be copied into hidden R global that changes identity.
+
+<a id="R-CMAP-0022"></a>
+
+**R-CMAP-0022** — Backend driver shall translate logical `@link` graph to target linker inputs exclusively from selected manifest, preserving dependency order, artifact identity and static/dynamic/framework kind. It shall not append discovered host search result or silently switch static/dynamic kind.
+
+<a id="R-CMAP-0023"></a>
+
+**R-CMAP-0023** — Dynamic/framework artifact and required symbol availability shall be checked by platform loader or generated startup guard before R module initialization. Failure follows R-FFI-0037 and shall never reach a null/incorrect call.
+
+<a id="R-CMAP-0024"></a>
+
+**R-CMAP-0024** — ABI verifier shall be compiled for target with same C compiler identity/options/sysroot/feature macros as generated C. Running a host executable to infer target layout is forbidden in cross build; compile-time assertions or target ABI record shall be used.
+
+<a id="R-CMAP-0025"></a>
+
+**R-CMAP-0025** — Generated C, ABI probe, link manifest and, when requested, exported C header shall be reproducible from identical normalized inputs. Hashes of every artifact actually emitted shall be recorded in conformance artifact; this rule does not itself require optional C-header generation.
+
+<a id="R-CMAP-0026"></a>
+
+**R-CMAP-0026** — If exact compatible declaration depends on header-defined typedef, reserved imported identifier, or tag expansion that portable standalone C17 cannot safely redeclare, backend may generate a strict-C17 bridge translation unit that includes verified headers. An equivalent declaration emitted only from immutable ABI record is allowed for non-reserved identifiers; reserved identifier requires the declaring header. Bridge calls/addresses original symbol and exposes a unique private non-reserved default-C ABI already proven equivalent to R declaration. Header requiring a nonstandard language extension, calling convention or decorated symbol is rejected unless user supplies an external default-C-ABI shim outside generated conforming backend. Guessing typedef underlying type, using compiler attributes or erasing the actual pointer type of an imported declaration to `void*` is forbidden. This does not prohibit the explicit user-visible managed-token adapter whose declared C ABI is `const void*` under R-FFI-0060/R-CMAP-0037. Object bridge shall address actual C object/TLS and shall not introduce mirrored storage.
+
+<a id="R-CMAP-0027"></a>
+
+**R-CMAP-0027** — Backend/runtime shall implement R stack-exhaustion behavior through stack probes/checks, managed stack or equivalent preflight before unsafe C stack growth. It shall not rely on recovering after generated C has overflowed its stack or otherwise executed invalid memory access.
+
+<a id="R-CMAP-0028"></a>
+
+**R-CMAP-0028** — Generated C shall preserve each R `f32`/`f64` operation and cast at the declared precision and rounding rule. Excess precision, contraction, reassociation, reciprocal approximation, finite-math assumptions and other fast-math transformations that can change an R result are forbidden; backend may use runtime helpers when target C evaluation cannot provide the required result.
+
+<a id="R-CMAP-0029"></a>
+
+**R-CMAP-0029** — C ABI ingress shall store return/object/C-origin-entry argument representations in compatible C temporaries without treating them as initialized safe R values, perform R-FFI-0056 checks, and only then materialize R representation. Optimizer shall not assume R enum, non-null or aggregate validity before the dominating gate.
+
+<a id="R-CMAP-0030"></a>
+
+**R-CMAP-0030** — Backend shall implement C-boundary isolation R-FFI-0058 with working C17 `<fenv.h>` operations, verified runtime helper, or proven immutable canonical no-op as recorded by R-IDB-020. Software floating operations may ensure R arithmetic independently but do not by themselves save/canonicalize/restore host fenv and satisfy boundary only with the contract-only fallback of R-FFI-0058. Backend shall compile R floating operations under environment-access rules that prevent ambient rounding-mode assumptions. Generated R operation shall have round-to-nearest ties-to-even semantics independently of C code called before it; every C-origin return restores foreign environment before control reaches C. Return codes/failures are handled exactly as R-FFI-0058, never ignored. C17 path shall use `fegetenv`/`fesetenv`, `fesetround(FE_TONEAREST)` and `feclearexcept(FE_ALL_EXCEPT)` as applicable; target helper normalizes/restores any additional value-affecting or trap-control state not represented by portable C17.
+
+<a id="R-CMAP-0031"></a>
+
+**R-CMAP-0031** — Strict C17 has no portable DLL/framework visibility syntax. Required visibility/rooting of every exported `extern "C"` symbol shall therefore be a verified target build/link-manifest property or be supplied by external shim; the backend shall not insert an unverified compiler attribute. Missing export in final typed symbol inventory requires `R-DIAG-LINK-003`.
+
+### F.7 Reference counting, threads, tasks and synchronization
+
+<a id="R-CMAP-0032"></a>
+
+**R-CMAP-0032** — Each `arc` or `rc` strong/weak handle lowers to one non-null C object pointer to an opaque, suitably aligned control block. The block contains T storage or a private pointer to it, strong and weak-liveness counters, drop glue and allocator identity. An `arc` block uses C17 `_Atomic` counters of the exact unsigned C representation selected for R `usize`, or a runtime-locked counter with the same width, limit and semantics. An `rc` block uses ordinary counters of that same exact type, confined to one R thread. Coallocation versus split allocation is unobservable.
+
+<a id="R-CMAP-0033"></a>
+
+**R-CMAP-0033** — Portable atomic lowering for `arc` shall implement: checked strong clone by CAS increment with relaxed success/failure; `downgrade` and `clone_weak` by checked weak-liveness CAS increment with relaxed success/failure, retrying while the uniqueness sentinel is installed; strong release by release decrement and, when the prior value was one, acquire fence before dropping T; weak release by release decrement and acquire fence before block deallocation; weak upgrade by CAS from a nonzero strong count with acquire success and relaxed failure; and `try_unwrap` by acq\_rel CAS from one to zero with relaxed failure. After successful unwrap CAS, one cleanup duty moves T into the `unwrapped` alternative, releases the implicit weak-liveness duty exactly once and deallocates the block iff no explicit weak remains; every exceptional exit owns exactly one of T/result and that cleanup duty. Overflow is checked before each successful write. A fetch-add followed by an overflow test is non-conforming because it can transiently wrap. The decrement-and-fence sequences, or the runtime-locked alternative of R-CMAP-0032, shall realize every synchronizes-with edge required by R-MEM-0028 before T destruction, T move-out or control-block deallocation.
+
+<a id="R-CMAP-0034"></a>
+
+**R-CMAP-0034** — `arc get_mut` shall be linearizable against strong clone, weak downgrade/clone, upgrade and release. A portable implementation may reserve the maximum value representable by `usize` as a locked sentinel: under R-OWN-0017 the normal physical range is zero through one plus half that maximum, rounded down. It may acquire-CAS the sole implicit weak value to that sentinel, acquire-check that strong is one, then release-restore the implicit weak value; weak creators retry while the sentinel is installed. Two independent count loads without exclusion are non-conforming. `weak_count` likewise retries and never reports the sentinel. Last-strong cleanup shall release the implicit weak duty exactly once after an ordinary drop or first unwind; immediate abort on a second panic follows R-ERR-0008. The successful uniqueness reservation and strong-count check shall realize the `get_mut` synchronizes-with edges of R-MEM-0028 before returning the mutable borrow.
+
+<a id="R-CMAP-0035"></a>
+
+**R-CMAP-0035** — Spawn lowering shall stage explicit arguments in one typed private capture record with per-field initialization state. A direct named Move argument is one provisional capture field; argument temporaries are never recursively provisional. Before commit, a field sourced from a direct named Move place records a provisional reference and an exclusive reservation token covering that still-initialized source and all overlapping storage; lowering shall reject any later argument access conflicting with the token. Temporary arguments are owned by the caller-side full expression. The runtime reserves the complete child and completion state before one atomic commit converts every token into a move of its named source into the capture. Successful runtime publication then makes the child the sole cleanup owner before entry begins. Failed creation and an unwind before commit release every token, commit no named move, destroy no named source, and destroys each staged temporary exactly once in reverse construction order. An abort before commit follows R-ERR-0005 and performs no additional R cleanup. On normal entry return, the child stages the returned value, or an exact declared checked-error payload, and begins its thread-local drops. Under unwind strategy, a panic reaching the thread root instead produces an owned panic report after applicable cleanup. If the first panic begins in a thread-local drop after normal return, lowering completes the failing instance’s remaining R-ERR-0008 duties, destroys the staged returned value exactly once, drops remaining Live thread-local instances by the exact R-OBJ-0008 stack algorithm, and only then forms and commits the replacement panic report; a panic during either later cleanup is the second panic of R-ERR-0008 and aborts. Only after the applicable thread-local drops does the child commit exactly one returned, thrown or panicked completion outcome. Under abort strategy, any first panic aborts under R-ERR-0005/R-ERR-0009 without committing an outcome or performing further R drops; a no-panic child still commits after its thread-local drops. The child publishes the committed completion with a release operation. Join consumes the handle and observes completion with acquire semantics before moving the result. A detached cleanup duty likewise observes the child’s completion release with acquire before touching the result. Detached completion destroys an unobserved result exactly once through the attached runtime cleanup duty of R-MEM-0017. Its ordinary no-panic path completes that context’s thread-local cleanup before the last abstract completion action observed by R-AM-0013. Under unwind strategy, any contained or newly produced panic report is also delivered to the hook and destroyed before that action; under abort strategy a first panic aborts immediately and no subsequent action is required. No payload drop executes in the target context after its thread-local teardown. The lowering retains separate target and observation/cleanup references to completion state and performs the sole last-reference release of completion storage and runtime/OS thread resource at the exact point required by R-MEM-0011; no moved, joined or detached state can release it twice. The `std.thread::thread` descriptor uses a checked atomic or runtime-locked identity/runtime- reference count of the exact R `usize` representation, enforces the R-LIB-0013 limit before change and realizes the last-reference acquire edge of R-MEM-0011 before releasing descriptor storage.
+
+<a id="R-CMAP-0036"></a>
+
+**R-CMAP-0036** — Generated strict C17 shall access mutexes, condition variables, barriers, once objects, thread lifecycle and channels only through versioned R runtime functions whose verified contracts implement section 21. A target with usable C17 `<threads.h>` may implement the runtime with it; a target-specific runtime may use other facilities, but these shall not leak non-C17 syntax into generated translation units. Every guard, endpoint and thread handle has one explicit moved/active/completed state preventing double unlock, close, join or result destruction. Successful scoped publication also records the child in a region supervisor independently of the handle and creates one non-observing registration liveness reference to completion storage. Each scoped outcome right has one linearizable state among HandleOwned, SupervisorOwned and Consumed: explicit join changes HandleOwned to Consumed, handle drop changes HandleOwned to SupervisorOwned, and scope close after all target waits changes every remaining HandleOwned state to SupervisorOwned before any outcome staging. The scope-close transition of a still-live handle simultaneously creates one non-observing tombstone reference for that shell; handle drop transfers the right without such a reference because no shell remains. Only a still-live scoped handle revoked by that scope-close transition has a tombstone; whether its right is still SupervisorOwned or has become Consumed, its destruction only releases that reference. Ordinary handle drop has no remaining shell or tombstone release. The transition and tombstone state belong to completion storage, so the rule applies without scanning or rewriting a handle nested in another outcome or aggregate and that storage remains live until the shell is destroyed. For each SupervisorOwned right, the phase-two acquire that moves its outcome into the supervisor’s staging sequence changes SupervisorOwned to Consumed exactly once and then releases that entry’s registration reference. An entry already Consumed by explicit join releases its registration reference when visited in the same reverse-order phase-two sweep; the supervisor does not access that entry again. After phase-three outcome consumption, the R-MEM-0011 last-reference duty runs only when its other preconditions and all tombstone and registration releases are satisfied.
+
+<a id="R-CMAP-0037"></a>
+
+**R-CMAP-0037** — No C declaration shall reproduce a managed-owner, control-block or standard-resource layout. A managed-token adapter exists only as an explicitly declared exported `extern "C"` R function governed by R-FFI-0024/0060; its exported name and exact C-compatible prototype are user-declared, and no adapter symbol is synthesized implicitly. Its C token parameters and results use only `const void *` and perform the explicit pointer round trip prescribed by R-FFI-0060. Such an adapter set may provide create, retain and release operation patterns; R 0.1 defines no weak raw token and therefore no C upgrade pattern. Create allocates an owner then applies `into_raw`. Retain attaches, reconstructs one valid obligation, clones once, and converts both resulting owners back into two obligations without net loss of the input obligation. Release attaches, reconstructs and drops one obligation. Arbitrary `raw T*` cannot be adopted as `arc T` or `rc T`. Every adapter completes attachment/fenv establishment before pointer reconstruction or count mutation and preserves module/drop-glue lifetime through its last outstanding obligation.
+
+<a id="R-CMAP-0038"></a>
+
+**R-CMAP-0038** — An `async` body shall lower to a private C17 state machine and owned frame, or to an observationally equivalent runtime representation. Each complete direct named Move argument is represented before commit by a provisional source reference and exclusive overlap-reservation token that enforces R-FUNC-0010. The start path reserves the complete frame/completion/executor state, then atomically converts all tokens into argument moves and publishes exactly once; every returning or unwind path before commit releases the tokens and preserves named Move operands. An abort path follows R-ERR-0005 without additional R cleanup. Suspension stores the continuation state without retaining a prohibited borrow, and terminal completion performs one release publication matched by the acquire operation of R-MEM-0031. Cancel, detach, task drop and completion races share one checked terminal state and one exactly-once cleanup path. Generated application translation units remain strict C17 and call only versioned R runtime entry points. Target-specific event-loop, filesystem, socket and process primitives are confined to verified runtime adapters; they shall not leak non-C17 syntax or native resource representations into generated C or public R types.
+
+<a id="R-CMAP-0039"></a>
+
+**R-CMAP-0039** — A hosted-native-async target may use the filesystem adapter lane only for descriptor-relative open/close, metadata query, shared-position seek, directory enumeration, directory creation, unlink, atomic no-replace rename and file/directory durability. The selected target manifest shall give the exact native entry points; no unlisted call may execute on the lane. Submission to the lane is bounded and never blocks an executor worker. Cancellation or deadline expiry removes an operation that is still queued. Once a lane thread has entered its native call, that call is not preempted: the runtime retains every handle, buffer and frame until return, publishes no outcome before acknowledgement, and performs exactly-once cleanup. Cancellation or a deadline may select the reported outcome only before the operation’s documented non-cancellable external commit point. An operation that has committed successfully returns success even if cancellation is observed later. Payload byte transfer, console, DNS, sockets, child-process waiting and R execution shall not be routed through the lane.
+
+<a id="annex-g"></a>
+
+## Annex G — Requirements for a conforming implementation
+
+### G.1 Source of truth
+
+<a id="R-CONF-G001"></a>
+
+**R-CONF-G001** — In conflict, authority order: published specification version; corrigenda; normative EBNF; conformance suite; reference translator; tutorials and examples. Implementation behavior shall not silently redefine the language.
+
+### G.2 Required implementation components
+
+<a id="R-CONF-G002"></a>
+
+**R-CONF-G002** — Conforming release shall provide: translator identity/version; strict mode; target manifest; diagnostics Annex B; machine-readable table mapping every `R-*` rule to tests or documented non-automatable review; reproducible standard-library interface; compatibility policy.
+
+<a id="R-CONF-G003"></a>
+
+**R-CONF-G003** — Translator shall process arbitrary input bytes without crash, out-of-bounds access or uncontrolled recursion up to documented resource exhaustion. Invalid source is data, not permission for translator UB.
+
+<a id="R-CONF-G004"></a>
+
+**R-CONF-G004** — Required test classes: lexical/grammar positive and negative; type/name; initialization; ownership/move; borrow/lifetime; runtime checks; drop order; panic; reference counting/weak lifetime; thread transfer/scoped join; locks/poison/channels; async start/await/cancel/detach; unsafe boundary; memory model; modules; C ABI; generated C; determinism and implementation limits.
+
+### G.3 Profiles
+
+| Capability | Freestanding | Hosted |
+| --- | --- | --- |
+| Core syntax/types/ownership | Required | Required |
+| Panic | Handler supplied by environment | Runtime abort/unwind |
+| Allocation and `new` | May be unsupported with compile-time diagnostic | Required |
+| `arc`/`rc`, `array<T>`/`list<T>`/`dict<K,V>` and R-LIB-0012/0019..0023 | Required iff allocation/new is supported; otherwise every construction/operation is diagnosed | Required |
+| Environment and non-blocking process state | Not required | Required |
+| `async`/`await`/`task<T>` execution | Not required; use is diagnosed when unavailable | Required only in the `hosted-native-async` profile; other hosted profiles may omit it |
+| Native asynchronous I/O | Not required | Complete filesystem, console, network and child-process surface required by `hosted-native-async`; no synchronous alias |
+| Threads | Not required | Required if target supports threads; otherwise documented hosted-single-thread profile |
+| `std.sync` | Not required | Required with hosted-thread profile |
+| C ABI | Required when target has conforming C17 implementation | Required |
+
+<a id="R-CONF-G005"></a>
+
+**R-CONF-G005** — Profile selection shall occur before translation and form part of interface fingerprint. Unsupported profile feature shall be diagnosed, not linked to a trap stub. `hosted-native-async` is a hosted allocation profile requiring the process executor, task runtime and complete native asynchronous library contract from R-REF-0005. Selection shall fail with `R-DIAG-PROFILE-001` when the target lacks any required backend, cancellation acknowledgement or deadline facility. Its runtime shall not implement potentially blocking I/O on an executor worker. The permitted blocking adapters are the filesystem adapter lane of R-TERM-0014/R-CMAP-0039 and R-REF-0005 and the blocking call pool of R-TERM-0015, which executes only entries passed to `std.async::blocking`.
+
+### G.4 Minimal normative examples
+
+**Positive: ownership, borrow and deterministic drop**
+
+```r
+module example.owner;
+
+protected struct Buffer {
+    own u8* data;
+    usize size;
+};
+
+drop(Buffer* self) {
+    // self.data is dropped after this body.
+}
+
+protected usize size_of(const Buffer* buffer) {
+    return buffer->size;
+}
+
+i32 main() {
+    own u8* byte = new u8(0u8);
+    Buffer b = { .data = move byte, .size = 1usize };
+    const Buffer* view = &b;
+    usize n = size_of(view);
+    return n as i32;
+}
+```
+
+**Negative: named owner copied without move**
+
+```r
+void rejected_owner_copy() {
+    own u8* first = new u8(1u8);
+    own u8* second = first; // R-DIAG-MOVE-001
+}
+```
+
+**Negative: conflicting borrow**
+
+```r
+i32 rejected_conflicting_borrow() {
+    i32 value = 1;
+    const i32* shared = &value;
+    i32* exclusive = &value; // R-DIAG-BORROW-001 while shared is live
+    return *shared + *exclusive;
+}
+```
+
+**Positive: explicit `arc` clone transferred to a typed thread**
+
+```r
+protected struct Payload {
+    i32 value;
+};
+
+protected i32 read_payload(arc Payload payload) {
+    return payload->value;
+}
+
+std.thread::join_result<i32> run_worker() throws std.thread::thread_error {
+    arc Payload shared = new arc Payload { .value = 41i32 };
+    arc Payload child = std.arc::clone(&shared);
+    std.thread::join_handle<i32> handle = std.thread::spawn(read_payload, move child);
+    std.thread::join_result<i32> joined = std.thread::join(move handle);
+    return move joined;
+}
+```
+
+**Positive: fast single-thread `rc` with explicit clone**
+
+```r
+bool same_local_allocation() {
+    rc i32 first = new rc i32(7i32);
+    rc i32 second = std.rc::clone(&first);
+    bool same = std.rc::ptr_eq(&first, &second);
+    drop second;
+    return same;
+}
+```
+
+**Negative: `rc` cannot cross a thread boundary**
+
+```r
+void consume_local(rc i32 value) {
+    drop value;
+}
+
+void rejected_rc_transfer() throws std.thread::thread_error {
+    rc i32 local = new rc i32(7i32);
+    std.thread::join_handle<void> started =
+        std.thread::spawn(consume_local, move local); // R-DIAG-MEM-001
+}
+```
+
+**Positive: scoped thread borrows an automatic local**
+
+```r
+i32 read_borrowed(const i32* value) {
+    return *value;
+}
+
+void scoped_read() throws std.thread::thread_error {
+    i32 value = 7i32;
+    thread_scope {
+        std.thread::scoped_join_handle<i32> started =
+            std.thread::spawn_scoped(read_borrowed, &value);
+    }
+    value += 1i32;
+}
+```
+
+**Positive: checked error propagation**
+
+```r
+error Error {
+    i32 code;
+};
+
+u8 read_first(const u8[] bytes) throws Error {
+    if (len(bytes) == 0usize) {
+        throw { .code = 1i32 };
+    }
+    return bytes[0usize];
+}
+
+u8 twice_first(const u8[] bytes) throws Error {
+    u8 value = read_first(bytes);
+    return (value + value) as u8;
+}
+```
+
+**Positive: range-for over a range, a sequence and a core iterator, with a membership test**
+
+```r
+module example.iteration;
+
+struct Counter {
+    i32 next_value;
+    i32 limit;
+};
+
+impl core::Iterator for Counter {
+    type Item = i32;
+    o<i32> next(Counter* this) {
+        if (this->next_value >= this->limit) { return o::none; }
+        i32 value = this->next_value;
+        this->next_value += 1;
+        return o::some(value);
+    }
+};
+
+i32 main() {
+    i32 total = 0;
+    i32[3] fixed = {1, 2, 3};
+    for (i32 i in 0..3) { total += i; }
+    for (const i32* x in &fixed) { total += *x; }
+    Counter counter = Counter { .next_value = 0, .limit = 3 };
+    for (i32 v in move counter) { total += v; }
+    if (total not in 0..100) { return 1; }
+    return total - 12;
+}
+```
+
+**Positive: collection expressions, a comprehension and a variadic sum**
+
+```r
+module example.collections;
+
+i32 sum(i32... values) {
+    i32 total = 0;
+    for (const i32* v in &values) { total += *v; }
+    return total;
+}
+
+i32 main() {
+    try {
+        array<i32> small = [1, 2, 3];
+        array<i32> squares = [x * x for (i32 x in 0..6) if (x % 2 == 0)];
+        dict<i32, i32> doubles = {*x: *x * 2 for (const i32* x in &small)};
+        i32 two = 2;
+        if (two not in doubles) { return 1; }
+        i32 packed = sum(1, 2, 3);
+        i32 spread = sum(...small);
+        i32 total = 0;
+        for (i32 s in &squares) { total += s; }
+        return packed + spread + total - 32;
+    } catch (std.array::push_error<i32> failure) {
+        failure as void;
+        return 2;
+    } catch (std.dict::insert_error<i32, i32> failure) {
+        failure as void;
+        return 3;
+    }
+}
+```
+
+**Positive: a tuple result and a recursion over a type pack**
+
+```r
+module example.packs;
+
+trait Shown { i32 show(const Self* this); };
+impl Shown for i32 { i32 show(const i32* this) { return *this; } };
+impl Shown for bool {
+    i32 show(const bool* this) {
+        if (*this == true) { return 1; }
+        return 0;
+    }
+};
+
+@generic<Head: Shown, Tail...: Shown>
+i32 total(Head head, Tail... tail) {
+    i32 first = head.show();
+    @if (len(Tail...) != 0usize) { return first + total(...move tail); }
+    return first;
+}
+
+(i32, bool) split(i32 value) { return (value / 2, value % 2 == 0); }
+
+i32 main() {
+    (i32, bool) half = split(8);
+    i32 sum = total(half.0, half.1, 3);
+    return sum - 8;
+}
+```
+
+**Positive: a builder with @chain methods**
+
+```r
+module example.builder;
+
+struct Options { u16 port; usize capacity; };
+
+Options Options::create() { return Options { .port = 8080u16, .capacity = 64usize }; }
+
+@chain Options Options::with_port(Options this, u16 value) {
+    this.port = value;
+    return move this;
+}
+
+@chain Options Options::with_capacity(Options this, usize value) {
+    this.capacity = value;
+    return move this;
+}
+
+i32 main() {
+    Options options = Options::create().with_port(9000u16).with_capacity(128usize);
+    if (options.port == 9000u16) { return 0; }
+    return 1;
+}
+```
+
+**Positive: string labels, a throwing arm and clauses without break**
+
+```r
+module example.labels;
+
+error Usage { str message; };
+
+i32 width(str kind) throws Usage {
+    return match (kind) {
+        case "i8": 1;
+        case "i16": 2;
+        case "i32": 4;
+        default: throw Usage { .message = "unknown type" };
+    };
+}
+
+i32 main() {
+    try {
+        i32 bytes = width("i16");
+        i32 code = 0;
+        switch (bytes) {
+        case 2: code = 0;
+        default: code = 1;
+        }
+        return code;
+    } catch (Usage failure) { return 2; }
+}
+```
+
+**Positive: an error family, the nearest ancestor and a rethrow**
+
+```r
+module example.errors;
+
+error io_error { i32 code; };
+error net_error : io_error { u16 port; };
+
+i32 port_of(io_error failure) {
+    try {
+        throw move failure;
+    } catch (net_error e) {
+        return e.port as i32;
+    } catch (io_error e) {
+        return 0;
+    }
+}
+
+i32 main() {
+    try {
+        throw net_error { .code = 7, .port = 80u16 };
+    } catch (io_error failure) {
+        i32 code = failure.code;
+        return port_of(move failure) - 80 + code - 7;
+    }
+}
+```
+
+**Positive: checked errors, floating values and a frozen dictionary during translation**
+
+```r
+module spec.translation;
+
+error bad_port { u32 digit; };
+
+u16 parse_port(str text) throws bad_port {
+    u32 value = 0u32;
+    for (usize index = 0usize; index < len(text); index += 1usize) {
+        u8 byte = text[index];
+        throw (byte < 48u8 || byte > 57u8) bad_port {.digit = index as u32};
+        value = value * 10u32 + ((byte - 48u8) as u32);
+    }
+    return value as u16;
+}
+
+u16 port_or(str text, u16 fallback) {
+    try {
+        return parse_port(text);
+    } catch (bad_port failure) {
+        return fallback;
+    }
+}
+
+f64 kelvin(f64 celsius) { return celsius + 273.15; }
+
+dict<str, u16> default_ports() throws std.alloc::alloc_error, std.dict::insert_error<str, u16> {
+    dict<str, u16> ports = std.dict::create::<str, u16>();
+    o<u16> first = ports.insert("http", 80u16);
+    first as void;
+    o<u16> second = ports.insert("https", 443u16);
+    second as void;
+    return move ports;
+}
+
+const u16 DEFAULT_PORT = parse_port("8080");     // 8080; "80a0" stops the build
+const u16 PROXY_PORT = port_or("none", 3128u16); // 3128, caught during translation
+const f64 FREEZING = kelvin(0.0);                // bit for bit as at run time
+const dict<str, u16> PORTS = default_ports();    // frozen into the program image
+
+i32 main() {
+    str name = "https";
+    o<const u16*> found = PORTS.get(&name);
+    u16 port = match (found) {
+        case variant o::some(value): *value;
+        case variant o::none: DEFAULT_PORT;
+    };
+    i32 failures = port == 443u16 && PROXY_PORT == 3128u16 ? 0 : 1;
+    failures += FREEZING == 273.15 ? 0 : 1;
+    return failures;
+}
+```
+
+**Positive: a deadline block bounds the operations it starts**
+
+```r
+module example.deadline;
+
+async usize size(std.fs::path path) throws std.fs::fs_error, std.async::start_error {
+    array<u8> data = await std.fs::read_file(&path, 65536usize);
+    return len(data);
+}
+
+async usize total(std.fs::path first, std.fs::path second)
+    throws std.fs::fs_error, std.async::start_error, std.time::time_error {
+    std.time::instant start = std.time::monotonic_now();
+    // Every read started in the block, also by the tasks it starts, ends within two seconds.
+    deadline (start.add(std.time::duration_from_seconds(2i64))) {
+        usize here = await size(move first);
+        usize there = await size(move second);
+        return here + there;
+    }
+}
+```
+
+**Positive: formatting user types through core::Format**
+
+```r
+module example.formatting;
+
+@derive(format)
+enum Shape { circle(f64), rect { i32 w; i32 h; }, empty };
+
+struct Celsius { f64 degrees; };
+
+impl core::Format for Celsius {
+    void format(const Celsius* this, std.format::builder* out) throws std.alloc::alloc_error {
+        std.string::string text = f"{this->degrees} C";
+        std.format::append_str(out, text.as_str());
+    }
+};
+
+@generic<T: core::Format>
+std.string::string labelled(str label, const T* value) throws std.alloc::alloc_error {
+    return f"{label}={value:8}";
+}
+
+std.string::string report() throws std.alloc::alloc_error {
+    Celsius today = Celsius {.degrees = 21.5};
+    Shape[2] shapes = {Shape::circle(1.5), Shape::rect {.w = 2, .h = 3}};
+    // "today=  21.5 C [circle(1.5), rect { w: 2, h: 3 }]"
+    std.string::string first = labelled("today", &today);
+    return f"{first} {shapes}";
+}
+```
+
+**Positive: field initializers and a default variant**
+
+```r
+module example.defaults;
+
+enum Level { quiet, @default normal, verbose };
+
+struct Retry {
+    u32 attempts = 3;
+    std.time::duration delay = std.time::duration_from_seconds(1i64);
+    Level level;
+};
+
+u32 total(u32 extra) {
+    Retry standard = Retry {};              // 3 attempts, one second, normal
+    Retry patient = Retry {.attempts = 10}; // the other fields keep their initializers
+    Retry previous = core::take(&patient);  // patient becomes Retry {} again
+    return standard.attempts + previous.attempts + patient.attempts + extra;
+}
+```
+
+**Negative: unsafe operation outside boundary**
+
+```r
+i32 rejected_raw_deref(raw i32* p) {
+    return *p; // R-DIAG-UNSAFE-001
+}
+```
+
+**Positive: dynamically linked C library with verified header**
+
+```r
+module example.zlib;
+
+@link(name = "zlib", kind = "dynamic")
+@header("zlib.h")
+extern "C" {
+    @link_name("zlibVersion")
+    @safety("ZLIB-VERSION",
+            "zlib is loaded; result is a non-null NUL-terminated static string")
+    raw const c_char* zlib_version();
+
+    @link_name("compressBound")
+    @safety("ZLIB-COMPRESS-BOUND", "source_len is accepted by selected zlib ABI")
+    c_ulong zlib_compress_bound(c_ulong source_len);
+}
+
+raw const c_char* read_zlib_version() {
+    unsafe {
+        raw const c_char* version = zlib_version();
+        return version;
+    }
+}
+```
+
+**Positive: opaque C handle, output pointer and verified C constant**
+
+```r
+@link(name = "sqlite3", kind = "dynamic")
+@header("sqlite3.h")
+extern "C" {
+    @c_type(name = "sqlite3", kind = "typedef")
+    opaque struct SQLite;
+
+    @c_constant(name = "SQLITE_OK")
+    const c_int SQLITE_OK = 0i32 as c_int;
+
+    @link_name("sqlite3_open")
+    @safety("SQLITE-OPEN",
+            "filename is a live NUL-terminated UTF-8 string; out_db is writable")
+    c_int sqlite_open(raw const c_char* filename,
+                      raw (raw SQLite*?)* out_db);
+
+    @link_name("sqlite3_close")
+    @safety("SQLITE-CLOSE", "db is a unique live sqlite3 handle and is consumed")
+    c_int sqlite_close(raw SQLite* db);
+}
+```
+
+**Positive: exported callback has an exact raw function-pointer type**
+
+```r
+@callback
+@export_name("r_compare")
+@safety("EXAMPLE-COMPARE-CALLBACK",
+        "runtime is initialized; trampoline may attach the calling thread; left and right satisfy comparator userdata contract")
+extern "C" c_int compare(raw const void* left, raw const void* right) {
+    // A real comparator validates and dereferences pointers only inside unsafe.
+    return 0i32 as c_int;
+}
+
+void prepare_callback() {
+    raw fn(raw const void*, raw const void*) -> c_int callback = compare;
+    callback as void;
+}
+```
+
+**Negative: source embeds a host-specific library path**
+
+```r
+@link(name = "/usr/local/lib/libz.dylib", kind = "dynamic") // R-DIAG-LINK-001
+@header("zlib.h")
+extern "C" { }
+```
+
+**Negative: non-empty block has no ABI evidence**
+
+```r
+@link(name = "zlib", kind = "dynamic")
+extern "C" {
+    @safety("ZLIB-VERSION", "result is a static C string")
+    raw const c_char* zlibVersion(); // R-DIAG-FFI-006
+}
+```
+
+<a id="R-CONF-G006"></a>
+
+**R-CONF-G006** — Examples illustrate rules but do not override grammar or normative paragraphs. Conformance repository shall expand each Annex B code into isolated positive/negative test pairs and shall record expected rule IDs. C FFI matrix shall cover the mandatory static-library, global, verification and callback cases of R-CONF-G009; dynamic/framework/system linking, TLS and C-origin threads follow the conditional target-capability matrix stated there. Core syntax/type fixtures shall cover bare and qualified aggregate type names, constructor-context resolution including a colliding ordinary name and every inadmissible braced head, direct-braced aggregate allocation, parenthesized expression allocation, declaration-wins parsing, default export and protected access rejection, contextual representable/out-of-range integer literals in object and payload initialization, simple assignment, by-value arguments, ordinary return and checked throw paths, plus default literal typing outside those contexts, and the identity of each standardized atomic shorthand with its expanded spelling. They shall prove that `bytes` and `array<u8>` have one canonical type identity, layout, capability set and interface fingerprint; accept either spelling where the other is expected; accept the allocation-free empty initializer through both spellings; reject declaration or shadowing in the aggregate type-name space; and still accept `bytes` as an ordinary value, function, module, variant or member name. Direct-call fixtures shall pass each source admitted by R-EXPR-0027 to one exact `const u8[]` parameter, prove byte-for-byte zero-copy observation and original-source borrow provenance, and reject the same owner/fixed-array contextual conversion in initialization, assignment, return and conditional common-type contexts. They shall also reject a non-u8 sequence and any source move or structural mutation overlapping the derived shared borrow. They shall also cover `constexpr str` literal typing, runtime selection, aggregate storage, passing, return and weakening to ordinary `str`; rejection of promotion from an ordinary string and `constexpr` on every other type; and lowercase-only `o` type and variant spellings. Conditional-expression fixtures shall reject a conditional expression directly and at depth in every call-argument form and return operand listed in R-EXPR-0014, and accept it in an object initializer and an assignment. Explicit-generic fixtures shall close result-only, constant and `errors` parameters with `name::<...>` in plain, qualified, owner-prefixed and receiver calls and in function items, select one overload member, form method items with the receiver as first parameter, and reject lists of the wrong length or form, lists after non-generic names and calls that leave a parameter uninferred. Tuple and pack fixtures shall build, read, destructure and spread tuples of Copy and Move elements, instantiate a function with a pack for several lengths including zero, recurse over a pack under `@if (len(T...) != 0usize)`, forward and extend a pack, call a callable whose signature ends in a pack, and destroy every piece of a spread exactly once, including after a rejected async start. Translation-time fixtures shall compute a table, a size used by a module-scope type and an enumerator value, replace a call with constant arguments by its value, reject in a required context a panicking call, a call over the translation-time limits and a call of a run-time function with `R-DIAG-CONST-003`, `R-DIAG-LIMIT-001` and `R-DIAG-CONST-002`, and execute a panicking call outside such a context at run time. They shall also throw, catch and rethrow checked errors of constant values and of an error family during translation and reject an error that leaves a required constant with `R-DIAG-CONST-003`, compute binary32 and binary64 values bit for bit as at run time, build and read arrays, lists, dictionaries, strings, options and tagged values, and freeze owners into `const` module and static objects that the program reads without allocation. Static-condition fixtures shall select a statement branch and module declarations by constant conditions, including a module condition that uses a declaration selected by another one, decide a condition over a constant generic parameter per instantiation and reject a condition that is not constant or panics. Computed-formula fixtures shall close a generic field, a signature, a local and a constant argument that call a function over the parameters for each instance, including an instance closed at module scope, and reject a formula that panics, is not evaluable for an instance or measures its own instance. Checked-error fixtures shall cover exact nominal error types, canonicalized error sets, `throw`, rethrow, multiple typed catches and `finally`. Async fixtures shall cover the declaration marker, logical return type, immediate `std.async::start_error` effect, `task<T throws E...>` value, exact closed `std.async` paths, composed awaits in initializers, returns, arguments, conditions and loop expressions, and rejection of await in synchronous functions, static initializers and finally bodies.
+
+### G.5 Canonical syntax and paired examples
+
+| Decision | Accepted R 0.1 | Rejected form / diagnostic |
+| --- | --- | --- |
+| Aggregate type spelling | `struct S { i32 x; }; S value = { .x = 0 };` | `struct S value = { .x = 0 };` / `R-DIAG-SYN-001` |
+| No typedef declaration | `S value = { .x = 0 };` after the definition of S | `typedef i32 Id;` / `R-DIAG-SYN-001` |
+| Type-name-aware declaration | `S* value = source;` when S resolves to an aggregate type | The same form when S is not a type / `R-DIAG-NAME-001` |
+| Braced constructor namespace | `example.api::S value = example.api::S { .x = 0 };` | Braces after an ordinary function name / `R-DIAG-TYPE-001` |
+| Direct-braced aggregate allocation | `own S* value = new S{ .x = 0 };` | `new S({ .x = 0 })` / `R-DIAG-SYN-001` |
+| Explicit cast uses `as` | `u32 y = x as u32;` | `u32 y = (u32)x;` / `R-DIAG-SYN-001` |
+| Small-integer compound result | `u8 x = 255; x += 1;` produces zero | `u8 y = x + 1;` without `as u8` / `R-DIAG-TYPE-001` |
+| Raw arithmetic requires unsafe | `unsafe { raw i32* q = p + 1usize; }` | Same initializer outside unsafe / `R-DIAG-UNSAFE-001` |
+| Module composition | `import platform.api;` | `#include "api.h"` / `R-DIAG-LEX-004` |
+| Default export and protected helper | `i32 api(); protected i32 helper();` | Access to `helper` from another module / `R-DIAG-NAME-001` |
+| C variadic import | Verified custom C declaration `c_int log_values(raw const c_char* format, ...);` with `@safety` | R definition with `...` / `R-DIAG-SYN-001` |
+| Payload alternatives | `enum E { I(i32), F(f32) };` | `union U { i32 i; f32 f; };` / `R-DIAG-SYN-001` |
+| Braced branch body | `if (a == 1) { b += 1; }` | `if (a == 1) b += 1;` / `R-DIAG-SYN-001` |
+| Explicit condition | `if (a == 1) { }` | `if (a) { }` / `R-DIAG-SYN-001` |
+| Tuple and type pack (R-TYPE-0052, R-TYPE-0053) | `(i32, bool) t = (1, true); i32 n = t.0;` and `@generic<T...> usize count(T... values)` | `T values` for a pack `T` / `R-DIAG-TYPE-001` |
+| Method chain (R-FUNC-0024) | `@chain Options Options::with_port(Options this, u16 value)` and `Options::create().with_port(80u16).with_capacity(4usize)` | a suffix after a method without `@chain` / `R-DIAG-SYN-001` |
+| Explicit switch transfer | `switch (x) { case 0: fallthrough; default: break; }` | A clause reaching the next label / `R-DIAG-SYN-001` |
+| Nested call argument (R-EXPR-0020) | `outer(inner());` or `i32 value = inner(); outer(value);` with compatible types | Result of `inner()` incompatible with the parameter type of `outer` / `R-DIAG-TYPE-001` |
+| Call in return (R-EXPR-0020, R-STMT-0005) | `return compute();` or `i32 value = compute(); return value;` with compatible types | Result of `compute()` incompatible with the enclosing function’s return type / `R-DIAG-TYPE-001` |
+| Eager asynchronous start | `task<u32> started = compute_async();` in a function declaring `throws std.async::start_error`, for `async u32 compute_async()` | Treating the call result as `u32` / `R-DIAG-TYPE-001` |
+| Explicit task observation | `u32 value = await move pending;` inside an async function | `return await move pending;` or `consume(await move pending);` / `R-DIAG-SYN-001` |
+| Void task observation | `await move pending;` for `task<void>` | Standalone await of `task<u32>` / `R-DIAG-ASYNC-001` |
+| Direct-call task observation | `u32 value = await compute_async();` and `await write_output(move data);` inside async functions with handled call and completion errors | `await pending;` or `await move compute_async();` / `R-DIAG-SYN-001` |
+| Asynchronous entry point | `async i32 main()` in `hosted-native-async` | Async main in a profile without its runtime / `R-DIAG-PROFILE-001` |
+| Checked-error declaration | `u32 f() throws Error { return 1; }` | `u32 f() throws i32 { return 1; }` / `R-DIAG-TYPE-001` |
+| Direct checked throw | `u32 f() throws Error { throw { .code = 1 }; }` when Error is the unique matching error type | A braced operand matching multiple or no permitted error types / `R-DIAG-TYPE-001` |
+| Typed handling and cleanup | `try { work(); } catch (Error error) { handle(move error); } finally { cleanup(); }` | Duplicate catch type or `await`/outward transfer in finally / `R-DIAG-FLOW-001` |
+| Payload-free function end | `void finish() { work(); }` needs no final `return;` | Reaching the end of `i32` / `R-DIAG-FLOW-001` |
+| Named fork before return | `i32 status = (count == 0) ? 1 : 2; return status;` | `return (count == 0) ? 1 : 2;` or `f((count == 0) ? 1 : 2);` / `R-DIAG-FLOW-001` |
+| Explicit generic arguments | `array<i32> values = make::<i32>(); auto read = Point::get;` | `make()` when `T` occurs only in the result, or `make::<i32, i32>()` / `R-DIAG-TYPE-001` |
+| Nullable marked `?` | `const i32*? p = null;` | `const i32* p = null;` / `R-DIAG-TYPE-001` |
+| Named move explicit | `own u8* b = move a;` | `own u8* b = a;` / `R-DIAG-MOVE-001` |
+| Atomic shared owner | `arc S a = new arc S { .x = 0 };` | `arc S a = null;` / `R-DIAG-TYPE-001` |
+| Fast local shared owner | `rc i32 a = new rc i32(1);` | Transfer of `a` to unscoped thread / `R-DIAG-MEM-001` |
+| Reference clone explicit | `arc S b = std.arc::clone(&a);` | `arc S b = a;` / `R-DIAG-MOVE-001` |
+| Weak owner explicit | `weak arc S w = std.arc::downgrade(&a);` | Dereference of `w` / `R-DIAG-TYPE-001` |
+| Scoped borrowed thread | `thread_scope { std.thread::scoped_join_handle<void> h = std.thread::spawn_scoped(worker, &value); }` in a function declaring `throws std.thread::thread_error` | Scoped handle or borrow escaping block / `R-DIAG-MEM-001` |
+| Atomic shorthand | `au32 flags = 0;` | Arithmetic directly on flags / `R-DIAG-TYPE-001` |
+| Contextual array and byte literals | `u8[3] bytes = { 0xcb, 0x48, 0xcd };` | `u8[1] bytes = { 0x100 };` / `R-DIAG-CONST-001` |
+| Complete array type before the name | `Entry[MAX_ENTRIES] entries;` | C split declarator `Entry entries[MAX_ENTRIES];` / `R-DIAG-SYN-001` |
+| Contextual integer literals | `u8 value = 1; value = 2; if (value < 0x80) { take_u8(3); }` | An out-of-range literal for a required destination or case type / `R-DIAG-CONST-001` |
+| Zero parameters | `Status initial_status()` | Native R `Status initial_status(void)` / `R-DIAG-SYN-001` |
+| Program-image string | `constexpr str text = count == 0 ? "yes" : "no";` | Conversion of an ordinary `str` to `constexpr str` / `R-DIAG-TYPE-001` |
+| Lowercase tagged type constructors | `o<i32> value = o::some(1);` | `Option<i32> value = o::some(1);` / `R-DIAG-SYN-001` |
+| Lowercase built-in variants | `o<i32> value = o::some(1);` | `o<i32> value = o::Some<1>;` / `R-DIAG-NAME-001` |
+| Dynamic array | `array<i32> values = std.array::create::<i32>();` | Copy of `values` without `move` / `R-DIAG-MOVE-001` |
+| Owned byte alias | `bytes data = {};` is exactly `array<u8> data = {};`; the separate ordinary, module, variant and field name spaces may also use that spelling | Declaring aggregate type `struct bytes { };` / `R-DIAG-NAME-003` |
+| Contextual read-only byte view | An exact `const u8[]` parameter directly accepts `str`, `constexpr str`, `bytes`, `array<u8>`, `u8[N]`, `u8[]` or `const u8[]` without copying | Using that contextual owner/array conversion for a variable initializer, or passing `array<u16>` / `R-DIAG-TYPE-001` |
+| Stable-node list | `list<i32> values = std.list::create::<i32>();` | Copy of `values` without `move` / `R-DIAG-MOVE-001` |
+| Associated dictionary key contract | `u64 Key::hash(const Key* value); bool Key::equal(const Key* left, const Key* right);` with matching definitions | Only one operation or a mismatched signature / `R-DIAG-TYPE-001` |
+| Linear-probing dictionary | `dict<Key,u32> counts = std.dict::create::<Key, u32>();` after the key contract | Nominal key without a key contract / `R-DIAG-TYPE-001` |
+| Inferred returned-borrow origin | `const i32* id(const i32* x) { return x; }` | A source-only borrowed-output declaration without definition/interface metadata / `R-DIAG-BORROW-002` |
+| C library is logical | `@link(name = "z", kind = "dynamic")` | Absolute/path-like library name / `R-DIAG-LINK-001` |
+| C ABI is verified | `@link(name = "api", kind = "static") @header("api.h") @abi("api.abi") extern "C" { @safety("API-VERSION", "no preconditions") c_int api_version(); }` | Non-empty unverified block / `R-DIAG-FFI-006` |
+| Opaque C type is pointer-only | `@link(name = "api", kind = "static") @header("api.h") @abi("api.abi") extern "C" { @c_type(name = "Handle", kind = "struct") opaque struct Handle; @safety("HANDLE-OPEN", "returns null or a live handle") raw Handle*? open_handle(); }` | Opaque `Handle` by value / `R-DIAG-FFI-003` |
+| Callback type is exact | `raw fn?(c_int) -> c_int callback = null;` | Mismatched callback prototype / `R-DIAG-FFI-005` |
+
+<a id="R-CONF-G007"></a>
+
+**R-CONF-G007** — Each rejected form in this table shall be represented by a negative conformance test with the listed primary diagnostic; each accepted form shall have a positive parse/type counterpart.
+
+### G.6 Release criteria
+
+<a id="R-CONF-G008"></a>
+
+**R-CONF-G008** — R 0.1 implementation may claim complete only when every normative rule is implemented or explicitly classified non-automatable, no known safe test reaches C UB, generated C is reproducible, and exported ABI manifests compare equal across repeated builds on same target.
+
+<a id="R-CONF-G009"></a>
+
+**R-CONF-G009** — Implementation claiming external C library support shall test a real minimal C17 static library: function, global, opaque handle, complete repr© struct with hidden-member-in-padding mismatch test, C integer constant plus same-value/wrong-type constant rejection, valid promoted variadic call plus unpromoted/variadic-definition rejection, retained userdata, portable null-for-non-null and invalid-enum ingress, omitted extra C enumerator, unused but representable enum value, missing artifact or typed symbol, header/ABI-record disagreement, wrong-provider evidence root, record target/options/artifact mismatch, two-provider same-spelling collision and cross-target host-fallback rejection. Mutable save/canonicalize/restore R-IDB-020 modes test C observation, change and exact restoration of rounding mode, exception flags and applicable extra state in outbound calls and C-origin entries. Proven immutable-canonical mode tests that attempted foreign change has no effect and every observation remains canonical. Unavailable contract-only mode instead tests acceptance of an `@fenv("preserve")` direct import and rejection of an unmarked/fenv-sensitive import, raw function-pointer call or exported `extern "C"` definition without executing a violated contract. Every implementation supporting C-origin entry additionally tests synchronous nested same-thread re-entry while already attached. Dynamic/framework/system, runtime-load failure, TLS and entry from a newly C-created thread run only for supported target capabilities. An unsupported link kind is a negative test when the target has one; absent optional `c_wint` is a negative test when unavailable, and present `c_wint` receives a positive manifest/range test. All C compiles use warnings as errors; sanitizer/substitute/non-applicability follows R-CMAP-0015.
+
+<a id="R-CONF-G010"></a>
+
+**R-CONF-G010** — The English and Russian files of one document revision shall have identical anchor sequences, normative rule-ID multisets, and source/EBNF blocks. The English file is normative. A release shall identify the Russian file as a translation, and any conflict shall be resolved in favor of the English text.
+
+<a id="R-CONF-G011"></a>
+
+**R-CONF-G011** — Every implementation supporting allocation/new shall test managed ownership independently of thread support: move without count change; explicit strong/weak clone; exactly-once T drop and block lifetime through last weak; allocator balance after successful/failing `try_unwrap`; remaining weak handles after unwrap; uniqueness success/failure and non-observable sentinel; injected strong/explicit-weak overflow before mutation; and balanced same-thread `into_raw`/`from_raw` round trips, including two equal pointer values carrying two distinct obligations. Under unwind strategy it shall additionally verify allocator balance after initializer and first drop panic. Under abort strategy subprocess tests instead verify process abort and absence of subsequent R drops; post-panic allocator balance is not required. Defined strong-cycle leak and weak-backedge reclamation shall be tested when the profile supplies a standardized safe interior-mutation facility capable of constructing those graphs; otherwise the suite records those two cases as not applicable to that profile.
+
+Every allocation-supporting profile shall additionally test `array<T>` contiguous order, fallible geometric growth, returned Move payloads and reverse-order destruction. It shall prove that the last use of every array element or slice borrow precedes a structural mutation, including reallocation and removal that shifts later elements. Dictionary tests shall cover predefined and nominal key contracts; exact signatures and closed effects of `K::hash`/`K::equal`; equal-key hash consistency; collisions, linear probing, tombstones, the load-factor boundary, rehash failure and insertion order; and recovery of both staged Move inputs after failed insertion. List tests shall retain node borrows across insertion and across removal of a proven-distinct node, verify unchanged addresses, require the removed node’s exclusive borrow, enforce iterator/mutation conflicts, and verify back-to-front destruction and allocation balance.
+
+Every `hosted-native-async` implementation shall inject both task-start failures and prove that no body instruction executes, no named Move operand changes state and every provisional runtime retain is balanced. Negative cases shall stage `move value` and then attempt, in a later argument, to read, write, borrow, repeat `move value` or access an overlapping subobject; each shall require `R-DIAG-BORROW-001`. Under unwind, a panic while evaluating a later disjoint argument and each injected start failure shall release the reservation and leave the original named source immediately usable; an abort-strategy subprocess shall instead terminate under R-ERR-0005 without asserting cleanup. A separate negative case shall reject nested `Payload { .owner = move value }` with `R-DIAG-MOVE-003`, while accepting a separately initialized named Payload passed as the complete direct Move argument. A successful start shall commit each by-value Move argument once, copy or retain every other argument as its signature requires, become independently runnable eagerly and publish all inputs before body access. Tests shall compose named consuming await and direct-call await with calls, conditions, returns and initializers under R-STMT-0012; reject frame-crossing views in ordinary async functions and verify supervised Send views under R-STMT-0017; verify `task<T throws E...>` Send derivation, including every E, and unconditional non-Sync status; and observe the release/acquire completion edge. Under R-STMT-0018 tests shall race a timer against native I/O and against computation, select among simultaneously terminal members, observe one of several child errors while the others are destroyed once, and delay cancellation acknowledgement while proving a single cleanup. Under R-STMT-0017 tests shall show that a detached member frees its slot once it is terminal, that the group exit cancels and drains a detached member that still runs, and that its outcome is destroyed once. Under R-STMT-0019 tests shall show that a task started inside a deadline block, a group member and a standard operation called without a deadline argument report `timed_out` once the deadline of the block has passed, that an explicit later deadline and a nested later block do not extend it, that a task started before the block and the waits without a deadline are not bounded by it, and that every exit from the block restores the previous deadline. Cancel, ordinary drop, detach, deadline and completion races shall reach one terminal outcome, retain all frame/native resources until cancellation acknowledgement, and perform exactly-once result/frame cleanup. Under unwind, observed panic shall re-raise at await and unobserved panic shall reach the configured handler. Async-main termination shall cancel and drain every remaining task before module destruction. Injected root executor/frame reservation failure shall execute no main-body instruction, report the exact start-error category, select a documented nonzero status and perform no R static/module destruction. Runtime tracing shall demonstrate that potentially blocking I/O is not executed as a blocking C call on an executor worker. Every hosted implementation shall inject startup-snapshot allocation failure and supply one native argument outside the R-IDB-022 representable domain for each of `main()` and `main(const str[] args)`; every `hosted-native-async` implementation shall repeat those cases for `async i32 main()` and `async i32 main(const str[] args)`. The cases shall prove respectively that `allocation_failure` or `argument_encoding_failure` is reported before any R static initialization or main-body instruction, with no invalid `str` materialized and with the distinct documented nonzero status. A zero-native-argument fixture using an argument-taking main shall observe the documented synthesized element zero and the same byte-identical nonempty snapshot through main args and `std.env::arguments()`. A combined invalid-argument/allocation-failure fixture shall report `argument_encoding_failure`; a combined provider/argument failure shall report `link_load_failure`. An asynchronous fixture with a valid snapshot shall separately inject root executor/frame start failure and report its start-error category, proving that it reached the later phase.
+
+Every profile shall exercise `core::validate_utf8` with valid and invalid instances of every RFC 3629 sequence class, verify the exact first-invalid-byte index, zero allocator calls and no source mutation on either outcome, and prove that a successful view from mutable storage prevents mutation until the returned `str` reaches its last use.
+
+Every profile shall type-check the seven universal R-UNSAFE-0008 signatures and require `R-DIAG-UNSAFE-001` for each operation, and for `source as D` representation transmute, outside an unsafe context. Valid raw-parts fixtures shall create shared and mutable slices of a nonempty live allocation plus an empty slice from a null pointer, verify exact length and alias effect, prove that no element is copied or allocation is performed, and keep the backing storage live for the complete fresh inferred result region. Anchored fixtures shall return views from methods of the anchoring object, keep one in a struct, anchor to a slice and a `str`, and require diagnostics for a moved, dropped or assigned anchor, and for a mutable-form anchor that is read, while the view is live, for an anchor that is not a place or a borrow of one and for an anchor without the required permission. Volatile fixtures over an instrumented compatible object shall observe exactly one load and one store of T and no atomic or synchronizes-with edge; Move, borrow-bearing, string-bearing and atomic T cases shall require `R-DIAG-TYPE-003`. A valid same-size Copy `source as D` fixture shall preserve the source and produce the exact valid target representation; unequal size, excluded component and direct or recursive `constexpr str` target cases shall require `R-DIAG-TYPE-003`. `core::assume(true)` shall type-check and introduce no observable runtime effect. Null nonempty raw parts, invalid transmute bits and `core::assume(false)` are unsafe- contract violations: the suite shall inspect their published contract metadata and shall not execute them as required conformance tests.
+
+Every allocation-supporting profile shall additionally type-check both adoption/release signatures, reject their use outside an unsafe context, and run a compatible single-T allocation fixture that adopts its exact base pointer and proves one ordinary owner drop/deallocation. A second fixture shall adopt, then `core::release(move owner)`, prove that the returned pointer is the identical base, that no R drop or deallocation occurred at release, and that the external fixture performs each transferred duty exactly once; the named owner shall be moved and unusable. Duplicate or non-base adoption and an incorrect released-pointer duty are unsafe-contract violations: the suite shall inspect their published contract metadata and shall not execute them as required conformance tests.
+
+Every profile shall test that a `void` function may reach its closing brace, including its async logical-return form, while an otherwise reachable end of a value-returning function requires `R-DIAG-FLOW-001`. It shall test nested calls and awaits in return operands, with ordered evaluation and cleanup on checked failure and cancellation.
+
+Checked-error fixtures shall accept exact named complete `error` declarations in struct and enum form, including explicitly registered standard error types and permitted closed nominal instantiations; reject ordinary struct/enum types in throws, throw, catch and task/thread error sets with `R-DIAG-EFFECT-002`; verify contextual `error` identifiers, forward references, imports, both member grammars and rejection of mixed forms; reject void, scalar, pointer, borrow, slice, runtime `str`, anonymous structural, incomplete and uninhabited candidates; reject a duplicate error type after canonical qualification; and prove that different source orders produce one compatible checked-error set and interface fingerprint. They shall accept named Copy and Move `throw` operands, requiring `move` for the latter, and direct in-place braced construction only when the outgoing checked-error set contains exactly one error type and that sole type is a complete struct. They shall reject implicit error conversion and narrowing. A call, `await` or `join` effect shall either be caught by an enclosing exact typed catch or be a member of the enclosing declaration’s `throws` set; unchecked and undeclared propagation requires `R-DIAG-FLOW-001`. Applying `try` as an expression prefix rather than beginning a try statement shall require a syntax diagnostic.
+
+Try-statement fixtures shall cover multiple distinct catches, exact type selection, source-order-independent matching, an unmatched error, and an error thrown by a catch bypassing its sibling catches. They shall cover `throw;` from a catch, rejection outside a catch and after moving or dropping the catch binding, and selection only by a nested or outer try. Finally fixtures shall execute exactly once after normal completion, handled and unmatched error, rethrow, return, break and continue, in inner-to-outer order where nested. Under unwind strategy, they shall additionally prove exactly-once finally execution during panic unwind. Under abort strategy, an isolated subprocess shall instead prove that a first panic aborts without executing any not-yet-started finally. They shall reject duplicate catch types; outward return, throw, rethrow, break or continue from finally; every residual checked effect; and every `await` within finally. They shall prove staged return/error ownership and exactly-once payload/local cleanup, including when cleanup itself panics under the selected panic strategy. They shall test that `expression as void` follows R-EXPR-0023: the operand is evaluated once; a Copy operand leaves its source usable; and a Move operand is consumed with exactly-once destruction, including user drop and nested cleanup. They shall reject a named Move operand without `move` and use of its consumed source before reinitialization. Operand and drop effects, panics, checked errors and task-resolution obligations shall be preserved. Separate translation shall accept every `ai8`, `ai16`, `ai32`, `ai64`, `aisize`, `au8`, `au16`, `au32`, `au64`, and `ausize` declaration matched by a definition using its expanded atomic spelling. At least one fixture shall nest matched shorthand/expanded spellings within a pointer, fixed array, and raw-function signature and verify one canonical interface fingerprint. The suite shall reject direct arithmetic, atomic-suffix literals, nested `atomic ai32`, and C `_Atomic` ABI use. For each permitted `atomic i8`, `atomic u8`, `atomic i16`, and `atomic u16`, fetch fixtures shall verify the returned old T, unsigned modulo final conversion, and signed overflow before modification. Cross-module fixtures shall prove default export, reject protected access and mismatched prototype/definition visibility, accept bare self-referential and qualified aggregate type names, and reject old `struct Name`/`enum Name` type-use spellings. The suite shall type every string literal as `constexpr str`; accept runtime conditional selection between literals and storage, copy, argument passing and return through a runtime aggregate; and accept implicit weakening to an ordinary `str` with the inferred source region. It shall reject conversion of ordinary, allocated or foreign-backed strings to `constexpr str` and `constexpr` applied to any other type. It shall accept `const constexpr str` as an immutable descriptor object, safely read a module or block-static object of that type, accept reassignment of a non-`const` local descriptor between literal-derived values, and reject reassignment of a `const` descriptor. It shall reject direct address-of applied to a string-literal descriptor with `R-DIAG-BORROW-002` while accepting a shared borrow of an in-bounds indexed literal byte, including through a conditional or returned descriptor temporary. It shall reject an exclusive borrow or write of that byte with `R-DIAG-BORROW-001`, reject string range subscripting with `R-DIAG-TYPE-001`, and reject chained literal-to-byte-slice conversion with that same code while accepting the two named staging declarations required by R-EXPR-0015 and the direct contextual literal argument admitted by R-EXPR-0027. It shall reject a conditional common type that would need the same two-edge conversion, accept a literal argument for a by-value `const constexpr str` parameter, and reject outermost object `const` on a function return type with `R-DIAG-TYPE-001`. It shall accept `const str` for a parameter or local descriptor while preserving its compiler-inferred origin, verify that Copy member access from an aggregate value removes only outermost object `const`, and verify the same removal for Copy-place conditional arms. It shall verify that a member place preserves effective `const` from either its field or aggregate path, rejecting write or exclusive borrow with `R-DIAG-BORROW-001` while accepting the corresponding mutable-place operations. It shall likewise construct and extract a Copy `o` payload whose component has outermost object `const`, producing an unqualified value, and reject moving an outermost-`const` Move payload with `R-DIAG-TYPE-001`. It shall accept only lowercase built-in `o<T>`, `o::some` and `o::none` spellings and reject their former uppercase spellings. Empty `constexpr str` shall use the program-lifetime sentinel required by R-TYPE-0028. Every C-signature nesting depth, including a raw-pointer pointee, shall reject both R string descriptor types. Direct or recursively contained `constexpr str` transmute targets shall be rejected with `R-DIAG-TYPE-003`.
+
+A hosted-thread profile shall additionally inject thread-creation failure and prove that entry is not invoked, every named Move operand remains initialized and unchanged, and each staged temporary is destroyed exactly once. Spawn argument fixtures shall repeat the staged `move value` overlap rejections required above and shall prove reservation release after a later-argument panic under unwind and after creation failure; an abort-strategy subprocess shall verify termination without asserting cleanup. They shall also repeat the nested `Payload { .owner = move value }` rejection and separately initialized payload acceptance. It shall also test safe `rc` transfer rejection, `arc` Send/Sync derivation, contended clone/drop with one last drop, upgrade versus last release, unwrap versus upgrade, scoped-borrow escape rejection and join on every exit, local `lock_result<State>` whose contained guard carries the creating lock’s inferred region, rejection where that guard would escape or enter forbidden storage, and local `scoped_join_handle<R throws E...>` carrying its inferred thread-scope region, same-region scoped-handle transfer plus nested handle return with supervisor revocation and no double observation, completion of all scoped target waits before an implicit outcome-drop panic, unwind `panicked` join result versus abort-strategy process abort with no join result, guard non-Send/poison recovery, and channel FIFO, rendezvous, disconnect, returned unsent value, factory-drop and queued-value drop. Concurrent tests use TSan or the substitute/limitation record required by R-CMAP-0015. Under unwind strategy, a fixture shall retain the `constexpr str` returned by `panic_category`, destroy the originating `panic_report`, and then observe the same category value successfully.
+
+An implementation supporting managed-owner C adapters shall statically reject direct or nested managed signatures, `@repr(C)` fields and transmute. Its conformance fixture shall explicitly declare user-named exported `extern "C"` create, retain and release adapters for one `arc` T; no name is synthesized. It shall execute one balanced sequence in which create yields one obligation, retain yields a second without consuming the first, and two releases reclaim the allocation. If newly C-created-thread entry is supported and R-IDB-020 is not unavailable, one release shall run on such an attached thread using Send+Sync T, attaching before decrement and releasing all obligations before shutdown. If that thread capability is absent, this cross-thread subcase is recorded as not applicable without a rejection test; if the capability exists but R-IDB-020 is unavailable, the suite performs the R-CONF-G009 boundary-rejection test. If `rc` C adapters are claimed, a corresponding balanced sequence shall run entirely within one live explicit attachment generation. Forged, repeated, wrong-family, wrong-T and wrong-thread/generation tokens are unsafe-contract violations and shall not be executed as required conformance tests; the suite inspects their published contract metadata and separately compile-rejects safe `rc` cross-thread transfer. A hardened adapter may additionally test its documented rejection behavior.
+
+<a id="R-CONF-G012"></a>
+
+**R-CONF-G012** — A target claiming `hosted-native-async` with a filesystem adapter lane shall prove by runtime tracing that the lane has exactly four threads, is disjoint from executor workers, admits only the manifest operations allowed by R-CMAP-0039 and never executes R code or payload I/O. Conformance tests shall cancel or expire an operation while queued and while inside every admitted native-call family, verify that queued work does not enter the native call, and verify acknowledgement, retention and exactly-once cleanup for begun work. Namespace and durability tests shall cover cancellation before and after the documented commit point and shall observe committed success after a late cancellation. Saturating the lane shall not prevent ready R continuations, console, network, DNS, timer or child-process completions from progressing. A target providing the blocking call pool of R-TERM-0015 shall likewise prove that the pool never runs more threads than its manifest records, is disjoint from executor workers and from the lane, never enters a call cancelled while queued and acknowledges an entered call only after it returns; saturating the pool shall not prevent ready R continuations or native completions from progressing.
+
+<a id="annex-h"></a>
+
+## Annex H — Portability recommendations (non-normative)
+
+This annex is informative.
+
+- Prefer fixed-width R integers for serialized/on-disk/network data and `c_*` types only at an FFI boundary.
+- Do not persist default R aggregate representation; define an explicit byte encoding or a reviewed `@repr(C)` protocol.
+- Treat signed/unsigned mixing as a review finding even though R defines it.
+- Declare recoverable allocation and I/O failures with `throws`; reserve `new` for code whose policy is panic on allocation failure.
+- Keep unsafe blocks minimal and place a comment citing an Annex E or project safety contract beside each unsafe operation.
+- Avoid depending on NaN payload, allocation address, padding, thread scheduling, atomic lock-freedom or diagnostic prose.
+- Prefer `rc T` for proven single-thread shared ownership and `arc T` only when an owner must cross threads; neither form makes mutation of T synchronized.
+- Use weak back edges for reference-counted graphs and test reclamation; strong cycles are intentionally not collected.
+- Expose C ownership with paired create/destroy functions and opaque raw handles; never expose default R layout as stable ABI.
+- Keep physical library/header paths in per-target link manifest; use the same logical `@link` name across Linux, macOS and Windows and pin non-system digests.
+- Treat header verification as ABI evidence, not source import. Commit generated R bindings and re-verify them whenever header, feature macro, compiler or sysroot changes.
+- Package required dynamic library beside application according to manifest and test a clean-machine launch; successful link does not prove runtime loadability.
+- Test generated C with multiple optimization levels and C17 compilers. A sanitizer pass complements but does not prove the abstract-machine mapping.
+- Pin Unicode data, C compiler, re2c and formatter versions in reproducible builds.
+- Preserve every exported borrow-origin relation in interface metadata and include it in API compatibility review.
+
+### H.1 Compatibility checklist
+
+| Question | Portable answer | Reason |
+| --- | --- | --- |
+| Does code depend on `usize == 64`? | No | R-IDB-001 permits 32 or 64 |
+| Does code inspect struct bytes? | No | Default layout and padding vary |
+| Does code depend on pointer order? | No | Safe R defines only equality |
+| Can panic cross C? | No | Boundary aborts by definition |
+| Can array be passed as pointer implicitly? | No | Use explicit borrow/slice/raw conversion |
+| Can C `long` be represented by `i64`? | No assumption | Use `c_long` |
+| Can a shared borrow outlive its owner? | No | Lifetime constraint |
+| Can relaxed atomics be used for publication? | No | Use release/acquire or stronger |
+| Can `rc T` be moved to another thread? | No | `rc` and `weak rc` are never Send or Sync |
+| Does `arc T` make T’s fields thread-safe? | No | It protects lifetime only; use atomics, mutex or rw\_lock |
+| Does observing strong count one grant mutation? | No | Only linearizable `get_mut` grants an exclusive borrow |
+| May a scoped handle escape `thread_scope`? | No | Its hidden inferred region is bound to the block and every child is joined |
+| Can `@link` contain `.so/.dylib/.lib` path? | No | Logical name resolves through target manifest |
+| Does `@header` import C names/macros into R? | No | It only drives ABI verification |
+| Does successful static link prove dynamic deployment? | No | Clean startup must resolve manifest runtime identity |
+
+### H.2 Index of normative rule families
+
+| Prefix | Subject |
+| --- | --- |
+| `R-GEN`, `R-REF`, `R-TERM`, `R-CONF` | General, references, terminology, conformance |
+| `R-AM` | Abstract machine |
+| `R-LEX`, `R-GRAM` | Source, lexical elements, grammar |
+| `R-NAME`, `R-TYPE`, `R-OBJ` | Names, types, objects |
+| `R-INIT`, `R-OWN`, `R-BORROW` | Initialization, ownership, borrowing |
+| `R-EXPR`, `R-STMT`, `R-FUNC` | Expressions, statements, functions |
+| `R-AGG`, `R-ARRAY`, `R-ERR` | Aggregates, arrays/strings, error behavior |
+| `R-UNSAFE`, `R-SAFETY` | Unsafe boundary and contracts |
+| `R-MEM`, `R-MOD`, `R-FFI` | Concurrency, modules, C interoperability |
+| `R-LIBREF`, `R-LIMIT` | Standard-library integration and limits |
+| `R-REFL` | Static reflection |
+| `R-DIAG`, `R-IDB`, `R-USB`, `R-CMAP` | Annex catalogs and C17 mapping |
+
+*End of R Core Language Specification 0.1 draft.*

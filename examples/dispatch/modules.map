@@ -1,0 +1,6 @@
+example.dispatch.main = src/main.r
+example.dispatch.routes = src/routes.r
+example.dispatch.priority = src/priority.r
+example.dispatch.roster = src/roster.r
+example.calculator.common = ../calculator/src/common.r
+example.dispatch.messages = src/messages.r

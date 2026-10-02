@@ -1,0 +1,106 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "debug",
+      "displayName": "R frontend debug",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "R_FRONTEND_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "sanitizers",
+      "inherits": "debug",
+      "displayName": "R frontend ASan and UBSan",
+      "binaryDir": "${sourceDir}/build/sanitizers",
+      "cacheVariables": {
+        "R_FRONTEND_ENABLE_SANITIZERS": "ON"
+      }
+    },
+    {
+      "name": "fuzz",
+      "inherits": "sanitizers",
+      "displayName": "R frontend byte fuzzers",
+      "binaryDir": "${sourceDir}/build/fuzz",
+      "cacheVariables": {
+        "R_FRONTEND_ENABLE_FUZZERS": "ON"
+      }
+    },
+    {
+      "name": "thread-sanitizer",
+      "inherits": "debug",
+      "displayName": "R frontend ThreadSanitizer",
+      "binaryDir": "${sourceDir}/build/thread-sanitizer",
+      "cacheVariables": {
+        "R_FRONTEND_ENABLE_THREAD_SANITIZER": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "debug"
+    },
+    {
+      "name": "sanitizers",
+      "configurePreset": "sanitizers"
+    },
+    {
+      "name": "fuzz",
+      "configurePreset": "fuzz"
+    },
+    {
+      "name": "thread-sanitizer",
+      "configurePreset": "thread-sanitizer"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "sanitizers",
+      "configurePreset": "sanitizers",
+      "environment": {
+        "ASAN_OPTIONS": "abort_on_error=1",
+        "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1"
+      },
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "fuzz",
+      "configurePreset": "fuzz",
+      "environment": {
+        "ASAN_OPTIONS": "abort_on_error=1",
+        "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1"
+      },
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "thread-sanitizer",
+      "configurePreset": "thread-sanitizer",
+      "environment": {
+        "TSAN_OPTIONS": "halt_on_error=1"
+      },
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

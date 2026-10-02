@@ -1,0 +1,87 @@
+(mir version=1 core_revision="0.1.0-draft.95"
+  (function name="test.codegen.switch_clauses::main" visibility=exported return=i32 state=definition
+    (block bb0
+      (local place=%local0 name="index" type=i32)
+      (%v0 = constant type=i32 value=0)
+      (store place=%local0 value=%v0)
+      (local place=%local1 name="sum" type=i32)
+      (%v1 = constant type=i32 value=0)
+      (store place=%local1 value=%v1)
+      (jump target=bb1)
+    )
+    (block bb1
+      (%v2 = load place=%local0 type=i32)
+      (%v3 = constant type=i32 value=4)
+      (%v4 = binary op="<" left=%v2 right=%v3 type=bool)
+      (branch condition=%v4 then=bb2 else=bb3)
+    )
+    (block bb2
+      (%v5 = load place=%local0 type=i32)
+      (%v6 = constant type=i32 value=0)
+      (%v7 = binary op="==" left=%v5 right=%v6 type=bool)
+      (branch condition=%v7 then=bb4 else=bb9)
+    )
+    (block bb3
+      (%v27 = load place=%local1 type=i32)
+      (%v28 = constant type=i32 value=9)
+      (%v29 = binary op="==" left=%v27 right=%v28 type=bool)
+      (branch condition=%v29 then=bb11 else=bb12)
+    )
+    (block bb4
+      (%v12 = load place=%local1 type=i32)
+      (%v13 = constant type=i32 value=1)
+      (%v14 = binary op="+" left=%v12 right=%v13 type=i32)
+      (store place=%local1 value=%v14)
+      (jump target=bb5)
+    )
+    (block bb5
+      (%v15 = load place=%local1 type=i32)
+      (%v16 = constant type=i32 value=2)
+      (%v17 = binary op="+" left=%v15 right=%v16 type=i32)
+      (store place=%local1 value=%v17)
+      (jump target=bb8)
+    )
+    (block bb6
+      (%v18 = load place=%local0 type=i32)
+      (%v19 = constant type=i32 value=1)
+      (%v20 = binary op="+" left=%v18 right=%v19 type=i32)
+      (store place=%local0 value=%v20)
+      (jump target=bb1)
+    )
+    (block bb7
+      (%v21 = load place=%local1 type=i32)
+      (%v22 = constant type=i32 value=4)
+      (%v23 = binary op="+" left=%v21 right=%v22 type=i32)
+      (store place=%local1 value=%v23)
+      (jump target=bb8)
+    )
+    (block bb8
+      (%v24 = load place=%local0 type=i32)
+      (%v25 = constant type=i32 value=1)
+      (%v26 = binary op="+" left=%v24 right=%v25 type=i32)
+      (store place=%local0 value=%v26)
+      (jump target=bb1)
+    )
+    (block bb9
+      (%v8 = constant type=i32 value=1)
+      (%v9 = binary op="==" left=%v5 right=%v8 type=bool)
+      (branch condition=%v9 then=bb5 else=bb10)
+    )
+    (block bb10
+      (%v10 = constant type=i32 value=2)
+      (%v11 = binary op="==" left=%v5 right=%v10 type=bool)
+      (branch condition=%v11 then=bb6 else=bb7)
+    )
+    (block bb11
+      (%v30 = constant type=i32 value=0)
+      (return value=%v30)
+    )
+    (block bb12
+      (%v31 = constant type=i32 value=1)
+      (return value=%v31)
+    )
+    (block bb13
+      (unreachable)
+    )
+  )
+)

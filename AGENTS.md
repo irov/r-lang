@@ -1,0 +1,248 @@
+# Working in the R repository
+
+This file is for coding agents (Claude Code, Codex and others) and for people who want the same
+rules. It says what the repository is, which gates a change must pass, and what is easy to get
+wrong. Longer references: [compiler/README.md](compiler/README.md) (the compiler, its artifacts,
+build and test), [docs/C_CODE_STYLE.md](docs/C_CODE_STYLE.md) (the C contract),
+[examples/README.md](examples/README.md) (the application catalogue),
+[docs/language-completeness-roadmap.ru.md](docs/language-completeness-roadmap.ru.md) and
+[docs/language-completeness-matrix.ru.md](docs/language-completeness-matrix.ru.md) (the stage
+history, in Russian).
+
+## What this is
+
+R is a systems language with ownership, checked errors and structured concurrency. The
+repository holds everything of its 0.1 implementation for one target, `arm64-apple-darwin`:
+
+| Directory | Contents |
+| --- | --- |
+| `specification/` | The normative Core (`R_LANGUAGE_SPECIFICATION_0_1`) and Standard Library (`R_STANDARD_LIBRARY_SPECIFICATION_0_1`) specifications, English and Russian, AsciiDoc (Core also rendered to Markdown); `generated/` holds the rule inventories derived from them |
+| `compiler/` | `r-front`: re2c lexer, CST, AST, whole-program semantic analysis, typed HIR and MIR, strict ISO C17 emitter. Strict C17, no stable external ABI |
+| `runtime/` | The hosted runtime (allocator, containers, strings, tasks) and `runtime/darwin` (executor, Dispatch I/O, sockets, processes, timers, file-system lane) |
+| `library/` | The standard library: `core` and `std/*` in C (one public operation per `.c` file), `r/std/*.r` modules written in R and listed in `library/r/library.map`, `native/*` providers behind the checked FFI (TLS over Mbed TLS, crypto over libsodium, SQLite, mmap), `internal/` shared code, `generated/` inventories |
+| `targets/` | The pinned target manifests (toolchain, ABI, stack budgets, specification revisions) |
+| `tests/` | C unit tests, CMake check drivers, R fixtures, golden artifacts, Python differential tests and the `run_*_examples.py` drivers of the examples |
+| `examples/` | The example applications, each with `src/*.r`, `modules.map` and a README; `catalogue.cmake`, `coverage.json` and `syntax-coverage.json` index them |
+| `tools/` | Generators and checkers (rule inventories, library inventory, registries, ABI digests, style, parity, coverage); `toolchain.lock` pins the reference tools |
+| `cmake/` | `RThirdParty.cmake`: download of pinned third-party archives at configuration |
+| `docs/` | Design and audit documents; the roadmap and matrix record every stage and its verification |
+
+The specification is normative. The implementation follows it, not the other way round: a
+behaviour that is not specified is first written into the specification (both languages), then
+implemented, then verified. Every rule has an identifier (`R-FUNC-0020`, `R-SLIB-PG-0005`, ...)
+and comments, tests and documents cite those identifiers.
+
+## Rules that are not negotiable
+
+1. **No commit, amend or push without the owner's explicit request in the conversation.** Finish
+   the work in the tree, run the gates, report what is uncommitted.
+2. **No third-party files in the repository.** External sources and data are downloaded at
+   configuration by `r_third_party_archive` (`cmake/RThirdParty.cmake`) with a pinned URL and
+   hash into `build/third_party`, which all build trees share. Our own generated tables and
+   extractions (Unicode tables, RFC examples) stay in the tree. The one derived file is
+   `compiler/codegen/layout.inc`, a C translation of parts of clang-format: it keeps its
+   SPDX header and the LLVM license text in `compiler/codegen/LICENSE-LLVM.txt`; code taken or
+   translated from elsewhere is declared the same way, never disguised.
+3. **Generated files are regenerated, never edited by hand.** Each has a generator in `tools/` or a
+   `regenerate*` CMake target, and a `--verify`/`--check` mode or a test that fails when the
+   committed file is stale.
+4. **Every warning is an error; no suppressions.** Project C is strict ISO C17 with the warning set
+   of the CMake files. Third-party code (`r_sqlite3`) is the only documented exception.
+5. **No `assert` in production or generated C** (`production-assertion-check`). Contract
+   violations panic through the runtime (`r_runtime_panic`) or abort; tests use their own
+   `R_TEST_CHECK`/`require` helpers.
+6. **English and Russian specifications move together**, with the same rules, the same tables and
+   the same line structure of tables (`tools/check_spec_parity.py`). A revision bump touches all
+   the places listed below in one change.
+7. **Nothing is "done" before its gates pass** (see *Gates*), and the stage record in the matrix
+   says what was run and what failed.
+
+## Environment
+
+macOS on Apple silicon with the Xcode command-line tools pinned by `targets/*.json` (the build
+checks the compiler and SDK: `target-toolchain-check`), CMake ≥ 3.25, Python 3, and from
+Homebrew: `mbedtls@3` (std.tls), `libsodium` (std.crypto), optionally `postgresql@17` (the
+std.postgres tests and the `orders` example register only when `pg_ctl` is found). The build
+downloads the SQLite amalgamation and the COSE examples on first configuration; a machine
+without network needs the archives copied into `build/third_party` (the error message names the
+file and hash). Optional for their checks only: `clang-format 22.1.8` (`format-check`), `re2c
+4.5.1` (`verify_generated_lexer`), `asciidoctor 2.0.26` (`specification-render-check`); the
+exact versions are in `tools/toolchain.lock`.
+
+## Build and test
+
+Four CMake presets, each with its own tree under `build/`:
+
+```sh
+cmake --preset debug && cmake --build --preset debug -j8 && ctest --preset debug -j6
+cmake --preset sanitizers        # ASan + UBSan
+cmake --preset thread-sanitizer  # TSan
+cmake --preset fuzz              # libFuzzer if available, else a standalone driver; ASan/UBSan
+```
+
+- Run a subset with `ctest --test-dir build/debug -R 'pattern' --output-on-failure`. Test names:
+  `r_frontend_codegen_<fixture>` compiles and runs `tests/fixtures/codegen_<fixture>.r`;
+  `r_frontend_codegen_example_<name>` builds an example and `r_example_<name>_commands` runs its
+  driver; `r_frontend_codegen_rtest_<module>` translates `library/r/tests/<module>.r` in test mode
+  and runs it; `r_library_*_unit` are C unit tests; `r_*_vectors` and `r_*_differential` compare
+  with an oracle (Python modules, RFC vectors, psql).
+- A full run of one preset takes 8–30 minutes and writes a few GB of `codegen_*` artifacts into
+  `build/<preset>/tests`; delete them between runs when the disk is tight. Pass
+  `--output-on-failure`, otherwise the cause of a rare failure is lost when `LastTest.log` is
+  overwritten.
+- Never edit sources or fixtures while `ctest` runs in the same tree: fixtures and R modules are
+  read at test time.
+- The complete verification of a stage ("the battery") is all four presets plus the audits below.
+  Four long command tests (`calculator`, `numbers`, `deflate`, `xml`) and `r_regex_differential`
+  are skipped under TSan for time; everything else runs everywhere.
+- A failure that passes on rerun is not a flake until proven: of the last six "flakes" five were
+  real races (lost bytes, use-after-free, cancellation windows). Loop the test under CPU load
+  (`yes > /dev/null` hogs, 4–12 parallel copies of the binary) before calling it timing.
+
+## Gates
+
+Build these targets from `build/debug` and run the two audit scripts before reporting a change
+as finished. The matrix records their results per stage.
+
+| Target or command | Checks |
+| --- | --- |
+| `specification-check` | standard methods table, EN/RU parity, grammar manifest, rule inventories, target manifests, target ABI digests, Copy/Move ABI, type and operation registries — all against the committed files |
+| `c-style-check` | the invariants of `docs/C_CODE_STYLE.md` that clang-format cannot express |
+| `production-assertion-check` | no runtime assertions in production or generated C |
+| `library-source-surface-audit` | every concrete public library name compiles from R source |
+| `runtime-entry-stack-inventory-check` | the runtime entry stack inventory matches the measured entries |
+| `library-layout-check`, `library-coverage-check`, `verify_library_inventory` | library source ownership, inventory coverage and freshness (also run as tests) |
+| `semantic-slice-audit`, `lowering-rejection-audit` | informational (exit 2 by design): counts of semantic slice sites and lowering rejections; compare with the previous stage |
+| `python3 tools/audit_compiler_implementation.py --compiler build/debug/r-front` | the implementation probes (all must be accepted) |
+| `python3 tools/audit_language_safety.py --compiler build/debug/r-front --sanitized-compiler build/sanitizers/r-front` | the safety probes (all must pass) |
+| `format-check` | clang-format conformance (needs the pinned clang-format) |
+
+## Checklists by kind of change
+
+### Compiler (`compiler/`)
+
+- Tests live in `tests/*_tests.c` (unit), `tests/fixtures/*.r` with `tests/check_*.cmake` and
+  `tests/check_*.py` drivers (acceptance and rejection with exact diagnostics), and
+  `tests/golden/*.sexp` (artifact goldens). A new diagnostic needs a rejection fixture; a new
+  lowering needs a sync and an async fixture (`codegen_<x>.r`, `codegen_async_<x>.r`).
+- Diagnostics store message pointers: pass string literals, never stack buffers.
+- Compiler-interface artifacts (`--emit=interface`, HIR/MIR dumps) carry an interface schema
+  number. Changing their shape bumps it in `compiler/mir/mir.c`, the `tests/check_*.py` that
+  assert it, `tests/compiler_interface_tests.c`, every "Interface schema N" sentence of both
+  specifications and `compiler/README.md`.
+- New enum values of standard operations go at the end of their enum; dump switches in
+  `compiler/hir/hir.c` and `compiler/mir/mir.c` need the new cases.
+- Describe the design in the relevant section of `compiler/README.md`; it is the compiler's
+  reference, not a changelog.
+
+### Specification (`specification/`)
+
+- Edit the English and Russian AsciiDoc together (and the Core Markdown renders), keeping rule
+  identifiers, table rows and the line structure of table rows identical.
+- Regenerate the rule inventories: `python3 tools/generate_rule_inventory.py --specification
+  specification/<DOC>.en.adoc --inventory specification/generated/<DOC>.rules.json --write` for
+  the changed document, then `specification-check`.
+- A revision bump (`0.1.0-draft.N`) and a rule-count change touch:
+  `tools/generate_rule_inventory.py`,
+  `tools/check_grammar.py` (Core), `tools/check_target_manifest.py` (both counts, three places),
+  `tests/tooling/test_spec_contracts.py`, `targets/*.json`, `compiler/include/r_frontend.h`
+  (Core), `compiler/grammar/annex_a_manifest.json` (Core), the revision rows of the specification
+  files, `tests/golden/*.sexp` (`core_revision`), `compiler/README.md`; then regenerate the
+  grammar manifest and the target ABI digests (`regenerate-grammar-manifest`,
+  `regenerate-target-abi`) and rebuild `r-front` (the digests are compiled in).
+- Annex A of the Library specification lists every public item; a new operation or type needs
+  its row, and the library inventory (below) is derived from the English document.
+
+### Standard library (`library/`)
+
+- C modules: one public operation per `.c` file named after it, one non-`static` symbol; shared
+  code in `library/internal/<subsystem>`; `r_library_internal_*` names never appear in generated
+  interfaces. Native providers (`library/native/*`) are reached only through the checked FFI
+  declared in `library/r/links.json`.
+- R-source modules (`library/r/std/*.r`): register in `library/r/library.map` with the least
+  profile that provides the module; a module of the `allocation` or `freestanding` profile cannot
+  use `std.string`, `bytes`, f-strings or `@derive(format)` (gate hosted items with a module-level
+  `@if` on `core::profile`). `tests/check_library_profiles.py` (test `r_library_source_profiles`)
+  verifies the profiles. The R part of a C module is a map entry under the C module's path.
+- After any public-surface change, regenerate in this order: `regenerate_library_inventory`,
+  `python3 tools/generate_standard_methods.py`, `regenerate-standard-operation-registry`,
+  `regenerate-standard-type-registry`, `regenerate-named-standard-copy-abi`,
+  `regenerate-named-standard-move-abi`, `regenerate-target-abi`, then rebuild. Module counts are
+  asserted in `tests/tooling/test_library_inventory.py`.
+- Every public inventory record must be used by an example application
+  (`tools/check_example_coverage.py --frontend build/debug/r-front --write` regenerates
+  `examples/coverage.json`; the `r_example_catalogue` test fails when it is stale, also after a
+  mere edit of an example's `.r` file).
+- Tests of R-source modules are `library/r/tests/<module>.r` with `@test` functions
+  (`std.test`); the file is discovered by the build. Tests that need external services skip
+  cleanly without the driver's environment (see `tests/run_postgres_tests.py`).
+- A new runtime entry point: `tools/generate_runtime_entry_stack.py`,
+  `regenerate-runtime-entry-stack-inventory` and the count in
+  `tests/tooling/test_runtime_entry_stack.py`.
+
+### Examples (`examples/`)
+
+- An application has `src/*.r`, `modules.map`, a README with its commands and expected output,
+  an entry in `examples/catalogue.cmake` and `catalogue.json`, a row in `examples/README.md`, a
+  driver `tests/run_<name>_examples.py` registered in `tests/CMakeLists.txt`, and regenerated
+  `coverage.json` / `syntax-coverage.json` (`tools/check_example_syntax.py`).
+- Drivers compare exact stdout, stderr and exit status. Environment failures are not caught in
+  examples (they end as `std.error::fault`, exit 71); CLI-contract failures use `sysexits`-style
+  codes (64 usage, 65 data, 69 unavailable).
+
+### Runtime (`runtime/`)
+
+- Darwin adapters publish one linearized terminal outcome per operation (R-SLIB-ASYNC-0007):
+  task cancellation is selected immediately but reaches the native request asynchronously, so an
+  operation with a commit point either gates its native entry (the
+  `r_runtime_darwin_io_prepared_set_shutdown_entry` pattern) or forces completion after a
+  committed native call (`r_runtime_task_external_select_terminal_completion`). Late callbacks
+  (cancel, deadline, close) must hold a reference to the storage they touch.
+- Testing hooks (`R_RUNTIME_DARWIN_IO_TESTING`, `R_RUNTIME_DARWIN_FS_LANE_TESTING`) pause a worker
+  at a chosen point so a race becomes a deterministic test; prefer them to sleeps.
+
+## Writing R in the library and examples
+
+The library modules and examples are R programs; the compiler enforces the specification, and
+these rules are the ones that most often reject otherwise reasonable code:
+
+- Grammar: `if (c) { } else { }` only — there is no `else if`; use `switch`, early `return` or
+  nested blocks. `throw (condition) error_value;` is the conditional throw.
+- Reserved words that look like names: `list`, `raw`, `import`, `export`, `move`, `drop`.
+- Functions are declared before use in source order; `protected` marks module-private items.
+- R-FUNC-0020: every result is used, forwarded or discarded with `as void` on every path, including
+  the zero-iteration path of a loop; a named Move value is discarded with `drop name;`.
+- R-INIT-0014: a value produced inside `task_scope` is accumulated into storage declared outside
+  it (`total += await child;`), not assigned.
+- `@scoped` async calls need an enclosing `task_scope`, even inside `@scoped` functions, and a
+  scoped child may borrow only storage declared outside that scope (nest a second scope for
+  values created inside).
+- A borrow local (`guard.get_mut()`) cannot live across `await` in a non-scoped async function;
+  pass it inline.
+- `new arc T(v)` directly as the argument of an awaited call is outside the C17 lowering; bind it
+  to a local first.
+- Importing an R-source module requires `import std.x;` even for the R part of a C module.
+- `constexpr str` converts to `const u8[]` through a `str` local (one conversion per expression).
+
+## Documentation and records
+
+- `docs/language-completeness-roadmap.ru.md` lists the stages (L = language, M = modules); each
+  stage has a checklist, a "done when" criterion and a completion note. The matrix
+  (`docs/language-completeness-matrix.ru.md`) has one section per stage with the item table, the
+  design decisions, every defect found (`<STAGE>-<n>`, cause and fix) and the final verification
+  table (all presets, audits). Write them in Russian, in the same register as the existing
+  sections; record a decision the roadmap leaves open as yours, with the reason.
+- Code comments, READMEs, commit messages and `compiler/README.md` are English. Comments explain
+  why and cite rule identifiers; they do not restate the code.
+- Commit messages: a short English subject, a body that says what changed and why, with the
+  specification revisions when they moved.
+
+## Housekeeping
+
+- Keep the repository root to the files already there; scratch files, logs and downloads belong
+  outside the repository or under `build/` (ignored).
+- `.gitignore` excludes `build/`, `*.plist` (static-analyzer reports), Python caches, editor and
+  assistant settings and `.DS_Store`. Do not add exceptions for local tools.
+- Test clusters (PostgreSQL) and servers started by drivers are stopped by the drivers; a killed
+  driver may leave one — check with `ps` before and after long runs, and never stop processes of
+  other projects on the machine.

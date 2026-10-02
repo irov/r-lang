@@ -1,0 +1,25 @@
+{
+  "schema": "r-link-manifest-0.1",
+  "links": [
+    {
+      "logical_name": "first",
+      "available": true,
+      "kind": "static",
+      "header_roots": ["tests/fixtures/ffi"],
+      "feature_test_definitions": ["PROBE_MODE=1"],
+      "symbols": [
+        {"c_identifier": "probe_increment", "kind": "function", "binding": "strong"}
+      ]
+    },
+    {
+      "logical_name": "second",
+      "available": true,
+      "kind": "static",
+      "header_roots": ["tests/fixtures/ffi"],
+      "feature_test_definitions": ["PROBE_MODE=2"],
+      "symbols": [
+        {"c_identifier": "probe_name", "kind": "function", "binding": "strong"}
+      ]
+    }
+  ]
+}

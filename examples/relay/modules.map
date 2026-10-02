@@ -1,0 +1,3 @@
+example.relay.main = src/main.r
+example.relay.lines = src/lines.r
+example.relay.channel = src/channel.r

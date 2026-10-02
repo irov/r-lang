@@ -1,0 +1,55 @@
+= Language extensions: implementation record
+
+The authorized scope is the five language changes identified after the strict-contract
+milestone. This record describes implementation decisions; normative rules and executable
+tests remain the acceptance criteria. Linux and resource-quota runtime work are separate.
+
+. Callable resource contracts: `fn @noalloc @nonblocking(P) -> R`, including raw C
+  function signatures, generic constraints, closure environments and interface fingerprints.
+  The guarantees cover invocation and environment cleanup. Forgetting a guarantee is safe;
+  adding one requires proof. Foreign implementation contracts
+  remain explicit trusted boundary obligations.
+. Checked and async closure bodies, and closures defined inside generic functions. Preserve
+  exact call modes, definition checking, transactional starts and capture cleanup.
+. Exported provenance contracts for returned borrows, projected origins and checked errors.
+  Missing proof never creates a new lifetime or permits a borrow to escape its owner.
+  Each normal result and nominal error exports an input-region union. Nested projections
+  share that bound; independent field lifetimes are not inferred.
+. Generic borrowed representations for synchronous processing, including safe composition
+  and cleanup. Suspension retains the existing Send and lifetime requirements.
+. `@must_use` functions and nominal types: diagnose ignored significant results and provide
+  explicit `expression as void` with ordinary cleanup. A named Move operand needs `move`;
+  a Copy operand preserves its source. The unread-binding check does not make values linear,
+  check each assigned version independently, or require an external operation to be committed.
+
+Core draft.43 and interface schema 13 introduced these contracts. The subsequent
+link:compositional-language.en.adoc[compositional language work] extends them with
+component-level provenance, richer traits, opaque results, matching and scoped tasks. Source definitions remain
+required for generic imports. Runtime carriers and C ABI representations are unchanged.
+
+The link:../examples/preflight/README.md[`preflight packet TEXT`] command combines a checked
+closure inside a generic function, a borrowed view, a resource-constrained callable,
+a significant result and an async closure. The borrowed processing scope ends before await.
+
+Focused regression coverage lives in
+link:../tests/check_borrowed_callables.py[borrowed callables and exported contracts],
+link:../tests/check_closure_modes.py[closure modes and generic modules],
+link:../tests/check_resource_contracts.py[resource contracts], and the corresponding
+`codegen_*borrowed_views`, `codegen_*must_use` and closure runtime fixtures. Fault-injection
+wrappers verify start recovery, actual suspension, cancellation and exactly-once owner cleanup.
+
+Validation includes negative definition checks, CST roundtrip, deterministic metadata,
+sync/async runtime tests, fault injection and cleanup, Debug CTest, targeted sanitizers,
+specification and ABI/layout/inventory checks, and the service examples.
+
+== Validation result
+
+On the arm64 macOS host, the final Debug build passed all 1732 CTest tests, including
+ZIP/unzip roundtrip and overwrite rejection. The targeted ASan/UBSan run passed 23 tests.
+Both builds completed without warnings. Specification, grammar/rule inventories, target
+ABI/layout, runtime entry contracts, example coverage, generated C17 formatting and source
+format/style checks passed. The library inventory remains at 979 public items across
+37 modules, with no partial or unimplemented records.
+
+The final full run used two parallel jobs after higher concurrency exhausted temporary disk
+space. Intermediate failing runs were superseded by the complete successful run.

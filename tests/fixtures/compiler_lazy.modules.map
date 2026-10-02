@@ -1,0 +1,3 @@
+compiler.lazy.dependency = compiler_lazy_dependency.r
+compiler.lazy.main = compiler_lazy_main.r
+compiler.lazy.unused = file_that_must_not_be_loaded.r

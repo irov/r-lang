@@ -1,0 +1,2 @@
+example.orders.main = src/main.r
+example.orders.store = src/store.r

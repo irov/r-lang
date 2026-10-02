@@ -1,0 +1,4 @@
+example.assistant.main = src/main.r
+example.assistant.memory = src/memory.r
+example.assistant.demo = src/demo.r
+example.assistant.frames = src/frames.r

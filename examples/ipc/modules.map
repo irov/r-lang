@@ -1,0 +1,3 @@
+example.ipc.main = src/main.r
+example.ipc.stream = src/stream.r
+example.ipc.datagram = src/datagram.r

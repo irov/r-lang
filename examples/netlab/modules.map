@@ -1,0 +1,7 @@
+example.netlab.main = src/main.r
+example.netlab.tcp = src/tcp.r
+example.netlab.handoff = src/handoff.r
+example.netlab.udp = src/udp.r
+example.netlab.address = src/address.r
+example.netlab.tune = src/tune.r
+example.netlab.dial = src/dial.r

@@ -1,0 +1,2249 @@
+= Глубокий аудит безопасности языка и компилятора
+:toc:
+:toclevels: 3
+
+Дата среза: 10 сентября 2026 года.
+
+== Результат
+
+Последний диагностический проход подтверждает одну ошибочную приёмку: обычное
+присваивание уже инициализированному atomic достигает C17 вопреки R-INIT-0012.
+Расширенная положительная матрица также нашла 11 отказов для корректных программ,
+объединённых в module/static storage, недоступные `core` intrinsic и
+borrow-output mapping. Реализация в этом проходе намеренно не исправлялась.
+Текущий opt-in результат — 100 из 101 safety probes и 25 из 36 положительных
+compiler-acceptance probes.
+
+Предыдущий расширенный аудит закрыл два класса дефектов. Критический дефект терял
+изменения ownership и borrow-состояния, выполненные `finally`, когда был активен
+отложенный `break`, `continue`, checked error или `return` через несколько
+`finally`. Восемь safe-исходников ошибочно достигали C17 и воспроизводили null
+dereference либо heap-use-after-free под ASan/UBSan в sync и async. Теперь все
+они отклоняются семантически до C17.
+
+Второй дефект имел среднюю серьёзность и ошибочно отклонял три корректные
+non-lexical lifetime программы. Анализ не распознавал как завершающий путь
+`throw (condition) A else B`, бесконечный `while (true)` и исчерпывающий
+terminating `switch`. Ещё один корректный контроль reinitialization ошибочно
+отклонялся устаревшей snapshot-моделью первого дефекта. Все четыре программы
+теперь генерируют C17 и исполняются с кодом 0.
+
+На том этапе были добавлены минимальные audit fixtures и постоянные
+CTest-регрессии. До текущего расширения opt-in аудит проходил полностью: 99
+probes, 99 passed, 0 failed. Нормативная спецификация не менялась: исправление
+привело frontend в соответствие существующим правилам.
+
+На предыдущем этапе были исправлены две связанные с control flow ошибки.
+Non-lexical lifetime analysis завершает старый borrow на пути, который уходит
+через обычный `throw`, `break` или `continue`, если продолжающийся путь до
+будущего чтения гарантированно заменяет borrow. Вложенный `break` внутри case
+разрешается относительно ближайшего `switch`, даже если вокруг нет цикла.
+
+Предыдущий этап исправил будущую полную перезапись borrow-переменной на обычном
+продолжающемся пути. Анализ будущих использований отделяет RHS простого
+присваивания от destination и завершает прежний lifetime после гарантированной
+безошибочной перезаписи. Для aggregate проверяется конкретное поле и его projected
+provenance.
+
+Предыдущий этап аудита закрыл два дефекта. Первый был критическим: whole-object `move`
+aggregate, который содержит owner и активный borrow этого же owner, терял
+projected-borrow metadata. Frontend разрешал заменить owner и оставлял висячий
+указатель в соседнем поле; AddressSanitizer подтверждал `heap-use-after-free` в
+обычной и закрытой generic-программах. Исправление переносит и перепривязывает
+покомпонентное состояние через `move`, вызов generic-функции, `?:`, whole-object
+и field assignment, а также через вложенные aggregate initializer.
+
+Второй дефект ошибочно отклонял корректную программу после обычного Copy
+aggregate с borrow-полем. Проверка записи в storage теперь отличает borrow самого
+слота от независимой копии хранящегося указателя. Явный borrow поля по-прежнему
+запрещает его замену.
+
+На том этапе были добавлены три положительных control-transfer NLL-пробы, три
+отрицательных NLL контроля, проверки вложенного `break`, его точной цели и выхода
+через `finally` в sync/async. Исходный opt-in аудит содержал 84 проверки; до
+добавления новых воспроизведений все 84 проходили в Debug, ASan/UBSan и сборке
+Homebrew Clang 22.1.8. Нормативный контракт не изменялся.
+
+Предыдущий аудит нашёл и закрыл критический дефект в обновлении provenance
+borrow-bearing aggregate после присваивания отдельному полю. До того исправления
+safe-программа могла сохранить в поле borrow из соседнего owner, заменить owner
+и затем прочитать освобождённую память. AddressSanitizer подтверждал
+heap-use-after-free в sync и async, для вложенного поля, generic aggregate,
+`error`, индексируемого aggregate и slice после перевыделения `array`.
+
+Тогда были добавлены девять отрицательных seed и три близких положительных
+контроля. Тот opt-in срез содержал 54 проверки, и все 54 проходили. Небезопасные
+программы отклоняются с `R-DIAG-BORROW-001` до C17; замена прежнего origin и
+изменение непересекающегося поля остаются допустимыми. Нормативный контракт не
+менялся.
+
+Предыдущий аудит нашёл и закрыл критический класс дефектов в специальных lowerer
+стандартной библиотеки. Компилятор не сопоставлял происхождение отдельных
+аргументов `std.bytes`, `std.string` и `std.array`, поэтому принимал
+exclusive-доступ к буферу вместе с перекрывающим shared-доступом или чтением.
+
+`std.bytes::append(&value, value)` при расширении освобождает прежнее хранилище,
+после чего runtime копирует из уже освобождённого `source`. Аналогично работают
+`std.string::append_str(&value, std.string::as_str(&value))` и `append_utf8` с
+`as_bytes`. AddressSanitizer подтвердил heap-use-after-free с чтением 1048576
+байт для bytes и 36 байт для string, включая async/MIR. Теперь все специальные
+вызовы проходят общую рекурсивную проверку доступа при создании
+`R_HIR_STANDARD_CALL`; эти программы отклоняются с `R-DIAG-BORROW-001` до C17.
+
+В том срезе были добавлены десять отрицательных seed и шесть положительных
+контролей. Десять небезопасных программ закреплены как штатные отрицательные
+CTest-регрессии; distinct-origin и доказуемо непересекающиеся диапазоны остаются
+допустимыми.
+
+Исправления предыдущих аудитов остаются действующими. Обычные вызовы и aggregate
+initializer рекурсивно проверяют последующие read, borrow и Move относительно
+ранних borrow-bearing значений. Подготовка стандартных aggregate-схем не
+сохраняет указатели на перевыделяемые таблицы компилятора. Также остаются
+закрытыми найденные ранее риски в итераторах, срезах, `core::adopt`,
+`core::slice_from_raw_parts`, async start carriers, составных error-схемах,
+`std.io::as_error`, `std.fs::as_error` и C17-доступе к полям
+`std.dict::entry_ref`.
+
+Семантический аудит запускается командой:
+
+[source,sh]
+----
+python3 tools/audit_language_safety.py \
+    --compiler build-debug/r-front \
+    --sanitized-compiler build-sanitize/r-front
+----
+
+Текущий результат: 99 probes, 99 passed, 0 failed.
+
+Семантический отказ для прежних воспроизведений проверяется командами:
+
+[source,sh]
+----
+python3 tools/run_sanitized_codegen_probe.py \
+    --build build-sanitize \
+    --expect-diagnostic R-DIAG-BORROW-001 \
+    --source tests/fixtures/audit_move_self_contained_borrow_uaf.r
+
+python3 tools/run_sanitized_codegen_probe.py \
+    --build build-sanitize \
+    --expect-diagnostic R-DIAG-BORROW-001 \
+    --source tests/fixtures/audit_generic_move_self_contained_borrow_uaf.r
+----
+
+Обе команды подтверждают семантический отказ до генерации C17. До исправления
+generated C завершался на AddressSanitizer `heap-use-after-free`. Близкий
+корректный контроль проходит без sanitizer error:
+
+[source,sh]
+----
+python3 tools/run_sanitized_codegen_probe.py \
+    --build build-sanitize \
+    --source tests/fixtures/audit_move_self_contained_borrow_after_last_use.r
+----
+
+Исправленный сценарий проверяется прямым запуском frontend:
+
+[source,sh]
+----
+build-debug/r-front \
+    tests/fixtures/audit_copy_borrow_aggregate_field_reassignment.r
+----
+
+Frontend принимает программу; generated C17 исполняется с кодом 0. Контроль, где
+вторая копия больше не используется, также принимается:
+
+[source,sh]
+----
+python3 tools/run_sanitized_codegen_probe.py \
+    --build build-sanitize \
+    --source tests/fixtures/audit_copy_borrow_aggregate_dead_copy_reassignment.r
+----
+
+Ранее добавленная семантическая регрессия проверяется командой:
+
+[source,sh]
+----
+python3 tools/run_sanitized_codegen_probe.py \
+    --build build-sanitize \
+    --expect-diagnostic R-DIAG-BORROW-001 \
+    --source tests/fixtures/audit_aggregate_initializer_borrow_then_move_same_origin.r
+----
+
+Команда завершается успешно, подтверждая семантический отказ до генерации C.
+Checked-error seed проверяется так же:
+
+[source,sh]
+----
+python3 tools/run_sanitized_codegen_probe.py \
+    --build build-sanitize \
+    --expect-diagnostic R-DIAG-BORROW-001 \
+    --source tests/fixtures/audit_error_initializer_borrow_then_move_same_origin.r
+----
+
+Distinct-origin контроль обязан завершиться успешно:
+
+[source,sh]
+----
+python3 tools/run_sanitized_codegen_probe.py \
+    --build build-sanitize \
+    --source tests/fixtures/audit_aggregate_initializer_borrow_then_move_distinct_origins.r
+----
+
+Runtime-контрпримеры воспроизводятся отдельно:
+
+[source,sh]
+----
+python3 tools/run_sanitized_codegen_probe.py \
+    --build build-sanitize \
+    --expect-diagnostic R-DIAG-BORROW-001 \
+    --source tests/fixtures/audit_call_borrow_then_conditional_move_same_origin.r
+
+python3 tools/run_sanitized_codegen_probe.py \
+    --build build-sanitize \
+    --expect-diagnostic R-DIAG-BORROW-001 \
+    --source tests/fixtures/audit_call_borrow_then_aggregate_move_same_origin.r
+
+python3 tools/run_sanitized_codegen_probe.py \
+    --build build-sanitize \
+    --expect-diagnostic R-DIAG-BORROW-001 \
+    --source tests/fixtures/audit_call_borrow_then_variant_move_same_origin.r
+
+python3 tools/run_sanitized_codegen_probe.py \
+    --build build-sanitize \
+    --expect-diagnostic R-DIAG-BORROW-001 \
+    --source tests/fixtures/audit_call_borrow_then_new_aggregate_move_same_origin.r
+----
+
+Все четыре команды теперь успешно подтверждают отказ `r-front` с
+`R-DIAG-BORROW-001` до генерации C.
+
+== Исходный срез
+
+* В репозитории нет `AGENTS.md` и корневого README. Инструкции сборки и описание
+  реализованного среза взяты из link:../compiler/README.md[].
+* Ветка `main` не имеет ни одного commit: `git rev-parse --verify HEAD` сообщает
+  `Needed a single revision`. Поэтому commit SHA зафиксировать невозможно.
+* До аудита `git status --porcelain=v1` содержал 17 неотслеживаемых
+  верхнеуровневых путей. Они сохранены; существующие исходники не очищались.
+* Итоговый SHA-256 Debug-компилятора:
+  `0234b74e8e52f7fdff346535ebccd765af93f90291a58edd80363963cc99bbf7`.
+  Итоговый SHA-256 ASan/UBSan-компилятора:
+  `2a7db90692e84ac51b95bdf2967cdb7fcf88cf28990c1f3f21423f10eafad75c`.
+  Итоговый SHA-256 компилятора, собранного Homebrew Clang 22.1.8:
+  `c44505a1a0b1752dec20682ebc4b95ffcd197144c6dc1945a4e52bc095d0a105`.
+* Инструменты: CMake/CTest 4.3.3, Apple Clang 21.0.0, Homebrew Clang 22.1.8,
+  Python 3.14.6, Darwin 25.6.0 arm64. `/usr/bin/gcc` является Apple Clang;
+  независимый GCC не найден.
+* В текущем срезе зарегистрировано 1157 Debug CTest. Весь набор прошёл как
+  1144 sandbox-safe теста и 13 loopback-тестов вне сетевого sandbox.
+
+Нормативным источником служат английские Core и Standard Library specifications.
+`compiler/README.md` прямо ограничивает текущую реализацию срезами, а
+link:compiler-implementation-audit.md[] фиксирует 21 известный acceptance gap.
+Повторный прогон этого inventory дал результат: 4 из 25 примеров приняты,
+21 не достигает C17. Эти известные недостающие возможности не смешиваются с
+ошибочным принятием небезопасных программ.
+
+== Исправленный критический дефект: состояние отложенного transfer через `finally`
+
+=== Серьёзность и контракт
+
+Серьёзность: критическая. Нарушены R-INIT-0008, R-OWN-0004,
+R-BORROW-0002/R-BORROW-0014, R-STMT-0009 и R-ERR-0002..0003. Изменение
+состояния, выполненное внутренним `finally`, обязано быть видимо следующему
+target или внешнему `finally`. Вместо этого frontend восстанавливает snapshot,
+снятый до выполнения cleanup, и допускает использование уже уничтоженного owner
+или borrow его освобождённого pointee.
+
+Минимальный switch-вариант находится в
+link:../tests/fixtures/audit_switch_break_finally_drops_owner.r[].
+
+[source,r]
+----
+i32 main() {
+    own i32* value = new i32(7);
+    switch (0) {
+        case 0:
+            try {
+                break;
+            } finally {
+                drop value;
+            }
+            break;
+        default:
+            break;
+    }
+    return *value;
+}
+----
+
+После `drop value` место имеет состояние `moved`, а разыменование нарушает
+R-OWN-0004. До исправления Debug, sanitizer и Homebrew Clang 22 frontend
+возвращали код 0 и пустой список диагностик. Теперь семантический отказ
+проверяется командой:
+
+[source,sh]
+----
+python3 tools/run_sanitized_codegen_probe.py \
+    --build build-sanitize \
+    --expect-diagnostic R-DIAG-MOVE-002 \
+    --source tests/fixtures/audit_switch_break_finally_drops_owner.r
+----
+
+Команда завершается успешно и подтверждает отказ до генерации C17. До
+исправления исполняемый результат завершался из-за срабатывания UBSan:
+
+[source,text]
+----
+runtime error: load of null pointer of type 'int32_t' (aka 'int')
+SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior
+----
+
+Существенная последовательность generated C сначала уничтожает owner в
+`finally`, а после перехода на switch target разыменовывает обнулённый handle:
+
+[source,c]
+----
+r_finally_body_00000001: {
+    r_type_drop_own_gate(&r_v00000001_00000074);
+}
+switch (r_pc_reason_00000001[r_pc_level_00000001 - UINT32_C(1)]) {
+case UINT32_C(1): {
+    r_pc_level_00000001 -= UINT32_C(1);
+    goto r_loop_break_00000001;
+}
+}
+r_loop_break_00000001:;
+int32_t r_t00000004 = (*(int32_t *)r_runtime_own_get_mut(&r_v00000001_00000074));
+----
+
+Тот же дефект подтверждён для:
+
+* `break` цикла —
+  link:../tests/fixtures/audit_loop_break_finally_drops_owner.r[];
+* `continue` цикла —
+  link:../tests/fixtures/audit_loop_continue_finally_drops_owner.r[];
+* checked error через внутренний `finally` к внешнему `catch` —
+  link:../tests/fixtures/audit_throw_finally_drops_owner_before_catch.r[];
+* `return` через два `finally`, где внешний читает borrow уничтоженного owner —
+  link:../tests/fixtures/audit_nested_finally_drops_borrow_origin.r[];
+* тот же путь в async/MIR —
+  link:../tests/fixtures/audit_async_nested_finally_drops_borrow_origin.r[].
+* перепривязка borrow внутренним `finally`, после которой внешний `finally`
+  уничтожает его новый origin, —
+  link:../tests/fixtures/audit_nested_finally_rebinds_borrow_origin.r[];
+* обнуление nullable owner внутренним `finally` при сохранённом старом
+  non-null fact —
+  link:../tests/fixtures/audit_nested_finally_clears_nullable_owner.r[].
+
+Пять исполняемых результатов завершаются на null dereference под UBSan, три
+воспроизводят `heap-use-after-free` под AddressSanitizer. Близкий
+корректный контроль
+link:../tests/fixtures/audit_finally_transfer_keeps_owner_control.r[] оставляет
+owner инициализированным, проверяет `break`, `continue`, `switch` и checked error
+и завершается с кодом 0 в Debug и ASan/UBSan.
+
+Обратный симптом той же snapshot-ошибки был зафиксирован в
+link:../tests/fixtures/audit_return_nested_finally_reinitializes_owner.r[]. Owner
+уничтожается до transfer, внутренний `finally` корректно reinitialize его, а
+внешний `finally` читает новое значение. Программа принимается по R-OWN-0006;
+до исправления frontend восстанавливал прежнее состояние и выдавал:
+
+[source,text]
+----
+R-DIAG-MOVE-002 [R-OWN-0004]: use of a moved value is not permitted
+----
+
+Контроль
+link:../tests/fixtures/audit_reinitialize_owner_before_nested_finally_control.r[]
+выполняет ту же reinitialization до начала pending transfer. Он принимается и
+исполняется с кодом 0 под ASan/UBSan, поэтому ложный отказ относится к переносу
+состояния через внутренний `finally`, а не к R-OWN-0006 в целом.
+
+=== Причина, исправление и регрессии
+
+`r_body_record_pending_finally_transfer`, `r_body_record_loop_object_state` и
+`r_body_record_switch_break_state` в
+link:../compiler/semantic/semantic.c[] сохраняют состояния в момент исходного
+transfer. `r_body_lower_try_statement` применяет результат `finally` к
+`merged_states` только для обычного достигающего выхода. Снимки loop/switch/catch
+и следующего внешнего `finally` не преобразовывались результатом внутреннего
+cleanup.
+
+Исправление временно отделяет существующие target snapshots от transfer-путей
+текущего `try`, применяет изменения `finally` только к новым путям и затем
+объединяет их обратно. Это сохраняет различия между ранее достигнутыми и новыми
+`break`, `continue`, `catch` и внешними `finally`. Каждый active `finally`
+дополнительно хранит глубину catch-стека, поэтому checked transfer во внешний
+`catch` отличается от локального `catch` даже при равных scope bases.
+Разыменование borrow также проверяет, что его локальный origin остаётся
+инициализированным.
+
+Восемь unsafe fixtures зарегистрированы в `SEMANTIC_PROBES` и постоянном CTest
+как ожидающие `rejected`; reinitialization-контроль ожидает `accepted`. Все
+девять проверок проходят в Debug и ASan/UBSan.
+
+== Исправленный дефект: NLL и составные terminating-пути
+
+=== Серьёзность и воспроизведение
+
+Серьёзность: средняя. Память не повреждается, но frontend нарушает
+CFG-based non-lexical lifetime из R-BORROW-0006 и отклоняет корректные программы.
+Представительный вход:
+link:../tests/fixtures/audit_nll_throw_else_branch_replaces_borrow.r[].
+
+[source,r]
+----
+const i32* alias = &source;
+source = 8;
+if (stop == true) {
+    throw (first == true) StopError { .code = 1, }
+        else StopError { .code = 2, };
+} else {
+    alias = &replacement;
+}
+return *alias - 11;
+----
+
+По R-ERR-0002 throw-with-else завершает обе ветви. Единственный путь к `return`
+заменяет `alias`, поэтому прежний borrow `source` заканчивается до присваивания
+`source = 8`. До исправления команда
+
+[source,sh]
+----
+build-debug/r-front --emit=c17 --diagnostics=json \
+    tests/fixtures/audit_nll_throw_else_branch_replaces_borrow.r
+----
+
+возвращала код 1:
+
+[source,text]
+----
+R-DIAG-BORROW-001 [R-BORROW-0002]:
+assignment conflicts with an active derived borrow
+----
+
+Явная эквивалентная пара обычных `if`/`throw` в
+link:../tests/fixtures/audit_nll_explicit_throw_branches_control.r[] принимается
+и исполняется с кодом 0 в Debug и ASan/UBSan. Два независимых terminating-пути
+дают тот же ложный отказ:
+
+* `while (true) {}` без `break` —
+  link:../tests/fixtures/audit_nll_infinite_loop_branch_replaces_borrow.r[];
+* исчерпывающий `switch`, все clauses которого бросают ошибку —
+  link:../tests/fixtures/audit_nll_terminating_switch_branch_replaces_borrow.r[].
+
+=== Причина, исправление и регрессии
+
+`r_body_ast_definitely_replaces_old_value` в
+link:../compiler/semantic/semantic.c[] использует отдельный синтаксический
+предикат вместо уже вычисленного control-flow результата. Для throw он считал
+terminating только форму без `R_SYNTAX_THROW_CONDITION`; наличие `else` не
+проверялось. `while` и `switch` функция вообще не классифицировала как
+непродолжающиеся statements.
+
+Общий AST-предикат теперь распознаёт `throw` с `else`, константно истинный
+условный `throw`, `while (true)` без достижимого `break` и `switch` с `default`,
+в котором каждый clause завершает внешний путь. Тот же результат используется
+loop-flow анализом. Три корректных fixtures и явный throw-control
+зарегистрированы как runtime CTest и исполняются с кодом 0 в Debug и ASan/UBSan.
+
+== Дополнительное исправление: диагностика перемещённого format-шаблона
+
+Полный sanitizer CTest обнаружил null dereference внутри frontend при обработке
+уже существующего отрицательного теста. После `std.format::format moved = move t`
+вызов `t.format()` правильно формировал `R-DIAG-MOVE-002`, но обработанный отказ
+borrow-lowering оставлял результат без HIR-узла. Внешний format-lowerer добавлял
+этот несуществующий узел в аргументы синтетического вызова и разыменовывал его.
+
+Теперь format-lowerer прекращает обработку после диагностированного невалидного
+receiver, а `r_format_call` проверяет целостность всех HIR-аргументов как
+внутренний инвариант. `r_frontend_semantic_unit` проходит в Debug и под
+ASan/UBSan; отрицательный сценарий по-прежнему выдаёт требуемый
+`R-DIAG-MOVE-002`.
+
+== Исправленный дефект: transfer-ветвь продлевала borrow lifetime
+
+=== Серьёзность и нарушенный контракт
+
+Серьёзность: средняя. Компилятор ошибочно отклонял корректные safe-программы;
+повреждения памяти не было. Дефект нарушал CFG-based non-lexical lifetime из
+`R-BORROW-0006` и порядок простой записи из `R-INIT-0007`. Для loop transfers
+также применяются `R-STMT-0004` и `R-STMT-0009`, для checked transfer —
+`R-ERR-0002` и `R-ERR-0003`.
+
+Если путь достигает будущего чтения borrow только после полной перезаписи, старая
+ссылка на источник на этом пути уже не используется. Альтернативный путь через
+`throw`, `break` или `continue` до чтения не доходит. Поэтому предшествующая
+мутация источника допустима.
+
+=== Исправление и проверки
+
+`r_body_ast_definitely_replaces_old_value` теперь считает безусловный `throw`,
+`break` и `continue` завершением локального последовательного пути. Внешний
+future-use анализ продолжает обходить `catch`/`finally`, назначение `break` и
+следующую итерацию. Поэтому transfer arm не создаёт ложное использование после
+`if`, но реальные использования в cleanup и у цели перехода сохраняются.
+
+Положительные runtime-регрессии:
+
+* link:../tests/fixtures/audit_nll_throw_branch_replaces_borrow.r[];
+* link:../tests/fixtures/audit_nll_break_branch_replaces_borrow.r[];
+* link:../tests/fixtures/audit_nll_continue_branch_replaces_borrow.r[].
+
+Все три генерируют C17 и исполняются с кодом 0. Защитные отрицательные проверки
+остаются отклонёнными с `R-DIAG-BORROW-001`:
+
+* link:../tests/fixtures/audit_nll_throw_branch_finally_uses_old_borrow.r[] —
+  `finally` читает старый borrow на checked-error пути;
+* link:../tests/fixtures/audit_nll_break_target_uses_old_borrow.r[] — цель
+  `break` читает старый borrow после цикла;
+* link:../tests/fixtures/audit_nll_continue_backedge_uses_old_borrow.r[] —
+  следующая итерация читает старый borrow до замены.
+
+== Исправленный дефект: вложенный `break` не распознавал окружающий `switch`
+
+=== Серьёзность и нарушенный контракт
+
+Серьёзность: средняя. Корректная safe-программа ошибочно отклонялась до HIR.
+`R-STMT-0004` разрешает `break` внутри цикла или `switch` и требует выйти из
+ближайшей такой конструкции. `R-STMT-0007` и `R-STMT-0009` допускают этот
+transfer как завершение пути case clause.
+
+Минимальная регрессия сохранена в
+link:../tests/fixtures/audit_switch_nested_break_false_rejection.r[]. Frontend
+теперь принимает вложенный в `if` переход при switch-only контексте; generated
+C17 исполняется с кодом 0.
+
+=== Исправление и проверки
+
+Semantic lowering ведёт отдельный стек лексических break-targets и состояние
+выходов из активного `switch`. Вложенный `break` выбирает ближайший loop или
+switch, добавляет cleanup до scope цели и сливает состояние владения с остальными
+путями switch. `continue` по-прежнему относится только к ближайшему циклу.
+
+HIR помечает switch-target у вложенного `break`. Sync C17 backend ведёт стек
+switch-целей и создаёт метку после switch, когда переход проходит через
+`finally`. MIR уже назначает ближайший switch merge block и использует тот же
+pending-completion lowering в async-коде.
+
+link:../tests/fixtures/audit_switch_nested_break_targets.r[] проверяет switch
+внутри loop, loop внутри switch и обязательный запуск `finally` при выходе.
+link:../tests/fixtures/audit_async_switch_nested_break_targets.r[] повторяет
+переход через `finally` в async/MIR. Оба runtime-теста завершаются с кодом 0.
+link:../tests/fixtures/audit_switch_break_escaping_finally.r[] подтверждает, что
+переход из самого тела `finally` к внешнему switch остаётся запрещённым с
+`R-DIAG-EFFECT-001`.
+
+== Исправленный дефект: будущая перезапись borrow продлевала прежний lifetime
+
+=== Серьёзность и нарушенный контракт
+
+Серьёзность: средняя. Компилятор ошибочно отклонял корректную safe-программу;
+повреждения памяти не было, но обязательный CFG-based non-lexical lifetime
+analysis был реализован неполно.
+
+Нарушены `R-BORROW-0006` и `R-INIT-0007`. Lifetime borrow должен заканчиваться
+после последнего потенциального использования, а вычисление destination простого
+присваивания не читает и не изменяет прежнее значение destination. Следовательно,
+`alias = &replacement` завершает прежнее заимствование `source` и не требует
+сохранять его lifetime до этой записи.
+
+=== Минимальная программа и проверка
+
+Регрессия сохранена в
+link:../tests/fixtures/audit_nll_future_overwrite_false_rejection.r[].
+
+[source,r]
+----
+i32 main() {
+    i32 source = 7;
+    i32 replacement = 11;
+    const i32* alias = &source;
+    source = 8;
+    alias = &replacement;
+    return *alias - 11;
+}
+----
+
+[source,sh]
+----
+build-debug/r-front --emit=c17 \
+    tests/fixtures/audit_nll_future_overwrite_false_rejection.r
+----
+
+Frontend успешно генерирует C17, а исполняемая программа завершается с кодом 0.
+
+Соседний контроль
+link:../tests/fixtures/audit_nll_overwrite_before_source_mutation.r[] сначала
+перезаписывает `alias`, затем изменяет `source`; он принимается. Оба случая
+добавлены в link:../tools/audit_language_safety.py[].
+
+=== Причина и исправление
+
+`r_body_ast_has_future_symbol_use_impl` в
+`compiler/semantic/semantic.c` считал любое последующее упоминание symbol
+использованием. Анализ не различал чтение borrow и destination полной записи,
+которая убивает прежнее значение. Затем
+`r_body_diagnose_active_derived_borrow_impl` видел ложное future use и выдавал
+`R-DIAG-BORROW-001` при изменении `source`.
+
+Теперь простой assignment отдельно проверяет RHS. Старое значение считается
+заменённым только после синтаксически гарантированно безошибочной записи; вызовы,
+индексация, compound assignment и RHS, читающий прежнее значение, остаются
+консервативными. Для `if` перезапись должна выполняться на каждом продолжающемся
+пути. Aggregate использует существующее projected-borrow состояние, поэтому
+замена одного поля завершает только provenance этого поля, а использование
+другого borrow-поля или всего aggregate сохраняет необходимый lifetime.
+
+Положительные runtime-тесты охватывают прямую замену, перестановку операций, обе
+ветви `if`, одно borrow-поле и непересекающиеся поля. Отрицательные тесты
+закрепляют неполную ветвь, чтение прежнего borrow в RHS и использование второго
+неперезаписанного поля через копию всего aggregate.
+
+== Исправленный критический дефект: whole-object move терял self-contained borrow
+
+=== Серьёзность и нарушенный контракт
+
+Серьёзность: критическая. Полностью safe-программа проходит frontend и строгую
+C17-компиляцию, освобождает allocation, на которую указывает соседнее поле того
+же aggregate, и затем читает освобождённую память.
+
+Нарушены следующие нормативные правила:
+
+* `R-OWN-0002` требует, чтобы Move-значение не имело активного borrow;
+* `R-BORROW-0002` запрещает движение или mutation исходного place, пока shared
+  borrow usable;
+* `R-BORROW-0018` требует сохранять или корректно сокращать hidden region
+  parameters при construction, copy, move и assignment compound-значения.
+
+Минимальное воспроизведение находится в
+link:../tests/fixtures/audit_move_self_contained_borrow_uaf.r[]. Существенная
+последовательность:
+
+[source,r]
+----
+first.alias = &*first.owner;
+Holder second = move first;
+second.owner = new i32(11);
+return *second.alias;
+----
+
+До исправления frontend возвращал код 0 и пустой список диагностик. ASan/UBSan
+запуск generated C завершался с `heap-use-after-free`, `READ of size 4`: прежний
+`owner` освобождался при присваивании `second.owner`, после чего `second.alias`
+разыменовывал прежний адрес. Теперь конфликт диагностируется как
+`R-DIAG-BORROW-001 [R-INIT-0007]` до генерации C17.
+
+Релевантный generated C17 показывает порядок напрямую:
+
+[source,c]
+----
+r_type_move_a00000001_gate(&r_t00000008, &r_v00000001_00000186);
+r_type_move_a00000001_gate(&r_v00000001_00000310, &r_t00000008);
+r_type_drop_own_gate(&r_v00000001_00000310.r_m00000001);
+r_type_move_own_gate(&r_v00000001_00000310.r_m00000001, &r_t00000010);
+int32_t r_t00000011 = (*r_v00000001_00000310.r_m00000002);
+----
+
+Сначала aggregate перемещается, затем прежний owner уничтожается и заменяется,
+после чего соседний указатель читается. ASan связывает allocation с
+`r_runtime_own_create`, освобождение с `r_runtime_own_release`, а invalid read —
+с последней строкой этого фрагмента.
+
+Закрытая generic-схема в
+link:../tests/fixtures/audit_generic_move_self_contained_borrow_uaf.r[]
+воспроизводит тот же дефект при передаче через `identity(move first)` и также
+завершается на ASan `heap-use-after-free`. Это второй путь к одному корню:
+инстанциация не создаёт отдельную ошибку provenance.
+
+=== Причина и исправление в компиляторе
+
+Borrow из соседнего поля хранится в `projected_borrow_state` перемещаемого
+символа. Раньше lowering whole-object `move` не переносил это состояние в
+результат и не привязывал пути к новому root. Теперь expression и HIR сохраняют
+состояние, а инициализация и присваивание клонируют projected place с заменой
+корня. Aggregate initializer добавляет префикс вложенного поля и учитывает
+прямо инициализированные внешние borrow-компоненты. Отдельный `rebase_origin`
+не позволяет ошибочно заменить внешний referent при перемещении aggregate.
+
+Та же проверка закреплена для обычного и generic `move`, `?:`, whole-object
+assignment, field assignment и вложенного aggregate. Опасные варианты получают
+`R-DIAG-BORROW-001`, а использование alias до перемещения и изменение
+непересекающегося вложенного owner остаются допустимыми.
+
+Близкий положительный контроль
+link:../tests/fixtures/audit_move_self_contained_borrow_after_last_use.r[]
+читает `alias` до `move`, больше его не использует и затем безопасно заменяет
+owner. Он принимается и завершается с кодом 0 под ASan/UBSan. Это отделяет
+дефект от допустимого сокращения региона после последнего использования.
+
+== Исправленный дефект: копия borrow-bearing aggregate блокировала свой прежний слот
+
+=== Наблюдаемое поведение
+
+Серьёзность была средней. До исправления корректная программа в
+link:../tests/fixtures/audit_copy_borrow_aggregate_field_reassignment.r[]
+отклонялась с:
+
+[source,text]
+----
+R-DIAG-BORROW-001 [R-BORROW-0002]:
+assignment conflicts with an active derived borrow
+----
+
+Минимальная последовательность:
+
+[source,r]
+----
+View first = View { .alias = &value };
+View second = first;
+first.alias = &replacement;
+return *second.alias - 7;
+----
+
+После Copy поля `first.alias` и `second.alias` являются разными слотами
+указателей. Присваивание меняет только слот в `first`; оно не изменяет referent
+`value`, который остаётся жив для `second.alias`. Следовательно, запрет
+mutation overlapping original place из `R-BORROW-0002` здесь не применяется, а
+сохранение region metadata по `R-BORROW-0018` не должно связывать storage двух
+копий.
+
+=== Причина, исправление и контроль
+
+В `r_body_lower_assignment` файла link:../compiler/semantic/semantic.c[] прежняя
+проверка не отличала запись в отдельный pointer-slot `first.alias` от записи в
+referent. Теперь storage-проверка учитывает тип активного значения и конфликтует
+только с borrow самого изменяемого слота или его содержащего storage. Поэтому
+независимая Copy-копия принимается, а
+link:../tests/fixtures/audit_borrowed_view_field_storage_reassignment.r[] с
+`&first.alias` отклоняется.
+
+Контроль
+link:../tests/fixtures/audit_copy_borrow_aggregate_dead_copy_reassignment.r[]
+не использует `second` после присваивания. Он принимается и исполняется с кодом
+0 под ASan/UBSan. Обычная копия локального borrow-указателя без aggregate также
+принимается, что сужает дефект до projected aggregate field.
+
+Оба исправления и близкие пути добавлены в `SEMANTIC_PROBES` инструмента
+link:../tools/audit_language_safety.py[]. Unsafe варианты имеют ожидаемый статус
+`rejected`, корректные Copy, last-use и disjoint-варианты — `accepted`.
+
+== Исправленный дефект: несколько projected borrow использовали только последний источник
+
+=== Серьёзность и нарушенный контракт
+
+Серьёзность до исправления: критическая. Полностью safe-программа достигала
+строгого ISO C17, освобождала allocation, адрес которой оставался в другом поле
+того же aggregate, и затем читала освобождённую память. Ошибка не зависела от оптимизации:
+AddressSanitizer воспроизводит `heap-use-after-free` при `-O0` и `-O2`.
+
+Нарушены следующие нормативные правила:
+
+* `R-BORROW-0002` запрещает mutation или movement overlapping original place,
+  пока shared borrow usable;
+* `R-BORROW-0006` завершает регион на последнем использовании, поэтому уже
+  заменённый и больше не используемый borrow не должен блокировать owner;
+* `R-BORROW-0011` различает непересекающиеся поля одного aggregate;
+* `R-BORROW-0018` требует сохранять origin каждого borrow-bearing компонента;
+* `R-OWN-0009` запрещает reassignment owner при usable derived borrow;
+* `R-INIT-0007` требует отсутствия overlapping borrow в commit point;
+* для `array` дополнительно нарушено `R-LIB-0019`: последний slice use обязан
+  предшествовать relocation.
+
+=== Минимальная программа
+
+Основной seed сохранён в
+link:../tests/fixtures/audit_multi_field_assignment_borrow_provenance_uaf.r[].
+
+[source,r]
+----
+struct Holder {
+    own i32* left;
+    own i32* right;
+    const i32* left_alias;
+    const i32* right_alias;
+};
+
+i32 main() {
+    i32 initial_left = 0;
+    i32 initial_right = 0;
+    own i32* left = new i32(7);
+    own i32* right = new i32(9);
+    Holder holder = Holder {
+        .left = move left,
+        .right = move right,
+        .left_alias = &initial_left,
+        .right_alias = &initial_right,
+    };
+    holder.left_alias = &*holder.left;
+    holder.right_alias = &*holder.right;
+    holder.left = new i32(11);
+    return *holder.left_alias;
+}
+----
+
+Ожидаемый и текущий результат: замена `holder.left` отклоняется с
+`R-DIAG-BORROW-001`, потому что `holder.left_alias` ещё используется.
+До исправления Debug- и Clang 22-компиляторы возвращали код 0, печатали пустой
+JSON-массив диагностик и генерировали C17.
+
+[source,sh]
+----
+build-debug/r-front --profile=hosted-native-async \
+    --emit=c17 --diagnostics=json \
+    tests/fixtures/audit_multi_field_assignment_borrow_provenance_uaf.r
+
+python3 tools/run_sanitized_codegen_probe.py \
+    --build build-sanitize \
+    --expect-diagnostic R-DIAG-BORROW-001 \
+    --source tests/fixtures/audit_multi_field_assignment_borrow_provenance_uaf.r
+----
+
+Обе команды теперь подтверждают semantic-отказ до C17. До исправления generated
+program попадал в AddressSanitizer: `heap-use-after-free`, `READ of size 4`.
+Allocation создавалась через `r_runtime_own_create`, освобождалась через
+`r_runtime_own_release`, после чего чтение происходило в `r_f00000001`.
+
+=== Релевантный C17
+
+Generated C до исправления сохранял оба адреса, уничтожал левый owner и затем
+разыменовывал левый сохранённый адрес:
+
+[source,c]
+----
+r_v00000001_00000316.r_m00000003 = r_t00000012;
+r_v00000001_00000316.r_m00000004 = r_t00000013;
+/* create replacement owner */
+r_type_drop_own_gate(&r_v00000001_00000316.r_m00000001);
+r_type_move_own_gate(&r_v00000001_00000316.r_m00000001, &r_t00000015);
+int32_t r_t00000016 = (*r_v00000001_00000316.r_m00000003);
+----
+
+В проверенном срезе это строки 171--186 файла
+`build-sanitize/tests/audit_multi_field_assignment_borrow_provenance_uaf.c`.
+
+=== Область дефекта и близкие контроли
+
+Дополнительные минимизированные программы показывают границы одной
+первопричины:
+
+* link:../tests/fixtures/audit_branch_field_assignment_borrow_provenance_uaf.r[]
+  присваивает `alias` из `left` или `right` в разных ветвях. Лексически последним
+  HIR-узлом оказывается правая ветвь, поэтому замена `left` разрешается и при
+  фактически выбранной левой ветви. До исправления ASan подтверждал
+  `heap-use-after-free`; теперь mutation отклоняется;
+* link:../tests/fixtures/audit_multi_view_array_reallocation_uaf.r[] хранит два
+  slice в двух полях. Последним назначается `right_view`, после чего
+  `std.array::reserve(&holder.left, 128usize)` перевыделяет левый буфер. ASan
+  подтверждал чтение освобождённого элемента через `left_view`; теперь
+  relocation отклоняется;
+* link:../tests/fixtures/audit_generic_multi_field_assignment_borrow_provenance_uaf.r[]
+  закрывает ту же структуру схемой `Holder<i32>`. До исправления программа
+  достигала C17, а ASan подтверждал чтение освобождённого значения через
+  `left_alias`; теперь mutation отклоняется;
+* link:../tests/fixtures/audit_error_multi_field_assignment_borrow_provenance_uaf.r[]
+  повторяет сценарий с field-form `error`. Категория checked error не меняет
+  provenance aggregate: до исправления программа достигала C17, и ASan
+  подтверждал то же чтение после освобождения; теперь mutation отклоняется;
+* link:../tests/fixtures/audit_async_multi_field_assignment_borrow_provenance_uaf.r[]
+  до исправления ошибочно принимался при `--emit=hir` и `--emit=mir`. MIR
+  содержал store нового owner перед load через старый borrow. Теперь программа
+  отклоняется на semantic phase до HIR;
+* link:../tests/fixtures/audit_multi_field_releases_replaced_origin.r[] заменяет
+  `left_alias` ссылкой на внешний `replacement`, оставляя `right_alias` связанным
+  только с правым owner. Замена левого owner безопасна и теперь достигает C17;
+* link:../tests/fixtures/audit_multi_field_disjoint_owner_replacement.r[] сначала
+  завершает последнее использование `left_alias`, затем заменяет левый owner и
+  читает только `right_alias`. Этот близкий корректный контроль достигает C17 и
+  исполняется под ASan/UBSan с кодом 0.
+
+=== Причина, исправление и регрессии
+
+`r_body_lower_assignment` в
+link:../compiler/semantic/semantic.c[] объединял borrow origins всего aggregate,
+когда `r_semantic_type_view_component_count` возвращал несколько компонентов.
+При последующей мутации `r_body_diagnose_self_contained_projection_mutation`
+вызывал `r_body_latest_projected_borrow_source`. Обратный HIR-поиск возвращал
+только последний projected borrow source.
+
+Теперь символ и каждый object snapshot хранят неизменяемое покомпонентное
+projected-borrow состояние. Присваивание заменяет источники соответствующего
+destination-place, ветвление и остальные control-flow merges объединяют все
+достижимые источники, а повторное присваивание удаляет прежний origin компонента.
+Проверка mutation сопоставляет каждый ещё используемый destination-компонент с
+его source-place. Для неполного состояния остаётся консервативная aggregate
+проверка.
+
+Восемь seed зарегистрированы в
+link:../tools/audit_language_safety.py[] и дают восемь semantic-регрессий.
+Два положительных seed дополнительно исполняются как C17 runtime-тесты. Новый
+набор проходит 12 из 12 в Debug, включая два generated-C format-test, и 10 из
+10 в ASan/UBSan.
+
+== Исправленный дефект: присваивание полю не обновляло aggregate provenance
+
+=== Серьёзность и нарушенный контракт
+
+Серьёзность до исправления: критическая. Полностью safe-программа достигала
+сгенерированного C17 и читала освобождённую heap-память.
+
+Нарушены следующие нормативные правила:
+
+* `R-BORROW-0018` требует, чтобы construction, copy, move и assignment
+  borrow-bearing compound value сохраняли либо сокращали скрытые region
+  parameters, выведенные из происхождения компонентов;
+* `R-OWN-0009` запрещает move, drop и reassignment owner, пока созданный из него
+  borrow остаётся usable;
+* `R-INIT-0007` требует отсутствия другого usable overlapping borrow в момент
+  commit простого присваивания;
+* slice-проявление дополнительно нарушает `R-BORROW-0002` и требование
+  `R-LIB-0019`, согласно которому последнее использование slice borrow должно
+  предшествовать структурной мутации `array`.
+
+=== Минимальная программа
+
+Seed сохранён в
+link:../tests/fixtures/audit_field_assignment_borrow_provenance_uaf.r[].
+
+[source,r]
+----
+struct Holder {
+    const i32* alias;
+};
+
+i32 main() {
+    i32 initial = 0;
+    Holder holder = Holder { .alias = &initial };
+    own i32* owner = new i32(7);
+    holder.alias = &*owner;
+    drop owner;
+    return *holder.alias;
+}
+----
+
+Ожидаемый результат: `holder.alias` после присваивания происходит из
+`owner`, поэтому явный `drop owner` должен быть отклонён с
+`R-DIAG-BORROW-001` до C17.
+
+До исправления frontend возвращал код 0 и пустой JSON-массив диагностик, после
+чего генерировал C17. Теперь программа отклоняется с `R-DIAG-BORROW-001`.
+
+[source,sh]
+----
+python3 tools/run_sanitized_codegen_probe.py \
+    --build build-sanitize \
+    --expect-diagnostic R-DIAG-BORROW-001 \
+    --source tests/fixtures/audit_field_assignment_borrow_provenance_uaf.r
+----
+
+Исторический runtime-контрпример до исправления воспроизводился без параметра
+`--expect-diagnostic`:
+
+[source,sh]
+----
+python3 tools/run_sanitized_codegen_probe.py \
+    --build build-sanitize \
+    --source tests/fixtures/audit_field_assignment_borrow_provenance_uaf.r
+----
+
+Старый frontend доходил до исполнения, где AddressSanitizer сообщал
+`heap-use-after-free`, `READ of size 4`; память освобождалась через
+`r_runtime_own_release`, а чтение выполнялось в сгенерированной функции
+`r_f00000001`. Текущий frontend останавливается на семантической диагностике.
+
+=== Релевантный C17
+
+Сгенерированный C сохраняет адрес pointee в поле, освобождает owner и сразу
+разыменовывает сохранённый адрес:
+
+[source,c]
+----
+r_v00000001_00000141.r_m00000001 = r_t00000006;
+r_type_drop_own_gate(&r_v00000001_00000193);
+int32_t r_t00000007 = (*r_v00000001_00000141.r_m00000001);
+----
+
+Это соответствует строкам 110..113 файла
+`build-sanitize/tests/audit_field_assignment_borrow_provenance_uaf.c` в
+проверенном срезе.
+
+=== Область дефекта
+
+Семь дополнительных seed подтверждают ту же первопричину:
+
+* link:../tests/fixtures/audit_nested_field_assignment_borrow_provenance_uaf.r[]
+  повторяет owner UAF через `outer.inner.alias` и `outer.inner.owner`;
+* link:../tests/fixtures/audit_field_assignment_slice_provenance_uaf.r[]
+  присваивает `holder.view = std.array::as_slice(&holder.values)`, затем
+  `std.array::push` перевыделяет буфер, а `holder.view[0]` читает прежний адрес;
+* link:../tests/fixtures/audit_index_assignment_borrow_provenance_uaf.r[]
+  заменяет borrow-bearing элемент fixed array через `holders[0]`, уничтожает
+  origin и читает сохранённый borrow;
+* link:../tests/fixtures/audit_generic_field_assignment_borrow_provenance_uaf.r[]
+  воспроизводит минимальный field-assignment UAF для закрытой инстанциации
+  `Holder<i32>`;
+* link:../tests/fixtures/audit_error_field_assignment_borrow_provenance_uaf.r[]
+  подтверждает тот же UAF для field-form объявления `error Failure`;
+* link:../tests/fixtures/audit_async_field_assignment_borrow_provenance_uaf.r[]
+  достигает MIR и async C17 backend; ASan фиксирует чтение после освобождения в
+  `r_async_step_00000001` на worker thread;
+* link:../tests/fixtures/audit_throw_field_assignment_borrow_provenance_uaf.r[]
+  переносит устаревший borrow в checked-error carrier через `throw`, а `catch`
+  разыменовывает его после уничтожения owner.
+
+До исправления все программы принимались без диагностик. ASan сообщал
+`heap-use-after-free` и `READ of size 4` для каждой. В slice-проявлении C17
+получал указатель и длину, вызывал `r_std_array_push` и читал прежний `r_data`.
+Теперь все восемь seed отклоняются до генерации C.
+
+Близкий корректный контроль
+link:../tests/fixtures/audit_field_assignment_borrow_provenance_control.r[]
+разыменовывает borrow, пока owner жив, затем возвращает поле к внешнему
+`initial` и только после этого уничтожает owner. Он компилируется, исполняется с
+кодом 0 и проходит ASan/UBSan.
+
+Второй допустимый контроль
+link:../tests/fixtures/audit_field_assignment_releases_previous_origin.r[]
+показывает обратную ошибку. Поле сначала заимствует из `first`, затем получает
+borrow из `second`. После commit прежний borrow больше не usable, поэтому
+`drop first` допустим, а `second` остаётся жив до последнего чтения. До
+исправления frontend ошибочно отклонял `drop first`; теперь контроль проходит
+семантику и ASan/UBSan runtime.
+
+=== Причина, исправление и регрессии
+
+Причина находилась в `r_body_lower_assignment` файла
+`compiler/semantic/semantic.c`. Lowering правильно создаёт
+`active_assignment_destination` для RHS, но после commit обновляет
+`destination->borrow_origin`, `borrow_referent` и набор происхождений только
+когда левый HIR-узел имеет вид `R_HIR_PLACE`. Для `R_HIR_FIELD_PLACE` и более
+глубокой проекции этот блок не выполнялся.
+
+В результате символ aggregate сохраняет provenance, полученный при исходном
+initializer (`initial`). Присваивание borrow из соседнего owner меняет runtime
+поле, но не semantic metadata aggregate. Следующая замена owner сравнивается с
+устаревшим происхождением и ошибочно разрешалась.
+
+Исправление обновляет provenance корневого объекта после присваивания полю или
+элементу. Для единственного borrow-bearing компонента прежний origin заменяется;
+для нескольких компонентов множества origin объединяются. Проекция обычного
+storage-поля или элемента direct aggregate получает origin корневого объекта,
+поэтому borrow из соседнего owner или `array` отслеживается как внутренний.
+
+При последующей мутации compiler восстанавливает HIR-путь источника внутреннего
+borrow и сравнивает его с destination через существующие отношения `same`,
+`overlapping` и `disjoint`. Проверка учитывает последнее использование, циклы и
+`finally`. Поэтому замена `outer.inner.owner` и структурная мутация
+`holder.values` отклоняются, а независимое присваивание `holder.counter`
+разрешается. Обычные slice-параметры не считаются containing aggregate и
+обрабатываются существующими правилами slice.
+
+Девять отрицательных seed и три положительных контроля зарегистрированы в
+link:../tools/audit_language_safety.py[] и обычном CTest. Дополнительно
+link:../tests/fixtures/audit_update_field_borrow_provenance_conflict.r[]
+проверяет `++` для заимствованного поля, а
+link:../tests/fixtures/audit_disjoint_internal_field_assignment.r[] подтверждает
+допустимость непересекающегося поля. Исторический итог после того исправления:
+`54` probes, `54` passed, `0` failed.
+
+== Исправленный дефект: конфликтующие аргументы специальных вызовов
+
+=== Серьёзность и контракт
+
+Серьёзность: критическая. Нарушены `R-BORROW-0002`, `R-BORROW-0003`,
+`R-LIB-0019`, `R-SLIB-BYTES-0002`, `R-SLIB-BYTES-0004` и
+`R-SLIB-STRING-0003`. Exclusive borrow исключает любой другой перекрывающий
+доступ. `copy` определён для различных borrow-регионов, а перекрывающиеся
+диапазоны одного буфера обслуживает `copy_within`. Успешные `append` и
+структурный `reserve` могут переместить хранилище, поэтому источник не может быть
+borrow из изменяемого target.
+
+=== Минимальная программа и диагностика компилятора
+
+[source,r]
+----
+i32 main() {
+    try {
+        bytes value = std.alloc::bytes(1048576, 17);
+        std.bytes::append(&value, value);
+        return 0;
+    } catch (std.alloc::alloc_error failure) {
+        return 2;
+    }
+}
+----
+
+Полный sync seed находится в
+link:../tests/fixtures/audit_std_bytes_append_self_alias.r[], async seed — в
+link:../tests/fixtures/audit_async_std_bytes_append_self_alias.r[]. Компилятор
+теперь завершает следующую команду с кодом 1 и выдаёт
+`R-DIAG-BORROW-001` до генерации C17:
+
+[source,sh]
+----
+build-debug/r-front --profile=hosted-native-async \
+    --emit=c17 --diagnostics=json \
+    tests/fixtures/audit_std_bytes_append_self_alias.r
+----
+
+До исправления существенная часть сгенерированного C17 сохраняла два
+представления одного буфера и передавала их одному runtime-вызову:
+
+[source,c]
+----
+RRuntimeArray *target = &value;
+RStdBytesSlice source = {
+    .data = (const uint8_t *)value.data,
+    .length = value.length,
+};
+RStdBytesAllocResult result = r_std_bytes_append(target, source);
+----
+
+В библиотечной реализации сначала выполняется потенциально перемещающий
+`reserve`, а затем чтение прежнего указателя:
+
+[source,c]
+----
+status = r_runtime_array_reserve(target, length);
+/* ... */
+memcpy((uint8_t *)target->data + target->length, source, length);
+----
+
+=== Runtime-симптом
+
+Контрпример запускается командой:
+
+[source,sh]
+----
+python3 tools/run_sanitized_codegen_probe.py \
+    --build build-sanitize \
+    --expect-diagnostic R-DIAG-BORROW-001 \
+    --source tests/fixtures/audit_std_bytes_append_self_alias.r
+----
+
+До исправления ASan сообщал heap-use-after-free:
+`r_runtime_array_reserve_valid` освобождал регион размером 1048576 байт, после
+чего `r_library_internal_bytes_append` пытался прочитать весь этот регион через
+`memcpy`. Async seed воспроизводил ту же ошибку на worker thread в
+`r_async_step_00000001`:
+
+[source,sh]
+----
+python3 tools/run_sanitized_codegen_probe.py \
+    --build build-sanitize \
+    --expect-diagnostic R-DIAG-BORROW-001 \
+    --source tests/fixtures/audit_async_std_bytes_append_self_alias.r
+----
+
+=== Остальные проявления `std.bytes`
+
+`std.bytes::copy(value[1..8], value[0..7])` также ошибочно принимался, хотя
+диапазоны перекрываются и контракт направляет такой случай в `copy_within`.
+Runtime применяет `memmove`, поэтому sanitizer не обнаруживает повреждения, но
+статический borrow-контракт был нарушен. `std.bytes::fill(&value, value[0])`
+принимался с exclusive slice и последующим чтением того же origin. Оба seed
+находятся соответственно в
+link:../tests/fixtures/audit_std_bytes_copy_overlapping_ranges.r[] и
+link:../tests/fixtures/audit_std_bytes_fill_read_same_origin.r[].
+
+Три контроля подтверждают необходимое различение: append из отдельного массива,
+copy между непересекающимися диапазонами и fill значением из другого origin.
+Они находятся в `audit_std_bytes_append_distinct_source.r`,
+`audit_std_bytes_copy_disjoint_ranges.r` и
+`audit_std_bytes_fill_read_distinct_origin.r` и проходят sync C17 и
+ASan/UBSan.
+
+=== `std.string` и `std.array`
+
+Минимальный string-контрпример использует документированный borrow origin из
+`as_str`:
+
+[source,r]
+----
+std.string::string value =
+    std.string::from_str("abcdefghijklmnopqrstuvwxyz0123456789");
+std.string::append_str(&value, std.string::as_str(&value));
+----
+
+Seed находится в
+link:../tests/fixtures/audit_std_string_append_str_self_alias.r[], его async
+вариант — в
+link:../tests/fixtures/audit_async_std_string_append_str_self_alias.r[]. До
+исправления оба принимались без диагностик. `r_runtime_string_reserve`
+освобождал исходный 36-байтовый регион, затем `r_runtime_string_append`
+передавал старый указатель в `memcpy`. ASan подтвердил heap-use-after-free в
+sync и в `r_async_step_00000003` на worker thread.
+
+`std.string::append_utf8(&value, std.string::as_bytes(&value))` воспроизводит
+тот же UAF через
+`r_runtime_string_append_utf8`; seed находится в
+link:../tests/fixtures/audit_std_string_append_utf8_self_alias.r[]. Существенная
+runtime-последовательность для обеих операций:
+
+[source,c]
+----
+status = r_runtime_string_reserve(string, length);
+/* ... */
+memcpy((uint8_t *)string->bytes.data + string->bytes.length, bytes, length);
+----
+
+Точные команды воспроизведения string-UAF:
+
+[source,sh]
+----
+python3 tools/run_sanitized_codegen_probe.py \
+    --build build-sanitize \
+    --expect-diagnostic R-DIAG-BORROW-001 \
+    --source tests/fixtures/audit_std_string_append_str_self_alias.r
+
+python3 tools/run_sanitized_codegen_probe.py \
+    --build build-sanitize \
+    --expect-diagnostic R-DIAG-BORROW-001 \
+    --source tests/fixtures/audit_async_std_string_append_str_self_alias.r
+
+python3 tools/run_sanitized_codegen_probe.py \
+    --build build-sanitize \
+    --expect-diagnostic R-DIAG-BORROW-001 \
+    --source tests/fixtures/audit_std_string_append_utf8_self_alias.r
+----
+
+Все три команды успешно подтверждают семантический отказ до генерации C.
+
+Кроме аварийных append, до исправления компилятор принимал
+`std.string::reserve(&value, std.string::len(&value))` и
+`std.string::truncate(&value, std.string::len(&value))`: первый аргумент уже
+является exclusive borrow, а вычисление второго читает тот же origin.
+Минимальные seed находятся в
+link:../tests/fixtures/audit_std_string_reserve_read_same_origin.r[] и
+link:../tests/fixtures/audit_std_string_truncate_read_same_origin.r[]. Эти
+конкретные программы не дают runtime-UAF, но нарушают общий borrow-контракт.
+
+Тот же статический дефект подтверждён для
+`std.array::reserve(&values, std.array::capacity(&values))` в
+link:../tests/fixtures/audit_std_array_reserve_read_same_origin.r[]. Близкие
+контроли читают отдельный string или array origin и проходят C17 и ASan/UBSan:
+link:../tests/fixtures/audit_std_string_append_distinct_source.r[],
+link:../tests/fixtures/audit_std_string_mutation_read_distinct_origin.r[] и
+link:../tests/fixtures/audit_std_array_reserve_read_distinct_origin.r[].
+
+=== Первопричина и регрессии
+
+`r_body_lower_standard_bytes_call` и `r_body_lower_standard_simple_call`
+понижали каждый аргумент независимо через `r_body_lower_call_bounded_value` или
+`r_body_lower_value`, проверяли только его точный тип и сразу сохраняли HIR-узел.
+`r_body_lower_standard_array_basic` отдельно понижал target и индекс с тем же
+пропуском. Между аргументами не было сравнения origin и режимов доступа.
+
+Проверка перенесена в общую точку создания `R_HIR_STANDARD_CALL` и использует
+тот же рекурсивный анализ дочерних HIR-узлов, что обычные вызовы. Константные
+срезы одного места считаются независимыми только при доказуемо непересекающихся
+полуинтервалах. Для операций списка сохранено существующее различение конкретных
+узлов по `borrow_referent`.
+
+Десять отрицательных seed включены в `tools/audit_language_safety.py` и штатный
+CTest с ожиданием `R-DIAG-BORROW-001`. Шесть положительных контролей проверяют,
+что distinct-origin, непересекающиеся срезы и допустимые операции над разными
+узлами списка не получают ложных отказов.
+
+== Исправленный дефект: borrow и Move одного origin внутри initializer
+
+=== Серьёзность и контракт
+
+Серьёзность: критическая. Нарушены `R-AM-0009`, `R-OWN-0002`, `R-OWN-0009`,
+`R-BORROW-0002` и `R-BORROW-0018`. Элементы initializer вычисляются слева
+направо. Borrow-bearing compound сохраняет скрытый region своих компонентов, а
+owner нельзя перемещать, пока созданный из него borrow пригоден для будущего
+использования.
+
+=== Минимальная программа
+
+[source,r]
+----
+struct Coupled {
+    const i32* borrowed;
+    own i32* owner;
+};
+
+i32 main() {
+    own i32* owner = new i32(17);
+    Coupled coupled = Coupled {
+        .borrowed = &*owner,
+        .owner = move owner,
+    };
+    own i32* replacement = new i32(23);
+    coupled.owner = move replacement;
+    return *(coupled.borrowed);
+}
+----
+
+Полный seed находится в
+link:../tests/fixtures/audit_aggregate_initializer_borrow_then_move_same_origin.r[].
+До исправления ожидался отказ с `R-DIAG-BORROW-001`, но `r-front --emit=c17`
+завершался с кодом 0 и без диагностик. Теперь та же команда отклоняет программу:
+
+[source,sh]
+----
+build-debug/r-front --profile=hosted-native-async \
+    --emit=c17 --diagnostics=json \
+    tests/fixtures/audit_aggregate_initializer_borrow_then_move_same_origin.r
+----
+
+Существенная последовательность C17, сгенерированного до исправления:
+
+[source,c]
+----
+r_d00000001 borrowed =
+    &(*(int32_t *)r_runtime_own_get_mut(&owner));
+r_type_move_own_gate(&field_owner, &owner);
+/* ... */
+r_type_drop_own_gate(&coupled.r_m00000002);
+r_type_move_own_gate(&coupled.r_m00000002, &replacement);
+int32_t result = (*coupled.r_m00000001);
+----
+
+`r_type_drop_own_gate` освобождает allocation со значением 17, после чего
+последняя строка читает четыре байта через висячий указатель. ASan подтверждает
+allocation в `r_runtime_own_create`, освобождение в `r_runtime_own_release` и
+последующее чтение в сгенерированной функции `main`.
+
+=== Область дефекта и положительный контроль
+
+Та же первопричина была подтверждена для:
+
+* закрытой `@generic<T>` структуры в
+  link:../tests/fixtures/audit_generic_aggregate_initializer_borrow_then_move_same_origin.r[];
+* checked-error payload, переносимого через `throw`/`catch`, в
+  link:../tests/fixtures/audit_error_initializer_borrow_then_move_same_origin.r[];
+* Move под `?:`, вложенного aggregate и `new` aggregate;
+* exclusive borrow с последующим чтением того же origin.
+
+До исправления варианты с заменой owning-поля, `drop` всего compound и полным
+присваиванием compound давали один и тот же ASan UAF. Они объединены как симптомы
+одной причины.
+Обратный порядок полей, где Move идёт до borrow, уже отклоняется с
+`R-DIAG-MOVE-002` как use-after-move.
+
+Положительный контроль
+link:../tests/fixtures/audit_aggregate_initializer_borrow_then_move_distinct_origins.r[]
+заимствует из одного owner и перемещает другой. Дополнительные контроли сохраняют
+Move того же origin в недостижимой ветви и разрешают shared borrow с последующим
+shared read. Все три компилируются и исполняются под ASan/UBSan с кодом 0.
+
+=== Причина и исправление
+
+`r_body_lower_aggregate_initializer` в
+link:../compiler/semantic/semantic.c[] по очереди вызывает `r_body_lower_value`
+для каждого поля и сохраняет происхождение borrow в `R_HIR_FIELD_INIT` и итоговом
+`R_HIR_AGGREGATE_INIT`. Однако полученный borrow-временный не становится активным
+ограничением до обработки следующего поля. До исправления перед последующим
+`R_HIR_MOVE` не было аналога межаргументной проверки
+`r_body_call_argument_conflict_depth`, поэтому Move того же origin проходил.
+Итоговый локальный символ получал
+`borrow_origin`, когда небезопасный initializer уже полностью построен.
+
+Исправление сравнивает каждое новое поле со всеми предыдущими borrow-bearing
+полями. Оно использует общий рекурсивный анализ доступа, учитывает проекции,
+shared/exclusive режим и достижимость условных ветвей. Семь отрицательных seed и
+три положительных контроля включены в link:../tools/audit_language_safety.py[] и
+обычный CTest.
+
+== Исправленный дефект: неполный анализ конфликтов аргументов
+
+=== Серьёзность и контракт
+
+Серьёзность: критическая. Нарушены `R-AM-0009`, `R-OWN-0002`, `R-OWN-0009`,
+`R-BORROW-0002`, `R-EXPR-0014` и `R-EXPR-0020`. Аргументы вычисляются слева
+направо; borrow из первого аргумента остаётся пригодным для callee. Любой
+последующий конфликтующий доступ обязан получить `R-DIAG-BORROW-001`.
+
+=== Минимальный UAF через `?:`
+
+[source,r]
+----
+i32 observe(const i32* borrowed, own i32* consumed) {
+    drop consumed;
+    return *borrowed;
+}
+
+i32 main() {
+    own i32* owner = new i32(17);
+    bool select_owner = true;
+    return observe(&*owner,
+        (select_owner == true) ? move owner : move owner);
+}
+----
+
+Полный вход находится в
+link:../tests/fixtures/audit_call_borrow_then_conditional_move_same_origin.r[].
+До исправления ожидался `R-DIAG-BORROW-001`, но `--emit=c17` завершался успешно.
+Sanitizer показывал освобождение через `r_runtime_own_release`, а затем чтение
+четырёх байт через первый параметр `observe`. Теперь вход отклоняется ожидаемой
+диагностикой.
+
+Существенная последовательность сгенерированного C17:
+
+[source,c]
+----
+r_d00000001 borrowed =
+    &(*(int32_t *)r_runtime_own_get_mut(&owner));
+if (condition) {
+    r_type_move_own_gate(&selected, &owner);
+} else {
+    r_type_move_own_gate(&selected, &owner);
+}
+int32_t result = r_f00000002(borrowed, selected);
+----
+
+В `r_f00000002` второй параметр уничтожается до `return *borrowed`, поэтому
+AddressSanitizer сообщает heap-use-after-free.
+
+=== Минимальный UAF через aggregate
+
+[source,r]
+----
+struct Holder { own i32* value; };
+
+i32 observe(const i32* borrowed, Holder consumed) {
+    drop consumed;
+    return *borrowed;
+}
+
+i32 main() {
+    own i32* owner = new i32(17);
+    return observe(&*owner, Holder { .value = move owner });
+}
+----
+
+Полный вход:
+link:../tests/fixtures/audit_call_borrow_then_aggregate_move_same_origin.r[].
+Фактический C сначала сохраняет `&*owner`, затем переносит owner в поле
+временного `Holder` и передаёт оба значения callee. ASan подтверждает тот же UAF.
+
+Тот же результат подтверждён для
+link:../tests/fixtures/audit_call_borrow_then_variant_move_same_origin.r[] и
+link:../tests/fixtures/audit_call_borrow_then_new_aggregate_move_same_origin.r[].
+В первом случае Move находится под `R_HIR_VARIANT`, во втором — под
+`R_HIR_NEW` и `R_HIR_AGGREGATE_INIT`.
+
+=== Близкий статический контрпример
+
+link:../tests/fixtures/audit_call_exclusive_borrow_then_read_same_origin.r[]
+передаёт `&value` как exclusive borrow, а следующим аргументом читает `value`.
+Программа не обязана падать на текущем backend, но нарушает исключительность
+borrow и теперь отклоняется. Контроль
+link:../tests/fixtures/audit_call_borrow_then_nested_move_distinct_origin.r[]
+перемещает другой owner во всех четырёх проверенных обёртках; он корректно
+компилируется и проходит под ASan. Значит, исправление должно сравнивать
+происхождения, а не запрещать все вложенные Move-выражения.
+
+Два дополнительных runtime-контроля фиксируют точность анализа:
+link:../tests/fixtures/audit_call_disjoint_field_borrows.r[] разрешает
+exclusive и shared borrow раздельных полей одной структуры, а
+link:../tests/fixtures/audit_call_borrow_then_unreachable_nested_move.r[]
+разрешает Move того же owner в недостижимой ветви константного `?:` и сохраняет
+owner на продолжающемся пути.
+
+=== Причина
+
+В `r_body_lower_call` файла
+link:../compiler/semantic/semantic.c[] `access_is_consuming_move` был истинным
+только когда корневой HIR-узел текущего аргумента равнялся `R_HIR_MOVE`. Цикл
+сравнения с предыдущими аргументами исполнялся только для `access_is_borrow` или
+этого прямого Move. Поэтому он не видел `R_HIR_MOVE` внутри
+`R_HIR_CONDITIONAL`, `R_HIR_AGGREGATE_INIT`, `R_HIR_VARIANT` и `R_HIR_NEW`, а
+также не проверял обычный load после exclusive borrow.
+
+Исправление рекурсивно обходит исполняемые дочерние HIR-узлы следующего
+аргумента и классифицирует read, shared/exclusive borrow и consuming Move.
+Константные ветви `?:` и `&&`/`||` учитывают достижимость. Для place-выражений
+сравнивается проекция, поэтому раздельные поля и константные индексы не создают
+ложного конфликта.
+
+Добавленные regression-входы зарегистрированы в
+link:../tools/audit_language_safety.py[] и в обычном CTest. Opt-in аудит
+завершается успешно только при ожидаемом отклонении небезопасных входов и
+принятии положительных контролей.
+
+== Заимствование и перемещение в аргументах вызова
+
+=== Контракт
+
+Правила `R-OWN-0002`, `R-OWN-0009` и `R-BORROW-0002` запрещают перемещать или
+освобождать owner, пока созданное из него заимствование остаётся пригодным для
+использования.
+
+Минимальный отрицательный вход находится в
+link:../tests/fixtures/audit_call_borrow_then_move_own_same_origin.r[].
+
+[source,r]
+----
+i32 observe(const i32* borrowed, own i32* owner) {
+    drop owner;
+    return *borrowed;
+}
+
+i32 main() {
+    own i32* owner = new i32(17);
+    i32 result = observe(&*owner, move owner);
+    return result == 17 ? 0 : 1;
+}
+----
+
+До исправления программа проходила семантический анализ и сгенерированный C17
+обращался к памяти после освобождения owner. Теперь вызов отклоняется:
+
+[source,text]
+----
+R-DIAG-BORROW-001 [R-OWN-0002]:
+Move call argument conflicts with an earlier borrow from the same origin
+----
+
+Проверка охватывает:
+
+* shared borrow перед `move own`;
+* exclusive borrow перед `move own`;
+* generic-функцию с выведенным параметром;
+* borrow из `rc T` перед перемещением того же handle.
+
+Входы находятся в:
+
+* link:../tests/fixtures/audit_call_borrow_then_move_own_same_origin.r[];
+* link:../tests/fixtures/audit_call_exclusive_borrow_then_move_own_same_origin.r[];
+* link:../tests/fixtures/audit_generic_call_borrow_then_move_own_same_origin.r[];
+* link:../tests/fixtures/audit_call_borrow_then_move_rc_same_origin.r[].
+
+Контроль
+link:../tests/fixtures/audit_call_borrow_then_move_own_distinct_origins.r[]
+заимствует из одного owner и перемещает другой. Он компилируется и исполняется,
+что подтверждает сравнение происхождений вместо запрета сочетания типов.
+
+=== Исправление
+
+`r_body_lower_call` рассматривает non-Copy `R_HIR_MOVE` как потребляющий доступ.
+Для него проверяются все более ранние call-bounded borrow-аргументы. Конфликт
+возникает только при пересечении происхождений; значения с разными
+происхождениями остаются допустимыми.
+
+Регрессии зарегистрированы как обычные semantic CTest. Отрицательные тесты
+требуют `R-DIAG-BORROW-001`, а положительный distinct-origin тест также проходит
+полный C17 runtime.
+
+== Указатели на изменяемые таблицы компилятора
+
+=== Первоначальный дефект
+
+Минимальный корректный вход:
+link:../tests/fixtures/audit_alloc_new_error_catch_field_compiler_uaf.r[].
+
+[source,r]
+----
+i32 main() {
+    try {
+        own i32* value = new i32(11);
+        own (own i32*)* stored = std.alloc::try_new(move value);
+        return 1;
+    } catch (std.alloc::new_error<own i32*> failure) {
+        return *(failure.value);
+    }
+}
+----
+
+До исправления `r_body_lower_postfix_impl` сохранял `current_type` как указатель
+на элемент `semantic_types`. Подготовка `std.alloc::new_error` могла расширить
+таблицу, после чего следующий `else if` читал освобождённый элемент. ASan
+останавливал сам `r-front`.
+
+Цепочка подготовки стандартных схем теперь выбирает ровно одну ветку по
+исходному type ID. Каждая ветка завершает подготовку до перехода дальше, а после
+операций, способных увеличить таблицу, тип извлекается заново или используется
+заранее скопированный `RTypeId`.
+
+Контрольный вход
+link:../tests/fixtures/audit_alloc_new_error_parameter_control.r[] проверяет уже
+подготовленный параметрический error-тип. Оба входа проходят Debug и
+ASan/UBSan-компилятор.
+
+=== Расширенный аудит семейства
+
+По тому же правилу проверены места, где указатель на `RSemanticType`,
+`RSemanticAggregate` или intern entry мог пережить интернирование, подготовку
+схемы либо lowering вложенного выражения. Исправлены найденные пересечения:
+
+* iterator lowering сохраняет base/second type IDs до подготовки результата;
+* `std.dict::entry_ref` сохраняет key/value IDs до интернирования borrow-типов;
+* array slicing, `core::adopt` и `core::slice_from_raw_parts` используют снимок
+  element type;
+* async lowering извлекает effect set из start carrier до обработки аргументов;
+* error-схемы сразу копируют type ID вложенного enum;
+* intern entry используется только для получения отдельно выделенной стабильной
+  строки имени;
+* `std.io::as_error` и `std.fs::as_error` не удерживают aggregate-указатель через
+  создание следующих схем.
+
+Эти пути проверены существующими sync/async container, core, checked-error и
+standard-library тестами в Debug и ASan/UBSan.
+
+== C17 для `std.dict::entry_ref`
+
+В
+link:../tests/fixtures/audit_dict_entry_ref_fields.r[] `key` и `value` читаются
+через оба поля `entry_ref`. Семантические типы полей являются borrowed pointers,
+но нативная C-структура хранит их как `const void*`.
+
+Field mapping теперь использует C-имена `key` и `value`. При последующем
+разыменовании backend приводит только эти поля к соответствующему generated
+pointer typedef. Правило реализовано для синхронного HIR и async MIR. Тест
+компилирует и исполняет C17, а соседний format-test проверяет, что вывод уже
+соответствует clang-format 22.1.8.
+
+== Проверки
+
+=== Сборки
+
+* Полная Debug-сборка завершена без предупреждений.
+* `r-front` собран в ASan/UBSan-конфигурации без предупреждений.
+* `r-front` собран Homebrew Clang 22.1.8 без предупреждений.
+* До добавления новых воспроизведений opt-in аудит давал 84 probes, 84 passed /
+  0 failed для Debug и ASan/UBSan frontend Apple Clang 21.0.0, а также для
+  frontend Homebrew Clang 22.1.8. Текущий набор даёт 99 probes, 99 passed и 0
+  failed в обеих frontend-конфигурациях. Compiler-memory probes используют
+  ASan/UBSan-компилятор.
+
+=== Runtime и sanitizer
+
+* Полный набор sanitizer-конфигурации прошёл 799 из 799: 786 тестов в sandbox и
+  13 socket/transport тестов вне сетевого sandbox.
+* Весь Debug CTest: 1157 из 1157 тестов пройдены. В sandbox прошли 1144 теста;
+  оставшиеся 13 loopback-тестов прошли 13 из 13 вне сетевого sandbox.
+* Соседние NLL, switch и finally регрессии повторно прошли 28 из 28 в Debug и
+  19 из 19 в ASan/UBSan. Они подтверждают, что прежние обычные branch
+  replacements, верхнеуровневые case terminators и finally provenance не
+  регрессировали.
+* Новый control-transfer и switch-target набор прошёл 16 из 16 в Debug и 10 из
+  10 в ASan/UBSan. Он включает sync/async runtime, generated-C format и четыре
+  отрицательные семантические проверки.
+* Восемь новых NLL-регрессий проходят в Debug и ASan/UBSan: пять корректных
+  программ компилируются и исполняются с кодом 0, три небезопасных контроля
+  отклоняются с `R-DIAG-BORROW-001`.
+* Новый целевой набор проходит 12 из 12 в Debug и ASan/UBSan: семь unsafe seed
+  отклоняются с `R-DIAG-BORROW-001`, пять last-use, Copy и disjoint-контролей
+  компилируются и исполняются с кодом 0.
+* До исправления sync и async self-alias append для bytes воспроизводили ASan
+  heap-use-after-free с чтением 1048576 освобождённых байт. String
+  `append_str` воспроизводил чтение 36 освобождённых байт в sync и async, а
+  `append_utf8` — в sync. Теперь все десять отрицательных seed отклоняются до
+  C17.
+* Десять отрицательных и шесть положительных distinct-origin/disjoint-range
+  контролей проходят 16 из 16 целевых проверок в ASan/UBSan-сборке.
+* Семь новых same-origin seed отклоняются с `R-DIAG-BORROW-001` до C17. Три
+  положительных runtime-контроля проходят под ASan/UBSan; весь новый целевой
+  набор проходит 13 из 13 проверок.
+* Соседний ASan/UBSan-набор checked errors, cleanup и владения проходит 11 из 11.
+* Целевой ASan/UBSan-набор ownership, aggregate schema, `entry_ref`, sync/async
+  core, IO, FS, time и error conversion: 38 из 38 тестов пройдены.
+* Обязательный owning-payload сценарий и соседние checked cleanup-пути:
+  8 из 8 целевых ASan/UBSan-тестов пройдены. В `generic_vector_push_oom` принудительный
+  отказ расширения возвращает непринятый owner через
+  `std.array::push_error<own i32*>`; значения 29 и 17 освобождаются ровно по
+  одному разу и в ожидаемом порядке.
+* Текущий regression-аудит: 99 probes, 99 passed, 0 failed. Восемь
+  pending-transfer/finally программ теперь отклоняются до C17; четыре корректные
+  reinitialization и составные terminating-path NLL программы принимаются и
+  исполняются с кодом 0. Ранее закрытые whole-object, generic, conditional,
+  nested aggregate и field-assignment варианты остаются зелёными.
+* Все восемь ошибочно принятых fixtures отдельно проведены через generated C17:
+  пять завершаются на null dereference под UBSan, три nested-finally/provenance
+  варианта — на heap-use-after-free под ASan.
+* Три близких корректных контроля прошли generated C17 с кодом 0 в Debug и
+  ASan/UBSan: явная пара обычных `throw`, ownership-preserving transfers через
+  `finally` и reinitialization до pending transfer.
+* Предыдущий projected-borrow набор и соседние checked-error, cleanup и ownership
+  регрессии совместно проходят 18 из 18 целевых тестов в ASan/UBSan-сборке.
+* Три положительных field-assignment контроля отдельно скомпилированы и
+  исполнены под ASan/UBSan. Они проверяют безопасное последнее использование,
+  освобождение прежнего origin и изменение непересекающегося поля.
+* TSan: 7 из 7 целевых async/thread/sync/arc и generated thread spawn/join
+  тестов пройдены.
+* Детерминированный standalone ASan/UBSan fuzz driver повторно выполнил 100000
+  lexer-входов, 100000 parser-входов и 100000 JSON-входов без
+  sanitizer-срабатываний. Runtime libFuzzer в доступном Apple Clang отсутствует.
+* Дополнительная направленная мутация выполнила 1080 обрезаний 180 codegen
+  fixtures и 1120 однотокенных изменений. Crash и timeout не получены. Все 81
+  результата с кодом 2 содержали ожидаемый `R-DIAG-LIMIT-001`; остальные 1039
+  mutations завершились обычной диагностикой либо успешным разбором.
+* ZIP/unzip codegen и roundtrip входят в полный зелёный набор.
+
+=== Контрактные проверки
+
+Пройдены:
+
+* `c-style-check`;
+* `format-check` для 964 handwritten C-файлов;
+* `specification-check` и EN/RU parity;
+* grammar manifest и оба rule inventory;
+* `verify_library_inventory`;
+* `library-coverage-check`: 27 модулей, 866 публичных записей, 0
+  `unimplemented`, 0 `partial`;
+* `library-layout-check`;
+* `runtime-entry-stack-inventory-check`.
+
+== Границы вывода
+
+Дополнительные гипотезы не отнесены к подтверждённым дефектам:
+
+* передача и возврат borrow-bearing aggregate через обычную функцию получают
+  известный `R-DIAG-SLICE-001` до исследуемого ownership-пути;
+* проверенные `error`-варианты с self-contained borrow отклоняются диагностикой
+  escape/outlives-source, поэтому обход checked-error channel не подтверждён;
+* fixed и dynamic array с исследуемым `Holder` не входят в реализованный local
+  type slice и не достигают C17;
+* копирование borrow в отдельный локальный указатель с последующим
+  переприсваиванием первой копии работает корректно, поэтому общий дефект Copy
+  указателей не подтверждён.
+
+Актуальные EN/RU specifications прошли parity-check; нового противоречия в
+контракте owning error payload или POD в этом срезе не найдено. Документированные
+acceptance gaps компилятора остаются отличимыми от закрытых в этом срезе
+расхождений: они отклоняют пока не реализованные конструкции и сами по себе не
+подтверждают нарушение safety.
+
+Рекурсивная проверка применяется ко всем дочерним HIR-узлам обычных и
+специальных стандартных вызовов. Покомпонентное состояние закрывает проверенные
+field/index assignment, generic, error, branch и async-пути. Новые регрессии
+проверяют перенос этого состояния через whole-object move, условное выражение и
+вложенный aggregate. Полный CTest и целевые sanitizer-регрессии проверяют только
+достигнутые пути.
+Самостоятельный inline-вход с fixed-array initializer невозможно записать в
+текущей грамматике call-free аргументов. Compound borrow-параметры не
+использовались для обхода, потому что этот указанный спецификацией класс сигнатур
+пока получает `R-DIAG-SLICE-001`; это известный acceptance gap.
+По той же причине assignment borrow-bearing aggregate через
+`R_HIR_DEREF_PLACE` не удалось довести до C17. Проверенные
+`R_HIR_FIELD_PLACE` и `R_HIR_INDEX_PLACE` уже достаточны для UAF, но отсутствие
+исполняемого dereference seed не доказывает корректность этого projection path.
+
+Произвольные импортированные `extern "C"` библиотеки и `@repr(C)` aggregate ABI
+остаются известными недореализованными основаниями FFI. Проверены реализованные
+raw-function callbacks, но это не доказывает общий FFI-контракт. Отдельного GCC
+на хосте нет, поэтому независимое сравнение GCC/Clang не выполнено. Проверки
+оптимизационных уровней не были исчерпывающими. Исторический UAF воспроизводился
+в строгой sanitizer-сборке при текущей тестовой оптимизации; это не заменяет
+сравнение нескольких уровней оптимизации.
+
+Успешные штатные тесты, TSan и fuzz-прогоны не доказывают безопасность языка.
+Ранее подтверждённые UAF специальных вызовов, одиночного borrow-bearing поля,
+multi-field assignment и whole-object move закрыты семантическим отказом.
+Ложный отказ Copy aggregate field также исправлен. Обнаруженные в текущем срезе
+pending-transfer/finally и terminating-path NLL дефекты закрыты постоянными
+регрессиями; приведённое покрытие не является доказательством общего
+safety-контракта.
+
+== Повторный аудит незавершённых возможностей, 10 сентября 2026
+
+Этот проход выполнялся как диагностический: реализация компилятора и
+спецификация не изменялись. Постоянная acceptance-матрица в
+link:../tools/audit_compiler_implementation.py[] расширена с 19 до 25 входов.
+Каждый вход является положительной программой по указанному нормативному правилу,
+поэтому отказ компиляции остаётся красным результатом и не маскируется как
+успешный negative test.
+
+Debug и ASan/UBSan-компиляторы дали одинаковую классификацию: 4 входа приняты,
+21 не дошёл до C17. Двадцать отказов содержат структурированную диагностику.
+Прежний `enum_fallthrough` по-прежнему завершается кодом 2 без диагностики.
+Точный исходник, правило и результат каждого входа записываются в JSON; актуальный
+Debug-результат находится в
+link:../build-debug/compiler-implementation-audit-current.json[].
+
+=== Подтверждённые дополнительные acceptance gaps
+
+* `local_atomic`: минимальное `au32 value = 0;` отклоняется как
+  `local type is valid R but outside semantic slice 2`, хотя R-INIT-0012 прямо
+  определяет такую инициализацию.
+* `atomic_aggregate_local`: та же граница рекурсивно блокирует локальную структуру
+  с полем `au32`. До проверки атомарной инициализации и C17 lowering выполнение не
+  доходит.
+* `atomic_parameter`: параметр `au32` отклоняется на уровне сигнатуры. Таким
+  образом, специфицированные atomic values нельзя провести через обычную
+  функцию даже до проверки exclusive move по R-INIT-0013.
+* `mutable_module_object`: неиспользуемый `i32 counter = 0;` на уровне модуля
+  отклоняется как незавершённый module binding. Контрольный immutable
+  `const i32 counter = 0;` принимается. Это отделяет отсутствие storage lowering
+  от правил безопасного доступа R-OBJ-0009.
+* `repr_c_struct` и `repr_c_enum`: корректные объявления `@repr(C)` отклоняются
+  как неподдерживаемый aggregate attribute. Пробники фиксируют отдельно struct по
+  R-FFI-0006 и fieldless enum с `c_int` по R-AGG-0005.
+
+Эти отказы являются недореализованными возможностями, а не подтверждённым
+нарушением memory safety: они происходят до генерации C17. Наиболее серьёзная
+диагностическая проблема в этой матрице остаётся у fieldless enum fallthrough:
+корректный вход заканчивается внутренним отказом без сообщения пользователю.
+
+=== Устойчивость ошибочного ввода
+
+Standalone ASan/UBSan fuzz drivers повторно обработали по 100000 lexer, parser и
+JSON входов без sanitizer-срабатываний. Дополнительные вложенные типы `o<T>` и
+скобочные выражения проверены на глубинах 64, 256, 1024, 4096 и 16384.
+Начиная с границы parser nesting они ограниченно завершаются с
+`R-DIAG-LIMIT-001`; timeout, ASan и UBSan не получены. Направленная семантическая
+мутация корректных codegen fixtures также не дала воспроизводимого crash или
+timeout. Эти проверки покрывают выбранные генераторы и лимиты, но не доказывают
+полную устойчивость для всех входных байтов и комбинаций возможностей.
+
+== Расширение аудита atomic, intrinsic и storage, 10 сентября 2026
+
+Этот проход выполнялся без исправлений реализации и без изменения
+спецификации. В рабочем каталоге нет доступного baseline-коммита: `HEAD` не
+существует, а `git status` показывает проект как untracked. Поэтому границы
+изменений перечисляются по созданным и изменённым audit-файлам, а не относительно
+Git diff. Apple Clang/CC 21.0.0, CMake/CTest 4.3.3 и Python 3.14.6 зафиксированы
+как инструменты этого среза. Проверены Debug и ASan/UBSan-компиляторы с
+одинаковым результатом; их SHA-256 сохранены в JSON-отчётах.
+
+=== Ошибочная приёмка присваивания живому atomic
+
+R-INIT-0012 разрешает обычную инициализацию atomic из точного неатомарного
+базового значения, но после инициализации требует доступ только через операции
+`core`. Исключение R-INIT-0013 относится к exclusive `move` и последующей полной
+реинициализации перемещённого storage. Компилятор корректно отклоняет compound
+assignment и update, но ошибочно принимает обычное присваивание живому объекту:
+
+[source,r]
+----
+void replace_live_atomic() {
+    au32 value = 0;
+    value = 1;
+}
+----
+
+Минимальное воспроизведение закреплено в
+link:../tests/fixtures/audit_atomic_live_assignment.r[]. Команда
+`build-debug/r-front --emit=c17 tests/fixtures/audit_atomic_live_assignment.r`
+завершается кодом 0, хотя ожидается `R-DIAG-TYPE-001` по R-INIT-0012. Generated
+C сначала вызывает `atomic_init` для временного значения, затем уничтожает
+живой destination и выполняет helper move:
+
+[source,c]
+----
+atomic_init(&r_t00000004, r_t00000003);
+r_type_drop_atomic_00000025_gate(&r_v00000001_00000062);
+r_type_move_atomic_00000025_gate(&r_v00000001_00000062, &r_t00000004);
+----
+
+Причина локализована в `r_body_lower_assignment`: для простого `=` тип
+destination передаётся как контекст RHS, поэтому initialization-only conversion
+из `u32` в `au32` становится доступна и для присваивания. Узел помечается как
+replacement уже инициализированного значения, но отдельной проверки запрета
+atomic assignment нет. Это нарушение семантического и concurrency-контракта
+средней серьёзности. Доказуемый safe-code memory corruption в достигнутом пути
+не подтверждён: exclusive-доступ к destination продолжает проверяться.
+
+Положительный соседний контроль
+link:../tests/fixtures/audit_atomic_moved_reinitialization.r[] перемещает source,
+полностью реинициализирует его и перемещает повторно. Он корректно принимается по
+R-AM-0006, R-INIT-0012 и R-INIT-0013. Opt-in
+link:../tools/audit_language_safety.py[] теперь содержит 101 проверку: 100
+проходят, а `atomic_live_assignment` намеренно остаётся красной регрессией до
+исправления семантики.
+
+=== Недоступные intrinsic-семейства `core`
+
+Положительные вызовы `core::atomic_load`, `core::checked_add_i32`,
+`core::wrapping_add_i32` и `core::saturating_add_i32` отклоняются с
+`R-DIAG-TYPE-001`: операция не распознана как стандартный вызов. При этом
+R-LIB-0011 определяет десять atomic-операций, а R-LIB-0001 — закрытые семейства
+checked, wrapping и saturating add/sub/mul для всех нормативных integer suffix.
+
+`r_body_core_operation` распознаёт `hash`, `key_equal`, `assume`, операции raw
+slice, volatile load/store, `adopt` и `release`; atomic и арифметических
+семейств в нём нет. Соответствующих вариантов standard-call и C17 lowering также
+нет. Generated implementation inventory одновременно маркирует
+`core::atomic_load`, `core::atomic_compare_exchange` и девять арифметических
+семейств как `implementation.kind = intrinsic` с полным compiler contract.
+
+Это подтверждённое расхождение inventory с доступностью API из R. Оно объясняет,
+почему зелёный `library-coverage-check` с 866 публичными записями и нулём
+`partial`/`unimplemented` не доказывает source-level интеграцию: gate проверяет
+структуру и заявленную реализацию, но не компилирует нормативные вызовы.
+
+=== Module/static storage и borrow outputs
+
+Расширенная положительная acceptance-матрица содержит 36 входов. Первые 25
+исторических проб остаются зелёными; 11 новых корректных программ отклоняются в
+Debug и ASan/UBSan одинаково:
+
+* отрицательный integer и Boolean module initializer не проходят узкий
+  `r_semantic_collect_module_constant`, который принимает только одиночный
+  неотрицательный integer token;
+* module aggregate и `thread_local` aggregate не строят constant value и storage
+  lifecycle по R-OBJ-0008/R-OBJ-0010;
+* block `static` с пользовательским aggregate ломает parser lookahead:
+  `r_known_statement_type_start` пропускает storage kind, но читает identifier
+  token из исходной позиции `static`;
+* borrow-bearing compound output отклоняется на уровне сигнатуры, хотя
+  R-BORROW-0008 прямо включает compound, содержащий borrow;
+* checked-error payload с условным выбором из двух входных borrow отклоняется как
+  `multi-origin checked-error borrow is outside semantic slice 3`, не достигая
+  требуемого объединения origin set.
+
+Точные исходники, нормативные правила и diagnostics сохранены в
+link:../build-debug/compiler-implementation-audit-current.json[] и
+link:../build-sanitize/compiler-implementation-audit-current.json[]. Постоянная
+матрица находится в link:../tools/audit_compiler_implementation.py[]; на момент
+этого прохода результат составлял 25 принятых и 11 отклонённых программ из 36.
+
+=== Статус после исправления
+
+Описанные выше дефекты исправлены в рабочем дереве. Расширенная acceptance-матрица
+теперь принимает 36 из 36 программ, а safety-аудит проходит 101 из 101 проверки.
+Обычное присваивание инициализированному atomic отклоняется; полная
+реинициализация после `move` остаётся допустимой.
+
+Семейства checked, wrapping и saturating integer intrinsics проходят HIR, MIR и
+sync/async C17. Atomic API включает load/store/exchange/fetch, lock-free query и
+`atomic_compare_exchange_result<T>` с вариантами `exchanged(T)` и `unchanged(T)`.
+Постоянные недопустимые memory order отклоняются с `R-DIAG-ATOMIC-001`, а
+выбранные во время исполнения значения приводят к `contract_violation` до atomic
+read или modification. Signed `atomic_fetch_add/sub` понижаются в CAS loop с
+проверкой overflow до успешной записи; unsigned арифметика сохраняет modulo
+semantics.
+
+Регрессии проверяют обе compare-exchange ветви, допустимые и недопустимые пары
+ordering, signed overflow/non-overflow, unsigned wrapping и sync/async backend.
+Целевые Debug и ASan/UBSan тесты проходят. `library-coverage-check` сообщает 866
+публичных записей, 0 `unimplemented` и 0 `partial`; оговорённая выше граница этой
+структурной проверки остаётся в силе.
+
+=== Неподтверждённые гипотезы и границы
+
+Рекурсивная generic-инстанциация с ростом типа проверена отдельно. Компилятор
+ограниченно завершился с `R-DIAG-LIMIT-001` и цепочкой инстанциаций; timeout и
+sanitizer-срабатывание не получены. Nullable raw function pointer после null
+assignment также не дал прямого вызова null: generated C содержит runtime
+contract check перед indirect call. Эти гипотезы не считаются дефектами.
+
+Проход подтверждает одну ошибочную приёмку и пять корневых групп acceptance или
+inventory gaps. Он не доказывает memory safety языка и не заменяет runtime-тесты
+для ещё не достигнутых путей. Нормативные EN/RU документы не изменялись.
+
+Штатный Debug CTest содержит 1202 теста. Все 1189 доступных в этом sandbox тестов
+прошли; остальные 13 требуют loopback socket/listener и завершаются на создании
+или `bind` внутри сетевого sandbox. Это ограничение окружения, а не успешная
+проверка этих путей. Отдельно прошли `r_frontend_semantic_unit`,
+`specification-check`, `format-check`, ручная whitespace-проверка изменённых
+файлов и `library-coverage-check`. Последний намеренно остаётся зелёным при
+недоступных intrinsic и тем самым воспроизводит описанную границу проверки.
+
+== Полный аудит public surface и явных semantic slices, 10 сентября 2026
+
+Этот проход продолжает диагностический режим: compiler и specification не
+исправлялись. Добавлены только audit tools, положительные и отрицательные
+регрессии, полное покрытие integer-family и настоящий вызов ранее не покрытых
+операций JSON tree. Слова _полный_ ниже означают полный перебор записей текущего
+inventory и всех явных `R-DIAG-SLICE-001` в semantic implementation. Они не
+означают математического доказательства отсутствия других дефектов.
+
+=== 102 недоступные публичные операции
+
+link:../tools/audit_library_source_surface.py[] разворачивает все закрытые
+семейства inventory и проверяет 872 конкретных имени. Для каждого имени он
+компилирует минимальный вызов с нулём аргументов. Правильный frontend может
+отклонить такой вызов по arity или типу, но сначала обязан разрешить публичное
+имя. Debug и ASan/UBSan дали одинаковый результат: 775 имён разрешены, 97
+завершаются `R-DIAG-NAME-001` с текстом `called function name is unresolved at
+this source position`.
+
+Неразрешённый набор состоит из `core::validate_utf8`, десяти операций `std.arc`,
+десяти `std.rc`, девятнадцати `std.fs`, семнадцати `std.net`, пятнадцати
+`std.process` и двадцати пяти `std.sync`. Полный список, точные signatures,
+правила и сгенерированные программы сохранены в
+`build-debug/library-source-surface-audit.json` и
+`build-sanitize/library-source-surface-audit.json`.
+
+У `std.sync::channel`, `sync_channel`, `sender`, `sync_sender` и `receiver`
+нулевой вызов пересекается с синтаксисом type constructor. Поэтому audit
+дополнительно компилирует пять корректных signatures. Все пять доходят до
+`R-DIAG-SLICE-001`: локальные channel types либо функции с endpoint в signature
+находятся вне semantic slice. Вместе это 102 заявленные операции, для которых
+положительный source path недоступен.
+
+Серьёзность этой группы высокая для полноты языка: specification и inventory
+обещают callable API, C implementations и headers существуют, но R-программа не
+может ими воспользоваться. Это не подтверждённая memory corruption, потому что
+отказ происходит до исполнения. Вероятная причина находится в закрытых таблицах
+operation dispatch около `r_body_core_operation` и standard-module dispatch в
+`compiler/semantic/semantic.c`: отсутствующее имя никогда не получает
+`R_STANDARD_CALL_*`. Регрессия — полный source-surface audit; команда:
+
+[source,sh]
+----
+python3 tools/audit_library_source_surface.py \
+  --compiler build-debug/r-front \
+  --output build-debug/library-source-surface-audit.json
+----
+
+=== Все 20 integer limit constants недоступны
+
+Для `core::min_i8` достаточно следующего корректного входа; audit повторяет его
+для `min`/`max` и всех десяти integer suffix:
+
+[source,r]
+----
+i8 minimum() {
+    return core::min_i8;
+}
+----
+
+Ожидается значение типа `i8`. Фактически frontend интерпретирует qualified value
+как enum path и сообщает `R-DIAG-NAME-001: enum type is unresolved`. Все 20 из 20
+проб воспроизводят один симптом в Debug и sanitizer builds. Вероятная причина —
+qualified-primary lowering в `r_body_lower_enum_constant`: integer constants не
+зарегистрированы как отдельная value category. Серьёзность средняя; C17 не
+генерируется. Регрессии входят в тот же JSON и target
+`library-source-surface-audit`.
+
+=== Неизвестные и отсутствующие standard types проходят name resolution
+
+Отрицательный контроль:
+
+[source,r]
+----
+void probe() {
+    unsafe {
+        raw std.__source_surface_missing::type*? value = null;
+        value as void;
+    }
+}
+----
+
+По R-NAME-0003 ожидается `R-DIAG-NAME-001` в позиции неизвестного типа. Фактически
+HIR создаёт named standard type, после чего C17 backend завершается кодом 1 без
+diagnostic. `r_semantic_standard_type_from_ast` в
+`compiler/semantic/semantic.c` канонизирует любой путь, начинающийся с `std` или
+`core`, и не сверяет имя с закрытым реестром до вызова
+`r_semantic_intern_derived_type`.
+
+Тот же silent failure воспроизводят реальные
+`std.sync::channel<i32>`, `sync_channel<i32>`, `sender<i32>`,
+`sync_sender<i32>` и `receiver<i32>` даже в неразыменовываемом raw pointer.
+Шестой тип, `once_lock<i32>`, проходит C17. Все шесть перечислены в Annex A, но
+ни один не имеет type facet в generated implementation inventory. Таким образом,
+здесь две ошибки: высокая по качеству diagnostics ошибочная приёмка неизвестного
+standard type и средняя tooling-ошибка неполного inventory. Отрицательный
+контроль и все 160 concrete type probes закреплены в source-surface audit.
+
+=== Пять Move objects со static storage ошибочно отклоняются
+
+Минимальный module case:
+
+[source,r]
+----
+bytes value = {};
+
+i32 main() {
+    return 0;
+}
+----
+
+R-TYPE-0030 определяет `{}` как allocation-free empty state для `bytes`, а
+R-OBJ-0010 задаёт module lifetime. Фактический результат —
+`R-DIAG-SLICE-001: Move module object lifetime is valid R but outside semantic
+slice 3`. `const bytes` и module `thread_local bytes` также отклоняются. Block
+`static bytes` и block `thread_local bytes` получают
+`R-DIAG-INIT-001: static object requires a constant initializer`, хотя этот empty
+initializer не выделяет память и не паникует.
+
+Причина module forms прямо отмечена в
+`r_hir_build_module_object_initializers`: все non-Copy types безусловно уходят в
+unsupported branch. Static forms не распознают предусмотренное R-TYPE-0030
+constant state. Серьёзность средняя, до runtime путь не доходит. Все пять
+положительных программ добавлены в
+link:../tools/audit_compiler_implementation.py[]. Debug и sanitizer result:
+36 принятых и 5 отклонённых из 41. Команда воспроизведения:
+
+[source,sh]
+----
+python3 tools/audit_compiler_implementation.py \
+  --compiler build-debug/r-front
+----
+
+=== Backend нарушает собственный formatting gate
+
+link:../tools/generate_core_integer_fixture.py[] создаёт sync и async программы
+для всех 90 комбинаций checked/wrapping/saturating add/sub/mul и десяти integer
+types. Debug и ASan/UBSan runtime tests проходят при `-O0` и `-O2`, включая
+новые JSON tree calls `std.json::number_text` и `std.json::array`. Оптимизированный
+тест повторно компилирует тот же generated C17, используя консервативные
+измеренные `-O0` stack bounds. Но
+`r_frontend_codegen_core_integer_all_format` отклоняет generated C17 в 14
+позициях. Минимальная корневая комбинация включает `checked_mul_isize`; ещё один
+симптом проявляется в длинных async assignments для saturating `isize`/`usize`.
+
+Фактический helper содержит переносы, не совпадающие с repository clang-format:
+
+[source,c]
+----
+if (((left > 0 &&
+      ((right > 0 && left > PTRDIFF_MAX / right) || ...)) ||
+     (left < 0 &&
+      ((right > 0 && left < PTRDIFF_MIN / right) || ...)))) {
+----
+
+Причина находится в ручной раскладке строк
+`r_c17_emit_core_integer_overflow_condition` и отсутствии общего wrapping
+решения для длинного async call assignment в `compiler/codegen/c17.c`.
+Серьёзность низкая для поведения программы, но это воспроизводимое нарушение
+обязательного clean-format gate. Регрессия намеренно остаётся красной; backend в
+рамках этого аудита не исправлялся.
+
+Дополнительная optimization-матрица повторяет при `-O2` ownership-sensitive
+`generic_vector_push_oom`, checked `finally`, JSON tree и async JSON tree. Все
+пять оптимизированных программ проходят в Debug и ASan/UBSan. Harness сохраняет
+C wrapper, включая OOM injection, и использует консервативные измеренные `-O0`
+stack bounds.
+
+=== `c-style-check` находит четыре нарушения в semantic frontend
+
+Отдельный target `c-style-check`, который не входит в полный CTest, отклоняет
+`compiler/semantic/semantic.c`. В `r_semantic_collect_module_constant` переход
+идёт на handwritten-метку `append_symbol`, а в
+`r_semantic_record_error_borrow_parameter` — на `add_parameter`. Checker сообщает
+для каждой пары, что цель `goto` должна быть последней cleanup-меткой функции и
+что handwritten label должна называться `cleanup`; всего четыре diagnostics на
+строках 7167, 7208, 34286 и 34304 текущего файла.
+
+Это существующий style-gate defect и потенциально затрудняющий сопровождение
+control flow, но сам по себе он не подтверждает ошибку поведения программы.
+`format-check` его не заменяет: форматирование 964 handwritten C files проходит.
+В соответствии с диагностическим режимом semantic implementation здесь не
+исправлялась.
+
+=== Полный реестр явно незавершённых ветвей
+
+link:../tools/audit_semantic_slices.py[] перечисляет не выборку, а каждую точку,
+которая эмитит `R-DIAG-SLICE-001`. Сейчас это 64 call sites, 66 message
+alternatives и 57 уникальных сообщений. Категории: 19 type/aggregate, 12
+async/thread, 9 ownership/borrow, 8 expression/control-flow, 2 module/storage и
+16 прочих сообщений. JSON с source line, enclosing function и полным текстом
+находится в `build-debug/semantic-slice-audit.json`.
+
+Пять static-storage входов выше динамически подтверждены. Остальные записи этого
+реестра считаются гипотезами реализации, пока для них не построена программа,
+которая одновременно допустима текущей specification и достигает конкретной
+ветви. Например, сообщение об atomic array/slice не считается дефектом языка:
+Annex A допускает только scalar `atomic-type`, хотя оставшийся compiler message
+называет составную форму valid R. Аналогично сообщение про open-ended range не
+считается acceptance defect, потому что R-EXPR-0021 нормирует только
+`a[lo..hi]`.
+
+=== Четыре компонента hosted profile явно остаются partial
+
+`library-coverage-check` сообщает 0 partial public records, однако это не
+покрывает полноту target profile. В
+`targets/arm64-apple-darwin.hosted-native-async.json` четыре implementation
+status заканчиваются на `integrated-partial`, а
+`profile_conformance_claim = false` сохранён для type-erased task executor,
+filesystem adapter lane, Dispatch I/O payload adapter и nonblocking socket
+adapter. `specification-check` не устраняет этот разрыв: его target-manifest
+часть специально требует, чтобы эти четыре partial-признака оставались false.
+
+Это явное ограничение, а не новый доказанный runtime defect. Но оно противоречит
+возможной интерпретации зелёного library inventory как полной готовности hosted
+профиля. Недоступные из R операции `std.fs`, `std.net` и `std.sync`, найденные
+source-surface audit, показывают практическую сторону этой границы.
+
+=== TSan обнаружил ошибочное предположение теста о worker affinity
+
+Первая полная TSan-матрица прошла 812 из 813 доступных tests. Единственный сбой,
+`r_frontend_codegen_async_module_storage`, не содержал ThreadSanitizer report:
+программа вернула `-2`, отображённое процессом как status 254. Минимизация через
+`--repeat until-fail` воспроизвела чередование успеха и status 254.
+
+Fixture последовательно ожидала две async-задачи и требовала, чтобы второе
+обращение к `thread_local i32` продолжило состояние того же executor worker.
+Target manifest обещает private concurrent queue и не обещает worker affinity.
+На другом worker правильное начальное значение даёт второй результат 13 вместо
+15. Тест исправлен: он принимает 13 или 15, продолжая проверять первый результат
+и последовательное изменение shared module object. Это дефект regression test,
+а не подтверждённая data race компилятора. Исправленная проверка прошла 20
+последовательных TSan-запусков; пять новых `-O2` tests также прошли под TSan.
+
+=== Проверенное окружение и границы
+
+Нет baseline commit: repository не имеет `HEAD`, а все пути отображаются как
+untracked. Использованы Apple Clang 21.0.0, CMake/CTest 4.3.3 и Python 3.14.6.
+Отдельный GNU GCC в окружении отсутствует: `/usr/bin/gcc` является Apple Clang,
+поэтому независимый GCC-прогон выполнить нельзя.
+Debug compiler имеет SHA-256
+`1b2e213d853b7673dc425ecba4962f20951a5b719e519e9c955b1565000da7f5`,
+ASan/UBSan compiler —
+`240f74c35ec8f819e86ea3e2e7efeb74ab6d9eb1d837420a05cb4e737b5ea357`.
+Три standalone ASan/UBSan fuzz drivers обработали по 100000 lexer, parser и JSON
+inputs без sanitizer report.
+
+Текущий Debug CTest содержит 1209 tests. Один новый formatting regression
+закономерно красный. Ещё 13 socket/listener tests заблокированы sandbox; это не
+результат реализации: два `r_runtime_darwin_socket*`,
+`r_library_json_reader_unit`, девять `r_library_net_*` socket tests и
+`r_frontend_codegen_json_reader_transports`. После исключения этих 14 имён прошли
+1190 исходных Debug
+tests и отдельно пять добавленных `-O2` tests, то есть все 1195 доступных
+проверок. В ASan/UBSan-конфигурации аналогично прошли 813 исходных tests и пять
+новых `-O2` tests, всего 818. TSan дал тот же итог после исправления flaky test:
+813 исходных и пять оптимизированных tests без race report. Safety audit остаётся
+зелёным: 101 из 101 bounded ownership probes. Отсутствие sanitizer report и
+зелёные достигнутые тесты не доказывают
+memory safety и не покрывают runtime недоступных public operations.
+
+== Повторная проверка 2026-09-13
+
+Повторный аудит выполнялся после последующих изменений проекта. Нового
+подтверждённого дефекта компилятора в проверенном объёме не найдено. Реализация
+компилятора и specification в этой проверке не изменялись.
+
+Добавлены две пары semantic-тестов для ранее не закреплённых границ времени
+жизни. `semantic_closure_copy_owner_lifetime` проверяет, что копия closure
+сохраняет происхождение захваченного borrow и не позволяет уничтожить owner до
+последнего вызова. `semantic_method_borrow_owner_lifetime` проверяет ту же
+гарантию для borrow, возвращённого методом owning-структуры. Соседние
+`semantic_closure_copy_owner_last_use` и
+`semantic_method_borrow_owner_last_use` подтверждают, что чтение до `drop`
+остаётся допустимым. Оба отрицательных теста получают
+`R-DIAG-BORROW-001 [R-INIT-0011]`, оба положительных принимаются. Все четыре
+прошли в Debug, ASan/UBSan и TSan.
+
+Направленные дополнительные пробы не дали контрпримера. Неограниченно растущая
+цепочка `grow<Box<T>>` останавливается через `R-DIAG-LIMIT-001 [R-LIMIT-0003]`
+с цепочкой инстанциаций. Source-only trait с borrowed output отклоняется через
+`R-DIAG-BORROW-002 [R-BORROW-0009]`, как требует правило явного происхождения.
+Closure после последнего вызова и borrow-return метода до уничтожения owner
+принимаются, а перестановка `drop` перед последним использованием отклоняется.
+
+Штатный Debug CTest содержит 1525 тестов. В sandbox прошли все 1510 тестов,
+которым не нужен запрещённый bind/socket-доступ. Остальные 15 сетевых тестов
+были отдельно запущены вне sandbox и прошли до добавления четырёх чисто
+frontend semantic-fixtures. ASan/UBSan baseline дал 1053 доступных теста и 15
+сетевых тестов вне sandbox без sanitizer report; четыре новые проверки затем
+отдельно прошли в этой конфигурации. Полная доступная TSan-матрица после
+добавления тестов прошла 1057 из 1057 без race report.
+
+Standalone libFuzzer выполнил 200000 входов lexer, 200000 входов parser и
+300000 входов JSON scanner без crash или sanitizer report. Попытка отдельного
+parser-run на корпусе всех `.r` fixtures с пределом 500000 оказалась слишком
+медленной и была остановлена вручную; она не считается завершённой проверкой.
+
+Инструментальный implementation audit принял 75 из 75 выбранных заявленных
+форм. Bounded safety audit сопоставил ожидаемый исход для 101 из 101 ownership
+и compiler-sanitizer probes. Library surface audit распознал все 939 операций,
+20 констант и 182 типа. `specification-check`, `library-coverage-check`,
+`format-check` и `c-style-check` проходят; inventory содержит 961 public record,
+0 `unimplemented` и 0 `partial`.
+
+Остаются неподтверждённые границы. В semantic frontend существуют 27 явных
+ветвей `R-DIAG-SLICE-001` с 24 уникальными сообщениями; без минимальной
+spec-valid программы, достигающей ветви, они считаются гипотезами, а не
+дефектами. Hosted target manifest по-прежнему содержит четыре статуса
+`integrated-partial` и не заявляет полную conformance для соответствующих
+адаптеров. Независимый GCC отсутствует: `/usr/bin/gcc` является Apple Clang.
+Отсутствие новых сбоев в этих ограниченных матрицах не доказывает безопасность
+языка в целом.

@@ -1,0 +1,83 @@
+set(R_STD_NET_PUBLIC_SOURCES
+    source/as_error.c
+    source/format_ip.c
+    source/parse_ip.c
+    source/resolve.c
+    source/tcp_accept.c
+    source/tcp_close.c
+    source/tcp_listener_close.c
+    source/tcp_listen.c
+    source/tcp_connect.c
+    source/tcp_get_options.c
+    source/tcp_listener_local_address.c
+    source/tcp_local_address.c
+    source/tcp_peer_address.c
+    source/tcp_read.c
+    source/tcp_read_into.c
+    source/tcp_set_options.c
+    source/tcp_shutdown.c
+    source/tcp_write.c
+    source/tcp_write_all.c
+    source/tcp_write_all_from.c
+    source/tcp_write_from.c
+    source/udp_bind.c
+    source/udp_close.c
+    source/udp_get_options.c
+    source/udp_join_multicast.c
+    source/udp_leave_multicast.c
+    source/udp_local_address.c
+    source/udp_receive_from.c
+    source/udp_receive_into.c
+    source/udp_send_from.c
+    source/udp_send_to.c
+    source/udp_set_options.c
+    source/unix_accept.c
+    source/unix_close.c
+    source/unix_connect.c
+    source/unix_datagram_bind.c
+    source/unix_datagram_close.c
+    source/unix_datagram_connect.c
+    source/unix_listen.c
+    source/unix_listener_close.c
+    source/unix_peer_credentials.c
+    source/unix_read_into.c
+    source/unix_receive_into.c
+    source/unix_send_from.c
+    source/unix_shutdown.c
+    source/unix_write_all_from.c
+    source/unix_write_from.c
+)
+r_add_library_module(r_std_net std.net std_net ${R_STD_NET_PUBLIC_SOURCES})
+target_sources(r_std_net PRIVATE
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/networking/source/async_accept.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/networking/source/async_connect.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/networking/source/async_datagram.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/networking/source/async_listener_close.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/networking/source/async_read.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/networking/source/async_resolve.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/networking/source/async_shutdown.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/networking/source/async_stream_close.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/networking/source/async_udp_close.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/networking/source/async_write.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/networking/source/async_bind.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/networking/source/handle.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/networking/source/native.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/networking/source/options.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/networking/source/parse_ip.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/networking/source/unix.c"
+)
+target_include_directories(r_std_net PRIVATE
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/networking/include"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/time/include"
+)
+target_include_directories(r_std_net PUBLIC
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/std/error/include"
+)
+target_link_libraries(r_std_net PUBLIC
+    r_std_async
+    r_std_string
+    r_std_time
+)
+if(APPLE AND R_FRONTEND_BUILD_TESTS)
+    target_compile_definitions(r_std_net PRIVATE R_LIBRARY_NET_TESTING=1)
+endif()

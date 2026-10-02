@@ -1,0 +1,49 @@
+set(R_STD_JSON_PUBLIC_SOURCES
+    source/append.c
+    source/array.c
+    source/boolean.c
+    source/find.c
+    source/from_bool.c
+    source/from_number.c
+    source/from_string.c
+    source/get.c
+    source/insert.c
+    source/key_at.c
+    source/kind.c
+    source/len.c
+    source/name_equal.c
+    source/null.c
+    source/parse_number.c
+    source/number_is_zero.c
+    source/number_text.c
+    source/object.c
+    source/parse.c
+    source/parse_with_options.c
+    source/stringify.c
+    source/stringify_with_options.c
+    source/take_field.c
+    source/take_index.c
+    source/text.c
+ )
+r_add_library_module(r_std_json std.json std_json ${R_STD_JSON_PUBLIC_SOURCES})
+target_sources(r_std_json PRIVATE
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/json/source/collections.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/json/source/common.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/json/source/cursor.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/json/source/decoder.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/json/source/encode.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/json/source/reader.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/json/source/scanner.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/json/source/tree.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/json/source/writer.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/json/source/fold.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/json/source/fold_data.c"
+)
+target_include_directories(r_std_json PRIVATE
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/json/include"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/text/include"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/std/async/include"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/std/error/include"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/std/time/include"
+)
+target_link_libraries(r_std_json PUBLIC r_std_string r_std_convert r_std_format)

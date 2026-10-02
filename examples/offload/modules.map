@@ -1,0 +1,2 @@
+example.offload.main = src/main.r
+example.offload.native = src/native.r

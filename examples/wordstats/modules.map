@@ -1,0 +1,2 @@
+example.wordstats.main = src/main.r
+example.wordstats.words = src/words.r

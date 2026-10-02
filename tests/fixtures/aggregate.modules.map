@@ -1,0 +1,2 @@
+test.aggregate.api = aggregate_api.r
+test.aggregate.consumer = aggregate_consumer.r

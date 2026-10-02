@@ -1,0 +1,2 @@
+example.registry.main = src/main.r
+example.registry.store = src/store.r

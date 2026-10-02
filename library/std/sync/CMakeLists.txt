@@ -1,0 +1,63 @@
+set(R_STD_SYNC_PUBLIC_SOURCES
+    source/barrier_new.c
+    source/barrier_wait.c
+    source/call_once.c
+    source/call_once_force.c
+    source/channel.c
+    source/clone_sender.c
+    source/clone_sync_sender.c
+    source/condvar_new.c
+    source/get.c
+    source/get_or_init.c
+    source/lock.c
+    source/mutex_guard_mut.c
+    source/mutex_guard_ref.c
+    source/mutex_new.c
+    source/notify_all.c
+    source/notify_one.c
+    source/once_lock.c
+    source/once_new.c
+    source/read.c
+    source/receive.c
+    source/receiver.c
+    source/recv.c
+    source/reserve.c
+    source/rw_read_guard_ref.c
+    source/rw_write_guard_mut.c
+    source/rw_write_guard_ref.c
+    source/rwlock_new.c
+    source/set.c
+    source/send.c
+    source/send_permit.c
+    source/sender.c
+    source/sync_channel.c
+    source/sync_receiver.c
+    source/sync_send.c
+    source/sync_sender.c
+    source/try_lock.c
+    source/try_read.c
+    source/try_recv.c
+    source/try_reserve.c
+    source/try_send.c
+    source/try_write.c
+    source/unlock.c
+    source/wait.c
+    source/write.c
+)
+r_add_library_module(r_std_sync std.sync std_sync ${R_STD_SYNC_PUBLIC_SOURCES})
+target_sources(r_std_sync PRIVATE
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/synchronization/source/barrier.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/synchronization/source/channel.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/synchronization/source/common.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/synchronization/source/condvar.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/synchronization/source/mutex.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/synchronization/source/once.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/synchronization/source/once_lock.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/synchronization/source/channel_receive.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/synchronization/source/channel_reserve.c"
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/synchronization/source/rwlock.c"
+)
+target_include_directories(r_std_sync PRIVATE
+    "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/synchronization/include"
+)
+target_link_libraries(r_std_sync PUBLIC r_std_alloc r_std_async r_runtime_0_1 Threads::Threads)

@@ -1,0 +1,11 @@
+example.calculator.common = src/common.r
+example.calculator.expression = src/expression.r
+example.calculator.operations = src/operations.r
+example.calculator.number_f32 = src/f32.r
+example.calculator.number_f64 = src/f64.r
+example.calculator.number_c_float = src/c_float.r
+example.calculator.number_c_double = src/c_double.r
+example.calculator.number_c_long_double = src/c_long_double.r
+example.calculator.number_complex_f32 = src/complex_f32.r
+example.calculator.number_complex_f64 = src/complex_f64.r
+example.calculator.main = src/main.r

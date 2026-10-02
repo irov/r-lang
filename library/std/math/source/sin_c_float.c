@@ -1,0 +1,45 @@
+#include "r_std_math.h"
+
+#include "r_library_math_environment.h"
+
+#include <math.h>
+#include <stdint.h>
+
+#pragma STDC FENV_ACCESS ON
+
+RStdMathCFloatResult r_std_math_sin_c_float(float value) {
+    RStdMathCFloatResult result = {0};
+    RLibraryMathEnvironment environment = {0};
+    RLibraryMathIndicators indicators;
+    volatile float canonical_operand;
+    float computed;
+    int classification;
+    _Bool finite_operand;
+    _Bool infinite_operand;
+    _Bool nonzero_operand;
+    _Bool underflow;
+
+    r_library_internal_math_environment_begin(&environment);
+    canonical_operand = value;
+    computed = sinf(canonical_operand);
+    classification = fpclassify(computed);
+    finite_operand = isfinite(canonical_operand) != 0;
+    infinite_operand = isinf(canonical_operand) != 0;
+    nonzero_operand = canonical_operand != 0.0F;
+    indicators = r_library_internal_math_environment_end(&environment);
+    underflow = finite_operand && nonzero_operand &&
+                ((classification == FP_ZERO) || (classification == FP_SUBNORMAL));
+    if (infinite_operand) {
+        result.status = R_STD_MATH_CALL_ERROR;
+        result.error.code = R_STD_MATH_ERROR_DOMAIN;
+        result.error.native_code = (int64_t)indicators.native_errno;
+    } else if (underflow) {
+        result.status = R_STD_MATH_CALL_ERROR;
+        result.error.code = R_STD_MATH_ERROR_UNDERFLOW;
+        result.error.native_code = (int64_t)indicators.native_errno;
+    } else {
+        result.status = R_STD_MATH_CALL_SUCCESS;
+        result.value = computed;
+    }
+    return result;
+}

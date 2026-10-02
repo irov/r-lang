@@ -1,0 +1,10 @@
+# Reference frontend module map: canonical module name = relative UTF-8 source path.
+example.zip.error         = src/error.r
+example.zip.model         = src/model.r
+example.zip.bytes         = src/bytes.r
+example.zip.name          = src/name.r
+example.zip.archive       = src/archive.r
+example.zip.host          = src/host.r
+example.zip.main          = src/main.r
+example.zip.tests.archive = tests/archive_test.r
+example.zip.tests.main    = tests/test_main.r

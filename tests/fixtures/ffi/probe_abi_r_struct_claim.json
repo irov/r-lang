@@ -1,0 +1,73 @@
+{
+  "schema": "r-abi-record-0.1",
+  "records": [
+    {
+      "name": "probe-abi-r-struct-claim",
+      "provider": "probe",
+      "compiler_identity": "Apple clang version 21.0.0 (clang-2100.3.34.2)",
+      "feature_test_definitions": [
+        "PROBE_LIBRARY_VERSION=1"
+      ],
+      "headers": [
+        {
+          "spelling": "probe_library.h",
+          "sha256": "139eebb402fa0d6cce95edb7ede3c466a48ff983ed10db2ec2a1535d6c1c0b00"
+        }
+      ],
+      "types": [
+        {
+          "c_name": "probe_pair",
+          "kind": "struct",
+          "size": 8,
+          "alignment": 4,
+          "members": [
+            {
+              "name": "x",
+              "type": "int",
+              "offset": 0,
+              "type_tree": {
+                "node": "scalar",
+                "spelling": "int"
+              }
+            },
+            {
+              "name": "y",
+              "type": "int",
+              "offset": 4,
+              "type_tree": {
+                "node": "scalar",
+                "spelling": "int"
+              }
+            }
+          ]
+        }
+      ],
+      "target_triple": "arm64-apple-darwin",
+      "options": [
+        "-std=c17"
+      ],
+      "symbols": [
+        {
+          "c_name": "probe_point_sum",
+          "kind": "function",
+          "type": {
+            "node": "function",
+            "result": {
+              "node": "scalar",
+              "spelling": "int"
+            },
+            "parameters": [
+              {
+                "node": "record",
+                "tag": "struct",
+                "tag_name": "probe_pair",
+                "complete": true
+              }
+            ],
+            "variadic": false
+          }
+        }
+      ]
+    }
+  ]
+}

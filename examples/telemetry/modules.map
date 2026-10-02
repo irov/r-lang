@@ -1,0 +1,2 @@
+example.telemetry.main = src/main.r
+example.telemetry.service = src/service.r

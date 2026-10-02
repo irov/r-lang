@@ -1,0 +1,18 @@
+module audit.throw_field_assignment_borrow_provenance_uaf;
+
+error Failure {
+    const i32* alias;
+};
+
+i32 main() {
+    i32 initial = 0;
+    try {
+        Failure failure = Failure { .alias = &initial };
+        own i32* owner = new i32(7);
+        failure.alias = &*owner;
+        drop owner;
+        throw failure;
+    } catch (Failure caught) {
+        return *caught.alias;
+    }
+}

@@ -1,0 +1,1474 @@
+{
+  "schema": "r-target-manifest-0.1",
+  "manifest_revision": 9,
+  "status": "draft-implementation-contract",
+  "conformance_claim": false,
+  "identity": {
+    "name": "arm64-apple-darwin-hosted-native-async",
+    "target_triple": "arm64-apple-darwin",
+    "profile": "hosted-native-async",
+    "minimum_os_version": "26.5",
+    "core_specification_revision": "0.1.0-draft.95",
+    "standard_library_specification_revision": "0.1.0-draft.60"
+  },
+  "toolchain": {
+    "c_compiler": "Apple clang",
+    "c_compiler_version": "21.0.0",
+    "c_compiler_build": "clang-2100.3.34.2",
+    "sdk": "macOS 27.0",
+    "generated_application_language": "ISO C17",
+    "generated_application_extensions": false,
+    "darwin_adapter_language": "Clang C17 with Blocks",
+    "warnings_as_errors": true
+  },
+  "core": {
+    "data_model": "LP64",
+    "byte_order": "little",
+    "usize_width": 64,
+    "isize_width": 64,
+    "usize_c_type": "size_t",
+    "isize_c_type": "ptrdiff_t",
+    "c_abi_numeric_types": {
+      "schema": "r-c-abi-numeric-types-0.1",
+      "derived_from": {
+        "target": "arm64-apple-macos26.5",
+        "compiler": "Apple clang 21.0.0",
+        "compiler_build": "clang-2100.3.34.2",
+        "sdk": "macOS 27.0",
+        "language": "ISO C17"
+      },
+      "byte_width_bits": 8,
+      "integer_rank_order": [
+        "bool",
+        "char",
+        "short",
+        "int",
+        "long",
+        "long_long"
+      ],
+      "integer_representation_contracts": {
+        "two's-complement": {
+          "padding_bits": 0,
+          "has_trap_representation": false
+        },
+        "pure-binary": {
+          "padding_bits": 0,
+          "has_trap_representation": false
+        },
+        "c17-_Bool": {
+          "value_bits": 1,
+          "padding_bits": 7,
+          "has_trap_representation": false,
+          "value_encoding": "false=0,true=1"
+        }
+      },
+      "binary_float_contract": {
+        "evaluation_method": 0,
+        "rounding": "round_to_nearest_ties_to_even",
+        "gradual_underflow": true,
+        "iec_60559_operation_mapping": {
+          "unary_plus": "+",
+          "unary_minus": "-",
+          "add": "+",
+          "subtract": "-",
+          "multiply": "*",
+          "divide": "/"
+        }
+      },
+      "types": {
+        "c_char": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "char",
+          "canonical_c_type": "char",
+          "object_size_bytes": 1,
+          "alignment_bytes": 1,
+          "width_bits": 8,
+          "rank": "char",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-128",
+          "maximum": "127"
+        },
+        "c_schar": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "signed char",
+          "canonical_c_type": "signed char",
+          "object_size_bytes": 1,
+          "alignment_bytes": 1,
+          "width_bits": 8,
+          "rank": "char",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-128",
+          "maximum": "127"
+        },
+        "c_uchar": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "unsigned char",
+          "canonical_c_type": "unsigned char",
+          "object_size_bytes": 1,
+          "alignment_bytes": 1,
+          "width_bits": 8,
+          "rank": "char",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "255"
+        },
+        "c_short": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "short",
+          "canonical_c_type": "short",
+          "object_size_bytes": 2,
+          "alignment_bytes": 2,
+          "width_bits": 16,
+          "rank": "short",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-32768",
+          "maximum": "32767"
+        },
+        "c_ushort": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "unsigned short",
+          "canonical_c_type": "unsigned short",
+          "object_size_bytes": 2,
+          "alignment_bytes": 2,
+          "width_bits": 16,
+          "rank": "short",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "65535"
+        },
+        "c_int": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "int",
+          "canonical_c_type": "int",
+          "object_size_bytes": 4,
+          "alignment_bytes": 4,
+          "width_bits": 32,
+          "rank": "int",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-2147483648",
+          "maximum": "2147483647"
+        },
+        "c_uint": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "unsigned int",
+          "canonical_c_type": "unsigned int",
+          "object_size_bytes": 4,
+          "alignment_bytes": 4,
+          "width_bits": 32,
+          "rank": "int",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "4294967295"
+        },
+        "c_long": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "long",
+          "canonical_c_type": "long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-9223372036854775808",
+          "maximum": "9223372036854775807"
+        },
+        "c_ulong": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "unsigned long",
+          "canonical_c_type": "unsigned long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "18446744073709551615"
+        },
+        "c_llong": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "long long",
+          "canonical_c_type": "long long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long_long",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-9223372036854775808",
+          "maximum": "9223372036854775807"
+        },
+        "c_ullong": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "unsigned long long",
+          "canonical_c_type": "unsigned long long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long_long",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "18446744073709551615"
+        },
+        "c_bool": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "_Bool",
+          "canonical_c_type": "_Bool",
+          "object_size_bytes": 1,
+          "alignment_bytes": 1,
+          "width_bits": 8,
+          "rank": "bool",
+          "signedness": "boolean",
+          "representation": "c17-_Bool",
+          "minimum": "0",
+          "maximum": "1"
+        },
+        "c_wchar": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "wchar_t",
+          "canonical_c_type": "int",
+          "object_size_bytes": 4,
+          "alignment_bytes": 4,
+          "width_bits": 32,
+          "rank": "int",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-2147483648",
+          "maximum": "2147483647"
+        },
+        "c_wint": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "wint_t",
+          "canonical_c_type": "int",
+          "object_size_bytes": 4,
+          "alignment_bytes": 4,
+          "width_bits": 32,
+          "rank": "int",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-2147483648",
+          "maximum": "2147483647"
+        },
+        "c_int8": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "int8_t",
+          "canonical_c_type": "signed char",
+          "object_size_bytes": 1,
+          "alignment_bytes": 1,
+          "width_bits": 8,
+          "rank": "char",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-128",
+          "maximum": "127"
+        },
+        "c_uint8": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "uint8_t",
+          "canonical_c_type": "unsigned char",
+          "object_size_bytes": 1,
+          "alignment_bytes": 1,
+          "width_bits": 8,
+          "rank": "char",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "255"
+        },
+        "c_int16": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "int16_t",
+          "canonical_c_type": "short",
+          "object_size_bytes": 2,
+          "alignment_bytes": 2,
+          "width_bits": 16,
+          "rank": "short",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-32768",
+          "maximum": "32767"
+        },
+        "c_uint16": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "uint16_t",
+          "canonical_c_type": "unsigned short",
+          "object_size_bytes": 2,
+          "alignment_bytes": 2,
+          "width_bits": 16,
+          "rank": "short",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "65535"
+        },
+        "c_int32": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "int32_t",
+          "canonical_c_type": "int",
+          "object_size_bytes": 4,
+          "alignment_bytes": 4,
+          "width_bits": 32,
+          "rank": "int",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-2147483648",
+          "maximum": "2147483647"
+        },
+        "c_uint32": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "uint32_t",
+          "canonical_c_type": "unsigned int",
+          "object_size_bytes": 4,
+          "alignment_bytes": 4,
+          "width_bits": 32,
+          "rank": "int",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "4294967295"
+        },
+        "c_int64": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "int64_t",
+          "canonical_c_type": "long long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long_long",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-9223372036854775808",
+          "maximum": "9223372036854775807"
+        },
+        "c_uint64": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "uint64_t",
+          "canonical_c_type": "unsigned long long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long_long",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "18446744073709551615"
+        },
+        "c_intptr": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "intptr_t",
+          "canonical_c_type": "long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-9223372036854775808",
+          "maximum": "9223372036854775807"
+        },
+        "c_uintptr": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "uintptr_t",
+          "canonical_c_type": "unsigned long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "18446744073709551615"
+        },
+        "c_intmax": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "intmax_t",
+          "canonical_c_type": "long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-9223372036854775808",
+          "maximum": "9223372036854775807"
+        },
+        "c_uintmax": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "uintmax_t",
+          "canonical_c_type": "unsigned long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "18446744073709551615"
+        },
+        "c_size": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "size_t",
+          "canonical_c_type": "unsigned long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "18446744073709551615"
+        },
+        "c_ptrdiff": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "ptrdiff_t",
+          "canonical_c_type": "long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-9223372036854775808",
+          "maximum": "9223372036854775807"
+        },
+        "c_float": {
+          "category": "binary_float",
+          "available": true,
+          "c_spelling": "float",
+          "canonical_c_type": "float",
+          "object_size_bytes": 4,
+          "alignment_bytes": 4,
+          "width_bits": 32,
+          "representation": "iec-60559-binary32",
+          "radix": 2,
+          "significand_bits": 24,
+          "exponent_bits": 8,
+          "minimum_normal_exponent": -126,
+          "maximum_normal_exponent": 127,
+          "minimum_subnormal_exponent": -149,
+          "minimum_positive_normal": "0x1p-126",
+          "minimum_positive_subnormal": "0x1p-149",
+          "maximum_finite": "0x1.fffffep+127",
+          "has_subnormals": true,
+          "has_infinity": true,
+          "has_quiet_nan": true,
+          "has_signaling_nan": true,
+          "has_signed_zero": true
+        },
+        "c_double": {
+          "category": "binary_float",
+          "available": true,
+          "c_spelling": "double",
+          "canonical_c_type": "double",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "representation": "iec-60559-binary64",
+          "radix": 2,
+          "significand_bits": 53,
+          "exponent_bits": 11,
+          "minimum_normal_exponent": -1022,
+          "maximum_normal_exponent": 1023,
+          "minimum_subnormal_exponent": -1074,
+          "minimum_positive_normal": "0x1p-1022",
+          "minimum_positive_subnormal": "0x1p-1074",
+          "maximum_finite": "0x1.fffffffffffffp+1023",
+          "has_subnormals": true,
+          "has_infinity": true,
+          "has_quiet_nan": true,
+          "has_signaling_nan": true,
+          "has_signed_zero": true
+        },
+        "c_long_double": {
+          "category": "binary_float",
+          "available": true,
+          "c_spelling": "long double",
+          "canonical_c_type": "long double",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "representation": "iec-60559-binary64",
+          "radix": 2,
+          "significand_bits": 53,
+          "exponent_bits": 11,
+          "minimum_normal_exponent": -1022,
+          "maximum_normal_exponent": 1023,
+          "minimum_subnormal_exponent": -1074,
+          "minimum_positive_normal": "0x1p-1022",
+          "minimum_positive_subnormal": "0x1p-1074",
+          "maximum_finite": "0x1.fffffffffffffp+1023",
+          "has_subnormals": true,
+          "has_infinity": true,
+          "has_quiet_nan": true,
+          "has_signaling_nan": true,
+          "has_signed_zero": true
+        }
+      }
+    },
+    "aggregate_layout": "Apple arm64 Darwin C ABI as verified by target probes",
+    "calling_convention": "Apple arm64 Darwin default C ABI",
+    "checked_errors": {
+      "source_model": "unordered exact nominal throws set",
+      "tag_c_type": "uint32_t",
+      "success_tag": 0,
+      "error_tag_order": "ascending canonical fully-qualified nominal type key",
+      "payload_storage": "one union shared by the success value and all checked error payloads",
+      "generated_r_to_r_abi": "explicit output-carrier parameter",
+      "publication": "tag and payload become observable only after complete initialization",
+      "interface_descriptor": "value type, normalized error set, tag table and target layout hash",
+      "native_exception_primitives": false,
+      "setjmp_longjmp": false
+    },
+    "module_path": {
+      "separator": ".",
+      "filesystem_case_sensitive": false,
+      "source_suffix": ".r"
+    },
+    "panic": {
+      "strategy": "abort",
+      "diagnostic_sink": "file descriptor 2 through allocation-free write",
+      "stack_exhaustion": "allocation-free panic followed by abort"
+    },
+    "stack": {
+      "architecture": "arm64",
+      "growth_direction": "down",
+      "bounds": {
+        "thread_api": "pthread_self",
+        "address_api": "pthread_get_stackaddr_np",
+        "size_api": "pthread_get_stacksize_np",
+        "interpretation": "high=stackaddr; low=high-size with overflow-checked uintptr_t arithmetic",
+        "storage": "_Thread_local",
+        "allocation": false,
+        "stdio": false,
+        "locking": false
+      },
+      "protected_low_bytes": 65536,
+      "call_transition_bytes": 16384,
+      "generated_frame_ceiling_bytes": 262144,
+      "frame_measurement": {
+        "compiler": "Apple clang 21.0.0",
+        "compile_flags": [
+          "-std=c17",
+          "-O0",
+          "-fstack-usage",
+          "-fno-inline-functions",
+          "-fno-lto"
+        ],
+        "accepted_frame_kind": "static",
+        "generated_source_only": true,
+        "measurement_define": "R_STACK_USAGE_MEASUREMENT=1",
+        "runtime_header": "deterministic R_STACK_FRAME_<function> macros from Clang .su records",
+        "artifact_pipeline": {
+          "bootstrap_object": {
+            "role": "seed-bounds-only",
+            "compile_mode": "R_STACK_USAGE_MEASUREMENT=1",
+            "includes_bounds_header": false,
+            "linked": false
+          },
+          "bounds_header": {
+            "format": "R_STACK_FRAME_<function>",
+            "ordering": "function-name-ascending",
+            "function_selection": "canonical-generated-source-path-equality",
+            "frame_kind": "static",
+            "requires_nonempty_function_set": true,
+            "initialization": "bootstrap-frame-size",
+            "update": "per-function-max-previous-bound-and-candidate-frame"
+          },
+          "fixed_point": {
+            "candidate_includes_bounds_header": true,
+            "header_injection_flag": "-include",
+            "candidate_remeasured": true,
+            "function_name_set": "exactly-equal-to-bootstrap-on-every-iteration",
+            "stability": "updated-bounds-exactly-equal-to-previous-bounds",
+            "maximum_candidate_iterations": 16,
+            "cap_exhaustion": "hard-fail-without-link"
+          },
+          "final_object": {
+            "source": "converged-candidate-object",
+            "includes_stable_bounds_header": true,
+            "remeasured": true,
+            "function_name_set": "exactly-equal-to-bootstrap",
+            "per_function_bound": "final-less-than-or-equal-to-stable-bound",
+            "bounds_header_identity": "exact-header-used-for-final-object",
+            "link_input_identity": "exact-converged-candidate-object"
+          }
+        },
+        "instrumented_builds": {
+          "configurations": [
+            "address-undefined",
+            "thread"
+          ],
+          "stack_conformance": false,
+          "stack_usage_report": "diagnostic-only",
+          "dynamic_or_unknown_frames": "not-validated",
+          "nonconforming_marker_suffix": ".stack-usage.nonconforming",
+          "link_input_identity": "instrumented-final-object"
+        },
+        "link_time_optimization": false,
+        "generated_function_inlining": false
+      },
+      "entry_budget_bytes": 393216,
+      "preflight": {
+        "api": "r_runtime_stack_require",
+        "failure": "stack_exhaustion panic at the entry into R code",
+        "policy": "static-entry-bound",
+        "call_graph": "acyclic R call graph; owned storage may self-nest through own/rc/arc, o<...>, fixed arrays and array/list/dict values, destroyed iteratively by r_runtime_drop_iterative (Core R-FUNC-0004)",
+        "sync_callee_gate": "none",
+        "type_glue_move_drop": "none",
+        "entry_gates": [
+          "hosted-entry-before-main-body",
+          "spawned-thread-entry-before-body",
+          "async-step-gate",
+          "async-initialize-drop-start-launch-gates",
+          "call-once-initializer-wrapper",
+          "generated-callback-wrapper-before-body"
+        ],
+        "entry_bound_header": "R_STACK_ENTRY_<entry> = frame(entry) + longest callee path from Clang .su records, a recursive set C counting depth(m) * frame(m) for each member m plus max(largest frame of C, deepest callee outside C); tools/compute_stack_entries.py",
+        "indirect_call_marker": "/* R_STACK_INDIRECT: <callback functions> */ before raw fn calls",
+        "recursion_marker": "/* R_STACK_RECURSION: <depth> */ in each function with @recursion (R-FUNC-0026)"
+      },
+      "thread_initialization": {
+        "api": "r_runtime_stack_initialize_current_thread",
+        "hosted_entry": "before source entry; failure panics stack_exhaustion",
+        "attached_thread": "before attachment commit; failure returns resource_exhausted",
+        "executor_worker": "before task body execution; failure panics stack_exhaustion"
+      }
+    },
+    "process_status": {
+      "main_i32_mapping": "0..111 unchanged; every other i32 reports invalid_main_status and maps to 124",
+      "argument_encoding_failure": 125,
+      "startup_snapshot_allocation_failure": 126,
+      "async_root_start_failure": 127,
+      "application_range": [
+        0,
+        111
+      ],
+      "main_error_reserved_range": [
+        112,
+        124
+      ],
+      "invalid_main_status": 124,
+      "implicit_main_error_domains": {
+        "allocation": 112,
+        "io": 113,
+        "filesystem": 113,
+        "network": 114,
+        "conversion": 115,
+        "format": 115,
+        "async_runtime": 116,
+        "threading": 116,
+        "math": 117,
+        "time": 117,
+        "environment": 117,
+        "process": 117,
+        "bytes": 117,
+        "string": 117,
+        "c_abi": 117
+      },
+      "implicit_main_error_types": [
+        "core::utf8_error",
+        "std.alloc::alloc_error",
+        "std.async::start_error",
+        "std.bits::read_error",
+        "std.bytes::bytes_error",
+        "std.c::runtime_error",
+        "std.c::string_error",
+        "std.convert::parse_error",
+        "std.convert::range_error",
+        "std.env::env_error",
+        "std.error::error",
+        "std.format::format_error",
+        "std.fs::fs_error",
+        "std.fs::path_error",
+        "std.io::io_error",
+        "std.math::math_error",
+        "std.net::address_error",
+        "std.net::net_error",
+        "std.process::process_error",
+        "std.string::boundary_error",
+        "std.string::string_error",
+        "std.sync::barrier_error",
+        "std.thread::thread_error",
+        "std.time::duration_error",
+        "std.time::time_error"
+      ],
+      "implicit_main_error_diagnostic": "allocation-free emergency stderr write: domain, std.error::name, code, native_code; diagnostic before drain before destruction"
+    },
+    "native_arguments": {
+      "encoding": "well-formed UTF-8 bytes",
+      "replacement": false,
+      "zero_argument_program_spelling": "<program>"
+    },
+    "allocator": {
+      "identity": "Darwin system malloc zone",
+      "maximum_object_size": 2305843009213693951,
+      "maximum_supported_alignment": 1073741824,
+      "zero_size_policy": "one non-dereferenceable allocation identity or null internal sentinel",
+      "out_of_memory_action": "typed allocation failure or panic according to source operation",
+      "compatible_t_allocation": "the exact non-null base pointer returned for sizeof(T) bytes at alignof(T); no owner header is prepended or embedded in that allocation",
+      "unique_owner_metadata": "RRuntimeOwn stores type drop/move metadata and allocation alignment inline, separately from the exact T allocation base",
+      "core_adopt": "transfers the exact compatible T allocation base and its drop/deallocation duties into unique ownership without allocation, copy, move or drop",
+      "core_release": "consumes unique ownership and returns the same exact T allocation base while suppressing drop and deallocation; the caller resumes both duties"
+    },
+    "atomics": {
+      "implementation": "C11 _Atomic through Apple Clang and Darwin runtime",
+      "always_lock_free": [
+        "ai8",
+        "au8",
+        "ai16",
+        "au16",
+        "ai32",
+        "au32",
+        "ai64",
+        "au64",
+        "aisize",
+        "ausize",
+        "atomic_pointer"
+      ]
+    },
+    "threads": {
+      "implementation": "pthread plus libdispatch",
+      "profile": "hosted-thread",
+      "scheduling_guarantee": "no fairness beyond normative synchronization and per-resource ordering"
+    },
+    "pointer_integer_exposure": {
+      "supported": false,
+      "address_width": 64,
+      "provenance_restoration_api": null
+    },
+    "floating_environment": {
+      "mode": "verified-runtime-helper",
+      "rounding": "FE_TONEAREST",
+      "exception_flags": "save, clear and restore",
+      "extra_controls": "FPCR/FPSR controls verified by target probes"
+    },
+    "lone_cr_source_warning": {
+      "code": "R-WARN-LEX-CR-001",
+      "fails_strict_build": true
+    }
+  },
+  "hosted_native_async": {
+    "executor": {
+      "backend": "libdispatch",
+      "worker_count": {
+        "mode": "libdispatch-managed",
+        "minimum": 1,
+        "maximum": "Darwin runtime limit"
+      },
+      "ready_task_policy": "runtime FIFO per submission source; no order across independent ready sources",
+      "executor_workers_may_block": false,
+      "implementation": {
+        "status": "type-erased-task-runtime-hosted-integrated-partial",
+        "cmake_target": "r_runtime_darwin_task",
+        "source": "runtime/darwin/source/task.c",
+        "system_dependency": "Darwin libdispatch",
+        "eager_submission": "dispatch_async_f on a private concurrent queue",
+        "two_phase_start": "complete frame allocation and adapter native-state reservation precede payload move and publication",
+        "start_failure_operand_preservation": "implemented",
+        "completion_release_acquire": "implemented",
+        "cancel_detach_drop": "implemented",
+        "terminal_acknowledgement": "task body return or external producer native acknowledgement",
+        "root_cancel_and_drain": "implemented as an explicit lifecycle operation",
+        "hosted_entry_integration": true,
+        "native_timer_task_bridge": true,
+        "native_io_task_bridge": true,
+        "native_io_task_bridge_scope": [
+          "std.io::read",
+          "std.io::write",
+          "std.io::write_all",
+          "std.io::write_shared",
+          "std.io::flush",
+          "std.io::close_input",
+          "std.io::close_output",
+          "std.fs::read_file",
+          "std.fs::read_file_beneath"
+        ],
+        "resumable_computation_primitive": {
+          "status": "implemented",
+          "prepare_api": "r_runtime_task_resumable_start_prepare",
+          "await_api": "r_runtime_task_execution_await",
+          "suspension_allocation": false,
+          "wait_registration": "single inline waiter with register-and-recheck",
+          "completion_wakeup": "release publication followed by at-most-once continuation dispatch",
+          "cancellation_wakeup": "a suspended frame is requeued for compiler-generated cleanup",
+          "retention": "frame, awaited observation and result storage remain live until terminal acknowledgement"
+        },
+        "stackless_continuation_await": false,
+        "profile_conformance_claim": false
+      }
+    },
+    "timers": {
+      "backend": "DispatchSourceTimer",
+      "deadline_clock": "mach_continuous_time continuous monotonic domain",
+      "native_scheduling_clock": "Dispatch mach_absolute_time uptime domain",
+      "clock_bridge": "absolute std.fs payload-operation deadlines retain the mach_continuous_time instant and recompute the remaining duration on activation and every Dispatch timer wake; std.time sleep timers currently use one relative Dispatch arm",
+      "cancellation": "dispatch_source_cancel with cancel-handler acknowledgement",
+      "deadline": "strict native one-shot arms; the std.fs payload absolute-deadline adapter re-arms until the continuous deadline is reached",
+      "implementation": {
+        "status": "std.time-sleep-integrated",
+        "cmake_target": "r_runtime_darwin_timer",
+        "runtime_source": "runtime/darwin/source/timer.c",
+        "library_sources": [
+          "library/std/time/source/sleep_for.c",
+          "library/std/time/source/sleep_until.c"
+        ],
+        "native_reservation_before_task_commit": true,
+        "eager_after_successful_start": true,
+        "executor_worker_blocking": false,
+        "completion_release_acquire": true,
+        "cancel_completion_single_terminal_selection": true,
+        "root_cancel_and_drain_acknowledgement": true
+      }
+    },
+    "filesystem_adapter_lane": {
+      "enabled": true,
+      "thread_count": 4,
+      "thread_class": "r.fs.adapter",
+      "disjoint_from_executor_workers": true,
+      "may_execute_r_code": false,
+      "maximum_pending_requests": 65536,
+      "queue_policy": "FIFO by committed submission sequence",
+      "submission": "bounded enqueue",
+      "queued_cancellation": "remove before native entry",
+      "entered_cancellation": "record event and acknowledge only after native return",
+      "queued_deadline": "remove before native entry",
+      "entered_deadline": "record event and acknowledge only after native return",
+      "retention": "operation record, handles, buffers and frame through native return",
+      "trace_provider": "r_runtime_fs_lane_trace_v1",
+      "allowed_native_entries": [
+        {
+          "name": "openat",
+          "flags": [
+            "O_CLOEXEC",
+            "O_NONBLOCK",
+            "O_NOFOLLOW",
+            "O_RESOLVE_BENEATH",
+            "O_NOFOLLOW_ANY",
+            "operation-specific access/create flags"
+          ],
+          "family": "descriptor_relative_open",
+          "beneath_resolution": "one atomic openat relative to the retained root with O_RESOLVE_BENEATH and O_NOFOLLOW_ANY",
+          "open_or_create": "at most 16 O_CREAT|O_EXCL create probes, with an existing-file open between probes; exhaustion returns EAGAIN",
+          "commit": "successful creation or truncation when requested; otherwise none and a late-cancelled successful descriptor is closed before cancellation publication"
+        },
+        {
+          "name": "close",
+          "flags": [],
+          "family": "descriptor_close",
+          "commit": "successful native close"
+        },
+        {
+          "name": "fstat",
+          "flags": [],
+          "family": "metadata_query",
+          "commit": "none"
+        },
+        {
+          "name": "fstatat",
+          "flags": [
+            "AT_SYMLINK_NOFOLLOW",
+            "AT_SYMLINK_NOFOLLOW_ANY",
+            "AT_RESOLVE_BENEATH"
+          ],
+          "family": "descriptor_relative_metadata_query",
+          "ordinary_resolution": "one fstatat relative to AT_FDCWD with AT_SYMLINK_NOFOLLOW inspects the final entry without following it",
+          "beneath_resolution": "one atomic fstatat relative to the retained root; intermediate links are rejected and the final entry is inspected without following it",
+          "commit": "none"
+        },
+        {
+          "name": "lseek",
+          "flags": [
+            "SEEK_SET",
+            "SEEK_CUR",
+            "SEEK_END"
+          ],
+          "family": "shared_position_seek",
+          "commit": "successful shared-position change"
+        },
+        {
+          "name": "getattrlistbulk",
+          "flags": [
+            "FSOPT_PACK_INVAL_ATTRS"
+          ],
+          "family": "directory_enumeration",
+          "commit": "none; a late-cancelled entry is cached for logical retry"
+        },
+        {
+          "name": "mkdirat",
+          "flags": [],
+          "family": "directory_creation",
+          "commit": "an unrestricted successful mkdirat is one component commit; a beneath staging mkdirat remains pre-commit until publication"
+        },
+        {
+          "name": "unlinkat",
+          "flags": [
+            "0",
+            "AT_REMOVEDIR",
+            "AT_SYMLINK_NOFOLLOW_ANY",
+            "AT_RESOLVE_BENEATH"
+          ],
+          "family": "unlink",
+          "beneath_resolution": "one atomic unlinkat relative to the retained root; intermediate links are rejected and a final link is the removed entry",
+          "commit": "successful namespace mutation"
+        },
+        {
+          "name": "renameatx_np",
+          "flags": [
+            "RENAME_EXCL",
+            "RENAME_NOFOLLOW_ANY",
+            "RENAME_RESOLVE_BENEATH"
+          ],
+          "family": "atomic_no_replace_rename",
+          "beneath_resolution": "one atomic renameatx_np resolves both paths relative to their retained roots; intermediate links are rejected and a final source link is moved as an entry",
+          "commit": "successful atomic namespace publication"
+        },
+        {
+          "name": "fsync",
+          "flags": [],
+          "family": "durability",
+          "commit": "successful durability barrier"
+        },
+        {
+          "name": "fcntl",
+          "flags": [
+            "F_FULLFSYNC",
+            "F_BARRIERFSYNC",
+            "F_OFD_SETLK"
+          ],
+          "family": "full_durability",
+          "commit": "successful full durability barrier, write-ordering barrier or open-file-description lock change"
+        }
+      ],
+      "excluded_families": [
+        "payload_read",
+        "payload_write",
+        "console",
+        "dns",
+        "tcp",
+        "udp",
+        "child_wait",
+        "signal_wait",
+        "callbacks",
+        "r_continuations"
+      ],
+      "implementation": {
+        "status": "typed-adapter-task-bridge-integrated-partial",
+        "cmake_target": "r_runtime_darwin_fs_lane",
+        "source_directory": "runtime/darwin",
+        "worker_backend": "pthread",
+        "worker_count_runtime_constant": 4,
+        "queue": "bounded FIFO with a maximum configured waiting capacity of 65536",
+        "supported_native_entries": [
+          "openat",
+          "close",
+          "fstat",
+          "fstatat",
+          "lseek",
+          "getattrlistbulk",
+          "mkdirat",
+          "unlinkat",
+          "renameatx_np",
+          "fsync",
+          "fcntl"
+        ],
+        "lifecycle_states": [
+          "prepared",
+          "queued",
+          "entered",
+          "terminal"
+        ],
+        "native_reservation_before_task_commit": true,
+        "start_failure_operand_preservation": "implemented and failure-injected",
+        "borrowed_submission_resources": "path copied and root descriptor duplicated before task start",
+        "beneath_resolution": "kernel-enforced O_RESOLVE_BENEATH/AT_RESOLVE_BENEATH/RENAME_RESOLVE_BENEATH with corresponding no-follow-any flags; directory creation publishes private root staging with one renameatx_np; atomic whole-file publication resolves both rename paths from the independently retained original root",
+        "maximum_path_bytes": 1048575,
+        "open_or_create_retry_limit": 16,
+        "open_or_create_retry_exhaustion": "EAGAIN mapped to resource_exhausted",
+        "directory_staging_prefix": ".r-dir-stage-",
+        "directory_staging_mode": "0700 subject to process umask",
+        "directory_staging_uses": [
+          "std.fs::create_directory_beneath",
+          "std.fs::write_file_atomic_no_replace",
+          "std.fs::write_file_atomic_no_replace_beneath"
+        ],
+        "directory_staging_payload_name": "payload",
+        "directory_staging_payload_mode": "0600 subject to process umask",
+        "directory_staging_collision_retry_limit": 16,
+        "directory_staging_collision_exhaustion": "EAGAIN mapped to resource_exhausted",
+        "directory_staging_namespace_owner": "R runtime exclusively",
+        "directory_staging_safe_api_access": "safe std.fs filesystem operations reject every path operand selecting a reserved staging component before native submission",
+        "directory_staging_foreign_mutation_boundary": "independent native or foreign mutation is outside staging identity and exactly-once cleanup guarantees; capability confinement remains mandatory",
+        "directory_staging_cleanup": "without independent native or foreign mutation: directory creation performs one root-confined unlinkat before every pre-publication terminal acknowledgement and successful rename consumes its staging directory; whole-file publication performs exactly one non-cancellable cleanup after staging creation on failure or success, removing payload if present and then the staging directory before terminal acknowledgement",
+        "directory_staging_cleanup_failure": "allocation-free abort before terminal acknowledgement because exact cleanup is a runtime invariant",
+        "atomic_write_beneath_publication": "one renameatx_np with RENAME_EXCL, RENAME_NOFOLLOW_ANY and RENAME_RESOLVE_BENEATH resolves both .r-dir-stage-*/payload and destination relative to the independently retained original root",
+        "atomic_write_postcommit": "successful rename fixes committed(data); later cancellation, deadline, staging cleanup, destination-parent F_FULLFSYNC or close cannot select failed; acknowledgement waits for cleanup and resource release",
+        "final_symlink_entry_operations": [
+          "std.fs::metadata",
+          "std.fs::metadata_beneath",
+          "std.fs::remove_file_beneath",
+          "std.fs::remove_directory_beneath",
+          "std.fs::rename_beneath"
+        ],
+        "runtime_retained_handle_lifecycle": "implemented",
+        "committed_completion_override": "an earlier native terminal event or successful create, truncate, final-directory, removal or rename commit replaces an unacknowledged task cancellation selection",
+        "cancellation_deadline_acknowledgement": "implemented",
+        "retained_submission_resources": "implemented",
+        "enumeration_retry_cache": "implemented",
+        "directory_iteration_cursor": "openat(root, \".\", O_DIRECTORY | O_CLOEXEC) creates an independent open-file description",
+        "handle_close_drain": "successful close start cancels and acknowledges every earlier registered handle operation before close acknowledgement",
+        "close_deadline_precedence": "pre-existing descriptor failure probed before deadline wins; otherwise expired deadline wins after descriptor release",
+        "filesystem_error_closed_native_mapping": "EBADF for a retained filesystem identity maps to std.fs::closed (19)",
+        "allocator_integration": "implemented",
+        "trace_provider_status": "not_implemented",
+        "task_runtime_integration": true,
+        "public_std_fs_integration": true,
+        "public_std_fs_integrated_operations": [
+          "std.fs::metadata",
+          "std.fs::open_directory",
+          "std.fs::open_directory_beneath",
+          "std.fs::open_file",
+          "std.fs::open_file_beneath",
+          "std.fs::create_directory",
+          "std.fs::create_directory_beneath",
+          "std.fs::file_metadata",
+          "std.fs::metadata_beneath",
+          "std.fs::remove_file_beneath",
+          "std.fs::remove_directory_beneath",
+          "std.fs::rename_beneath",
+          "std.fs::seek",
+          "std.fs::flush",
+          "std.fs::sync",
+          "std.fs::try_lock",
+          "std.fs::lock",
+          "std.fs::unlock",
+          "std.fs::close_file",
+          "std.fs::close_directory",
+          "std.fs::iterate",
+          "std.fs::next",
+          "std.fs::read_file",
+          "std.fs::read_file_beneath"
+        ],
+        "profile_conformance_claim": false
+      }
+    },
+    "blocking_call_pool": {
+      "enabled": true,
+      "thread_count": 4,
+      "thread_class": "r.blocking",
+      "disjoint_from_executor_workers": true,
+      "disjoint_from_filesystem_adapter_lane": true,
+      "may_execute_r_code": true,
+      "executes": "entries passed to std.async::blocking (Library R-SLIB-ASYNC-0017)",
+      "thread_start": "on demand while every existing pool thread is busy",
+      "maximum_pending_calls": 65536,
+      "queue_policy": "FIFO by committed submission sequence",
+      "submission": "slot reserved before task commit; enqueue never allocates",
+      "queued_cancellation": "remove before entry and destroy the staged arguments",
+      "entered_cancellation": "acknowledge only after the entry returns and destroy its result",
+      "cancellation_mode": "queued_removed_or_acknowledged_after_return",
+      "implementation": {
+        "cmake_target": "r_runtime_darwin_task",
+        "source": "runtime/darwin/source/blocking_pool.inc",
+        "worker_backend": "pthread",
+        "worker_count_runtime_constant": "R_RUNTIME_BLOCKING_THREAD_COUNT",
+        "pending_bound_runtime_constant": "R_RUNTIME_BLOCKING_MAX_PENDING_CALLS"
+      }
+    },
+    "dispatch_io_payload_adapter": {
+      "implementation": {
+        "status": "std.io-console-close-and-std.fs-payload-task-bridge-integrated-partial",
+        "cmake_target": "r_runtime_darwin_io",
+        "source_directory": "runtime/darwin",
+        "system_dependency": "Darwin libdispatch",
+        "supported_operations": [
+          "random_read",
+          "random_write",
+          "stream_read",
+          "stream_write",
+          "shared_borrow_write",
+          "ordering_flush",
+          "close"
+        ],
+        "descriptor_classes": [
+          "random_access_file",
+          "stream_file",
+          "console",
+          "process_pipe"
+        ],
+        "blocks_enabled_units": [
+          "source/io_deadline.c",
+          "source/io_dispatch.c",
+          "source/io_flush.c",
+          "source/io_handle.c",
+          "source/io_read.c",
+          "source/io_write.c"
+        ],
+        "allocator_integration": "implemented",
+        "owned_buffer_two_phase_start": "implemented",
+        "shared_owner_two_phase_start": "implemented",
+        "native_reservation_before_task_commit": true,
+        "start_failure_operand_preservation": "implemented and failure-injected",
+        "partial_progress": "implemented",
+        "eof": "implemented",
+        "cancellation": "per-operation dispatch_io_close(DISPATCH_IO_STOP)",
+        "deadline": "DispatchSourceTimer followed by per-operation DISPATCH_IO_STOP",
+        "terminal_acknowledgement": "final Dispatch I/O handler or root close cleanup handler",
+        "retention": "request and owned buffer or immutable shared owner retained through final native handler",
+        "child_cleanup_handler": "captures no R request and may be deferred until root close",
+        "flush_semantics": "Dispatch I/O ordering barrier only; no durability claim",
+        "flush_submission": "serialized after terminal acknowledgement of every prior accepted payload operation",
+        "flush_precommit_cancel_deadline": "immediate terminal outcome before barrier submission",
+        "payload_during_active_flush": "queued in reserved same-direction submission order",
+        "explicit_close_during_active_operation": "cancel requests with an earlier submission sequence and wait for native acknowledgement",
+        "close_deadline": "cleanup and view release always complete before timed_out publication; a terminal close failure known before start takes precedence",
+        "console_views": "allocation-free independent Move-only Send+Sync retains",
+        "console_root_lifecycle": "runtime-owned roots survive view close/drop; hosted finish drains output and flush barriers, cancels input, waits for acknowledgement, then releases roots",
+        "same_direction_submission_order": "reads serialize independently; writes and flushes share one ordered output queue",
+        "queued_cancellation_deadline": "terminalize without payload submission, preserve owned buffer or shared owner, acknowledge exactly once and release the next request",
+        "low_level_relative_deadline": "runtime Dispatch I/O requests receive an adapter-computed relative timeout; std.fs payload requests pass no native timeout because std_fs_deadline_clock governs their absolute deadline",
+        "std_fs_shared_position_order": "std.fs::read, std.fs::write, std.fs::write_all, std.fs::read_at, std.fs::write_all_at, std.fs::seek, std.fs::flush and std.fs::sync share one synchronized FIFO in successful-start submission order",
+        "std_fs_payload_channel": "successful std.fs file output materialization creates and owns one persistent DISPATCH_IO_STREAM root before file-result publication, materialization failure publishes no file handle, and every payload start only retains that root for its prepared STREAM child",
+        "std_fs_nonappend_positioning": "every read and non-append write applies the shared logical absolute position, or the explicit offset of a positional operation, with lseek(SEEK_SET) only inside dispatch_io_barrier on the persistent STREAM root before payload submission; a positional operation leaves the shared logical position unchanged",
+        "std_fs_append_positioning": "append writes use the persistent STREAM root with a descriptor retaining O_APPEND, select end atomically for each write and do not change the shared read/seek observation position",
+        "std_fs_deadline_clock": "std.fs payload operations retain the absolute std.time instant in the mach_continuous_time domain; activation and every Dispatch timer wake recompute the remaining continuous duration and re-arm until the absolute deadline is reached",
+        "std_fs_absolute_deadline": "for std.fs payload operations the absolute std.time instant is fixed before task commit, is never converted once into a stored relative timeout and remains effective while waiting in the shared position FIFO and during native I/O",
+        "std_fs_cancellation_deadline_acknowledgement": "queued cancellation or deadline removes the position reservation before acknowledgement; cancellation during a position barrier retains the handle, buffer and task frame through barrier acknowledgement without payload submission; cancellation after payload submission retains them through the final Dispatch I/O handler",
+        "std_fs_explicit_close": "std.fs::close_file reserves the handle before task commit, rejects new operations, cancels and drains registered operations, waits for persistent STREAM root cleanup acknowledgement, propagates its native error and releases its view exactly once",
+        "std_fs_whole_file_read_operations": [
+          "std.fs::read_file",
+          "std.fs::read_file_beneath"
+        ],
+        "std_fs_whole_file_read_pipeline": "filesystem-lane open, one per-operation DISPATCH_IO_RANDOM root, filesystem-lane close of the original descriptor, repeated offset-ordered reads and Dispatch I/O root cleanup",
+        "std_fs_whole_file_read_path_policy": "std.fs::read_file follows an ordinary path final symbolic link; std.fs::read_file_beneath opens relative to the retained directory with O_RESOLVE_BENEATH and O_NOFOLLOW_ANY and rejects intermediate and final symbolic links",
+        "std_fs_whole_file_read_chunk_bytes": 65536,
+        "std_fs_whole_file_read_limit_eof": "each Dispatch I/O request is bounded by the 65536-byte chunk and the remaining limit-plus-one probe; EOF is authoritative, including a one-byte probe when limit is zero; at most limit bytes succeeds and an observed byte beyond limit returns file_too_large",
+        "std_fs_whole_file_read_terminal_acknowledgement": "publish the task terminal outcome only after filesystem-lane close acknowledgement for the original descriptor and the DISPATCH_IO_RANDOM root cleanup handler; every error destroys the partial array before publication",
+        "task_runtime_integration": true,
+        "public_std_fs_integration": true,
+        "public_std_fs_integrated_operations": [
+          "std.fs::read",
+          "std.fs::write",
+          "std.fs::write_all",
+          "std.fs::read_at",
+          "std.fs::write_all_at",
+          "std.fs::read_file",
+          "std.fs::read_file_beneath"
+        ],
+        "public_std_io_integration": true,
+        "public_std_io_integrated_operations": [
+          "std.io::read",
+          "std.io::write",
+          "std.io::write_all",
+          "std.io::write_shared",
+          "std.io::flush",
+          "std.io::stdin",
+          "std.io::stdout",
+          "std.io::stderr",
+          "std.io::close_input",
+          "std.io::close_output"
+        ],
+        "public_std_io_unimplemented_operations": [],
+        "profile_conformance_claim": false
+      }
+    },
+    "dns_resolver_adapter": {
+      "implementation": {
+        "status": "dns-service-get-addr-info-task-bridge-integrated",
+        "cmake_targets": [
+          "r_runtime_darwin_dns",
+          "r_std_net"
+        ],
+        "source_directories": [
+          "runtime/darwin",
+          "library/internal/networking",
+          "library/std/net"
+        ],
+        "system_dependency": "Darwin DNS-SD through libSystem",
+        "backend": "DNSServiceGetAddrInfo assigned to one private serial Dispatch queue per request",
+        "supported_operations": [
+          "std.net::resolve"
+        ],
+        "native_reservation_before_task_commit": true,
+        "start_failure_operand_preservation": "the complete host byte sequence is copied into immutable task-owned NUL-terminated storage before task commit; every precommit allocation or runtime-stopping failure performs no DNS query and leaves the caller borrow unchanged",
+        "task_local_validation": "before native submission the task classifies numeric candidates exactly by colon or decimal-and-dot syntax and otherwise validates ASCII DNS labels, final dot, 63-byte label and 253-byte total limits, with embedded NUL rejected",
+        "numeric_resolution": "parse_ip handles numeric candidates without DNS submission; requested-family mismatch returns name_not_found with native code zero",
+        "dns_submission": "after task commit and validation DNSServiceGetAddrInfo is submitted without blocking an executor worker; DNSServiceSetDispatchQueue binds callbacks and deallocation to the request serial queue",
+        "result_ordering": "accepted v4 and v6 addresses preserve DNSServiceGetAddrInfo callback order, remove duplicates, retain IPv6 scope and receive the requested host-order port; an empty accepted set returns name_not_found",
+        "error_mapping": "definitive absence maps to name_not_found, explicitly retryable DNS-SD statuses map to temporary_failure, narrower portable meanings win, and the exact native status is preserved",
+        "cancellation_deadline_acknowledgement": "native completion, cancellation and a strict Dispatch deadline use the shared event sequence; the immutable hostname, address storage, task frame, DNSServiceRef and timer remain live until DNSServiceRef deallocation and callback/timer quiescence before exactly-once task acknowledgement",
+        "profile_conformance_claim": true
+      }
+    },
+    "nonblocking_socket_adapter": {
+      "implementation": {
+        "status": "listen-bind-connect-accept-listener-close-tcp-read-write-shutdown-stream-close-udp-data-close-task-bridge-integrated-partial",
+        "cmake_targets": [
+          "r_runtime_darwin_socket",
+          "r_std_net"
+        ],
+        "source_directories": [
+          "runtime/darwin",
+          "library/internal/networking"
+        ],
+        "backend": "non-blocking BSD socket establishment with Dispatch readiness sources; TCP payload through a cached Dispatch I/O STREAM root",
+        "supported_operations": [
+          "std.net::tcp_listen",
+          "std.net::tcp_accept",
+          "std.net::tcp_listener_close",
+          "std.net::tcp_connect",
+          "std.net::tcp_listener_local_address",
+          "std.net::tcp_local_address",
+          "std.net::tcp_peer_address",
+          "std.net::tcp_read",
+          "std.net::tcp_shutdown",
+          "std.net::tcp_write",
+          "std.net::tcp_write_all",
+          "std.net::tcp_close",
+          "std.net::udp_bind",
+          "std.net::udp_local_address",
+          "std.net::udp_send_to",
+          "std.net::udp_receive_from",
+          "std.net::udp_close",
+          "std.net::unix_listen",
+          "std.net::unix_accept",
+          "std.net::unix_connect",
+          "std.net::unix_listener_close",
+          "std.net::unix_read_into",
+          "std.net::unix_write_from",
+          "std.net::unix_write_all_from",
+          "std.net::unix_shutdown",
+          "std.net::unix_close",
+          "std.net::unix_peer_credentials",
+          "std.net::unix_datagram_bind",
+          "std.net::unix_datagram_connect",
+          "std.net::unix_send_from",
+          "std.net::unix_receive_into",
+          "std.net::unix_datagram_close"
+        ],
+        "descriptor_publication": "FD_CLOEXEC and O_NONBLOCK are established before any descriptor enters a runtime-retained handle; connected and accepted TCP streams also enable SO_NOSIGPIPE before publication",
+        "native_reservation_before_task_commit": true,
+        "start_failure_operand_preservation": "implemented and failure-injected for task frame, handle storage, connect/accept/listener-close control, close deadline control, lazy TCP payload root, shutdown request, consuming stream-close request, UDP queue/request/bounce storage and consuming UDP-close control; failed tcp_close or udp_close start leaves the named handle owner unchanged and failed UDP data start leaves the named array owner byte-for-byte unchanged",
+        "address_validation": "v4 scope zero and v6 target interface index validation precede socket creation",
+        "listen_bind_submission": "bounded socket, setsockopt, bind and listen calls run after successful task commit without occupying a blocking worker lane",
+        "listen_bind_cancellation": "cancellation observed before native submission performs no socket operation; successful bind or listen is the non-cancellable establishment commit",
+        "listen_bind_deadline": "the absolute continuous-clock deadline is checked immediately before socket creation",
+        "connect_submission": "socket, Dispatch write source and optional strict Dispatch timer are reserved before task commit; connect is submitted only after successful commit and never blocks an executor worker",
+        "connect_completion": "Dispatch write readiness is verified through SO_ERROR; successful native establishment transfers the nonblocking close-on-exec descriptor into the retained tcp_stream identity",
+        "connect_cancellation_deadline_acknowledgement": "the task frame, socket and sources remain live until every activated Dispatch source cancel handler acknowledges cleanup; one event-sequence-selected terminal outcome is published and becomes immutable before callback delivery",
+        "accept_reservation": "the new tcp_stream storage, an independent listener retain, a FIFO node, the native request, Dispatch read source and optional strict timer are reserved before task commit; start failure leaves the listener queue unchanged and performs no accept",
+        "accept_submission": "successful starts enqueue in per-listener FIFO order; only the head activates its Dispatch read source, queued deadlines remain armed, and accept is called only from head read-readiness handling; transient EAGAIN, EWOULDBLOCK or EINTR leaves the head pending",
+        "accept_completion": "successful accept establishes FD_CLOEXEC, O_NONBLOCK and SO_NOSIGPIPE before publishing a newly owned tcp_stream and preserves the exact peer sockaddr returned by accept",
+        "accept_cancellation_deadline_acknowledgement": "native readiness, cancellation and deadline candidates use the shared monotonic event sequence; the listener retain, task frame, accepted descriptor, FIFO node and sources remain live until every Dispatch cancel handler acknowledges cleanup; the selected result becomes immutable before callback delivery, and only then is the node removed and the next ready head activated",
+        "listener_close_submission": "successful task start consumes the listener and atomically marks its identity closing before returning; new accepts and address observations report closed; all FIFO accept reservations and active native requests are cancelled and acknowledged before the listener descriptor is closed",
+        "listener_close_cancellation_deadline_acknowledgement": "close duties, descriptor release and the consumed listener release continue after task cancellation or deadline; an independently armed strict Dispatch timer rechecks the absolute mach-continuous deadline and records one shared event sequence at expiry; terminal publication waits for accept drain and timer cancellation acknowledgement, and a pre-existing close failure retains precedence",
+        "tcp_payload_root": "the first data operation lazily reserves one hidden duplicated-descriptor Dispatch I/O STREAM root under the tcp_stream mutex before task commit; stream storage owns the cached view and every committed request owns an independent native retain through the final handler acknowledgement",
+        "tcp_read_submission": "tcp_read reserves its complete request, deadline source, operation channel and same-direction FIFO position before task commit; failed reservation preserves the complete named array owner and performs no payload I/O",
+        "tcp_read_completion": "one read returns after the first positive payload progress, EOF or failure; the original array owner is returned with exact progress while untouched tail bytes remain unchanged; reads are FIFO by submission sequence and the output direction remains independently schedulable",
+        "tcp_read_cancellation_deadline_acknowledgement": "native completion, cancellation and strict continuous-clock deadline use the shared event sequence; task outcome is immutable after first selection, while buffer, request, cached root and descriptor remain live through the final Dispatch I/O handler acknowledgement",
+        "tcp_write_submission": "tcp_write and tcp_write_all reserve the complete request, deadline source, Dispatch data, operation channel and write FIFO position before task commit; failed reservation preserves the complete named array owner and performs no payload I/O",
+        "tcp_write_completion": "tcp_write publishes success only after one positive native prefix; tcp_write_all continues until every byte is accepted or a terminal condition wins; every outcome returns the exact owner without mutating any byte and preserves positive partial progress",
+        "tcp_write_ordering": "nonempty writes share one submission-order FIFO independently from reads; an empty buffer bypasses that FIFO and an expired deadline as a successful side-effect-free no-op",
+        "tcp_write_cancellation_deadline_acknowledgement": "native completion, cancellation and strict continuous-clock deadline use the shared event sequence; task outcome is immutable after first selection, while buffer, request, Dispatch data, cached root and descriptor remain live through the final Dispatch I/O handler acknowledgement",
+        "tcp_shutdown_submission": "tcp_shutdown reserves the complete native request, optional deadline source, direction-specific FIFO position and independent stream retain before task commit; failed reservation performs no half-close, while an already committed direction succeeds without repeating native shutdown and before an expired deadline",
+        "tcp_shutdown_ordering": "read shutdown follows earlier reads, write shutdown follows earlier writes, both waits at the head of both direction FIFOs, and the opposite direction remains independently schedulable; later empty payload operations retain their side-effect-free no-op result",
+        "tcp_shutdown_commit_cancellation_deadline_acknowledgement": "successful native shutdown is the idempotent half-close commit and cannot be replaced by a later cancellation or deadline; storage state is published before later same-direction work, and the task frame, request, cached root and descriptor remain live through native acknowledgement",
+        "tcp_close_submission": "tcp_close reserves the cached STREAM root, terminal close request and deadline state before task commit; successful commit consumes the named stream and atomically rejects later stream operations, while every start failure leaves that owner unchanged",
+        "tcp_close_terminal_cleanup": "tcp_close cancels pending read and write requests, waits for their final native handlers and root cleanup, closes the original descriptor, detaches the cached root and releases the consumed stream exactly once; cancellation, deadline and close failure never skip these duties, and a pre-existing close failure precedes an expired deadline",
+        "tcp_close_cancellation_deadline_acknowledgement": "close completion, cancellation and strict continuous-clock deadline use one immutable event-sequence outcome; task acknowledgement occurs only after terminal descriptor and retained-resource cleanup, including when the task observer has already cancelled or dropped",
+        "udp_datagram_submission_and_ownership": "udp_send_to and udp_receive_from reserve the task, independent socket retain, direction FIFO node, native request, optional strict timer and receive bounce storage before task commit; failed start preserves the complete named array owner byte-for-byte and performs no native datagram operation",
+        "udp_receive_buffer_contract": "receive reads one datagram into independent bounce storage, commits only the received prefix into the returned array, leaves its tail unchanged and reports truncation exactly when the datagram exceeded the supplied buffer; native failure, cancellation and deadline preserve every byte, while send never mutates the array",
+        "udp_direction_ordering": "sends and receives use separate submission-order FIFOs so each direction is serialized while the two directions progress independently; zero-length send remains one real native datagram in the send FIFO",
+        "udp_send_commit_cancellation_deadline_acknowledgement": "native acceptance of the complete datagram is the send commit and cannot be replaced by a later cancellation or deadline; every terminal race uses the shared event sequence and retains the task, exact buffer owner, socket, queue node and Dispatch sources through native cancellation acknowledgement",
+        "udp_close_terminal_cleanup": "udp_close consumes the named socket only after complete close reservation and task commit, rejects later operations, cancels and drains both direction FIFOs, closes the descriptor and releases the consumed socket exactly once; cancellation, deadline and close failure never skip cleanup, and a pre-existing close failure precedes an expired deadline",
+        "handle_retention": "atomic independent references close the non-blocking descriptor exactly once after the final view or operation retain",
+        "unix_domain_sockets": "R-SLIB-NET-0014..0017: Unix-domain listeners, streams and datagram sockets reuse the TCP listener, TCP stream and UDP socket storages and operation paths; a path converts to sockaddr_un before task commit, connect uses the same non-blocking connect source, accept publishes no peer address, a datagram send goes to the connected peer and a receive reports no sender; listen and datagram bind remove a stale socket file only on request, and peer credentials come from getpeereid and LOCAL_PEERPID",
+        "profile_conformance_claim": false
+      }
+    },
+    "process_spawn_adapter": {
+      "implementation": {
+        "status": "spawn-pipes-wait-terminate-integrated",
+        "cmake_targets": [
+          "r_runtime_darwin_process",
+          "r_std_process"
+        ],
+        "source_directories": [
+          "runtime/darwin",
+          "library/internal/process",
+          "library/std/process"
+        ],
+        "system_dependencies": [
+          "Darwin libdispatch",
+          "Darwin libSystem posix_spawn"
+        ],
+        "supported_operations": [
+          "std.process::spawn",
+          "std.process::take_stderr",
+          "std.process::take_stdin",
+          "std.process::take_stdout",
+          "std.process::terminate",
+          "std.process::wait"
+        ],
+        "exact_program_invocation": "posix_spawn with an exact executable path, argv, environment and captured-or-explicit cwd; no shell and no PATH lookup",
+        "native_reservation_before_task_commit": true,
+        "start_failure_operand_preservation": "command remains byte-for-byte ownership-equivalent after every allocator, pipe, Dispatch I/O root, spawn-attribute and runtime-stopping precommit failure",
+        "creation_commit": "POSIX_SPAWN_CLOEXEC_DEFAULT plus POSIX_SPAWN_START_SUSPENDED plus POSIX_SPAWN_SETSIGMASK with an empty mask plus POSIX_SPAWN_SETSIGDEF for every signal whose disposition a std.signal listener replaced; the process lifecycle source and registry are installed before the event-sequenced SIGCONT commit",
+        "cancellation_deadline": "task cancellation and a strict mach-continuous deadline may select only before creation commit; duties continue after selection and the first event sequence remains immutable",
+        "pipe_reservation": "all requested parent process-pipe Dispatch I/O STREAM roots are created before task commit and remain child-owned until extraction or child drop",
+        "pipe_extraction": "each allocation-free take atomically transfers one parent Dispatch I/O view under the process registry mutex; exactly one racing caller receives a configured endpoint, every unavailable state returns o::none and the extracted owner is independent of child destruction",
+        "wait_reservation": "wait reserves the task frame, strict deadline source, exclusive observation slot and an independent native child retain before task commit; every start failure preserves the exact named child owner",
+        "wait_completion": "DispatchSourceProcess performs the sole nonblocking waitpid reap and records one event sequence; success totalizes the wait status, while a pre-reap deadline returns the same retryable child owner and all paths wait for timer cancellation acknowledgement",
+        "terminate_commit": "terminate independently retains the borrowed child, checks its absolute deadline immediately before bounded SIGKILL submission and treats native acceptance as a non-cancellable commit; wait remains the sole status observation operation",
+        "child_status_mapping": "WIFEXITED maps to exited with WEXITSTATUS, WIFSIGNALED maps to signalled with WTERMSIG, every other Darwin wait status maps to other with the exact signed 32-bit wait status; success is true only for exited code zero",
+        "rollback": "every failure after suspended child creation sends SIGKILL, cancels the installed process source if present and reaps exactly once before task acknowledgement",
+        "child_lifecycle": "a runtime-retained child registry and DispatchSourceProcess reap every committed child exactly once even after the public child view is dropped",
+        "hosted_shutdown": "executor drain is followed by child kill/reap, process-source cancellation acknowledgement and final Dispatch I/O pipe-root cleanup acknowledgement",
+        "public_unimplemented_operations": [],
+        "profile_conformance_claim": true
+      }
+    },
+    "capability_matrix": [
+      {
+        "family": "file_payload_read_write",
+        "backend": "dispatch_io_read/dispatch_io_write",
+        "lane": false,
+        "cancellation": "native",
+        "deadline": "native",
+        "acknowledgement": "final Dispatch I/O handler"
+      },
+      {
+        "family": "filesystem_metadata_cursor_namespace_durability",
+        "backend": "filesystem_adapter_lane",
+        "lane": true,
+        "cancellation": "queued_or_acknowledged_after_return",
+        "deadline": "queued_or_acknowledged_after_return",
+        "acknowledgement": "native call return and operation-record terminal transition"
+      },
+      {
+        "family": "console_and_process_pipe_payload",
+        "backend": "Dispatch I/O",
+        "lane": false,
+        "cancellation": "native",
+        "deadline": "native",
+        "acknowledgement": "final Dispatch I/O handler"
+      },
+      {
+        "family": "dns",
+        "backend": "DNSServiceGetAddrInfo",
+        "lane": false,
+        "cancellation": "native",
+        "deadline": "native",
+        "acknowledgement": "DNSServiceRef deallocation and callback quiescence"
+      },
+      {
+        "family": "tcp_udp_establishment",
+        "backend": "non-blocking BSD sockets plus DispatchSourceRead/DispatchSourceWrite",
+        "lane": false,
+        "cancellation": "native",
+        "deadline": "native",
+        "acknowledgement": "all operation Dispatch source cancellation handlers"
+      },
+      {
+        "family": "tcp_payload",
+        "backend": "Dispatch I/O STREAM over a hidden duplicated descriptor",
+        "lane": false,
+        "cancellation": "native",
+        "deadline": "native",
+        "acknowledgement": "final Dispatch I/O handler"
+      },
+      {
+        "family": "udp_datagram",
+        "backend": "non-blocking BSD datagrams plus DispatchSourceRead/DispatchSourceWrite",
+        "lane": false,
+        "cancellation": "native",
+        "deadline": "native",
+        "acknowledgement": "all operation Dispatch source cancellation handlers"
+      },
+      {
+        "family": "child_spawn",
+        "backend": "serial Dispatch submission of exact-path posix_spawn with START_SUSPENDED",
+        "lane": false,
+        "cancellation": "before_commit_only",
+        "deadline": "before_commit_only",
+        "acknowledgement": "process source installation, SIGCONT creation commit or suspended rollback reap"
+      },
+      {
+        "family": "child_wait",
+        "backend": "DispatchSourceProcess",
+        "lane": false,
+        "cancellation": "native",
+        "deadline": "native",
+        "acknowledgement": "process-source cancellation handler and exactly-once reap"
+      },
+      {
+        "family": "signal_wait",
+        "backend": "DispatchSourceSignal",
+        "lane": false,
+        "cancellation": "native",
+        "deadline": "native",
+        "acknowledgement": "strict-timer cancellation handler after the terminal selection"
+      }
+    ]
+  },
+  "standard_library": {
+    "path_encoding": "UTF-8 converted all-or-error to Darwin filesystem representation; NUL forbidden",
+    "path_case_behavior": "filesystem-volume-defined and documented at deployment",
+    "path_normalization": "no Unicode normalization by R",
+    "reserved_beneath_components": [
+      ".r-dir-stage-*"
+    ],
+    "atomic_no_replace": {
+      "staging_directory": "ordinary: private destination sibling; beneath: private original-root child; named .r-dir-stage-* with mode 0700 subject to process umask",
+      "payload": "one regular file named payload with mode 0600 subject to process umask",
+      "payload_io": "complete offset-ordered Dispatch I/O write through a per-operation DISPATCH_IO_RANDOM root",
+      "prepublication_durability": "successful payload F_FULLFSYNC before publication",
+      "publication": "one renameatx_np with RENAME_EXCL; beneath source and destination resolve from the independently retained original root",
+      "cleanup": "after staging creation exactly one non-cancellable cleanup removes payload if present and then the private directory after failure or success",
+      "postcommit": "destination-parent F_FULLFSYNC and all cleanup complete before acknowledgement; no later outcome changes committed(data)"
+    },
+    "directory_enumeration_order": "native getattrlistbulk order",
+    "dns_order": "DNSServiceGetAddrInfo callback order",
+    "tcp_default_backlog": 128,
+    "tcp_backlog_above_native_int_max": "clamped to INT_MAX",
+    "udp_maximum_send_payload": 65507,
+    "array_growth": "capacity doubles from at least 8 elements, checked and rounded for alignment",
+    "hash": "r_hash_siphash13_v1 with per-process dictionary seed"
+  }
+}

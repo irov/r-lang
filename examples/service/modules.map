@@ -1,0 +1,5 @@
+example.service.main = src/main.r
+example.service.handlers = src/handlers.r
+example.service.books = src/books.r
+example.service.client = src/client.r
+example.service.wire = src/wire.r

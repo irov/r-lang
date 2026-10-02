@@ -1,0 +1,13 @@
+/* Explicit opaque POD capabilities. Padding is allowed; arbitrary bytes are not values. */
+R_STANDARD_POD("core::memory_order")
+R_STANDARD_POD("std.alloc::alloc_error")
+R_STANDARD_POD("std.async::start_error")
+R_STANDARD_POD("std.hash::md5_digest")
+R_STANDARD_POD("std.hash::sha1_digest")
+R_STANDARD_POD("std.hash::sha256_digest")
+R_STANDARD_POD("std.hash::sha512_digest")
+R_STANDARD_POD("std.time::duration")
+R_STANDARD_POD("std.time::duration_error")
+R_STANDARD_POD("std.time::instant")
+R_STANDARD_POD("std.time::system_time")
+R_STANDARD_POD("std.time::utc_datetime")

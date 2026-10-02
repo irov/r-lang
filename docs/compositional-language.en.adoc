@@ -1,0 +1,173 @@
+= Compositional language contracts
+
+This change implements the six language improvements authorized after Core draft.43
+and interface 13. The current contract is Core draft.46, Library draft.18 and interface 14.
+The sections below record the design, executable examples and validation boundaries.
+
+. Preserve separate input-origin dependencies for borrowed output components, including
+  checked errors, generic substitution and disjoint mutable projections. Regions remain
+  inferred metadata rather than source-level lifetime names.
+. Extend static traits with type parameters, associated-type constraints, supertraits and
+  checked default method bodies. Preserve coherent implementation selection, definition
+  checking, exact checked errors and resource contracts.
+. Add opaque result contracts for returning concrete closures, iterators and adapters
+  without exposing their implementation type or adding boxing or dynamic dispatch.
+. Add scoped async task lifetimes with supervised completion and cancellation cleanup,
+  checked borrowing from the enclosing scope, and bounded group operations. Scope exit
+  must await completion acknowledgement before releasing any borrowed storage.
+. Compose ordinary calls and awaits with deterministic evaluation, explicit ownership
+  transfer, temporary cleanup and the existing transactional async start semantics.
+. Extend payload matching with nested and named-field patterns, guards and value-producing
+  matching. Preserve exhaustiveness, access checks and exactly-once payload destruction.
+
+The implementation includes negative definition tests, sync/async runtime coverage,
+module and metadata checks, and application examples. Syntax, semantic checking, HIR/MIR,
+C17 generation and runtime cleanup are integrated; acceptance is recorded below.
+
+Dynamic dispatch, effect-set parameters, expanded constant-parameter kinds and platform
+ports belong to separate proposals and are not introduced by this worklist.
+
+== Opaque result design
+
+A factory spells its complete result as `opaque(contracts)`. Contracts use the generic
+capability vocabulary, static traits (including applications), and callable signatures.
+An associated type is fixed explicitly, for example `opaque(core::Iterator & Item = i32)`.
+Every advertised associated type must have one unambiguous binding; duplicate bindings
+and mismatches with the concrete implementation are errors.
+
+All returns establish one canonical implementation type, including while checking an
+unused generic definition. Static branch evidence does not create a different type
+identity for an otherwise identical type parameter. A function without a concrete return
+cannot infer an opaque representation. Opaque syntax is confined to complete function
+results, requires a definition, and is unavailable at the C ABI boundary.
+
+Callers use `auto` or ordinary generic inference. They see the declared contracts and
+fixed associated types; fields, arithmetic, conversion to the implementation type, and
+unadvertised capabilities are unavailable. Each factory and its canonical generic
+arguments define a distinct identity. Generic static storage retains these identities
+even when two factories happen to use the same concrete implementation.
+
+After body checking and monomorphization, opaque facades are replaced with their concrete
+executable representations. Hidden Copy storage can implement an opaque Move contract:
+the checked source remains consumed, while physical copying and empty cleanup require no
+runtime owner protocol. Real Move payloads retain their normal drop and cancellation
+cleanup. Layout and resource-effect validation inspect the concrete executable graph.
+Borrow provenance follows the concrete captures; opacity cannot hide an escaping borrow.
+
+Interface 14 retains opaque return contracts, associated bindings, defining modules and
+definition fingerprints. Physical checked-carrier layout remains part of the ABI record.
+Imported factories and generic bodies still require their defining source.
+
+Executable coverage currently includes opaque traits and default methods, functions and
+closures, concrete and generic iterators, borrowed views, checked errors, async results,
+Move cleanup, source-order-independent metadata, and distinct generic static state. The
+batch painting estimate in `examples/methods` demonstrates an opaque iterator and a
+captured discount policy. These focused checks also run in the complete Debug suite and
+in the targeted ASan/UBSan suite.
+
+== Payload matching
+
+`match (value) { case pattern [if (condition)]: expression; default: expression; }`
+produces one value. The contextual name `match` remains available for ordinary calls.
+Patterns include constants, `_`, named bindings, `move` bindings, nested `variant` patterns,
+and named structure fields. Coverage is proved over nested constructor combinations;
+guards do not establish exhaustiveness. Open scalar domains require a wildcard/default.
+Opaque native library outcomes continue to use their existing typed switch projections;
+nominal enum/error and option/result
+patterns do not assume an addressable payload layout for those native records.
+
+The input is evaluated once. Tests and guards inspect read-only aliases; only the selected
+arm commits payload moves. A destructive pattern requires an owned temporary or `match
+(move name)`. Partitioning transfers every active component into separately tracked local
+storage, including unnamed components that need cleanup. A user-defined drop on a value
+being partitioned prevents decomposition; a whole leaf with its own drop can still move.
+The general prohibition on moving through arbitrary fields or borrowed storage is unchanged.
+
+Arms have one common result type; a `never` arm does not contribute a continuing ownership
+state. Payload inspection stays behind the corresponding tag test. Borrowed output retains
+its source dependency, and references to arm-owned storage cannot escape. Copy substitution
+can remove cleanup nodes; both generic and opaque lowering update the selected value's
+position when removing preceding cleanup.
+
+Sync and async runtime fixtures cover nested guards, both guard outcomes, Move destruction,
+Copy/Move generic instantiations, and awaits in selected arms. The delivery dispatch example
+adds a `message` command with initial submission, retry, expiry, and readiness reporting.
+Its command test checks these outputs together with the existing route and scheduling modes.
+
+== Scoped task groups
+
+The runtime foundation now uses compiler-owned, immovable scope and entry storage in the
+parent's resumable frame. A reservation precedes child preparation; failed starts abandon
+the reservation, and successful commits bind it without another fallible operation.
+Each child has a supervision reference independent of its observation handle.
+
+An all-members wait is a readiness barrier. A selected-members wait returns the first ready
+argument's index, breaking simultaneous readiness ties by argument order. Neither consumes
+results or checked errors. Scope cancellation initiates cancellation for all members, then
+drain waits for terminal acknowledgement even when the parent is cancelled. Consumed
+observations release their membership only after terminal publication and any active
+result cleanup. Closing requires an empty group. The parent cannot publish completion or
+destroy its borrowed frame while a scope remains open.
+
+Runtime tests exercise inline completion before binding, suspension, selection order,
+bounded reservations and reuse, cancellation, delayed acknowledgement, and exactly-once
+destruction. The compiler lowers `task_scope(N) name { ... }` to the existing finally and
+resumable control-flow machinery. Direct child starts reserve a group entry before preparation;
+`scope_full` and allocator failure preserve named owners. `@scoped async` functions may
+capture Send views into storage declared outside the group body. Group loans survive
+observation cancellation and end at the consuming await of their member, an all-members
+barrier or scope exit. Results and
+completion errors remain Send and unborrowed. Scoped standard operations
+(R-SLIB-ASYNC-0012) take the same loans for their byte views and hold them until the
+native backend acknowledges the outcome, so no buffer moves into the task.
+
+End-to-end fixtures cover shared and exclusive views, generic functions, conditional
+readiness waits, short-circuit await composition, nested groups, break/continue, checked
+Move payloads and parent cancellation during a native acknowledgement delay. In the last
+case, the child's finally reads/writes borrowed storage before its owner is destroyed.
+The sensor-summary application demonstrates a shared owned array, a bounded fan-out,
+readiness barriers, separately consumed results and an opaque calibration closure.
+
+
+== Component contracts, traits and expression composition
+
+Borrowed output fields and constant array indices have independent input-origin mappings.
+The mapping survives nominal wrappers, generic instantiation, checked throws, catch and
+rethrow. Complete mappings allow a caller to release an unrelated owner after the last
+use of the components borrowing it. Conditional alternatives join their possible origins;
+incomplete or wildcard paths keep the conservative input bound. The implementation does
+not infer arbitrary disjointness through unknown indices or extend borrowed lifetimes.
+The executable link:../tests/fixtures/codegen_borrow_components.r[borrow component fixture]
+and its generic, checked-error and async companions cover these relationships.
+
+Static traits accept type arguments, constrained associated types, supertraits and checked
+default bodies. Defaults and unused generic bodies are checked at definition, and closed
+applications preserve resource promises, exact checked errors and scoped markers. Method
+selection remains coherent and static. The painting application uses inherited pricing
+defaults; the link:../tests/fixtures/codegen_trait_parameters.r[trait parameter fixture]
+exercises nested trait applications, associated bounds and inherited substitutions.
+
+Calls and awaits compose in ordinary runtime expressions. Evaluation is once in source
+order, including nested arguments, return and throw operands, conditional branches and
+short-circuit operands. Range membership stages its subject once, evaluates the lower
+bound next, and evaluates the upper bound only if the lower comparison succeeds. Reading
+a Copy field from a temporary result destroys the containing owner after obtaining that
+value. A reference to temporary storage cannot escape, and arbitrary Move-field extraction
+remains prohibited. Native async starts preserve the same transactional ownership behavior
+inside a task scope as generated async functions.
+
+== Acceptance
+
+The final Debug build uses warnings as errors. All 1811 CTest entries pass, including
+semantic allocation-failure sweeps, generated C17 formatting, source-order determinism,
+example commands and ZIP/unzip roundtrip with refusal to overwrite an existing archive.
+All 51 selected ASan/UBSan entries pass with immediate failure on sanitizer diagnostics.
+They cover all six changes, native and generated tasks, delayed cancellation acknowledgement,
+Move payload matching across suspension, start-error recovery, imports and ZIP/unzip.
+
+Specification parity, references, EBNF, rule inventories, target ABI metadata, runtime entry
+inventory, library layout, C style and formatting checks pass. The inventories contain
+472 Core rules, 236 Library rules, 274 grammar productions and 1011 public library records
+with no partial or unimplemented records. Application coverage references all 999 records
+and all 88 tracked syntax nodes. These counts establish the checked coverage boundaries;
+they do not imply that every possible program or scheduler interleaving has been explored.

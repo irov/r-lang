@@ -1,0 +1,29 @@
+execute_process(
+    COMMAND "${R_FRONT_EXECUTABLE}" --emit=cst --diagnostics=json "${SOURCE_FILE}"
+    OUTPUT_QUIET
+    ERROR_VARIABLE DIAGNOSTICS_JSON
+    RESULT_VARIABLE FRONTEND_RESULT
+)
+
+if(NOT FRONTEND_RESULT EQUAL 1)
+    message(FATAL_ERROR "invalid source returned ${FRONTEND_RESULT}, expected 1")
+endif()
+
+string(JSON DIAGNOSTIC_COUNT LENGTH "${DIAGNOSTICS_JSON}")
+if(DIAGNOSTIC_COUNT LESS 1)
+    message(FATAL_ERROR "JSON diagnostics array is empty")
+endif()
+string(JSON FIRST_CODE GET "${DIAGNOSTICS_JSON}" 0 code)
+if(NOT FIRST_CODE STREQUAL "R-DIAG-SYN-001")
+    message(FATAL_ERROR "unexpected first diagnostic: ${FIRST_CODE}")
+endif()
+string(JSON FIRST_RULE GET "${DIAGNOSTICS_JSON}" 0 rule)
+string(JSON FIRST_START GET "${DIAGNOSTICS_JSON}" 0 start)
+string(JSON FIRST_END GET "${DIAGNOSTICS_JSON}" 0 end)
+string(JSON FIRST_LINE GET "${DIAGNOSTICS_JSON}" 0 line)
+string(JSON FIRST_COLUMN GET "${DIAGNOSTICS_JSON}" 0 column)
+if(NOT FIRST_RULE STREQUAL "R-GRAM-0005" OR
+   NOT FIRST_START EQUAL 74 OR NOT FIRST_END EQUAL 75 OR
+   NOT FIRST_LINE EQUAL 4 OR NOT FIRST_COLUMN EQUAL 14)
+    message(FATAL_ERROR "unexpected diagnostic rule or byte/source span")
+endif()

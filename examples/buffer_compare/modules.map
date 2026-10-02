@@ -1,0 +1,3 @@
+example.calculator.common = ../calculator/src/common.r
+example.buffer_compare.compare = src/compare.r
+example.buffer_compare.main = src/main.r

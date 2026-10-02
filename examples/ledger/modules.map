@@ -1,0 +1,4 @@
+example.ledger.main = src/main.r
+example.ledger.accounts = src/accounts.r
+example.ledger.handoff = src/handoff.r
+example.calculator.common = ../calculator/src/common.r

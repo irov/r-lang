@@ -1,0 +1,4 @@
+example.workers.main = src/main.r
+example.workers.queue = src/queue.r
+example.workers.coordination = src/coordination.r
+example.calculator.common = ../calculator/src/common.r

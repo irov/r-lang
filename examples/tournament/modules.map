@@ -1,0 +1,3 @@
+example.tournament.main = src/main.r
+example.tournament.season = src/season.r
+example.calculator.common = ../calculator/src/common.r

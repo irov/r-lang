@@ -1,0 +1,4 @@
+example.realtime.main = src/main.r
+example.realtime.room = src/room.r
+example.realtime.names = src/names.r
+example.realtime.line = src/line.r

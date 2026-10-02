@@ -1,0 +1,2 @@
+example.reflection.model = src/model.r
+example.reflection.main = src/main.r

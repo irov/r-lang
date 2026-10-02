@@ -1,0 +1,2 @@
+example.journal.main = src/main.r
+example.journal.store = src/store.r

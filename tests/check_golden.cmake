@@ -1,0 +1,17 @@
+execute_process(
+    COMMAND "${R_FRONT_EXECUTABLE}" --emit=${EMIT_KIND} "${SOURCE_FILE}"
+    OUTPUT_FILE "${ACTUAL_FILE}"
+    ERROR_VARIABLE FRONTEND_DIAGNOSTICS
+    RESULT_VARIABLE FRONTEND_RESULT
+)
+if(NOT FRONTEND_RESULT EQUAL 0)
+    message(FATAL_ERROR "golden ${EMIT_KIND} parse failed:\n${FRONTEND_DIAGNOSTICS}")
+endif()
+execute_process(
+    COMMAND "${CMAKE_COMMAND}" -E compare_files "${EXPECTED_FILE}" "${ACTUAL_FILE}"
+    RESULT_VARIABLE COMPARE_RESULT
+)
+if(NOT COMPARE_RESULT EQUAL 0)
+    message(FATAL_ERROR "golden ${EMIT_KIND} output changed")
+endif()
+

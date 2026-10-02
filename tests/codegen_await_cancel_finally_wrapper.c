@@ -1,0 +1,3 @@
+#define R_TEST_TASK_SLOT r_l00000002
+#define R_TEST_TASK_INITIALIZED r_l00000002_initialized
+#include "codegen_async_cancel_finally_wrapper.c"

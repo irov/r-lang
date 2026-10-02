@@ -1,0 +1,17 @@
+# Reference frontend module map: canonical module name = relative UTF-8 source path.
+example.unzip.error     = src/error.r
+example.unzip.model     = src/model.r
+example.unzip.bytes     = src/bytes.r
+example.unzip.bitstream = src/bitstream.r
+example.unzip.path      = src/path.r
+example.unzip.huffman   = src/huffman.r
+example.unzip.deflate   = src/deflate.r
+example.unzip.zip       = src/zip.r
+example.unzip.host      = src/host.r
+example.unzip.worker    = src/worker.r
+example.unzip.main      = src/main.r
+example.unzip.tests.stored_block       = tests/stored_block_test.r
+example.unzip.tests.fixed_huffman      = tests/fixed_huffman_test.r
+example.unzip.tests.dynamic_huffman    = tests/dynamic_huffman_test.r
+example.unzip.tests.deflate_validation = tests/deflate_validation_test.r
+example.unzip.tests.main               = tests/test_main.r

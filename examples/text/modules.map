@@ -1,0 +1,4 @@
+example.calculator.common = ../calculator/src/common.r
+example.text.search = src/search.r
+example.text.inspect = src/inspect.r
+example.text.main = src/main.r

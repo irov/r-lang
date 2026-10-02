@@ -1,0 +1,2 @@
+example.methods.shapes = src/shapes.r
+example.methods.main = src/main.r

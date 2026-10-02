@@ -1,0 +1,33 @@
+{
+  "schema": "r-link-manifest-0.1",
+  "links": [
+    {
+      "logical_name": "system.libc",
+      "available": true,
+      "kind": "system",
+      "implicit_c_runtime": true,
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "apple-clang-system-runtime",
+      "link_artifact_identity": "apple-system-runtime",
+      "header_roots": [
+        "system-sdk"
+      ],
+      "abi_record_roots": [
+        "darwin-arm64-c17"
+      ],
+      "library_version": "target-sdk",
+      "dependencies": [],
+      "feature_test_definitions": [
+        "_DARWIN_C_SOURCE"
+      ],
+      "symbols": [
+        {
+          "c_identifier": "usleep",
+          "kind": "function",
+          "binding": "strong"
+        }
+      ]
+    }
+  ]
+}

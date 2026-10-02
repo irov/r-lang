@@ -1,0 +1,761 @@
+{
+  "schema": "r-target-manifest-0.1",
+  "manifest_revision": 9,
+  "status": "draft-implementation-contract",
+  "conformance_claim": false,
+  "identity": {
+    "name": "arm64-apple-darwin-freestanding",
+    "target_triple": "arm64-apple-darwin",
+    "profile": "freestanding",
+    "minimum_os_version": "26.5",
+    "core_specification_revision": "0.1.0-draft.95",
+    "standard_library_specification_revision": "0.1.0-draft.60"
+  },
+  "toolchain": {
+    "c_compiler": "Apple clang",
+    "c_compiler_version": "21.0.0",
+    "c_compiler_build": "clang-2100.3.34.2",
+    "sdk": "macOS 27.0",
+    "generated_application_language": "ISO C17",
+    "generated_application_extensions": false,
+    "darwin_adapter_language": "Clang C17 with Blocks",
+    "warnings_as_errors": true
+  },
+  "core": {
+    "data_model": "LP64",
+    "byte_order": "little",
+    "usize_width": 64,
+    "isize_width": 64,
+    "usize_c_type": "size_t",
+    "isize_c_type": "ptrdiff_t",
+    "c_abi_numeric_types": {
+      "schema": "r-c-abi-numeric-types-0.1",
+      "derived_from": {
+        "target": "arm64-apple-macos26.5",
+        "compiler": "Apple clang 21.0.0",
+        "compiler_build": "clang-2100.3.34.2",
+        "sdk": "macOS 27.0",
+        "language": "ISO C17"
+      },
+      "byte_width_bits": 8,
+      "integer_rank_order": [
+        "bool",
+        "char",
+        "short",
+        "int",
+        "long",
+        "long_long"
+      ],
+      "integer_representation_contracts": {
+        "two's-complement": {
+          "padding_bits": 0,
+          "has_trap_representation": false
+        },
+        "pure-binary": {
+          "padding_bits": 0,
+          "has_trap_representation": false
+        },
+        "c17-_Bool": {
+          "value_bits": 1,
+          "padding_bits": 7,
+          "has_trap_representation": false,
+          "value_encoding": "false=0,true=1"
+        }
+      },
+      "binary_float_contract": {
+        "evaluation_method": 0,
+        "rounding": "round_to_nearest_ties_to_even",
+        "gradual_underflow": true,
+        "iec_60559_operation_mapping": {
+          "unary_plus": "+",
+          "unary_minus": "-",
+          "add": "+",
+          "subtract": "-",
+          "multiply": "*",
+          "divide": "/"
+        }
+      },
+      "types": {
+        "c_char": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "char",
+          "canonical_c_type": "char",
+          "object_size_bytes": 1,
+          "alignment_bytes": 1,
+          "width_bits": 8,
+          "rank": "char",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-128",
+          "maximum": "127"
+        },
+        "c_schar": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "signed char",
+          "canonical_c_type": "signed char",
+          "object_size_bytes": 1,
+          "alignment_bytes": 1,
+          "width_bits": 8,
+          "rank": "char",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-128",
+          "maximum": "127"
+        },
+        "c_uchar": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "unsigned char",
+          "canonical_c_type": "unsigned char",
+          "object_size_bytes": 1,
+          "alignment_bytes": 1,
+          "width_bits": 8,
+          "rank": "char",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "255"
+        },
+        "c_short": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "short",
+          "canonical_c_type": "short",
+          "object_size_bytes": 2,
+          "alignment_bytes": 2,
+          "width_bits": 16,
+          "rank": "short",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-32768",
+          "maximum": "32767"
+        },
+        "c_ushort": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "unsigned short",
+          "canonical_c_type": "unsigned short",
+          "object_size_bytes": 2,
+          "alignment_bytes": 2,
+          "width_bits": 16,
+          "rank": "short",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "65535"
+        },
+        "c_int": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "int",
+          "canonical_c_type": "int",
+          "object_size_bytes": 4,
+          "alignment_bytes": 4,
+          "width_bits": 32,
+          "rank": "int",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-2147483648",
+          "maximum": "2147483647"
+        },
+        "c_uint": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "unsigned int",
+          "canonical_c_type": "unsigned int",
+          "object_size_bytes": 4,
+          "alignment_bytes": 4,
+          "width_bits": 32,
+          "rank": "int",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "4294967295"
+        },
+        "c_long": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "long",
+          "canonical_c_type": "long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-9223372036854775808",
+          "maximum": "9223372036854775807"
+        },
+        "c_ulong": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "unsigned long",
+          "canonical_c_type": "unsigned long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "18446744073709551615"
+        },
+        "c_llong": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "long long",
+          "canonical_c_type": "long long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long_long",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-9223372036854775808",
+          "maximum": "9223372036854775807"
+        },
+        "c_ullong": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "unsigned long long",
+          "canonical_c_type": "unsigned long long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long_long",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "18446744073709551615"
+        },
+        "c_bool": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "_Bool",
+          "canonical_c_type": "_Bool",
+          "object_size_bytes": 1,
+          "alignment_bytes": 1,
+          "width_bits": 8,
+          "rank": "bool",
+          "signedness": "boolean",
+          "representation": "c17-_Bool",
+          "minimum": "0",
+          "maximum": "1"
+        },
+        "c_wchar": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "wchar_t",
+          "canonical_c_type": "int",
+          "object_size_bytes": 4,
+          "alignment_bytes": 4,
+          "width_bits": 32,
+          "rank": "int",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-2147483648",
+          "maximum": "2147483647"
+        },
+        "c_wint": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "wint_t",
+          "canonical_c_type": "int",
+          "object_size_bytes": 4,
+          "alignment_bytes": 4,
+          "width_bits": 32,
+          "rank": "int",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-2147483648",
+          "maximum": "2147483647"
+        },
+        "c_int8": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "int8_t",
+          "canonical_c_type": "signed char",
+          "object_size_bytes": 1,
+          "alignment_bytes": 1,
+          "width_bits": 8,
+          "rank": "char",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-128",
+          "maximum": "127"
+        },
+        "c_uint8": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "uint8_t",
+          "canonical_c_type": "unsigned char",
+          "object_size_bytes": 1,
+          "alignment_bytes": 1,
+          "width_bits": 8,
+          "rank": "char",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "255"
+        },
+        "c_int16": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "int16_t",
+          "canonical_c_type": "short",
+          "object_size_bytes": 2,
+          "alignment_bytes": 2,
+          "width_bits": 16,
+          "rank": "short",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-32768",
+          "maximum": "32767"
+        },
+        "c_uint16": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "uint16_t",
+          "canonical_c_type": "unsigned short",
+          "object_size_bytes": 2,
+          "alignment_bytes": 2,
+          "width_bits": 16,
+          "rank": "short",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "65535"
+        },
+        "c_int32": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "int32_t",
+          "canonical_c_type": "int",
+          "object_size_bytes": 4,
+          "alignment_bytes": 4,
+          "width_bits": 32,
+          "rank": "int",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-2147483648",
+          "maximum": "2147483647"
+        },
+        "c_uint32": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "uint32_t",
+          "canonical_c_type": "unsigned int",
+          "object_size_bytes": 4,
+          "alignment_bytes": 4,
+          "width_bits": 32,
+          "rank": "int",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "4294967295"
+        },
+        "c_int64": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "int64_t",
+          "canonical_c_type": "long long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long_long",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-9223372036854775808",
+          "maximum": "9223372036854775807"
+        },
+        "c_uint64": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "uint64_t",
+          "canonical_c_type": "unsigned long long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long_long",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "18446744073709551615"
+        },
+        "c_intptr": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "intptr_t",
+          "canonical_c_type": "long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-9223372036854775808",
+          "maximum": "9223372036854775807"
+        },
+        "c_uintptr": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "uintptr_t",
+          "canonical_c_type": "unsigned long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "18446744073709551615"
+        },
+        "c_intmax": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "intmax_t",
+          "canonical_c_type": "long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-9223372036854775808",
+          "maximum": "9223372036854775807"
+        },
+        "c_uintmax": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "uintmax_t",
+          "canonical_c_type": "unsigned long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "18446744073709551615"
+        },
+        "c_size": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "size_t",
+          "canonical_c_type": "unsigned long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long",
+          "signedness": "unsigned",
+          "representation": "pure-binary",
+          "minimum": "0",
+          "maximum": "18446744073709551615"
+        },
+        "c_ptrdiff": {
+          "category": "integer",
+          "available": true,
+          "c_spelling": "ptrdiff_t",
+          "canonical_c_type": "long",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "rank": "long",
+          "signedness": "signed",
+          "representation": "two's-complement",
+          "minimum": "-9223372036854775808",
+          "maximum": "9223372036854775807"
+        },
+        "c_float": {
+          "category": "binary_float",
+          "available": true,
+          "c_spelling": "float",
+          "canonical_c_type": "float",
+          "object_size_bytes": 4,
+          "alignment_bytes": 4,
+          "width_bits": 32,
+          "representation": "iec-60559-binary32",
+          "radix": 2,
+          "significand_bits": 24,
+          "exponent_bits": 8,
+          "minimum_normal_exponent": -126,
+          "maximum_normal_exponent": 127,
+          "minimum_subnormal_exponent": -149,
+          "minimum_positive_normal": "0x1p-126",
+          "minimum_positive_subnormal": "0x1p-149",
+          "maximum_finite": "0x1.fffffep+127",
+          "has_subnormals": true,
+          "has_infinity": true,
+          "has_quiet_nan": true,
+          "has_signaling_nan": true,
+          "has_signed_zero": true
+        },
+        "c_double": {
+          "category": "binary_float",
+          "available": true,
+          "c_spelling": "double",
+          "canonical_c_type": "double",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "representation": "iec-60559-binary64",
+          "radix": 2,
+          "significand_bits": 53,
+          "exponent_bits": 11,
+          "minimum_normal_exponent": -1022,
+          "maximum_normal_exponent": 1023,
+          "minimum_subnormal_exponent": -1074,
+          "minimum_positive_normal": "0x1p-1022",
+          "minimum_positive_subnormal": "0x1p-1074",
+          "maximum_finite": "0x1.fffffffffffffp+1023",
+          "has_subnormals": true,
+          "has_infinity": true,
+          "has_quiet_nan": true,
+          "has_signaling_nan": true,
+          "has_signed_zero": true
+        },
+        "c_long_double": {
+          "category": "binary_float",
+          "available": true,
+          "c_spelling": "long double",
+          "canonical_c_type": "long double",
+          "object_size_bytes": 8,
+          "alignment_bytes": 8,
+          "width_bits": 64,
+          "representation": "iec-60559-binary64",
+          "radix": 2,
+          "significand_bits": 53,
+          "exponent_bits": 11,
+          "minimum_normal_exponent": -1022,
+          "maximum_normal_exponent": 1023,
+          "minimum_subnormal_exponent": -1074,
+          "minimum_positive_normal": "0x1p-1022",
+          "minimum_positive_subnormal": "0x1p-1074",
+          "maximum_finite": "0x1.fffffffffffffp+1023",
+          "has_subnormals": true,
+          "has_infinity": true,
+          "has_quiet_nan": true,
+          "has_signaling_nan": true,
+          "has_signed_zero": true
+        }
+      }
+    },
+    "aggregate_layout": "Apple arm64 Darwin C ABI as verified by target probes",
+    "calling_convention": "Apple arm64 Darwin default C ABI",
+    "checked_errors": {
+      "source_model": "unordered exact nominal throws set",
+      "tag_c_type": "uint32_t",
+      "success_tag": 0,
+      "error_tag_order": "ascending canonical fully-qualified nominal type key",
+      "payload_storage": "one union shared by the success value and all checked error payloads",
+      "generated_r_to_r_abi": "explicit output-carrier parameter",
+      "publication": "tag and payload become observable only after complete initialization",
+      "interface_descriptor": "value type, normalized error set, tag table and target layout hash",
+      "native_exception_primitives": false,
+      "setjmp_longjmp": false
+    },
+    "module_path": {
+      "separator": ".",
+      "filesystem_case_sensitive": false,
+      "source_suffix": ".r"
+    },
+    "panic": {
+      "strategy": "environment-handler",
+      "handler": "r_runtime_environment_panic",
+      "diagnostic_sink": "environment handler; the runtime writes nothing",
+      "stack_exhaustion": "environment handler with category stack_exhaustion"
+    },
+    "stack": {
+      "architecture": "arm64",
+      "growth_direction": "down",
+      "bounds": {
+        "source": "environment",
+        "adopt_api": "r_runtime_freestanding_stack_adopt",
+        "release_api": "r_runtime_freestanding_stack_release",
+        "interpretation": "low and high supplied by the environment; protected low band added with overflow-checked uintptr_t arithmetic",
+        "storage": "_Thread_local",
+        "allocation": false,
+        "stdio": false,
+        "locking": false
+      },
+      "protected_low_bytes": 65536,
+      "call_transition_bytes": 16384,
+      "generated_frame_ceiling_bytes": 262144,
+      "frame_measurement": {
+        "compiler": "Apple clang 21.0.0",
+        "compile_flags": [
+          "-std=c17",
+          "-O0",
+          "-fstack-usage",
+          "-fno-inline-functions",
+          "-fno-lto"
+        ],
+        "accepted_frame_kind": "static",
+        "generated_source_only": true,
+        "measurement_define": "R_STACK_USAGE_MEASUREMENT=1",
+        "runtime_header": "deterministic R_STACK_FRAME_<function> macros from Clang .su records",
+        "artifact_pipeline": {
+          "bootstrap_object": {
+            "role": "seed-bounds-only",
+            "compile_mode": "R_STACK_USAGE_MEASUREMENT=1",
+            "includes_bounds_header": false,
+            "linked": false
+          },
+          "bounds_header": {
+            "format": "R_STACK_FRAME_<function>",
+            "ordering": "function-name-ascending",
+            "function_selection": "canonical-generated-source-path-equality",
+            "frame_kind": "static",
+            "requires_nonempty_function_set": true,
+            "initialization": "bootstrap-frame-size",
+            "update": "per-function-max-previous-bound-and-candidate-frame"
+          },
+          "fixed_point": {
+            "candidate_includes_bounds_header": true,
+            "header_injection_flag": "-include",
+            "candidate_remeasured": true,
+            "function_name_set": "exactly-equal-to-bootstrap-on-every-iteration",
+            "stability": "updated-bounds-exactly-equal-to-previous-bounds",
+            "maximum_candidate_iterations": 16,
+            "cap_exhaustion": "hard-fail-without-link"
+          },
+          "final_object": {
+            "source": "converged-candidate-object",
+            "includes_stable_bounds_header": true,
+            "remeasured": true,
+            "function_name_set": "exactly-equal-to-bootstrap",
+            "per_function_bound": "final-less-than-or-equal-to-stable-bound",
+            "bounds_header_identity": "exact-header-used-for-final-object",
+            "link_input_identity": "exact-converged-candidate-object"
+          }
+        },
+        "instrumented_builds": {
+          "configurations": [
+            "address-undefined",
+            "thread"
+          ],
+          "stack_conformance": false,
+          "stack_usage_report": "diagnostic-only",
+          "dynamic_or_unknown_frames": "not-validated",
+          "nonconforming_marker_suffix": ".stack-usage.nonconforming",
+          "link_input_identity": "instrumented-final-object"
+        },
+        "link_time_optimization": false,
+        "generated_function_inlining": false
+      },
+      "entry_budget_bytes": 393216,
+      "preflight": {
+        "api": "r_runtime_stack_require",
+        "failure": "stack_exhaustion panic at the entry into R code",
+        "policy": "static-entry-bound",
+        "call_graph": "acyclic R call graph; owned storage may self-nest through own/rc/arc, o<...>, fixed arrays and array/list/dict values, destroyed iteratively by r_runtime_drop_iterative (Core R-FUNC-0004)",
+        "sync_callee_gate": "none",
+        "type_glue_move_drop": "none",
+        "entry_gates": [
+          "hosted-entry-before-main-body",
+          "spawned-thread-entry-before-body",
+          "async-step-gate",
+          "async-initialize-drop-start-launch-gates",
+          "call-once-initializer-wrapper",
+          "generated-callback-wrapper-before-body"
+        ],
+        "entry_bound_header": "R_STACK_ENTRY_<entry> = frame(entry) + longest callee path from Clang .su records, a recursive set C counting depth(m) * frame(m) for each member m plus max(largest frame of C, deepest callee outside C); tools/compute_stack_entries.py",
+        "indirect_call_marker": "/* R_STACK_INDIRECT: <callback functions> */ before raw fn calls",
+        "recursion_marker": "/* R_STACK_RECURSION: <depth> */ in each function with @recursion (R-FUNC-0026)"
+      },
+      "thread_initialization": "the environment adopts the bounds of each thread before its first entry into R code"
+    },
+    "allocator": {
+      "available": false,
+      "diagnostic": "R-DIAG-PROFILE-001",
+      "rejected_forms": [
+        "new",
+        "core::adopt",
+        "own",
+        "arc",
+        "rc",
+        "weak",
+        "array",
+        "list",
+        "dict",
+        "bytes",
+        "std.*"
+      ]
+    },
+    "atomics": {
+      "implementation": "C11 _Atomic through Apple Clang and Darwin runtime",
+      "always_lock_free": [
+        "ai8",
+        "au8",
+        "ai16",
+        "au16",
+        "ai32",
+        "au32",
+        "ai64",
+        "au64",
+        "aisize",
+        "ausize",
+        "atomic_pointer"
+      ]
+    },
+    "threads": {
+      "implementation": "environment",
+      "profile": "freestanding",
+      "scheduling_guarantee": "no R thread creation; the environment adopts stack bounds per thread"
+    },
+    "pointer_integer_exposure": {
+      "supported": false,
+      "address_width": 64,
+      "provenance_restoration_api": null
+    },
+    "floating_environment": {
+      "mode": "environment-managed",
+      "rounding": "FE_TONEAREST expected at every entry",
+      "exception_flags": "not saved or restored by generated code",
+      "extra_controls": "environment responsibility"
+    },
+    "lone_cr_source_warning": {
+      "code": "R-WARN-LEX-CR-001",
+      "fails_strict_build": true
+    }
+  },
+  "freestanding": {
+    "runtime_library": "r_runtime_freestanding",
+    "runtime_sources": [
+      "runtime/freestanding/source/panic.c",
+      "runtime/freestanding/source/stack.c",
+      "runtime/freestanding/source/thread_local.c"
+    ],
+    "include_order": [
+      "runtime/freestanding/include",
+      "runtime/include"
+    ],
+    "generated_includes": [
+      "r_runtime_core.h",
+      "r_runtime_freestanding.h",
+      "r_runtime_target_abi.h"
+    ],
+    "program_entry": "r_freestanding_main",
+    "environment_supplies": [
+      "r_runtime_environment_panic"
+    ],
+    "environment_calls": [
+      "r_runtime_freestanding_stack_adopt",
+      "r_runtime_freestanding_stack_release",
+      "r_runtime_freestanding_thread_exit",
+      "r_freestanding_main"
+    ],
+    "c_library_symbols": [
+      "memcpy",
+      "memset"
+    ],
+    "loader_symbols": [
+      "__tlv_bootstrap"
+    ],
+    "thread_local_support": "Mach-O thread-local variables; the environment loader resolves __tlv_bootstrap",
+    "hosted_entry": false,
+    "c_entry_guards": false
+  }
+}

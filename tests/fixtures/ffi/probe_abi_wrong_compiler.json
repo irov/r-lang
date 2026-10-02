@@ -1,0 +1,43 @@
+{
+  "schema": "r-abi-record-0.1",
+  "records": [
+    {
+      "name": "probe-abi-wrong_compiler",
+      "provider": "probe",
+      "target_triple": "arm64-apple-darwin",
+      "compiler_identity": "GNU C 13.2.0",
+      "options": [
+        "-std=c17"
+      ],
+      "feature_test_definitions": [
+        "PROBE_LIBRARY_VERSION=1"
+      ],
+      "headers": [
+        {
+          "spelling": "probe_library.h",
+          "sha256": "139eebb402fa0d6cce95edb7ede3c466a48ff983ed10db2ec2a1535d6c1c0b00"
+        }
+      ],
+      "types": [
+        {
+          "c_name": "probe_pair",
+          "kind": "struct",
+          "size": 8,
+          "alignment": 4,
+          "members": [
+            {
+              "name": "left",
+              "type": "int",
+              "offset": 0
+            },
+            {
+              "name": "right",
+              "type": "int",
+              "offset": 4
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

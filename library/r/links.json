@@ -1,0 +1,450 @@
+{
+  "schema": "r-link-manifest-0.1",
+  "links": [
+    {
+      "logical_name": "std.tls.native",
+      "available": true,
+      "kind": "static",
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "library/native/tls",
+      "link_artifact_identity": "r_std_tls_native",
+      "header_roots": [
+        "library/native/tls/include"
+      ],
+      "abi_record_roots": [],
+      "library_version": "0.1",
+      "dependencies": [
+        "mbedtls"
+      ],
+      "feature_test_definitions": [],
+      "symbols": [
+        {
+          "c_identifier": "r_std_tls_native_config_create",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_tls_native_config_release",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_tls_native_config_add_authority",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_tls_native_config_set_identity",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_tls_native_config_add_protocol",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_tls_native_config_set_verification",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_tls_native_session_create",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_tls_native_session_release",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_tls_native_session_feed",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_tls_native_session_take",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_tls_native_session_pending",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_tls_native_session_handshake",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_tls_native_session_read",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_tls_native_session_write",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_tls_native_session_close",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_tls_native_session_protocol",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_tls_native_session_version",
+          "kind": "function",
+          "binding": "strong"
+        }
+      ]
+    },
+    {
+      "logical_name": "mbedtls",
+      "available": true,
+      "kind": "static",
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "mbedtls-3.6",
+      "link_artifact_identity": "mbedtls-3.6-static",
+      "header_roots": [
+        "mbedtls-3.6-include"
+      ],
+      "abi_record_roots": [],
+      "library_version": "3.6",
+      "dependencies": [],
+      "feature_test_definitions": [],
+      "symbols": []
+    },
+    {
+      "logical_name": "std.crypto.native",
+      "available": true,
+      "kind": "static",
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "library/native/crypto",
+      "link_artifact_identity": "r_std_crypto_native",
+      "header_roots": [
+        "library/native/crypto/include"
+      ],
+      "abi_record_roots": [],
+      "library_version": "0.1",
+      "dependencies": [
+        "sodium"
+      ],
+      "feature_test_definitions": [],
+      "symbols": [
+        {
+          "c_identifier": "r_std_crypto_native_ready",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_aead_seal",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_aead_open",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_sign_seed_keypair",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_sign",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_verify",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_exchange_public",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_exchange_shared",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_hkdf",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_argon2id",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_password_hash",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_password_verify",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_blake2b",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_blake2b_start",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_blake2b_update",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_blake2b_finish",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_random",
+          "kind": "function",
+          "binding": "strong"
+        }
+      ]
+    },
+    {
+      "logical_name": "sodium",
+      "available": true,
+      "kind": "static",
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "libsodium-1.0",
+      "link_artifact_identity": "libsodium-1.0-static",
+      "header_roots": [
+        "libsodium-1.0-include"
+      ],
+      "abi_record_roots": [],
+      "library_version": "1.0",
+      "dependencies": [],
+      "feature_test_definitions": [],
+      "symbols": []
+    },
+    {
+      "logical_name": "std.sqlite.native",
+      "available": true,
+      "kind": "static",
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "library/native/sqlite",
+      "link_artifact_identity": "r_std_sqlite_native",
+      "header_roots": [
+        "library/native/sqlite/include"
+      ],
+      "abi_record_roots": [],
+      "library_version": "0.1",
+      "dependencies": [
+        "sqlite3"
+      ],
+      "feature_test_definitions": [],
+      "symbols": [
+        {
+          "c_identifier": "r_std_sqlite_native_open",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_sqlite_native_close",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_sqlite_native_database_message",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_sqlite_native_statement_message",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_sqlite_native_execute",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_sqlite_native_prepare",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_sqlite_native_autocommit",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_sqlite_native_finalize",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_sqlite_native_parameter_count",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_sqlite_native_bind_null",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_sqlite_native_bind_integer",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_sqlite_native_bind_real",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_sqlite_native_bind_text",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_sqlite_native_bind_blob",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_sqlite_native_step",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_sqlite_native_reset",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_sqlite_native_column_count",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_sqlite_native_column_type",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_sqlite_native_column_integer",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_sqlite_native_column_real",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_sqlite_native_column_bytes",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_sqlite_native_column_name",
+          "kind": "function",
+          "binding": "strong"
+        }
+      ]
+    },
+    {
+      "logical_name": "sqlite3",
+      "available": true,
+      "kind": "static",
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "sqlite-amalgamation-3530400",
+      "link_artifact_identity": "r_sqlite3",
+      "header_roots": [],
+      "abi_record_roots": [],
+      "library_version": "3.53.4",
+      "dependencies": [],
+      "feature_test_definitions": [],
+      "symbols": []
+    },
+    {
+      "logical_name": "std.alloc.native",
+      "available": true,
+      "kind": "static",
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "library/native/alloc",
+      "link_artifact_identity": "r_std_alloc_native",
+      "header_roots": [
+        "library/native/alloc/include"
+      ],
+      "abi_record_roots": [],
+      "library_version": "0.1",
+      "dependencies": [],
+      "feature_test_definitions": [],
+      "symbols": [
+        {
+          "c_identifier": "r_std_alloc_native_usage",
+          "kind": "function",
+          "binding": "strong"
+        }
+      ]
+    },
+    {
+      "logical_name": "std.fs.native",
+      "available": true,
+      "kind": "static",
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "library/native/fs",
+      "link_artifact_identity": "r_std_fs_native",
+      "header_roots": [
+        "library/native/fs/include"
+      ],
+      "abi_record_roots": [],
+      "library_version": "0.1",
+      "dependencies": [],
+      "feature_test_definitions": [],
+      "symbols": [
+        {
+          "c_identifier": "r_std_fs_native_map",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_fs_native_unmap",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_fs_native_sync",
+          "kind": "function",
+          "binding": "strong"
+        }
+      ]
+    }
+  ]
+}
