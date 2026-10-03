@@ -409,6 +409,75 @@ static int r_test_generated_drop_glue_reverse_order(void) {
     return 0;
 }
 
+typedef struct RTestTriple {
+    uint16_t first;
+    uint8_t second;
+    uint32_t third;
+} RTestTriple;
+
+/* R-LIB-0019 (P4.2): filled copies one Copy value into every element of one allocation; one-byte
+ * elements take the memset path and wider ones the doubling copy, checked at every length up to
+ * past several doublings. Zero length allocates nothing and a failure leaves no partial value. */
+static int r_test_filled(void) {
+    RRuntimeAllocator allocator;
+    const RRuntimeTypeInfo byte_type = {sizeof(uint8_t), _Alignof(uint8_t), NULL, NULL};
+    const RRuntimeTypeInfo word_type = {sizeof(uint32_t), _Alignof(uint32_t), NULL, NULL};
+    const RRuntimeTypeInfo triple_type = {sizeof(RTestTriple), _Alignof(RTestTriple), NULL, NULL};
+    const RRuntimeTypeInfo empty_type = {0U, 1U, NULL, NULL};
+    const uint8_t byte = UINT8_C(0xA5);
+    const uint32_t word = UINT32_C(0xDEADBEEF);
+    const RTestTriple triple = {UINT16_C(7), UINT8_C(3), UINT32_C(99)};
+    RStdArrayAllocValueResult filled;
+    uint64_t attempts;
+
+    r_runtime_allocator_initialize(&allocator);
+    filled = r_std_array_filled(&allocator, byte_type, 37U, &byte);
+    R_TEST_CHECK(filled.status == R_STD_ARRAY_CALL_SUCCESS);
+    R_TEST_CHECK(filled.value.length == 37U && r_std_array_capacity(&filled.value) >= 37U);
+    for (size_t index = 0U; index < 37U; ++index) {
+        R_TEST_CHECK(((const uint8_t *)filled.value.data)[index] == byte);
+    }
+    r_runtime_array_destroy(&filled.value);
+    for (size_t length = 1U; length <= 70U; ++length) {
+        filled = r_std_array_filled(&allocator, word_type, length, &word);
+        R_TEST_CHECK(filled.status == R_STD_ARRAY_CALL_SUCCESS && filled.value.length == length);
+        for (size_t index = 0U; index < length; ++index) {
+            R_TEST_CHECK(((const uint32_t *)filled.value.data)[index] == word);
+        }
+        r_runtime_array_destroy(&filled.value);
+    }
+    filled = r_std_array_filled(&allocator, triple_type, 9U, &triple);
+    R_TEST_CHECK(filled.status == R_STD_ARRAY_CALL_SUCCESS && filled.value.length == 9U);
+    for (size_t index = 0U; index < 9U; ++index) {
+        const RTestTriple *element = r_runtime_array_get(&filled.value, index);
+
+        R_TEST_CHECK(element != NULL && element->first == triple.first &&
+                     element->second == triple.second && element->third == triple.third);
+    }
+    r_runtime_array_destroy(&filled.value);
+
+    attempts = r_runtime_allocator_attempt_count(&allocator);
+    filled = r_std_array_filled(&allocator, word_type, 0U, &word);
+    R_TEST_CHECK(filled.status == R_STD_ARRAY_CALL_SUCCESS);
+    R_TEST_CHECK(filled.value.length == 0U && filled.value.data == NULL);
+    R_TEST_CHECK(r_runtime_allocator_attempt_count(&allocator) == attempts);
+    r_runtime_array_destroy(&filled.value);
+
+    filled = r_std_array_filled(&allocator, empty_type, 5U, &byte);
+    R_TEST_CHECK(filled.status == R_STD_ARRAY_CALL_SUCCESS && filled.value.length == 5U);
+    R_TEST_CHECK(r_std_array_capacity(&filled.value) >= 5U);
+    r_runtime_array_destroy(&filled.value);
+
+    r_runtime_allocator_set_failure(&allocator, UINT64_C(1));
+    filled = r_std_array_filled(&allocator, word_type, 16U, &word);
+    R_TEST_CHECK(filled.status == R_STD_ARRAY_CALL_ERROR);
+    R_TEST_CHECK(filled.value.length == 0U && filled.value.data == NULL);
+    filled = r_std_array_filled(&allocator, word_type, SIZE_MAX, &word);
+    R_TEST_CHECK(filled.status == R_STD_ARRAY_CALL_ERROR);
+    R_TEST_CHECK(filled.value.length == 0U && filled.value.data == NULL);
+    return 0;
+}
+
 int main(void) {
     if (r_test_empty_and_zero_capacity() != 0) {
         return 1;
@@ -423,6 +492,9 @@ int main(void) {
         return 1;
     }
     if (r_test_generated_drop_glue_reverse_order() != 0) {
+        return 1;
+    }
+    if (r_test_filled() != 0) {
         return 1;
     }
     return 0;

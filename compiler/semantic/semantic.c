@@ -857,7 +857,8 @@ typedef enum RStandardArrayOperation {
     R_STANDARD_ARRAY_OPERATION_GET,
     R_STANDARD_ARRAY_OPERATION_GET_MUT,
     R_STANDARD_ARRAY_OPERATION_CLEAR,
-    R_STANDARD_ARRAY_OPERATION_WITH_CAPACITY
+    R_STANDARD_ARRAY_OPERATION_WITH_CAPACITY,
+    R_STANDARD_ARRAY_OPERATION_FILLED
 } RStandardArrayOperation;
 
 typedef enum RStandardOutcomeKind {
@@ -25109,6 +25110,8 @@ static bool r_body_standard_array_operation(const RFrontendContext *context,
         *operation = R_STANDARD_ARRAY_OPERATION_CLEAR;
     } else if (r_semantic_token_text_equal_owned(context, &components[2], "with_capacity")) {
         *operation = R_STANDARD_ARRAY_OPERATION_WITH_CAPACITY;
+    } else if (r_semantic_token_text_equal_owned(context, &components[2], "filled")) {
+        *operation = R_STANDARD_ARRAY_OPERATION_FILLED;
     } else {
         return false;
     }
@@ -30474,6 +30477,141 @@ static bool r_body_lower_standard_array_with_capacity(RBodyContext *body,
     node->auxiliary_type = effect_carrier;
     node->standard_operation = R_STANDARD_CALL_ARRAY_WITH_CAPACITY;
     if (!r_body_attach_effect_exits(body, node_id, effect_set, view.span)) {
+        return false;
+    }
+    result->node = node_id;
+    result->type = array_type;
+    result->valid = true;
+    return true;
+}
+
+/* R-LIB-0019 (P4.2): std.array::filled(length, value) is length copies of value in one
+   allocation. The element type is that of an expected array<T>, otherwise the type of the
+   value; it shall be Copy and hold no views, so the copies need no clone and no region. */
+static bool r_body_lower_standard_array_filled(RBodyContext *body,
+                                               RAstRef argument_list,
+                                               const RAstNodeView *arguments_view,
+                                               RSourceSpan call_span,
+                                               RTypeId contextual_type,
+                                               RExpressionResult *result) {
+    RTypeId element_type = R_TYPE_ID_INVALID;
+    RTypeId array_type;
+    RTypeId length_type;
+    RTypeId alloc_error_type;
+    RTypeId effect_set;
+    RTypeId effect_carrier;
+    RAstRef length_argument;
+    RAstRef value_argument;
+    RExpressionResult length;
+    RExpressionResult value;
+    RHirNodeId child_storage[2];
+    RHirVector children;
+    RHirNodeId node_id;
+    RHirNode *node;
+
+    r_body_expression_invalid(result);
+    if (arguments_view->child_count != UINT32_C(2)) {
+        return r_body_diagnostic(body,
+                                 "R-DIAG-TYPE-001",
+                                 "R-LIB-0019",
+                                 "std.array::filled requires length and value arguments",
+                                 call_span);
+    }
+    if (!r_ast_ref_child(body->frontend, argument_list, UINT32_C(0), &length_argument) ||
+        !r_ast_ref_child(body->frontend, argument_list, UINT32_C(1), &value_argument) ||
+        !r_semantic_type_from_token(body->frontend, R_TOKEN_KW_USIZE, &length_type)) {
+        body->frontend->resource_status = R_FRONTEND_INTERNAL_ERROR;
+        return false;
+    }
+    (void)r_body_standard_operand_from_context(
+        body, contextual_type, R_SEMANTIC_TYPE_ARRAY, NULL, UINT32_C(0), &element_type);
+    if (!r_body_lower_value(body, length_argument, length_type, &length)) {
+        return false;
+    }
+    if (!length.valid) {
+        return true;
+    }
+    if ((length.type != length_type) &&
+        (r_semantic_value_kind(body->frontend, length.type) != R_SEMANTIC_TYPE_U32)) {
+        return r_body_diagnostic(body,
+                                 "R-DIAG-TYPE-001",
+                                 "R-LIB-0019",
+                                 "std.array::filled length shall be usize-compatible",
+                                 r_body_hir_node(body, length.node)->span);
+    }
+    if (!r_body_lower_value(body, value_argument, element_type, &value)) {
+        return false;
+    }
+    if (!value.valid) {
+        return true;
+    }
+    if (element_type == R_TYPE_ID_INVALID) {
+        element_type = value.type;
+    }
+    if (value.type != element_type) {
+        return r_body_diagnostic(body,
+                                 "R-DIAG-TYPE-001",
+                                 "R-LIB-0019",
+                                 "std.array::filled value type does not match the array element",
+                                 r_body_hir_node(body, value.node)->span);
+    }
+    if (!r_semantic_type_is_copy(body->frontend, element_type) ||
+        r_semantic_type_may_hold_views(body->frontend, element_type)) {
+        return r_body_diagnostic(body,
+                                 "R-DIAG-TYPE-001",
+                                 "R-LIB-0019",
+                                 "std.array::filled requires a Copy element without views",
+                                 r_body_hir_node(body, value.node)->span);
+    }
+    if (!r_semantic_type_is_container_element(body->frontend, element_type)) {
+        return r_body_unsupported(
+            body, call_span, "array element has no storable value representation");
+    }
+    if (!r_semantic_intern_type(body->frontend, R_SEMANTIC_TYPE_ARRAY, element_type, &array_type)) {
+        body->frontend->resource_status = R_FRONTEND_INTERNAL_ERROR;
+        return false;
+    }
+    if ((contextual_type != R_TYPE_ID_INVALID) &&
+        (r_semantic_value_type(body->frontend, contextual_type) != array_type)) {
+        return r_body_diagnostic(body,
+                                 "R-DIAG-TYPE-001",
+                                 "R-LIB-0019",
+                                 "std.array::filled result does not match its array type",
+                                 call_span);
+    }
+    if (!r_semantic_intern_named_standard_type(
+            body->frontend, "std.alloc::alloc_error", &alloc_error_type) ||
+        !r_semantic_single_effect_set(body->frontend, alloc_error_type, &effect_set) ||
+        !r_semantic_intern_effect_carrier(
+            body->frontend, array_type, effect_set, &effect_carrier) ||
+        !r_body_validate_effect_set(body, effect_set, call_span)) {
+        return false;
+    }
+    child_storage[0] = length.node;
+    child_storage[1] = value.node;
+    children.items = child_storage;
+    children.count = UINT32_C(2);
+    children.capacity = UINT32_C(2);
+    if (!r_body_append_node(body,
+                            R_HIR_STANDARD_CALL,
+                            call_span,
+                            array_type,
+                            R_SYMBOL_ID_INVALID,
+                            R_TOKEN_KW_ARRAY,
+                            UINT64_C(0),
+                            false,
+                            &children,
+                            &node_id)) {
+        return false;
+    }
+    node = r_body_hir_node(body, node_id);
+    if (node == NULL) {
+        body->frontend->resource_status = R_FRONTEND_INTERNAL_ERROR;
+        return false;
+    }
+    node->auxiliary_type = effect_carrier;
+    node->standard_operation = R_STANDARD_CALL_ARRAY_FILLED;
+    if (!r_body_attach_effect_exits(body, node_id, effect_set, call_span)) {
         return false;
     }
     result->node = node_id;
@@ -41919,6 +42057,14 @@ static bool r_body_lower_call(RBodyContext *body,
                                                          standard_array_operation ==
                                                              R_STANDARD_ARRAY_OPERATION_AS_SLICE,
                                                          result);
+            }
+            if (standard_array_operation == R_STANDARD_ARRAY_OPERATION_FILLED) {
+                return r_body_lower_standard_array_filled(body,
+                                                          argument_list,
+                                                          &arguments_view,
+                                                          call_span,
+                                                          contextual_type,
+                                                          result);
             }
             if (standard_array_operation == R_STANDARD_ARRAY_OPERATION_PUSH) {
                 return r_body_lower_standard_array_push(body,

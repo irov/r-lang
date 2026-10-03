@@ -387,6 +387,7 @@ static const RStandardResultDescriptor r_standard_results[] = {
     {"std.array::capacity", "usize"},
     {"std.array::clear", "void"},
     {"std.array::create", "array<T>"},
+    {"std.array::filled", "array<T>"},
     {"std.array::get", "o<const T*>"},
     {"std.array::get_mut", "o<T*>"},
     {"std.array::pop", "o<T>"},

@@ -9,7 +9,7 @@
     "profile": "hosted-native-async",
     "minimum_os_version": "26.5",
     "core_specification_revision": "0.1.0-draft.96",
-    "standard_library_specification_revision": "0.1.0-draft.61"
+    "standard_library_specification_revision": "0.1.0-draft.62"
   },
   "toolchain": {
     "c_compiler": "Apple clang",

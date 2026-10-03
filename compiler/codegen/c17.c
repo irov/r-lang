@@ -3269,7 +3269,8 @@ static bool r_c17_standard_operation_is_alloc(RStandardCallOperation operation) 
 static bool r_c17_standard_operation_is_array(RStandardCallOperation operation) {
     return ((operation >= R_STANDARD_CALL_ARRAY_CAPACITY) &&
             (operation <= R_STANDARD_CALL_ARRAY_WITH_CAPACITY)) ||
-           (operation == R_STANDARD_CALL_ARRAY_CREATE);
+           (operation == R_STANDARD_CALL_ARRAY_CREATE) ||
+           (operation == R_STANDARD_CALL_ARRAY_FILLED);
 }
 
 static bool r_c17_standard_operation_is_list(RStandardCallOperation operation) {
@@ -10640,11 +10641,12 @@ static bool r_c17_preflight_async_array_call(RC17Emitter *emitter,
                                              const RMirFunction *mir,
                                              const RMirInstruction *instruction) {
     const bool is_push = instruction->standard_operation == R_STANDARD_CALL_ARRAY_PUSH;
-    const uint32_t expected_operands = is_push ? UINT32_C(2) : UINT32_C(1);
+    const bool is_filled = instruction->standard_operation == R_STANDARD_CALL_ARRAY_FILLED;
+    const uint32_t expected_operands = (is_push || is_filled) ? UINT32_C(2) : UINT32_C(1);
     const RMirInstruction *first = r_c17_mir_value_definition(
         emitter, mir, r_c17_mir_operand(emitter, instruction, UINT32_C(0)));
     const RMirInstruction *value =
-        is_push ? r_c17_mir_value_definition(
+        (is_push || is_filled) ? r_c17_mir_value_definition(
                       emitter, mir, r_c17_mir_operand(emitter, instruction, UINT32_C(1)))
                 : NULL;
     const RSemanticType *result_type =
@@ -10674,7 +10676,8 @@ static bool r_c17_preflight_async_array_call(RC17Emitter *emitter,
         return true;
     }
 
-    if ((!is_push && (instruction->standard_operation != R_STANDARD_CALL_ARRAY_WITH_CAPACITY)) ||
+    if ((!is_push && !is_filled &&
+         (instruction->standard_operation != R_STANDARD_CALL_ARRAY_WITH_CAPACITY)) ||
         (instruction->operand_count != expected_operands) ||
         (instruction->result == R_MIR_VALUE_ID_INVALID) || (first == NULL) ||
         (instruction->auxiliary_type == R_TYPE_ID_INVALID) || (result_type == NULL) ||
@@ -10710,7 +10713,9 @@ static bool r_c17_preflight_async_array_call(RC17Emitter *emitter,
                !r_c17_type_is_supported(emitter, success_type->base, false) ||
                !r_c17_type_has_runtime_glue_representation(emitter, success_type->base) ||
                ((r_c17_value_kind(emitter, first->type) != R_SEMANTIC_TYPE_USIZE) &&
-                (r_c17_value_kind(emitter, first->type) != R_SEMANTIC_TYPE_U32))) {
+                (r_c17_value_kind(emitter, first->type) != R_SEMANTIC_TYPE_U32)) ||
+               (is_filled && ((value == NULL) || (r_c17_value_type(emitter, value->type) !=
+                                                  r_c17_value_type(emitter, success_type->base))))) {
         return r_c17_fail(emitter, R_FRONTEND_NOT_LOWERABLE);
     }
     if (!r_c17_preflight_type_dependency(emitter, instruction->type, UINT32_C(0))) {
@@ -12072,7 +12077,8 @@ static bool r_c17_preflight_async_instruction(RC17Emitter *emitter,
         }
         if ((instruction->standard_operation == R_STANDARD_CALL_ARRAY_CREATE) ||
             (instruction->standard_operation == R_STANDARD_CALL_ARRAY_PUSH) ||
-            (instruction->standard_operation == R_STANDARD_CALL_ARRAY_WITH_CAPACITY)) {
+            (instruction->standard_operation == R_STANDARD_CALL_ARRAY_WITH_CAPACITY) ||
+            (instruction->standard_operation == R_STANDARD_CALL_ARRAY_FILLED)) {
             return r_c17_preflight_async_array_call(emitter, mir, instruction);
         }
         if (r_c17_standard_operation_is_simple(instruction->standard_operation)) {
@@ -26690,6 +26696,7 @@ static bool r_c17_emit_array_call(RC17Emitter *emitter,
                                   uint32_t depth,
                                   RC17Value *result) {
     const bool is_push = node->standard_operation == R_STANDARD_CALL_ARRAY_PUSH;
+    const bool is_filled = node->standard_operation == R_STANDARD_CALL_ARRAY_FILLED;
     const RSemanticType *carrier_type =
         r_c17_type(emitter, r_c17_value_type(emitter, node->auxiliary_type));
     const RTypeId error_type = r_c17_single_effect_type(emitter, node->auxiliary_type);
@@ -26770,7 +26777,8 @@ static bool r_c17_emit_array_call(RC17Emitter *emitter,
 
     (void)memset(&first, 0, sizeof(first));
     (void)memset(&value, 0, sizeof(value));
-    if ((!is_push && (node->standard_operation != R_STANDARD_CALL_ARRAY_WITH_CAPACITY)) ||
+    if ((!is_push && !is_filled &&
+         (node->standard_operation != R_STANDARD_CALL_ARRAY_WITH_CAPACITY)) ||
         (carrier_type == NULL) || (carrier_type->kind != R_SEMANTIC_TYPE_EFFECT_CARRIER) ||
         (error_type == R_TYPE_ID_INVALID) || (element_type == R_TYPE_ID_INVALID)) {
         return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
@@ -26799,6 +26807,31 @@ static bool r_c17_emit_array_call(RC17Emitter *emitter,
             !r_c17_write(emitter, ", &") || !r_c17_emit_temporary_name(emitter, staged) ||
             !r_c17_write(emitter, ");\n") ||
             !r_c17_reflow_assignment_call(emitter, call_start, depth)) {
+            return false;
+        }
+    } else if (is_filled) {
+        /* R-LIB-0019 (P4.2): the Copy value is staged once and copied by the library. */
+        if (!r_c17_emit_expression(
+                emitter, r_c17_child(emitter, node, UINT32_C(1)), depth, &value) ||
+            !value.has_value || !r_c17_take_temporary(emitter, &staged) ||
+            !r_c17_indent(emitter, depth) || !r_c17_emit_value_type(emitter, element_type) ||
+            !r_c17_write(emitter, " ") || !r_c17_emit_temporary_name(emitter, staged) ||
+            !r_c17_write(emitter, " = ") || !r_c17_emit_temporary_name(emitter, value.temporary) ||
+            !r_c17_write(emitter, ";\n")) {
+            return false;
+        }
+        argument_indentation = ((size_t)depth + 1U) * 4U + strlen("r_std_array_filled(");
+        if (!r_c17_take_temporary(emitter, &native_result) || !r_c17_indent(emitter, depth) ||
+            !r_c17_write(emitter, "RStdArrayAllocValueResult ") ||
+            !r_c17_emit_temporary_name(emitter, native_result) || !r_c17_write(emitter, " =\n") ||
+            !r_c17_indent(emitter, depth + UINT32_C(1)) ||
+            !r_c17_write(emitter, "r_std_array_filled(r_runtime_hosted_allocator(),\n") ||
+            !r_c17_emit_runtime_type_info_at(emitter, element_type, argument_indentation) ||
+            !r_c17_write(emitter, ",\n") || !r_c17_spaces(emitter, argument_indentation) ||
+            !r_c17_write(emitter, "(size_t)") ||
+            !r_c17_emit_temporary_name(emitter, first.temporary) || !r_c17_write(emitter, ",\n") ||
+            !r_c17_spaces(emitter, argument_indentation) || !r_c17_write(emitter, "&") ||
+            !r_c17_emit_temporary_name(emitter, staged) || !r_c17_write(emitter, ");\n")) {
             return false;
         }
     } else {
@@ -28720,7 +28753,8 @@ r_c17_emit_expression(RC17Emitter *emitter, RHirNodeId node_id, uint32_t depth, 
         }
         if ((node->standard_operation == R_STANDARD_CALL_ARRAY_CREATE) ||
             (node->standard_operation == R_STANDARD_CALL_ARRAY_PUSH) ||
-            (node->standard_operation == R_STANDARD_CALL_ARRAY_WITH_CAPACITY)) {
+            (node->standard_operation == R_STANDARD_CALL_ARRAY_WITH_CAPACITY) ||
+            (node->standard_operation == R_STANDARD_CALL_ARRAY_FILLED)) {
             return r_c17_emit_array_call(emitter, node, depth, result);
         }
         if (r_c17_standard_operation_is_simple(node->standard_operation)) {
@@ -40078,6 +40112,7 @@ static bool r_c17_emit_async_array_call(RC17Emitter *emitter,
                                         const RMirInstruction *instruction,
                                         uint32_t depth) {
     const bool is_push = instruction->standard_operation == R_STANDARD_CALL_ARRAY_PUSH;
+    const bool is_filled = instruction->standard_operation == R_STANDARD_CALL_ARRAY_FILLED;
     const RSemanticType *carrier_type =
         r_c17_type(emitter, r_c17_value_type(emitter, instruction->type));
     const RTypeId error_type = r_c17_single_effect_type(emitter, instruction->type);
@@ -40087,8 +40122,9 @@ static bool r_c17_emit_async_array_call(RC17Emitter *emitter,
     const RTypeId element_type = is_push ? (error == NULL ? R_TYPE_ID_INVALID : error->base)
                                          : (success == NULL ? R_TYPE_ID_INVALID : success->base);
     const RMirValueId first = r_c17_mir_operand(emitter, instruction, UINT32_C(0));
-    const RMirValueId value =
-        is_push ? r_c17_mir_operand(emitter, instruction, UINT32_C(1)) : R_MIR_VALUE_ID_INVALID;
+    const RMirValueId value = (is_push || is_filled)
+                                  ? r_c17_mir_operand(emitter, instruction, UINT32_C(1))
+                                  : R_MIR_VALUE_ID_INVALID;
     size_t argument_indentation;
 
     if (instruction->standard_operation == R_STANDARD_CALL_ARRAY_CREATE) {
@@ -40137,7 +40173,8 @@ static bool r_c17_emit_async_array_call(RC17Emitter *emitter,
         return true;
     }
 
-    if ((first == R_MIR_VALUE_ID_INVALID) || (is_push && (value == R_MIR_VALUE_ID_INVALID)) ||
+    if ((first == R_MIR_VALUE_ID_INVALID) ||
+        ((is_push || is_filled) && (value == R_MIR_VALUE_ID_INVALID)) ||
         (carrier_type == NULL) || (carrier_type->kind != R_SEMANTIC_TYPE_EFFECT_CARRIER) ||
         (error_type == R_TYPE_ID_INVALID) || (element_type == R_TYPE_ID_INVALID)) {
         return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
@@ -40160,6 +40197,26 @@ static bool r_c17_emit_async_array_call(RC17Emitter *emitter,
             !r_c17_write(emitter, "(") ||
             !r_c17_emit_async_storage_reference(emitter, mir, function, false, first) ||
             !r_c17_format(emitter, ", &r_array_staged_%08" PRIu32 ");\n", instruction->result)) {
+            return false;
+        }
+    } else if (is_filled) {
+        /* R-LIB-0019 (P4.2): the Copy value is staged once and copied by the library. */
+        argument_indentation = ((size_t)depth + 1U) * 4U + strlen("r_std_array_filled(");
+        if (!r_c17_indent(emitter, depth) || !r_c17_emit_value_type(emitter, element_type) ||
+            !r_c17_format(emitter, " r_array_staged_%08" PRIu32 " = ", instruction->result) ||
+            !r_c17_emit_async_storage_reference(emitter, mir, function, false, value) ||
+            !r_c17_write(emitter, ";\n") || !r_c17_indent(emitter, depth) ||
+            !r_c17_format(emitter,
+                          "RStdArrayAllocValueResult r_array_native_%08" PRIu32 " =\n",
+                          instruction->result) ||
+            !r_c17_indent(emitter, depth + UINT32_C(1)) ||
+            !r_c17_write(emitter, "r_std_array_filled(r_runtime_hosted_allocator(),\n") ||
+            !r_c17_emit_runtime_type_info_at(emitter, element_type, argument_indentation) ||
+            !r_c17_write(emitter, ",\n") || !r_c17_spaces(emitter, argument_indentation) ||
+            !r_c17_write(emitter, "(size_t)") ||
+            !r_c17_emit_async_storage_reference(emitter, mir, function, false, first) ||
+            !r_c17_write(emitter, ",\n") || !r_c17_spaces(emitter, argument_indentation) ||
+            !r_c17_format(emitter, "&r_array_staged_%08" PRIu32 ");\n", instruction->result)) {
             return false;
         }
     } else {
@@ -42879,7 +42936,8 @@ static bool r_c17_emit_async_instruction(RC17Emitter *emitter,
         }
         if ((instruction->standard_operation == R_STANDARD_CALL_ARRAY_CREATE) ||
             (instruction->standard_operation == R_STANDARD_CALL_ARRAY_PUSH) ||
-            (instruction->standard_operation == R_STANDARD_CALL_ARRAY_WITH_CAPACITY)) {
+            (instruction->standard_operation == R_STANDARD_CALL_ARRAY_WITH_CAPACITY) ||
+            (instruction->standard_operation == R_STANDARD_CALL_ARRAY_FILLED)) {
             return r_c17_emit_async_array_call(emitter, mir, function, instruction, depth);
         }
         if (r_c17_standard_operation_is_simple(instruction->standard_operation)) {
@@ -50479,7 +50537,8 @@ static bool r_c17_preflight_array_call(RC17Emitter *emitter,
                                        RSymbolId function_symbol,
                                        size_t depth) {
     const bool is_push = node->standard_operation == R_STANDARD_CALL_ARRAY_PUSH;
-    const uint32_t expected_children = is_push ? UINT32_C(2) : UINT32_C(1);
+    const bool is_filled = node->standard_operation == R_STANDARD_CALL_ARRAY_FILLED;
+    const uint32_t expected_children = (is_push || is_filled) ? UINT32_C(2) : UINT32_C(1);
     const RSemanticType *carrier_type;
     const RSemanticType *success_type;
     const RSemanticType *error_type;
@@ -50508,7 +50567,8 @@ static bool r_c17_preflight_array_call(RC17Emitter *emitter,
         return true;
     }
 
-    if (!is_push && (node->standard_operation != R_STANDARD_CALL_ARRAY_WITH_CAPACITY)) {
+    if (!is_push && !is_filled &&
+        (node->standard_operation != R_STANDARD_CALL_ARRAY_WITH_CAPACITY)) {
         return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
     }
     if ((node->child_count != expected_children) || (node->auxiliary_type == R_TYPE_ID_INVALID)) {
@@ -50560,6 +50620,14 @@ static bool r_c17_preflight_array_call(RC17Emitter *emitter,
             ((r_c17_value_kind(emitter, first->type) != R_SEMANTIC_TYPE_USIZE) &&
              (r_c17_value_kind(emitter, first->type) != R_SEMANTIC_TYPE_U32))) {
             return r_c17_fail(emitter, R_FRONTEND_NOT_LOWERABLE);
+        }
+        if (is_filled) {
+            const RHirNode *value = r_c17_node(emitter, r_c17_child(emitter, node, UINT32_C(1)));
+
+            if ((value == NULL) || (r_c17_value_type(emitter, value->type) !=
+                                    r_c17_value_type(emitter, element_type_id))) {
+                return r_c17_fail(emitter, R_FRONTEND_NOT_LOWERABLE);
+            }
         }
     }
     if (!r_c17_preflight_type_dependency(emitter, node->auxiliary_type, depth + 1U)) {
@@ -52674,7 +52742,8 @@ static bool r_c17_preflight_expression(RC17Emitter *emitter,
         }
         if ((node->standard_operation == R_STANDARD_CALL_ARRAY_CREATE) ||
             (node->standard_operation == R_STANDARD_CALL_ARRAY_PUSH) ||
-            (node->standard_operation == R_STANDARD_CALL_ARRAY_WITH_CAPACITY)) {
+            (node->standard_operation == R_STANDARD_CALL_ARRAY_WITH_CAPACITY) ||
+            (node->standard_operation == R_STANDARD_CALL_ARRAY_FILLED)) {
             return r_c17_preflight_array_call(emitter, node, function_symbol, depth);
         }
         if (r_c17_standard_operation_is_simple(node->standard_operation)) {

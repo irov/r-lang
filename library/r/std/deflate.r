@@ -1444,19 +1444,6 @@ struct deflater {
     protected bool poisoned;
 };
 
-/* The capacity is reserved first, so no push can fail; the error is caught once per table. */
-protected array<u32> pushed_u32(usize count, u32 value)
-    throws std.alloc::alloc_error, std.array::push_error<u32> {
-    array<u32> result = std.array::with_capacity::<u32>(count);
-    for (usize index = 0usize; index < count; index += 1usize) { std.array::push(&result, value); }
-    return move result;
-}
-
-protected array<u32> filled_u32(usize count, u32 value) throws std.alloc::alloc_error {
-    try { return pushed_u32(count, value); }
-    catch (std.array::push_error<u32> failure) { panic("reserved table insertion failed"); }
-}
-
 deflater deflater::create(format form, u8 level, usize window_size)
     throws error, std.alloc::alloc_error {
     throw (level > 9) error { .code = error_code::invalid_level, .offset = 0usize };
@@ -1466,9 +1453,9 @@ deflater deflater::create(format form, u8 level, usize window_size)
     if (hash_bits > 15usize) { hash_bits = 15usize; }
     usize hash_size = 1usize << hash_bits;
     array<u8> buffer = std.alloc::bytes(window_size * 2usize, 0u8);
-    array<u32> head = filled_u32(hash_size, NIL);
-    array<u32> prev = filled_u32(window_size * 2usize, NIL);
-    array<u32> tokens = filled_u32(window_size, 0u32);
+    array<u32> head = std.array::filled(hash_size, NIL);
+    array<u32> prev = std.array::filled(window_size * 2usize, NIL);
+    array<u32> tokens = std.array::filled(window_size, 0u32);
     array<u8> pending = std.alloc::bytes(window_size + MAX_MATCH + PENDING_EXTRA, 0u8);
     deflater result = deflater {
         .buffer = move buffer,

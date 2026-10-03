@@ -182,6 +182,7 @@ EXTERNAL_ENTRIES = (
     ("r_std_array_capacity", "library/std/array/source/capacity.c", "stdlib-operation"),
     ("r_std_array_clear", "library/std/array/source/clear.c", "stdlib-operation"),
     ("r_std_array_create", "library/std/array/source/create.c", "stdlib-operation"),
+    ("r_std_array_filled", "library/std/array/source/filled.c", "stdlib-operation"),
     ("r_std_array_push", "library/std/array/source/push.c", "stdlib-operation"),
     ("r_std_array_remove", "library/std/array/source/remove.c", "stdlib-operation"),
     ("r_std_array_reserve", "library/std/array/source/reserve.c", "stdlib-operation"),

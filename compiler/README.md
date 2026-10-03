@@ -1073,6 +1073,15 @@ without `::<...>` when only their value operands follow (a trial parse in
 `r_parse_standard_type_call`); their lowering takes the operands from the expected type
 (`r_body_standard_operand_from_context`) and reports R-TYPE-0036 without one.
 
+`std.array::filled(length, value)` (Library R-LIB-0019, P4.2) is an ordinary call, not a type
+call: `r_body_lower_standard_array_filled` takes the element from an expected `array<T>` or from
+the value and requires a Copy element without views, so the copies need neither clone glue nor
+regions. The node `R_STANDARD_CALL_ARRAY_FILLED` keeps the length and the value as its two
+children and the array and `std.alloc::alloc_error` carrier as `auxiliary_type`, like
+`with_capacity`. Both C17 paths stage the value once and pass its address to
+`r_std_array_filled` with the element type information; the library allocates once and fills by
+`memset` or by doubling `memcpy`. Translation-time evaluation builds the container cell by cell.
+
 Core draft.70 (L18) adds tuples and type packs (interface schema 23). A tuple type `(A, B)` is
 the instance of a synthesized generic struct of its arity (`r_tuple_origin`,
 `RSemanticAggregate.is_tuple`) with fields `0` to `n - 1`, so layout, moves, cleanup and element

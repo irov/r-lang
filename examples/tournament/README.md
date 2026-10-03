@@ -37,8 +37,9 @@ fixed seat, and `std.slice::rotate_right` turns the circle one seat after every 
 field adds a bye seat that meets nobody. `core::swap` alternates the home side of the fixed
 seat's game, so it does not host every round. Each pair of players meets exactly once: every
 game becomes a `Pairing`, the lower number first, whose `@derive(equal, ordered, key)` makes it
-an element of a `std.set::set`. The last line reports the distinct pairings, how many repeated
-and the highest pairing in the derived order.
+an element of a `std.set::set`. The last line reports the distinct pairings, how many repeated,
+the highest pairing in the derived order and the fewest and most home games of a player. The
+home games are counted in an array that `std.array::filled` creates with one zero per player.
 
 `table` ranks `NAME:POINTS` entries, most points first and equal points by name. Each row owns
 its name, so the rows are not Copy: `std.slice::sort_by` exchanges them in place with a

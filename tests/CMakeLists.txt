@@ -4264,6 +4264,8 @@ if(NOT MSVC)
             generic_vector_push_oom_o2
             array_create
             async_array_create
+            array_filled
+            async_array_filled
             generic_example
             method_example
             reflection_example
@@ -5119,7 +5121,7 @@ if(NOT MSVC)
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_EXPECTED_PANIC "")
             set(R_CODEGEN_TEST_MODE ON)
-        elseif(R_CODEGEN_CASE MATCHES "^(async_)?array_create$")
+        elseif(R_CODEGEN_CASE MATCHES "^(async_)?array_(create|filled)$")
             set(R_CODEGEN_SOURCE_1
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
             set(R_CODEGEN_SOURCE_2 "")
@@ -8028,6 +8030,30 @@ if(NOT MSVC)
         PROPERTIES
             LABELS "semantic;regression"
     )
+    # R-LIB-0019 (P4.2): std.array::filled copies a Copy element without views, and takes a
+    # length and a value.
+    foreach(R_ARRAY_FILLED_CASE IN ITEMS
+            "move_element|requires a Copy element without views"
+            "view_element|requires a Copy element without views"
+            "arguments|requires length and value arguments")
+        string(REPLACE "|" ";" R_ARRAY_FILLED_PARTS "${R_ARRAY_FILLED_CASE}")
+        list(GET R_ARRAY_FILLED_PARTS 0 R_ARRAY_FILLED_NAME)
+        list(GET R_ARRAY_FILLED_PARTS 1 R_ARRAY_FILLED_MESSAGE)
+        add_test(
+            NAME r_frontend_semantic_regression_array_filled_${R_ARRAY_FILLED_NAME}
+            COMMAND "${CMAKE_COMMAND}"
+                -DR_FRONT_EXECUTABLE=$<TARGET_FILE:r-front>
+                -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/regression_array_filled_${R_ARRAY_FILLED_NAME}.r
+                -DEXPECTATION=reject
+                "-DREQUIRED_DIAGNOSTIC=R-DIAG-TYPE-001 \\[R-LIB-0019\\]: std.array::filled ${R_ARRAY_FILLED_MESSAGE}"
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/check_semantic_regression.cmake
+        )
+        set_tests_properties(
+            r_frontend_semantic_regression_array_filled_${R_ARRAY_FILLED_NAME}
+            PROPERTIES
+                LABELS "semantic;regression"
+        )
+    endforeach()
     foreach(R_JSON_MUTATION_CASE IN ITEMS
             append_borrow
             insert_borrow

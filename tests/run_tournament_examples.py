@@ -42,6 +42,7 @@ def main():
             size = len(seats)
             lines = []
             met = set()
+            hosted = [0] * (players + 1)
             for round_number in range(1, size):
                 pairs = []
                 for seat in range(size // 2):
@@ -51,10 +52,12 @@ def main():
                     if home and away:
                         pairs.append(f' {home}-{away}')
                         met.add(frozenset((home, away)))
+                        hosted[home] += 1
                 lines.append(f'round={round_number}' + ''.join(pairs) + '\n')
                 seats = [seats[0], seats[-1]] + seats[1:-1]
             assert len(met) == players * (players - 1) // 2
-            lines.append(f'pairings={len(met)} repeated=0 highest={players - 1}-{players}\n')
+            home = f'{min(hosted[1:])}-{max(hosted[1:])}'
+            lines.append(f'pairings={len(met)} repeated=0 highest={players - 1}-{players} home={home}\n')
             run('rounds', players, *([first] if first != 1 else []), expected=''.join(lines))
     rng2 = random.Random(1726)
     for size in [1, 2, 5, 12]:

@@ -1219,6 +1219,9 @@ static bool r_hir_dump_node(const RFrontendContext *context,
         case R_STANDARD_CALL_ARRAY_WITH_CAPACITY:
             operation_name = "std.array::with_capacity";
             break;
+        case R_STANDARD_CALL_ARRAY_FILLED:
+            operation_name = "std.array::filled";
+            break;
         case R_STANDARD_CALL_BYTES_WITH_CAPACITY:
             operation_name = "std.bytes::with_capacity";
             break;
@@ -2070,7 +2073,8 @@ static bool r_hir_dump_node(const RFrontendContext *context,
                        user_data,
                        (node->standard_operation == R_STANDARD_CALL_ARRAY_CREATE) ||
                                (node->standard_operation == R_STANDARD_CALL_ARRAY_PUSH) ||
-                               (node->standard_operation == R_STANDARD_CALL_ARRAY_WITH_CAPACITY)
+                               (node->standard_operation == R_STANDARD_CALL_ARRAY_WITH_CAPACITY) ||
+                               (node->standard_operation == R_STANDARD_CALL_ARRAY_FILLED)
                            ? " element="
                            : " input=") ||
                    !r_hir_write_type(context, node->auxiliary_type, writer, user_data)) {

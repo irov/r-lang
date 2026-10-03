@@ -165,6 +165,8 @@ std.string::string rounds(u32 players, u32 first) throws Usage, std.alloc::alloc
     std.set::set<Pairing> met = std.set::set<Pairing>::create();
     Pairing highest = Pairing { .low = 0u32, .high = 0u32 };
     u32 repeated = 0u32;
+    // Home games per player number; slot 0, the bye, stays unused.
+    array<u32> hosted = std.array::filled(players as usize + 1usize, 0u32);
     for (usize round = 1usize; round < size; round += 1usize) {
         std.string::string line = f"round={round}";
         for (usize seat = 0usize; seat < size / 2usize; seat += 1usize) {
@@ -175,6 +177,7 @@ std.string::string rounds(u32 players, u32 first) throws Usage, std.alloc::alloc
             if (home != 0u32 && away != 0u32) {
                 std.string::string pair = f" {home}-{away}";
                 line.append(pair.as_str());
+                hosted[home as usize] += 1u32;
                 Pairing pairing = Pairing { .low = home, .high = away };
                 if (away < home) { pairing = Pairing { .low = away, .high = home }; }
                 if (met.insert(pairing) == false) { repeated += 1u32; }
@@ -190,7 +193,14 @@ std.string::string rounds(u32 players, u32 first) throws Usage, std.alloc::alloc
     usize pairings = met.count();
     u32 low = highest.low;
     u32 high = highest.high;
-    std.string::string summary = f"pairings={pairings} repeated={repeated} highest={low}-{high}\n";
+    u32 fewest = hosted[1usize];
+    u32 most = hosted[1usize];
+    for (usize number = 2usize; number <= players as usize; number += 1usize) {
+        if (hosted[number] < fewest) { fewest = hosted[number]; }
+        if (hosted[number] > most) { most = hosted[number]; }
+    }
+    std.string::string summary =
+        f"pairings={pairings} repeated={repeated} highest={low}-{high} home={fewest}-{most}\n";
     output.append(summary.as_str());
     return move output;
 }

@@ -453,6 +453,24 @@ r_consteval_array_call(RConstEval *eval, const RHirNode *node, RConstCell *resul
         }
         r_consteval_owner_empty(result, type);
         return true;
+    case R_STANDARD_CALL_ARRAY_FILLED:
+        /* R-LIB-0019 (P4.2): length copies of one Copy value. */
+        if (!r_consteval_operand(eval, node, 0U, &operand, depth) ||
+            !r_consteval_operand(eval, node, 1U, &element, depth)) {
+            return false;
+        }
+        r_consteval_owner_empty(result, type);
+        if (!r_consteval_owner_cells(eval, result, operand.bits, 1U, node->span)) {
+            return false;
+        }
+        for (index = 0U; index < operand.bits; ++index) {
+            (void)memset(&result->items[index], 0, sizeof(*result->items));
+            if (!r_consteval_store(eval, &result->items[index], &element, node->span)) {
+                return false;
+            }
+            result->count = index + 1U;
+        }
+        return true;
     case R_STANDARD_CALL_ARRAY_RESERVE:
         if (!r_consteval_owner_operand(eval, node, 0U, &owner, depth) ||
             !r_consteval_operand(eval, node, 1U, &operand, depth)) {
@@ -927,6 +945,7 @@ static bool r_consteval_owner_operation(RStandardCallOperation operation) {
     case R_STANDARD_CALL_STRING_TRUNCATE:
     case R_STANDARD_CALL_ARRAY_CREATE:
     case R_STANDARD_CALL_ARRAY_WITH_CAPACITY:
+    case R_STANDARD_CALL_ARRAY_FILLED:
     case R_STANDARD_CALL_ARRAY_RESERVE:
     case R_STANDARD_CALL_ARRAY_PUSH:
     case R_STANDARD_CALL_ARRAY_POP:
@@ -1013,6 +1032,7 @@ r_consteval_owner_call(RConstEval *eval, const RHirNode *node, RConstCell *resul
         return r_consteval_string_call(eval, node, result, depth);
     case R_STANDARD_CALL_ARRAY_CREATE:
     case R_STANDARD_CALL_ARRAY_WITH_CAPACITY:
+    case R_STANDARD_CALL_ARRAY_FILLED:
     case R_STANDARD_CALL_ARRAY_RESERVE:
     case R_STANDARD_CALL_ARRAY_PUSH:
     case R_STANDARD_CALL_ARRAY_POP:

@@ -1880,6 +1880,21 @@ CHECKED_SCHEMA_KERNEL_CONTRACT = (
     "validates the exact selected target-manifest identity before producing output."
 )
 
+# R-LIB-0019 (P4.2): the std.array operation added after the original catalogue.
+STD_ARRAY_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
+    "std.array::filled": {
+        "item_kind": "operation_schema",
+        "source_signature": (
+            "std.array::filled(usize length, T value) -> array<T> throws std.alloc::alloc_error"
+        ),
+        "implementation": {
+            "kind": "source",
+            "source": "library/std/array/source/filled.c",
+            "c_symbol": "r_std_array_filled",
+        },
+    },
+}
+
 STD_CONVERT_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
     "std.convert::checked_D": {
         "item_kind": "operation_schema",
@@ -6896,6 +6911,7 @@ def canonical_implementation_for(item_id: str) -> dict[str, Any] | None:
         MATH_COMPLEX_SCHEMA_IMPLEMENTATIONS,
         MATH_NON_FAILING_SCHEMA_IMPLEMENTATIONS,
         MATH_FALLIBLE_SCHEMA_IMPLEMENTATIONS,
+        STD_ARRAY_IMPLEMENTATIONS,
         STD_CONVERT_IMPLEMENTATIONS,
         STD_BYTES_IMPLEMENTATIONS,
         STD_HASH_IMPLEMENTATIONS,

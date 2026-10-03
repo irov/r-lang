@@ -1,9 +1,9 @@
 {
   "version": 4,
   "scope": "source references and resolved program operations and types; execution checked separately",
-  "total_records": 1496,
-  "covered_records": 1496,
-  "application_records": 1496,
+  "total_records": 1497,
+  "covered_records": 1497,
+  "application_records": 1497,
   "items": [
     {
       "record_id": "core::adopt#operation",
@@ -1665,6 +1665,18 @@
         "tournament",
         "wordstats",
         "workers"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "std.array::filled#operation",
+      "required": [
+        "std.array::filled"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "tournament"
       ],
       "resolved_type_examples": []
     },

@@ -15,7 +15,7 @@ Normative draft of the R standard library
 |Field |Value
 |Document|R Standard Library Specification
 |Language version|0.1
-|Document revision|0.1.0-draft.61
+|Document revision|0.1.0-draft.62
 |Status|Normative draft; not a stable R 1.0 standard
 |Document language|English; normative original
 |Required language standard|R Core Language Specification 0.1
@@ -730,8 +730,13 @@ signatures fixed by that rule.
 live T objects. `+std.array::create::<T>() -> array<T>+` creates an empty value without
 allocation. `+std.array::with_capacity::<T>(usize capacity) ->
 array<T> throws std.alloc::alloc_error+` creates an empty value able to receive at least
-capacity elements without reallocation; zero capacity performs no allocation. The exact
-remaining operations are:
+capacity elements without reallocation; zero capacity performs no allocation.
+`+std.array::filled(usize length, T value) -> array<T> throws std.alloc::alloc_error+`
+creates a value of length elements, each a copy of value, with capacity at least length in
+one allocation; zero length performs no allocation, and size overflow or allocation failure
+throws without a partial value. T is the element type of an expected `+array<T>+` result
+and otherwise the type of value; T shall be Copy and hold no views, otherwise
+`+R-DIAG-TYPE-001+` is required. The exact remaining operations are:
 
 * `+std.array::capacity(const array<T>* source) -> usize+`;
 * `+std.array::reserve(array<T>* target, usize additional) ->
@@ -8306,7 +8311,7 @@ remains separate from it.
 
 [[R-SLIB-IDB-0015]]
 *R-SLIB-IDB-0015* — It shall document the exact capacity rounding and growth policy for
-`+std.array::create+`, `+with_capacity+`, `+reserve+` and `+push+`, including the
+`+std.array::create+`, `+with_capacity+`, `+filled+`, `+reserve+` and `+push+`, including the
 geometric-growth rule, allocator/alignment rounding and the maximum selectable capacity
 for each target type and address space. Every value observed through
 `+std.array::capacity+` shall follow that published policy while satisfying the lower

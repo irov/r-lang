@@ -15,7 +15,7 @@
 |Поле |Значение
 |Документ |R Standard Library Specification
 |Версия языка |0.1
-|Редакция документа |0.1.0-draft.61
+|Редакция документа |0.1.0-draft.62
 |Статус |Перевод нормативного черновика; не является стабильным стандартом R 1.0
 |Язык документа |Русский перевод; ключевые нормативные термины приведены на английском
 |Требуемый стандарт языка |R Core Language Specification 0.1
@@ -755,8 +755,13 @@ generic-аргументов Core R-TYPE-0036 и никогда не среди 
 последовательности live objects T. `+std.array::create::<T>() -> array<T>+` создаёт empty
 value без allocation. `+std.array::with_capacity::<T>(usize capacity) ->
 array<T> throws std.alloc::alloc_error+` создаёт empty value, способный принять как минимум
-capacity elements без reallocation; нулевая capacity не выполняет allocation. Остальные
-точные operations:
+capacity elements без reallocation; нулевая capacity не выполняет allocation.
+`+std.array::filled(usize length, T value) -> array<T> throws std.alloc::alloc_error+`
+создаёт value из length elements, каждый из которых копия value, с capacity не меньше length
+за одну allocation; нулевая length не выполняет allocation, а переполнение размера или отказ
+allocation бросают error без частичного value. T — тип element ожидаемого результата
+`+array<T>+`, а без него тип value; T должен быть Copy и не содержать views, иначе требуется
+`+R-DIAG-TYPE-001+`. Остальные точные operations:
 
 * `+std.array::capacity(const array<T>* source) -> usize+`;
 * `+std.array::reserve(array<T>* target, usize additional) ->
@@ -8324,7 +8329,7 @@ stability иначе не требуется. Mixing seed каждого diction
 
 [[R-SLIB-IDB-0015]]
 *R-SLIB-IDB-0015* — Она документирует точную policy rounding и growth capacity для
-`+std.array::create+`, `+with_capacity+`, `+reserve+` и `+push+`, включая rule geometric
+`+std.array::create+`, `+with_capacity+`, `+filled+`, `+reserve+` и `+push+`, включая rule geometric
 growth, rounding allocator/alignment и максимальную selectable capacity для каждого
 target type и address space. Каждое value, наблюдаемое через `+std.array::capacity+`,
 следует этой опубликованной policy и удовлетворяет lower bounds и contract amortized

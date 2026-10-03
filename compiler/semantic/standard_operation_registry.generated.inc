@@ -60,6 +60,7 @@ static const RStandardOperationRegistryEntry r_standard_operation_registry[] = {
     {"std", "array", "capacity", false},
     {"std", "array", "clear", false},
     {"std", "array", "create", false},
+    {"std", "array", "filled", false},
     {"std", "array", "get", false},
     {"std", "array", "get_mut", false},
     {"std", "array", "pop", false},

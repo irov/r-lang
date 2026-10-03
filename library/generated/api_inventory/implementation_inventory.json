@@ -2,8 +2,8 @@
   "schema_version": 3,
   "generated_from": {
     "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-    "revision": "0.1.0-draft.61",
-    "sha256": "9e41e7c969d09400d0fbadf3df90ebfd4a05429152b965974c411fe4c93c1fdc"
+    "revision": "0.1.0-draft.62",
+    "sha256": "1615b3fe3c6f40998f28d70aa522cef21845bf35bd9384bd91f5ab6c8378768b"
   },
   "extraction": {
     "qualified_item_pattern": "(?<![A-Za-z0-9_.])((?:core|std\\.[a-z][a-z0-9]*)::[A-Za-z_][A-Za-z0-9_]*)",
@@ -7426,6 +7426,66 @@
         },
         "completion": null,
         "descriptor_sha256": "131ea871c2dc32a3a4f6b680dad5ad90143c03e757480b635af0398f4f0e1246"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "std.array::filled#operation",
+      "id": "std.array::filled",
+      "facet": "operation",
+      "module": "std.array",
+      "item_kind": "operation_schema",
+      "normative_rules": [
+        "R-LIB-0019"
+      ],
+      "implementation": {
+        "kind": "source",
+        "source": "library/std/array/source/filled.c",
+        "c_symbol": "r_std_array_filled"
+      },
+      "source_signature": "std.array::filled(usize length, T value) -> array<T> throws std.alloc::alloc_error",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "array<T>",
+        "normalized_error_set": [
+          "std.alloc::alloc_error"
+        ],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "array<T>"
+          },
+          {
+            "tag": 1,
+            "role": "checked_error",
+            "type": "std.alloc::alloc_error"
+          }
+        ],
+        "carrier": "explicit_output_parameter",
+        "invocation": {
+          "value_type": "array<T>",
+          "normalized_error_set": [
+            "std.alloc::alloc_error"
+          ],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "array<T>"
+            },
+            {
+              "tag": 1,
+              "role": "checked_error",
+              "type": "std.alloc::alloc_error"
+            }
+          ],
+          "carrier": "explicit_output_parameter"
+        },
+        "completion": null,
+        "descriptor_sha256": "9654a9e5fbb48836ddb2412da2b7745fa8e790634183874990fa813d28222da9"
       },
       "panics_on_allocation_failure": false,
       "discardable_result": false,

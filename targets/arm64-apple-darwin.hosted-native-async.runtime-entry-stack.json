@@ -1806,6 +1806,13 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_std_array_filled",
+      "source": "library/std/array/source/filled.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_std_array_push",
       "source": "library/std/array/source/push.c",
       "category": "stdlib-operation",

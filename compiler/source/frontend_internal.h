@@ -1889,7 +1889,11 @@ typedef enum RStandardCallOperation {
     /* R-UNSAFE-0008 (L38): the anchored raw-parts slices name source calls only; they lower to
        the raw-parts operations above, and the node marks its anchor (integer_value 1). */
     R_STANDARD_CALL_CORE_SLICE_FROM_RAW_PARTS_IN,
-    R_STANDARD_CALL_CORE_SLICE_FROM_RAW_PARTS_IN_MUT
+    R_STANDARD_CALL_CORE_SLICE_FROM_RAW_PARTS_IN_MUT,
+    /* R-LIB-0019 (P4.2): std.array::filled(length, value), length copies of one Copy value in
+       one allocation; the children are the length and the value, auxiliary_type the effect
+       carrier of the array and std.alloc::alloc_error. */
+    R_STANDARD_CALL_ARRAY_FILLED
 } RStandardCallOperation;
 
 typedef struct RStandardMathOperationDescriptor {

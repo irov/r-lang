@@ -4,6 +4,7 @@ set(R_STD_ARRAY_PUBLIC_SOURCES
     source/capacity.c
     source/clear.c
     source/create.c
+    source/filled.c
     source/get.c
     source/get_mut.c
     source/pop.c

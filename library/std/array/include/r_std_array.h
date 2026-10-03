@@ -91,6 +91,17 @@ RStdArrayCreateResult r_std_array_create(RRuntimeAllocator *allocator, RRuntimeT
 RStdArrayAllocValueResult
 r_std_array_with_capacity(RRuntimeAllocator *allocator, RRuntimeTypeInfo element, size_t capacity);
 
+/*
+ * R-LIB-0019 (P4.2). Ownership: allocator and type metadata are shared call-bounded inputs
+ * retained by the result; value points to one initialized Copy T that is only read. Success
+ * returns the sole owner of length copies of it in one allocation; failure exposes no partial
+ * allocation.
+ */
+RStdArrayAllocValueResult r_std_array_filled(RRuntimeAllocator *allocator,
+                                             RRuntimeTypeInfo element,
+                                             size_t length,
+                                             const void *value);
+
 /* Ownership: source is a shared call-bounded borrow and is never retained. */
 size_t r_std_array_capacity(const RStdArray *source);
 

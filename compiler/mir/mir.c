@@ -1723,6 +1723,7 @@ static bool r_mir_lower_standard_call(RMirBuildContext *build,
         (node->standard_operation == R_STANDARD_CALL_ARRAY_RESERVE) ||
         (node->standard_operation == R_STANDARD_CALL_ARRAY_PUSH) ||
         (node->standard_operation == R_STANDARD_CALL_ARRAY_WITH_CAPACITY) ||
+        (node->standard_operation == R_STANDARD_CALL_ARRAY_FILLED) ||
         ((node->standard_operation >= R_STANDARD_CALL_LIST_PUSH_FRONT) &&
          (node->standard_operation <= R_STANDARD_CALL_LIST_INSERT_AFTER)) ||
         (node->standard_operation == R_STANDARD_CALL_DICT_WITH_CAPACITY) ||
@@ -3023,6 +3024,7 @@ static bool r_mir_lower_standard_call(RMirBuildContext *build,
            (node->standard_operation == R_STANDARD_CALL_CORE_SWAP) ||
            (node->standard_operation == R_STANDARD_CALL_CORE_KEY_EQUAL) ||
            (node->standard_operation == R_STANDARD_CALL_ARRAY_PUSH) ||
+           (node->standard_operation == R_STANDARD_CALL_ARRAY_FILLED) ||
            (node->standard_operation == R_STANDARD_CALL_BYTES_APPEND) ||
            (node->standard_operation == R_STANDARD_CALL_BYTES_APPEND_U8) ||
            (node->standard_operation == R_STANDARD_CALL_BYTES_APPEND_U16_LE) ||
@@ -8446,6 +8448,9 @@ static bool r_mir_dump_instruction(const RFrontendContext *context,
         case R_STANDARD_CALL_ARRAY_WITH_CAPACITY:
             operation_name = "std.array::with_capacity";
             break;
+        case R_STANDARD_CALL_ARRAY_FILLED:
+            operation_name = "std.array::filled";
+            break;
         case R_STANDARD_CALL_BYTES_WITH_CAPACITY:
             operation_name = "std.bytes::with_capacity";
             break;
@@ -9629,7 +9634,8 @@ static bool r_mir_dump_instruction(const RFrontendContext *context,
                        (instruction->standard_operation == R_STANDARD_CALL_ARRAY_CREATE) ||
                                (instruction->standard_operation == R_STANDARD_CALL_ARRAY_PUSH) ||
                                (instruction->standard_operation ==
-                                R_STANDARD_CALL_ARRAY_WITH_CAPACITY)
+                                R_STANDARD_CALL_ARRAY_WITH_CAPACITY) ||
+                               (instruction->standard_operation == R_STANDARD_CALL_ARRAY_FILLED)
                            ? " element="
                            : " input=") ||
                    !r_mir_write_type(context, instruction->auxiliary_type, writer, user_data)) {
@@ -11119,7 +11125,8 @@ static RMirLinkLibraries r_mir_link_libraries(const RFrontendContext *context) {
             libraries.std_rc = true;
         } else if (((instruction->standard_operation >= R_STANDARD_CALL_ARRAY_CAPACITY) &&
                     (instruction->standard_operation <= R_STANDARD_CALL_ARRAY_WITH_CAPACITY)) ||
-                   (instruction->standard_operation == R_STANDARD_CALL_ARRAY_CREATE)) {
+                   (instruction->standard_operation == R_STANDARD_CALL_ARRAY_CREATE) ||
+                   (instruction->standard_operation == R_STANDARD_CALL_ARRAY_FILLED)) {
             libraries.std_array = true;
         } else if ((instruction->standard_operation >= R_STANDARD_CALL_LIST_CREATE) &&
                    (instruction->standard_operation <= R_STANDARD_CALL_LIST_NEXT)) {

@@ -252,15 +252,7 @@ protected arc metric register(const registry* owner, metric_kind kind, str name,
                               const array<label>* labels, array<f64> bounds)
     throws metrics_error, std.alloc::alloc_error {
     if (valid_name(name, true) == false) { throw refusal(error_code::invalid_name); }
-    array<u64> buckets = [];
-    for (usize index = 0usize; index <= len(bounds); index += 1usize) {
-        try {
-            buckets.push(0u64);
-        } catch (std.array::push_error<u64> rejected) {
-            rejected as void;
-            throw std.alloc::alloc_error::out_of_memory;
-        }
-    }
+    array<u64> buckets = std.array::filled(len(bounds) + 1usize, 0u64);
     metric made = metric {
         .kind = kind, .name = std.string::from_str(name), .help = std.string::from_str(help),
         .labels = labels_text(labels, kind), .total = 0u64, .level = 0i64, .bounds = move bounds,
