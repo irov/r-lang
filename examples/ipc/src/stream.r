@@ -48,6 +48,28 @@ async void answer(std.net::unix_stream client) throws std.error::fault {
     await std.net::unix_close(move client);
 }
 
+/* Waits for SIGTERM or SIGINT; a wait that fails also stops the service. It returns instead of
+   throwing, so the serve loop may leave it to its group on every exit (Core R-FUNC-0012), and
+   the loop never cancels it while it serves: a wait cancelled after its signal arrived would
+   lose that signal. */
+@scoped
+async bool stopped_by_signal(const Stops* stops) {
+    try {
+        task_scope(2) waits {
+            auto term = stops->terminate.next();
+            auto intr = stops->interrupt.next();
+            select (waits) {
+            case u64 count = await move term: count as void;
+            case u64 count = await move intr: count as void;
+            }
+            waits.cancel_all();
+        }
+    } catch (std.error::fault failure) {
+        failure as void;
+    }
+    return true;
+}
+
 /* Serve up to `limit` clients at the path; SIGTERM or SIGINT stops the service between clients.
    The listeners exist before the ready line is printed, so no signal sent after it is missed. */
 async u32 serve(std.string::string path, u32 limit) throws std.error::fault {
@@ -57,28 +79,20 @@ async u32 serve(std.string::string path, u32 limit) throws std.error::fault {
     std.net::unix_listener listener = await std.net::unix_listen(where, 8u32, true);
     await std.console::print(f"listening {path}\n");
     u32 served = 0u32;
-    Flag stopped = {.value = false};
-    while (served < limit && stopped.value == false) {
-        o<std.net::unix_stream> arrived = o::none;
-        task_scope(3) turn {
+    task_scope(2) turns {
+        auto signal = stopped_by_signal(&stops);
+        while (served < limit) {
             auto next = listener.accept();
-            auto term = stops.terminate.next();
-            auto intr = stops.interrupt.next();
-            select (turn) {
-            case std.net::unix_stream client = await move next: arrived = o::some(move client); break;
-            case u64 signals = await move term: signals as void; stopped.value = true; break;
-            case u64 signals = await move intr: signals as void; stopped.value = true; break;
+            usize winner = await turns.first(&next, &signal);
+            if (winner != 0usize) {
+                std.async::cancel(move next);
+                break;
             }
-            turn.cancel_all();
-            await turn.all();
-        }
-        switch (move arrived) {
-        case variant o::some(move client):
+            std.net::unix_stream client = await move next;
             await answer(move client);
             served += 1u32;
-            break;
-        case variant o::none: break;
         }
+        std.async::cancel(move signal);
     }
     await std.net::unix_listener_close(move listener);
     return served;

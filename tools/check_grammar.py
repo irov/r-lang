@@ -81,7 +81,7 @@ def generated_manifest(specification: Path) -> dict[str, object]:
         }
     return {
         "schema_version": 1,
-        "core_revision": "0.1.0-draft.95",
+        "core_revision": "0.1.0-draft.96",
         "annex": "A",
         "annex_sha256": digest,
         "production_count": len(productions),

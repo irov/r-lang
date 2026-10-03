@@ -291,7 +291,8 @@ _Bool r_runtime_darwin_io_internal_activate_shutdown(RRuntimeDarwinIoRequest *re
         }
         return 0;
     }
-    if (handle->type != R_RUNTIME_DARWIN_IO_STREAM || handle->root_channel == NULL ||
+    if (handle->type != R_RUNTIME_DARWIN_IO_STREAM ||
+        (handle->engine == R_RUNTIME_DARWIN_IO_ENGINE_DISPATCH && handle->root_channel == NULL) ||
         handle->root_released || request->shutdown_commit == NULL ||
         request->shutdown_context == NULL || request->references == SIZE_MAX) {
         (void)pthread_mutex_unlock(&request->mutex);

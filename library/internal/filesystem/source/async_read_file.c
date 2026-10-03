@@ -1318,7 +1318,8 @@ static void open_completed(RRuntimeDarwinFsRequest *request, void *context) {
         return;
     }
 
-    created = r_runtime_darwin_io_handle_create(
+    /* R-SLIB-ASYNC-0019: the chunk reads of a regular file run on the file payload adapter. */
+    created = r_library_internal_fs_payload_handle_create(
         control->allocator, descriptor, R_RUNTIME_DARWIN_IO_RANDOM);
     if (created.status != R_RUNTIME_DARWIN_IO_START_OK || created.handle == NULL) {
         created_error_sequence = r_runtime_darwin_event_sequence_next();

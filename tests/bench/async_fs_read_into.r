@@ -1,6 +1,6 @@
 module bench.async_fs_read_into;
 
-/* One scoped 4 KiB read per iteration from a regular file through the filesystem lane; the
+/* One scoped 4 KiB read per iteration from a regular file through the file payload adapter; the
    shared position is rewound at end of file. */
 async i32 main() {
     std.fs::path path = std.fs::path_from_utf8("/usr/share/dict/words");

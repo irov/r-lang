@@ -18,7 +18,7 @@ repository holds everything of its 0.1 implementation for one target, `arm64-app
 | --- | --- |
 | `specification/` | The normative Core (`R_LANGUAGE_SPECIFICATION_0_1`) and Standard Library (`R_STANDARD_LIBRARY_SPECIFICATION_0_1`) specifications, English and Russian, AsciiDoc (Core also rendered to Markdown); `generated/` holds the rule inventories derived from them |
 | `compiler/` | `r-front`: re2c lexer, CST, AST, whole-program semantic analysis, typed HIR and MIR, strict ISO C17 emitter. Strict C17, no stable external ABI |
-| `runtime/` | The hosted runtime (allocator, containers, strings, tasks) and `runtime/darwin` (executor, Dispatch I/O, sockets, processes, timers, file-system lane) |
+| `runtime/` | The hosted runtime (allocator, containers, strings, tasks) and `runtime/darwin` (executor, payload I/O, sockets, processes, timers, file-system lane) |
 | `library/` | The standard library: `core` and `std/*` in C (one public operation per `.c` file), `r/std/*.r` modules written in R and listed in `library/r/library.map`, `native/*` providers behind the checked FFI (TLS over Mbed TLS, crypto over libsodium, SQLite, mmap), `internal/` shared code, `generated/` inventories |
 | `targets/` | The pinned target manifests (toolchain, ABI, stack budgets, specification revisions) |
 | `tests/` | C unit tests, CMake check drivers, R fixtures, golden artifacts, Python differential tests and the `run_*_examples.py` drivers of the examples |
@@ -98,6 +98,8 @@ cmake --preset fuzz              # libFuzzer if available, else a standalone dri
 - A failure that passes on rerun is not a flake until proven: of the last six "flakes" five were
   real races (lost bytes, use-after-free, cancellation windows). Loop the test under CPU load
   (`yes > /dev/null` hogs, 4–12 parallel copies of the binary) before calling it timing.
+- After reverting a temporary mutation by copying a file back, `touch` it: make compares
+  modification times at one-second resolution and can keep the mutant's object file.
 
 ## Gates
 
@@ -198,8 +200,21 @@ as finished. The matrix records their results per stage.
   `r_runtime_darwin_io_prepared_set_shutdown_entry` pattern) or forces completion after a
   committed native call (`r_runtime_task_external_select_terminal_completion`). Late callbacks
   (cancel, deadline, close) must hold a reference to the storage they touch.
+  `r_runtime_task_external_try_select_completion` never replaces a selected cancellation, so a
+  cancel callback may acknowledge a waiter it withdrew; only `..._at` with a sequence captured
+  at the native event may replace one, and its adapter must then not acknowledge twice (P4.1-8).
 - Testing hooks (`R_RUNTIME_DARWIN_IO_TESTING`, `R_RUNTIME_DARWIN_FS_LANE_TESTING`) pause a worker
-  at a chosen point so a race becomes a deterministic test; prefer them to sleeps.
+  at a chosen point so a race becomes a deterministic test; prefer them to sleeps. New one-shot
+  pauses use `RRuntimeDarwinIoTestPause` (`io_internal.h`). An unarmed hook costs one atomic load:
+  the Release tree with tests, where `benchmarks` runs, compiles the hooks in.
+- Payload I/O has three engines. Regular files go through the file payload adapter
+  (`io_direct.c`, R-SLIB-ASYNC-0019): at most `R_RUNTIME_DARWIN_IO_FILE_MAX_ENTERED_TRANSFERS`
+  transfers are in `pread`/`pwrite` at once, a bound the target manifest and
+  `tools/check_target_manifest.py` pin. Stream sockets use nonblocking calls and per-handle
+  readiness sources. Dispatch I/O remains for the console, process pipes and the FIFOs, terminals
+  and devices that `std.fs` opens (the engine follows `fstat`). A completion registered
+  with `r_runtime_darwin_io_request_set_completion_inline` may run on the thread that finishes the
+  request, or before the registration returns.
 
 ## Writing R in the library and examples
 
@@ -223,6 +238,16 @@ these rules are the ones that most often reject otherwise reasonable code:
   to a local first.
 - Importing an R-source module requires `import std.x;` even for the R part of a C module.
 - `constexpr str` converts to `const u8[]` through a `str` local (one conversion per expression).
+- R-FUNC-0012: a task with checked errors must be awaited, cancelled or detached on every path,
+  throws included, so a member that lives across a whole loop returns its failure as a value
+  instead of throwing it (`watch_stop` in `std.service`).
+
+One rule is not a compile error but has cost real defects (P4.1-5): a member that a `select` did
+not choose, or a wait that lost to an until clause, may already have taken its value, and
+`cancel_all` destroys that value with the unobserved result (Core R-STMT-0018). A receive, a
+notification wait or a signal wait raced anew each round can therefore lose what it took. Take
+values that must not be lost without waiting (`try_recv`) after a wake-up whose loss is harmless,
+or keep one wait pending for the whole loop and test it with `first`/`first_until`.
 
 ## Documentation and records
 

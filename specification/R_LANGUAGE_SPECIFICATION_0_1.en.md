@@ -6,7 +6,7 @@ Normative draft of the R programming language
 | --- | --- |
 | Document | R Core Language Specification |
 | Language version | 0.1 |
-| Document revision | 0.1.0-draft.95 |
+| Document revision | 0.1.0-draft.96 |
 | Status | Normative draft; not a stable R 1.0 standard |
 | Document language | English; normative original |
 | Target backend | ISO/IEC 9899:2018 (C17) |
@@ -161,6 +161,10 @@ For dated references, only this version applies.
 <a id="R-TERM-0015"></a>
 
 **R-TERM-0015** — A **blocking call pool** is a target-runtime service of at most the number of threads recorded by the selected target manifest, separate from every process-executor worker and from the filesystem adapter lane, that executes only the entries passed to `std.async::blocking` (Library R-SLIB-ASYNC-0017). A pool thread runs one entry at a time, to its return, as ordinary R code on its own stack and never executes continuations; the pool adds a thread only while every existing one is busy.
+
+<a id="R-TERM-0016"></a>
+
+**R-TERM-0016** — A **file payload adapter** is a closed target-runtime service that executes only the regular-file payload byte transfer of Library R-SLIB-ASYNC-0019, never on a process-executor worker, a filesystem adapter lane thread or a blocking call pool thread, with at most the number of concurrently entered transfers recorded by the selected target manifest. It never executes R code, continuations, console, pipe, DNS, socket or child-process waiting.
 
 <a id="conformance"></a>
 
@@ -3574,11 +3578,11 @@ This catalogue is also closed. All options remain defined and safe.
 
 <a id="R-CONF-G005"></a>
 
-**R-CONF-G005** — Profile selection shall occur before translation and form part of interface fingerprint. Unsupported profile feature shall be diagnosed, not linked to a trap stub. `hosted-native-async` is a hosted allocation profile requiring the process executor, task runtime and complete native asynchronous library contract from R-REF-0005. Selection shall fail with `R-DIAG-PROFILE-001` when the target lacks any required backend, cancellation acknowledgement or deadline facility. Its runtime shall not implement potentially blocking I/O on an executor worker. The permitted blocking adapters are the filesystem adapter lane of R-TERM-0014/R-CMAP-0039 and R-REF-0005 and the blocking call pool of R-TERM-0015, which executes only entries passed to `std.async::blocking`.
+**R-CONF-G005** — Profile selection shall occur before translation and form part of interface fingerprint. Unsupported profile feature shall be diagnosed, not linked to a trap stub. `hosted-native-async` is a hosted allocation profile requiring the process executor, task runtime and complete native asynchronous library contract from R-REF-0005. Selection shall fail with `R-DIAG-PROFILE-001` when the target lacks any required backend, cancellation acknowledgement or deadline facility. Its runtime shall not implement potentially blocking I/O on an executor worker. The permitted blocking adapters are the filesystem adapter lane of R-TERM-0014/R-CMAP-0039 and R-REF-0005, the blocking call pool of R-TERM-0015, which executes only entries passed to `std.async::blocking`, and the file payload adapter of R-TERM-0016, which executes only regular-file payload byte transfer.
 
-### G.4 Minimal normative examples
+=== G.4 Minimal normative examples
 
-**Positive: ownership, borrow and deterministic drop**
+.Positive: ownership, borrow and deterministic drop
 
 ```r
 module example.owner;
@@ -3605,7 +3609,7 @@ i32 main() {
 }
 ```
 
-**Negative: named owner copied without move**
+.Negative: named owner copied without move
 
 ```r
 void rejected_owner_copy() {
@@ -3614,7 +3618,7 @@ void rejected_owner_copy() {
 }
 ```
 
-**Negative: conflicting borrow**
+.Negative: conflicting borrow
 
 ```r
 i32 rejected_conflicting_borrow() {
@@ -3625,7 +3629,7 @@ i32 rejected_conflicting_borrow() {
 }
 ```
 
-**Positive: explicit `arc` clone transferred to a typed thread**
+.Positive: explicit `arc` clone transferred to a typed thread
 
 ```r
 protected struct Payload {
@@ -3645,7 +3649,7 @@ std.thread::join_result<i32> run_worker() throws std.thread::thread_error {
 }
 ```
 
-**Positive: fast single-thread `rc` with explicit clone**
+.Positive: fast single-thread `rc` with explicit clone
 
 ```r
 bool same_local_allocation() {
@@ -3657,7 +3661,7 @@ bool same_local_allocation() {
 }
 ```
 
-**Negative: `rc` cannot cross a thread boundary**
+.Negative: `rc` cannot cross a thread boundary
 
 ```r
 void consume_local(rc i32 value) {
@@ -3671,7 +3675,7 @@ void rejected_rc_transfer() throws std.thread::thread_error {
 }
 ```
 
-**Positive: scoped thread borrows an automatic local**
+.Positive: scoped thread borrows an automatic local
 
 ```r
 i32 read_borrowed(const i32* value) {
@@ -3688,7 +3692,7 @@ void scoped_read() throws std.thread::thread_error {
 }
 ```
 
-**Positive: checked error propagation**
+.Positive: checked error propagation
 
 ```r
 error Error {
@@ -3708,7 +3712,7 @@ u8 twice_first(const u8[] bytes) throws Error {
 }
 ```
 
-**Positive: range-for over a range, a sequence and a core iterator, with a membership test**
+.Positive: range-for over a range, a sequence and a core iterator, with a membership test
 
 ```r
 module example.iteration;
@@ -3740,7 +3744,7 @@ i32 main() {
 }
 ```
 
-**Positive: collection expressions, a comprehension and a variadic sum**
+.Positive: collection expressions, a comprehension and a variadic sum
 
 ```r
 module example.collections;
@@ -3773,7 +3777,7 @@ i32 main() {
 }
 ```
 
-**Positive: a tuple result and a recursion over a type pack**
+.Positive: a tuple result and a recursion over a type pack
 
 ```r
 module example.packs;
@@ -3803,7 +3807,7 @@ i32 main() {
 }
 ```
 
-**Positive: a builder with @chain methods**
+.Positive: a builder with @chain methods
 
 ```r
 module example.builder;
@@ -3829,7 +3833,7 @@ i32 main() {
 }
 ```
 
-**Positive: string labels, a throwing arm and clauses without break**
+.Positive: string labels, a throwing arm and clauses without break
 
 ```r
 module example.labels;
@@ -3858,7 +3862,7 @@ i32 main() {
 }
 ```
 
-**Positive: an error family, the nearest ancestor and a rethrow**
+.Positive: an error family, the nearest ancestor and a rethrow
 
 ```r
 module example.errors;
@@ -3886,7 +3890,7 @@ i32 main() {
 }
 ```
 
-**Positive: checked errors, floating values and a frozen dictionary during translation**
+.Positive: checked errors, floating values and a frozen dictionary during translation
 
 ```r
 module spec.translation;
@@ -3940,7 +3944,7 @@ i32 main() {
 }
 ```
 
-**Positive: a deadline block bounds the operations it starts**
+.Positive: a deadline block bounds the operations it starts
 
 ```r
 module example.deadline;
@@ -3962,7 +3966,7 @@ async usize total(std.fs::path first, std.fs::path second)
 }
 ```
 
-**Positive: formatting user types through core::Format**
+.Positive: formatting user types through core::Format
 
 ```r
 module example.formatting;
@@ -3993,7 +3997,7 @@ std.string::string report() throws std.alloc::alloc_error {
 }
 ```
 
-**Positive: field initializers and a default variant**
+.Positive: field initializers and a default variant
 
 ```r
 module example.defaults;
@@ -4014,7 +4018,7 @@ u32 total(u32 extra) {
 }
 ```
 
-**Negative: unsafe operation outside boundary**
+.Negative: unsafe operation outside boundary
 
 ```r
 i32 rejected_raw_deref(raw i32* p) {
@@ -4022,7 +4026,7 @@ i32 rejected_raw_deref(raw i32* p) {
 }
 ```
 
-**Positive: dynamically linked C library with verified header**
+.Positive: dynamically linked C library with verified header
 
 ```r
 module example.zlib;
@@ -4048,7 +4052,7 @@ raw const c_char* read_zlib_version() {
 }
 ```
 
-**Positive: opaque C handle, output pointer and verified C constant**
+.Positive: opaque C handle, output pointer and verified C constant
 
 ```r
 @link(name = "sqlite3", kind = "dynamic")
@@ -4072,7 +4076,7 @@ extern "C" {
 }
 ```
 
-**Positive: exported callback has an exact raw function-pointer type**
+.Positive: exported callback has an exact raw function-pointer type
 
 ```r
 @callback
@@ -4090,7 +4094,7 @@ void prepare_callback() {
 }
 ```
 
-**Negative: source embeds a host-specific library path**
+.Negative: source embeds a host-specific library path
 
 ```r
 @link(name = "/usr/local/lib/libz.dylib", kind = "dynamic") // R-DIAG-LINK-001
@@ -4098,7 +4102,7 @@ void prepare_callback() {
 extern "C" { }
 ```
 
-**Negative: non-empty block has no ABI evidence**
+.Negative: non-empty block has no ABI evidence
 
 ```r
 @link(name = "zlib", kind = "dynamic")
@@ -4217,7 +4221,9 @@ An implementation supporting managed-owner C adapters shall statically reject di
 
 <a id="R-CONF-G012"></a>
 
-**R-CONF-G012** — A target claiming `hosted-native-async` with a filesystem adapter lane shall prove by runtime tracing that the lane has exactly four threads, is disjoint from executor workers, admits only the manifest operations allowed by R-CMAP-0039 and never executes R code or payload I/O. Conformance tests shall cancel or expire an operation while queued and while inside every admitted native-call family, verify that queued work does not enter the native call, and verify acknowledgement, retention and exactly-once cleanup for begun work. Namespace and durability tests shall cover cancellation before and after the documented commit point and shall observe committed success after a late cancellation. Saturating the lane shall not prevent ready R continuations, console, network, DNS, timer or child-process completions from progressing. A target providing the blocking call pool of R-TERM-0015 shall likewise prove that the pool never runs more threads than its manifest records, is disjoint from executor workers and from the lane, never enters a call cancelled while queued and acknowledges an entered call only after it returns; saturating the pool shall not prevent ready R continuations or native completions from progressing.
+**R-CONF-G012** — A target claiming `hosted-native-async` with a filesystem adapter lane shall prove by runtime tracing that the lane has exactly four threads, is disjoint from executor workers, admits only the manifest operations allowed by R-CMAP-0039 and never executes R code or payload I/O. Conformance tests shall cancel or expire an operation while queued and while inside every admitted native-call family, verify that queued work does not enter the native call, and verify acknowledgement, retention and exactly-once cleanup for begun work. Namespace and durability tests shall cover cancellation before and after the documented commit point and shall observe committed success after a late cancellation. Saturating the lane shall not prevent ready R continuations, console, network, DNS, timer or child-process completions from progressing. A target providing the blocking call pool of R-TERM-0015 shall likewise prove that the pool never runs more threads than its manifest records, is disjoint from executor workers and from the lane, never enters a call cancelled while queued and acknowledges an entered call only after it returns; saturating the pool shall not prevent ready R continuations or native completions from progressing. A target providing the file payload adapter of R-TERM-0016 shall prove that it never has more transfers entered than its manifest records, runs only regular-file payload transfer through the manifest entry points and never on an executor worker, never enters a transfer cancelled or expired before admission and acknowledges an entered transfer only after its call returns; saturating the adapter shall not prevent ready R continuations or native completions from progressing.
+
+[appendix]
 
 <a id="annex-h"></a>
 

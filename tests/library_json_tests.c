@@ -1,5 +1,6 @@
 #include "r_std_json.h"
 
+#include <malloc/malloc.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -290,6 +291,102 @@ static int test_allocation_failures(void) {
     }
     return 0;
 }
+/* A document past the scanner's linear key limit, with borrowed and escaped (owned) text,
+ * nested and empty containers. */
+static void wide_document(char *buffer, size_t size) {
+    size_t used = 0U;
+    used += (size_t)snprintf(buffer + used, size - used, "{");
+    for (unsigned i = 0U; i < 20U; ++i)
+        used += (size_t)snprintf(buffer + used, size - used, "\"key%02u\":%u,", i, i);
+    (void)snprintf(buffer + used,
+                   size - used,
+                   "\"esc\\u0041\\n\":\"a\\\"b\\u00e9 plain tail text\","
+                   "\"nested\":{\"x\":[1,[2,{\"y\":\"z\"}],\"t\",[]],\"u\":true,\"e\":{}},"
+                   "\"long\":\"%s\",\"n\":null}",
+                   "a long plain string that crosses many chunk boundaries of the feed test");
+}
+/* Live malloc blocks of the process; sanitizer runtimes replace the zone allocator, so there the
+ * count is not meaningful and every check passes. */
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
+#define JSON_TEST_SANITIZED_MALLOC 1
+#endif
+#endif
+static size_t blocks_in_use(void) {
+#if defined(JSON_TEST_SANITIZED_MALLOC)
+    return 0U;
+#else
+    malloc_statistics_t statistics = {0};
+    malloc_zone_statistics(NULL, &statistics);
+    return statistics.blocks_in_use;
+#endif
+}
+static int test_wide_document(void) {
+    char source[2048];
+    RRuntimeAllocator allocator;
+    RStdJsonValueResult result;
+    RStdJsonOptions options = R_STD_JSON_DEFAULT_OPTIONS;
+    Trace expected, actual;
+    uint64_t attempts;
+    size_t baseline;
+    wide_document(source, sizeof(source));
+    CHECK(scan_chunks(source, strlen(source), options, &expected) == 0);
+    for (size_t size = 1U; size <= 64U; ++size) {
+        CHECK(scan_chunks(source, size, options, &actual) == 0);
+        CHECK(actual.hash == expected.hash && actual.tokens == expected.tokens);
+    }
+    r_runtime_allocator_initialize(&allocator);
+    baseline = blocks_in_use();
+    result = r_std_json_parse(&allocator, view(source));
+    CHECK(result.outcome.status == R_STD_JSON_CALL_SUCCESS);
+    attempts = r_runtime_allocator_attempt_count(&allocator);
+    CHECK(r_std_json_len(&result.value) == 24U);
+    {
+        RStdJsonStringResult text = r_std_json_stringify(&allocator, &result.value);
+        RStdJsonValueResult again;
+        CHECK(text.outcome.status == R_STD_JSON_CALL_SUCCESS);
+        again = r_std_json_parse(
+            &allocator,
+            (RStdJsonByteView){r_runtime_string_bytes(&text.value),
+                               r_runtime_string_length(&text.value)});
+        CHECK(again.outcome.status == R_STD_JSON_CALL_SUCCESS);
+        CHECK(r_std_json_len(&again.value) == 24U);
+        r_json_value_destroy(&again.value);
+        r_runtime_string_destroy(&text.value);
+    }
+    r_json_value_destroy(&result.value);
+    CHECK(blocks_in_use() == baseline);
+    for (uint64_t i = 1U; i <= attempts; ++i) {
+        r_runtime_allocator_set_failure(&allocator, i);
+        result = r_std_json_parse(&allocator, view(source));
+        r_runtime_allocator_set_failure(&allocator, 0U);
+        CHECK(result.outcome.status == R_STD_JSON_CALL_ALLOCATION_ERROR);
+        CHECK(result.value.node == NULL);
+        CHECK(blocks_in_use() == baseline);
+    }
+    {
+        char duplicate[2048];
+        size_t length;
+        wide_document(duplicate, sizeof(duplicate));
+        length = strlen(duplicate);
+        (void)snprintf(duplicate + length - 1U, sizeof(duplicate) - length + 1U, ",\"key07\":1}");
+        result = r_std_json_parse(&allocator, view(duplicate));
+        CHECK(result.outcome.error.code == R_STD_JSON_ERROR_DUPLICATE_KEY);
+        CHECK(equal((RStdJsonByteView){r_runtime_string_bytes(&result.outcome.error.pointer),
+                                       r_runtime_string_length(&result.outcome.error.pointer)},
+                    view("/key07")));
+        r_json_error_destroy(&result.outcome.error);
+    }
+    result =
+        r_std_json_parse(&allocator, view("{\"a\":{\"b\":1,\"c\":[{\"b\":2}]},\"b\":2,\"a\":3}"));
+    CHECK(result.outcome.error.code == R_STD_JSON_ERROR_DUPLICATE_KEY);
+    CHECK(equal((RStdJsonByteView){r_runtime_string_bytes(&result.outcome.error.pointer),
+                                   r_runtime_string_length(&result.outcome.error.pointer)},
+                view("/a")));
+    r_json_error_destroy(&result.outcome.error);
+    CHECK(blocks_in_use() == baseline);
+    return 0;
+}
 static int test_transactional_mutation(void) {
     RRuntimeAllocator allocator;
     RStdJsonValueResult target, value;
@@ -483,6 +580,7 @@ int main(void) {
     CHECK(test_numbers_and_folding() == 0);
     CHECK(test_limits() == 0);
     CHECK(test_allocation_failures() == 0);
+    CHECK(test_wide_document() == 0);
     CHECK(test_transactional_mutation() == 0);
     return 0;
 }

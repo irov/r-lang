@@ -1,4 +1,4 @@
-(mir version=1 core_revision="0.1.0-draft.95"
+(mir version=1 core_revision="0.1.0-draft.96"
   (function name="test.async_mir::consume" visibility=exported return=i32 async=true start=(carrier (task i32) (effects (standard "std.async::start_error"))) state=definition
     (block bb0
       (parameter place=%arg0 name="work" type=(task i32))

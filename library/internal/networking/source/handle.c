@@ -266,8 +266,8 @@ r_library_internal_net_tcp_stream_prepare_read(RStdNetTcpStreamStorage *stream,
         return tcp_read_prepare_result(R_RUNTIME_DARWIN_IO_START_OK, 0, 1);
     }
     if (stream->data_io == NULL) {
-        created = r_runtime_darwin_io_handle_create(
-            stream->handle.allocator, stream->handle.descriptor, R_RUNTIME_DARWIN_IO_STREAM);
+        created = r_runtime_darwin_io_handle_create_socket(stream->handle.allocator,
+                                                           stream->handle.descriptor);
         if (created.status != R_RUNTIME_DARWIN_IO_START_OK) {
             if (pthread_mutex_unlock(&stream->handle.mutex) != 0) {
                 abort();
@@ -332,8 +332,8 @@ r_library_internal_net_tcp_stream_prepare_write(RStdNetTcpStreamStorage *stream,
         return tcp_write_prepare_result(R_RUNTIME_DARWIN_IO_START_OK, 0, 1);
     }
     if (stream->data_io == NULL) {
-        created = r_runtime_darwin_io_handle_create(
-            stream->handle.allocator, stream->handle.descriptor, R_RUNTIME_DARWIN_IO_STREAM);
+        created = r_runtime_darwin_io_handle_create_socket(stream->handle.allocator,
+                                                           stream->handle.descriptor);
         if (created.status != R_RUNTIME_DARWIN_IO_START_OK) {
             if (pthread_mutex_unlock(&stream->handle.mutex) != 0) {
                 abort();
@@ -421,8 +421,8 @@ static RRuntimeDarwinIoStartStatus ensure_tcp_data_io_locked(RStdNetTcpStreamSto
     if (stream->data_io != NULL) {
         return R_RUNTIME_DARWIN_IO_START_OK;
     }
-    created = r_runtime_darwin_io_handle_create(
-        stream->handle.allocator, stream->handle.descriptor, R_RUNTIME_DARWIN_IO_STREAM);
+    created = r_runtime_darwin_io_handle_create_socket(stream->handle.allocator,
+                                                      stream->handle.descriptor);
     if (created.status != R_RUNTIME_DARWIN_IO_START_OK) {
         *native_error = created.native_error;
         return created.status;

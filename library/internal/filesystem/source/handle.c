@@ -6,7 +6,18 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
+
+RRuntimeDarwinIoHandleCreateResult r_library_internal_fs_payload_handle_create(
+    RRuntimeAllocator *allocator, int descriptor, RRuntimeDarwinIoType type) {
+    struct stat status;
+
+    if (descriptor >= 0 && fstat(descriptor, &status) == 0 && S_ISREG(status.st_mode)) {
+        return r_runtime_darwin_io_handle_create_file(allocator, descriptor, type);
+    }
+    return r_runtime_darwin_io_handle_create(allocator, descriptor, type);
+}
 
 static RLibraryFsHandleStorage *
 reserve_storage(RRuntimeAllocator *allocator, size_t size, size_t alignment) {

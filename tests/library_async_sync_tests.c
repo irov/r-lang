@@ -5,6 +5,7 @@
 #include "r_runtime_task.h"
 #include "r_runtime_type.h"
 
+#include <pthread.h>
 #include <sched.h>
 #include <stdatomic.h>
 #include <stddef.h>
@@ -654,6 +655,171 @@ static int test_broadcast_volume(RRuntimeAllocator *allocator) {
     return 0;
 }
 
+/*
+ * P4.1-8: a waiter woken while it is cancelled. The runtime once let a completion selected without
+ * its own event sequence replace a cancellation chosen a moment earlier; the waiter was then
+ * acknowledged twice, by its cancellation and by its finish, and the second acknowledgement read a
+ * freed task. Each round starts one pending wait, releases a thread that wakes it and cancels the
+ * wait at once, at a varying offset.
+ */
+enum {
+    R_TEST_RACE_ROUNDS = 20000
+};
+
+typedef struct RTestRace {
+    _Atomic unsigned requested;
+    _Atomic unsigned served;
+    _Atomic unsigned failures;
+    _Atomic _Bool stop;
+    const RStdAsyncNotify *notify;
+    const RStdSyncSender *sender;
+} RTestRace;
+
+static void *race_waker(void *argument) {
+    RTestRace *race = argument;
+    unsigned seen = 0U;
+    unsigned idle = 0U;
+
+    while (!atomic_load_explicit(&race->stop, memory_order_acquire)) {
+        const unsigned round = atomic_load_explicit(&race->requested, memory_order_acquire);
+
+        if (round == seen) {
+            /* Spin to wake as soon as the round starts, yielding now and then. */
+            idle += 1U;
+            if ((idle % 1024U) == 0U) {
+                (void)sched_yield();
+            }
+            continue;
+        }
+        seen = round;
+        if (race->notify != NULL) {
+            r_std_async_notify_all(race->notify);
+        } else {
+            RTestValue value = {(int32_t)round};
+
+            if (r_std_sync_send(race->sender, &value).kind != R_STD_SYNC_SEND_RESULT_SENT) {
+                atomic_fetch_add_explicit(&race->failures, 1U, memory_order_relaxed);
+            }
+        }
+        atomic_store_explicit(&race->served, round, memory_order_release);
+    }
+    return NULL;
+}
+
+/* Releases the waker for round, cancels task after a few spins and waits for the waker. */
+static void race_round(RTestRace *race, unsigned round, RRuntimeTask **task) {
+    atomic_store_explicit(&race->requested, round, memory_order_release);
+    for (unsigned spin = (round * 7U) % 97U; spin > 0U; --spin) {
+        (void)atomic_load_explicit(&race->served, memory_order_relaxed);
+    }
+    r_std_async_cancel(task);
+    while (atomic_load_explicit(&race->served, memory_order_acquire) != round) {
+        (void)sched_yield();
+    }
+}
+
+static int test_notify_cancellation_race(RRuntimeAllocator *allocator) {
+    RStdAsyncNotifyNewResult created = r_std_async_notify_new(allocator);
+    RTestRace race = {0};
+    pthread_t waker;
+    int status = 0;
+
+    R_TEST_CHECK(created.status == R_STD_ASYNC_CALL_SUCCESS);
+    race.notify = &created.value;
+    R_TEST_CHECK(pthread_create(&waker, NULL, race_waker, &race) == 0);
+    for (unsigned round = 1U; round <= R_TEST_RACE_ROUNDS && status == 0; ++round) {
+        RStdAsyncStartResult waiting = r_std_async_notified(&created.value);
+
+        if (!waiting.is_ok) {
+            status = 1;
+            break;
+        }
+        race_round(&race, round, &waiting.task);
+    }
+    atomic_store_explicit(&race.stop, 1, memory_order_release);
+    R_TEST_CHECK(pthread_join(waker, NULL) == 0);
+    R_TEST_CHECK(status == 0);
+    /* notify_all stored nothing, so a new waiter waits for the next notification. */
+    {
+        RStdAsyncStartResult next = r_std_async_notified(&created.value);
+
+        R_TEST_CHECK(next.is_ok && stays_pending(next.task));
+        r_std_async_notify_one(&created.value);
+        R_TEST_CHECK(completes(next.task));
+        R_TEST_CHECK(r_runtime_task_await(&next.task, NULL) == R_RUNTIME_TASK_AWAIT_OK);
+    }
+    r_std_async_notify_destroy(&created.value);
+    return 0;
+}
+
+typedef struct RTestReceived {
+    uint32_t tag;
+    RTestValue value;
+} RTestReceived;
+
+static void received_move(void *destination, void *source) {
+    (void)memcpy(destination, source, sizeof(RTestReceived));
+}
+
+static void received_drop(void *value) {
+    const RTestReceived *received = value;
+
+    if (received->tag == 1U) {
+        value_drop((void *)&received->value);
+    }
+}
+
+/* The value of each round goes to the cancelled receive, whose result is destroyed, or stays
+   queued; either way it is destroyed exactly once. */
+static int test_receive_cancellation_race(RRuntimeAllocator *allocator) {
+    const RStdSyncReceiveLayout layout = {
+        {sizeof(RTestReceived), _Alignof(RTestReceived), received_move, received_drop},
+        offsetof(RTestReceived, tag),
+        offsetof(RTestReceived, value),
+    };
+    RStdSyncChannelCreateResult created = r_std_sync_channel(allocator, value_type);
+    RStdSyncSender sender;
+    RStdSyncReceiver receiver;
+    RTestRace race = {0};
+    pthread_t waker;
+    int status = 0;
+
+    atomic_store(&value_drops, 0U);
+    R_TEST_CHECK(created.status == R_STD_SYNC_CHANNEL_CALL_SUCCESS);
+    sender = r_std_sync_sender(&created.value);
+    receiver = r_std_sync_receiver(&created.value);
+    race.sender = &sender;
+    R_TEST_CHECK(pthread_create(&waker, NULL, race_waker, &race) == 0);
+    for (unsigned round = 1U; round <= R_TEST_RACE_ROUNDS && status == 0; ++round) {
+        RStdSyncReceiveStartResult waiting = r_std_sync_receive(&receiver, layout);
+        RTestValue queued = {0};
+
+        if (!waiting.is_ok) {
+            status = 1;
+            break;
+        }
+        race_round(&race, round, &waiting.task);
+        if (r_std_sync_try_recv(&receiver, &queued).kind == R_STD_SYNC_TRY_RECV_RESULT_RECEIVED) {
+            value_drop(&queued);
+        }
+    }
+    atomic_store_explicit(&race.stop, 1, memory_order_release);
+    R_TEST_CHECK(pthread_join(waker, NULL) == 0);
+    R_TEST_CHECK(status == 0);
+    R_TEST_CHECK(atomic_load(&race.failures) == 0U);
+    {
+        const clock_t start = clock();
+
+        while (atomic_load(&value_drops) != R_TEST_RACE_ROUNDS) {
+            R_TEST_CHECK((clock() - start) <= 10 * CLOCKS_PER_SEC);
+            (void)sched_yield();
+        }
+    }
+    r_std_sync_sender_destroy(&sender);
+    r_std_sync_receiver_destroy(&receiver);
+    return 0;
+}
+
 int main(void) {
     RRuntimeAllocator allocator;
 
@@ -669,6 +835,8 @@ int main(void) {
     R_TEST_CHECK(test_reserve_backpressure(&allocator) == 0);
     R_TEST_CHECK(test_broadcast(&allocator) == 0);
     R_TEST_CHECK(test_broadcast_volume(&allocator) == 0);
+    R_TEST_CHECK(test_notify_cancellation_race(&allocator) == 0);
+    R_TEST_CHECK(test_receive_cancellation_race(&allocator) == 0);
     R_TEST_CHECK(r_runtime_executor_lifecycle_stop());
     return 0;
 }

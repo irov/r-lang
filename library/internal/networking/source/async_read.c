@@ -502,7 +502,8 @@ static void external_start(RRuntimeTaskExternalExecution *execution,
     payload->request = submitted.request;
     payload->buffer_owned = 0;
     r_runtime_task_external_start_ready(execution);
-    if (!r_runtime_darwin_io_request_set_completion(payload->request, native_completed, payload)) {
+    if (!r_runtime_darwin_io_request_set_completion_inline(
+            payload->request, native_completed, payload)) {
         read_panic();
     }
 }

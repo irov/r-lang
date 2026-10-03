@@ -565,9 +565,23 @@ PAYLOAD_OPERATIONS = {
 PAYLOAD_DESCRIPTOR_CLASSES = {
     "random_access_file",
     "stream_file",
+    "special_file",
     "console",
     "process_pipe",
+    "stream_socket",
 }
+# R-SLIB-ASYNC-0019: regular files use the file payload adapter, stream sockets their readiness
+# engine; Dispatch I/O remains for other file types, console and process-pipe payload.
+PAYLOAD_ENGINES = {
+    "dispatch_io": ["special_file", "console", "process_pipe"],
+    "file_payload_adapter": ["random_access_file", "stream_file"],
+    "nonblocking_socket": ["stream_socket"],
+}
+PAYLOAD_TERMINAL_ACKNOWLEDGEMENT = (
+    "final Dispatch I/O handler or root close cleanup handler for Dispatch I/O handles; for "
+    "file and socket handles the request terminal transition after the last native call "
+    "returned and root cleanup after the last direct activity"
+)
 PAYLOAD_BLOCKS_UNITS = {
     "source/io_deadline.c",
     "source/io_dispatch.c",
@@ -659,9 +673,9 @@ NETWORK_UNIX_DOMAIN_SOCKETS = (
     "and peer credentials come from getpeereid and LOCAL_PEERPID"
 )
 NETWORK_TCP_WRITE_SUBMISSION = (
-    "tcp_write and tcp_write_all reserve the complete request, deadline source, Dispatch data, "
-    "operation channel and write FIFO position before task commit; failed reservation preserves "
-    "the complete named array owner and performs no payload I/O"
+    "tcp_write and tcp_write_all reserve the complete request, deadline source and write FIFO "
+    "position before task commit; failed reservation preserves the complete named array owner "
+    "and performs no payload I/O"
 )
 NETWORK_TCP_WRITE_COMPLETION = (
     "tcp_write publishes success only after one positive native prefix; tcp_write_all continues "
@@ -674,9 +688,8 @@ NETWORK_TCP_WRITE_ORDERING = (
 )
 NETWORK_TCP_WRITE_TERMINAL_ACKNOWLEDGEMENT = (
     "native completion, cancellation and strict continuous-clock deadline use the shared event "
-    "sequence; task outcome is immutable after first selection, while buffer, request, Dispatch "
-    "data, cached root and descriptor remain live through the final Dispatch I/O handler "
-    "acknowledgement"
+    "sequence; task outcome is immutable after first selection, while buffer, request, cached "
+    "handle and descriptor remain live through the request terminal transition"
 )
 NETWORK_TCP_SHUTDOWN_SUBMISSION = (
     "tcp_shutdown reserves the complete native request, optional deadline source, "
@@ -692,19 +705,19 @@ NETWORK_TCP_SHUTDOWN_ORDERING = (
 NETWORK_TCP_SHUTDOWN_TERMINAL_ACKNOWLEDGEMENT = (
     "successful native shutdown is the idempotent half-close commit and cannot be replaced by a "
     "later cancellation or deadline; storage state is published before later same-direction "
-    "work, and the task frame, request, cached root and descriptor remain live through native "
+    "work, and the task frame, request, cached handle and descriptor remain live through native "
     "acknowledgement"
 )
 NETWORK_TCP_CLOSE_SUBMISSION = (
-    "tcp_close reserves the cached STREAM root, terminal close request and deadline state before "
-    "task commit; successful commit consumes the named stream and atomically rejects later "
-    "stream operations, while every start failure leaves that owner unchanged"
+    "tcp_close reserves the cached payload handle, terminal close request and deadline state "
+    "before task commit; successful commit consumes the named stream and atomically rejects "
+    "later stream operations, while every start failure leaves that owner unchanged"
 )
 NETWORK_TCP_CLOSE_TERMINAL_CLEANUP = (
-    "tcp_close cancels pending read and write requests, waits for their final native handlers and "
-    "root cleanup, closes the original descriptor, detaches the cached root and releases the "
-    "consumed stream exactly once; cancellation, deadline and close failure never skip these "
-    "duties, and a pre-existing close failure precedes an expired deadline"
+    "tcp_close cancels pending read and write requests, waits for their terminal transitions "
+    "and the handle root cleanup, closes the original descriptor, detaches the cached handle "
+    "and releases the consumed stream exactly once; cancellation, deadline and close failure "
+    "never skip these duties, and a pre-existing close failure precedes an expired deadline"
 )
 NETWORK_TCP_CLOSE_TERMINAL_ACKNOWLEDGEMENT = (
     "close completion, cancellation and strict continuous-clock deadline use one immutable "
@@ -888,28 +901,32 @@ TIMER_DEADLINE = (
     "the continuous deadline is reached"
 )
 PAYLOAD_LOW_LEVEL_RELATIVE_DEADLINE = (
-    "runtime Dispatch I/O requests receive an adapter-computed relative timeout; std.fs payload "
-    "requests pass no native timeout because std_fs_deadline_clock governs their absolute deadline"
+    "runtime payload requests receive an adapter-computed relative timeout; std.fs payload "
+    "requests pass no native timeout because std_fs_deadline_clock governs their absolute "
+    "deadline"
 )
 STD_FS_SHARED_POSITION_ORDER = (
     "std.fs::read, std.fs::write, std.fs::write_all, std.fs::read_at, std.fs::write_all_at, "
     "std.fs::seek, std.fs::flush and std.fs::sync share one synchronized FIFO in "
     "successful-start submission order"
 )
-STD_FS_PAYLOAD_CHANNEL = (
-    "successful std.fs file output materialization creates and owns one persistent "
-    "DISPATCH_IO_STREAM root before file-result publication, materialization failure publishes "
-    "no file handle, and every payload start only retains that root for its prepared STREAM child"
+STD_FS_PAYLOAD_HANDLE = (
+    "successful std.fs file output materialization creates and owns one payload handle over a "
+    "duplicated descriptor before file-result publication, a file payload adapter handle for a "
+    "regular file and a Dispatch I/O STREAM handle for any other file type; materialization "
+    "failure publishes no file handle, and every payload start only retains that handle"
 )
 STD_FS_NONAPPEND_POSITIONING = (
-    "every read and non-append write applies the shared logical absolute position, or the "
-    "explicit offset of a positional operation, with lseek(SEEK_SET) only inside "
-    "dispatch_io_barrier on the persistent STREAM root before payload submission; a positional "
-    "operation leaves the shared logical position unchanged"
+    "every read and non-append write of a regular file passes the shared logical absolute "
+    "position, or the explicit offset of a positional operation, as the offset of pread or "
+    "pwrite on the file payload adapter and never moves the descriptor offset; for any other "
+    "file type the position is applied with lseek(SEEK_SET) inside dispatch_io_barrier on its "
+    "STREAM handle; a positional operation leaves the shared logical position unchanged"
 )
 STD_FS_APPEND_POSITIONING = (
-    "append writes use the persistent STREAM root with a descriptor retaining O_APPEND, select "
-    "end atomically for each write and do not change the shared read/seek observation position"
+    "append writes use write on a regular file and the STREAM handle for any other file type, "
+    "on a descriptor retaining O_APPEND, select end atomically for each write and do not change "
+    "the shared read/seek observation position"
 )
 STD_FS_DEADLINE_CLOCK = (
     "std.fs payload operations retain the absolute std.time instant in the mach_continuous_time "
@@ -923,22 +940,24 @@ STD_FS_ABSOLUTE_DEADLINE = (
 )
 STD_FS_CANCELLATION_DEADLINE_ACKNOWLEDGEMENT = (
     "queued cancellation or deadline removes the position reservation before acknowledgement; "
-    "cancellation during a position barrier retains the handle, buffer and task frame through "
-    "barrier acknowledgement without payload submission; cancellation after payload submission "
-    "retains them through the final Dispatch I/O handler"
+    "cancellation before the transfer enters its native call finishes it without that call; "
+    "cancellation after entry is acknowledged after the call returns, or for a file that is not "
+    "regular after the final Dispatch I/O handler, and the handle, buffer and task frame are "
+    "retained until then"
 )
 STD_FS_EXPLICIT_CLOSE = (
     "std.fs::close_file reserves the handle before task commit, rejects new operations, cancels "
-    "and drains registered operations, waits for persistent STREAM root cleanup acknowledgement, "
-    "propagates its native error and releases its view exactly once"
+    "and drains registered operations, waits for the handle root cleanup that follows the last "
+    "native activity, propagates its native error and releases its view exactly once"
 )
 STD_FS_WHOLE_FILE_READ_OPERATIONS = {
     "std.fs::read_file",
     "std.fs::read_file_beneath",
 }
 STD_FS_WHOLE_FILE_READ_PIPELINE = (
-    "filesystem-lane open, one per-operation DISPATCH_IO_RANDOM root, filesystem-lane close of "
-    "the original descriptor, repeated offset-ordered reads and Dispatch I/O root cleanup"
+    "filesystem-lane open, one per-operation RANDOM payload handle over a duplicated descriptor "
+    "(file payload adapter for a regular file, Dispatch I/O otherwise), filesystem-lane close "
+    "of the original descriptor, repeated offset-ordered reads and handle root cleanup"
 )
 STD_FS_WHOLE_FILE_READ_PATH_POLICY = (
     "std.fs::read_file follows an ordinary path final symbolic link; "
@@ -946,14 +965,14 @@ STD_FS_WHOLE_FILE_READ_PATH_POLICY = (
     "O_RESOLVE_BENEATH and O_NOFOLLOW_ANY and rejects intermediate and final symbolic links"
 )
 STD_FS_WHOLE_FILE_READ_LIMIT_EOF = (
-    "each Dispatch I/O request is bounded by the 65536-byte chunk and the remaining "
-    "limit-plus-one probe; EOF is authoritative, including a one-byte probe when limit is zero; "
-    "at most limit bytes succeeds and an observed byte beyond limit returns file_too_large"
+    "each read is bounded by the 65536-byte chunk and the remaining limit-plus-one probe; EOF "
+    "is authoritative, including a one-byte probe when limit is zero; at most limit bytes "
+    "succeeds and an observed byte beyond limit returns file_too_large"
 )
 STD_FS_WHOLE_FILE_READ_TERMINAL_ACKNOWLEDGEMENT = (
     "publish the task terminal outcome only after filesystem-lane close acknowledgement for the "
-    "original descriptor and the DISPATCH_IO_RANDOM root cleanup handler; every error destroys "
-    "the partial array before publication"
+    "original descriptor and the root cleanup of the RANDOM payload handle; every error "
+    "destroys the partial array before publication"
 )
 LANE_OPENAT_FLAGS = {
     "O_CLOEXEC",
@@ -1816,8 +1835,12 @@ def validate_lane(manifest: dict[str, Any], errors: ValidationErrors) -> None:
         )
         errors.require(
             payload_implementation.get("terminal_acknowledgement")
-            == "final Dispatch I/O handler or root close cleanup handler",
+            == PAYLOAD_TERMINAL_ACKNOWLEDGEMENT,
             "payload adapter must identify its native terminal acknowledgement",
+        )
+        errors.require(
+            payload_implementation.get("engines") == PAYLOAD_ENGINES,
+            "payload adapter engine assignment is not closed",
         )
         errors.require(
             payload_implementation.get("child_cleanup_handler")
@@ -1885,13 +1908,13 @@ def validate_lane(manifest: dict[str, Any], errors: ValidationErrors) -> None:
             "std.fs payload operations must share the exact synchronized position FIFO",
         )
         errors.require(
-            payload_implementation.get("std_fs_payload_channel") == STD_FS_PAYLOAD_CHANNEL,
-            "std.fs payload operations must use one persistent STREAM root",
+            payload_implementation.get("std_fs_payload_handle") == STD_FS_PAYLOAD_HANDLE,
+            "std.fs payload operations must use one file payload adapter handle",
         )
         errors.require(
             payload_implementation.get("std_fs_nonappend_positioning")
             == STD_FS_NONAPPEND_POSITIONING,
-            "std.fs reads and non-append writes must position only in the STREAM root barrier",
+            "std.fs reads and non-append writes must pass their position to pread or pwrite",
         )
         errors.require(
             payload_implementation.get("std_fs_append_positioning")
@@ -1914,7 +1937,7 @@ def validate_lane(manifest: dict[str, Any], errors: ValidationErrors) -> None:
         )
         errors.require(
             payload_implementation.get("std_fs_explicit_close") == STD_FS_EXPLICIT_CLOSE,
-            "std.fs explicit close must wait for persistent root cleanup and propagate its error",
+            "std.fs explicit close must wait for handle root cleanup and propagate its error",
         )
         errors.require(
             string_set(payload_implementation.get("std_fs_whole_file_read_operations"))
@@ -1943,7 +1966,7 @@ def validate_lane(manifest: dict[str, Any], errors: ValidationErrors) -> None:
         errors.require(
             payload_implementation.get("std_fs_whole_file_read_terminal_acknowledgement")
             == STD_FS_WHOLE_FILE_READ_TERMINAL_ACKNOWLEDGEMENT,
-            "std.fs whole-file reads must wait for descriptor close and Dispatch root cleanup",
+            "std.fs whole-file reads must wait for descriptor close and handle root cleanup",
         )
         for field in (
             "task_runtime_integration",
@@ -2239,7 +2262,6 @@ def validate_lane(manifest: dict[str, Any], errors: ValidationErrors) -> None:
             "filesystem lane deadline mode is invalid",
         )
     for family in (
-        "file_payload_read_write",
         "console_and_process_pipe_payload",
         "dns",
         "tcp_udp_establishment",
@@ -2254,17 +2276,25 @@ def validate_lane(manifest: dict[str, Any], errors: ValidationErrors) -> None:
         errors.require(record.get("lane") is False, f"{family} must not use the filesystem lane")
         errors.require(record.get("cancellation") == "native", f"{family} cancellation must be native")
         errors.require(record.get("deadline") == "native", f"{family} deadline must be native")
-    for family in (
-        "file_payload_read_write",
-        "console_and_process_pipe_payload",
-        "tcp_payload",
-    ):
-        record = by_family.get(family)
-        if record is not None:
-            errors.require(
-                record.get("acknowledgement") == "final Dispatch I/O handler",
-                f"{family} must acknowledge at the final Dispatch I/O handler",
-            )
+    console_payload = by_family.get("console_and_process_pipe_payload")
+    if console_payload is not None:
+        errors.require(
+            console_payload.get("acknowledgement") == "final Dispatch I/O handler",
+            "console_and_process_pipe_payload must acknowledge at the final Dispatch I/O handler",
+        )
+    file_payload = by_family.get("file_payload_read_write")
+    if file_payload is not None:
+        errors.require(
+            file_payload == FILE_PAYLOAD_CAPABILITY,
+            "file_payload_read_write must record the file payload adapter and "
+            "queued_or_acknowledged_after_return",
+        )
+    tcp_payload = by_family.get("tcp_payload")
+    if tcp_payload is not None:
+        errors.require(
+            tcp_payload == TCP_PAYLOAD_CAPABILITY,
+            "tcp_payload must acknowledge at the request terminal transition",
+        )
     child_spawn = by_family.get("child_spawn")
     if child_spawn is not None:
         errors.require(child_spawn.get("lane") is False, "child spawn must not use the lane")
@@ -2350,6 +2380,117 @@ def validate_blocking_pool(
         "#define R_RUNTIME_BLOCKING_MAX_PENDING_CALLS "
         f"((size_t){BLOCKING_POOL_FIELDS['maximum_pending_calls']}U)" in text,
         "runtime blocking pool pending bound differs from the manifest",
+    )
+
+
+FILE_PAYLOAD_CAPABILITY = {
+    "family": "file_payload_read_write",
+    "backend": (
+        "file payload adapter for regular files: pread, pwrite and write as work items of a "
+        "private libdispatch concurrent queue with a bounded admission count; other file types "
+        "opened through std.fs use Dispatch I/O"
+    ),
+    "lane": False,
+    "cancellation": "queued_or_acknowledged_after_return",
+    "deadline": "queued_or_acknowledged_after_return",
+    "acknowledgement": "native call return and request terminal transition",
+}
+TCP_PAYLOAD_CAPABILITY = {
+    "family": "tcp_payload",
+    "backend": (
+        "non-blocking BSD stream sockets: immediate system calls, then per-handle "
+        "DispatchSourceRead/DispatchSourceWrite readiness"
+    ),
+    "lane": False,
+    "cancellation": "native",
+    "deadline": "native",
+    "acknowledgement": "request terminal transition after the last nonblocking system call",
+}
+FILE_PAYLOAD_ADAPTER_FIELDS = {
+    "enabled": True,
+    "maximum_entered_transfers": 4,
+    "executes": "regular-file payload byte transfer of std.fs (Library R-SLIB-ASYNC-0019)",
+    "transfer_operations": [
+        "std.fs::read",
+        "std.fs::write",
+        "std.fs::write_all",
+        "std.fs::read_at",
+        "std.fs::write_all_at",
+        "std.fs::read_file",
+        "std.fs::read_file_beneath",
+        "std.fs::write_file_atomic_no_replace",
+        "std.fs::write_file_atomic_no_replace_beneath",
+    ],
+    "native_entries": ["pread", "pwrite", "write"],
+    "worker_backend": (
+        "work items of the private libdispatch concurrent queue r.io.file targeting the "
+        "default-QoS global queue"
+    ),
+    "disjoint_from_executor_workers": True,
+    "disjoint_from_filesystem_adapter_lane": True,
+    "disjoint_from_blocking_call_pool": True,
+    "may_execute_r_code": False,
+    "admission_policy": (
+        "admitted at activation while fewer than maximum_entered_transfers are admitted, "
+        "otherwise queued in one process-wide FIFO by activation order; a finishing work item "
+        "takes the FIFO head on its own thread"
+    ),
+    "queued_cancellation": (
+        "a transfer waiting for admission is removed and finished on its handle serial queue "
+        "without a native call; an admitted transfer that has not entered its call finishes "
+        "without it"
+    ),
+    "entered_cancellation": (
+        "record the event, make no further native call and acknowledge after the call returns"
+    ),
+    "cancellation_mode": "queued_or_acknowledged_after_return",
+    "retention": "request, buffer, handle and task frame through the native return",
+    "descriptor_release": (
+        "root cleanup of a closed or dropped handle runs after its last admitted transfer "
+        "finished"
+    ),
+}
+FILE_PAYLOAD_ADAPTER_IMPLEMENTATION = {
+    "cmake_target": "r_runtime_darwin_io",
+    "source": "runtime/darwin/source/io_direct.c",
+    "bound_runtime_constant": "R_RUNTIME_DARWIN_IO_FILE_MAX_ENTERED_TRANSFERS",
+}
+
+
+def validate_file_payload_adapter(
+    manifest: dict[str, Any], root: Path, errors: ValidationErrors
+) -> None:
+    """Core R-TERM-0016 and Library R-SLIB-ASYNC-0019: the file payload adapter record is closed
+    and its admission bound is the runtime's own constant."""
+    async_record = manifest.get("hosted_native_async")
+    if not isinstance(async_record, dict):
+        return
+    adapter = async_record.get("file_payload_adapter")
+    errors.require(isinstance(adapter, dict), "file_payload_adapter must be an object")
+    if not isinstance(adapter, dict):
+        return
+    errors.require(
+        set(adapter) == set(FILE_PAYLOAD_ADAPTER_FIELDS) | {"implementation"},
+        "file payload adapter record key set is not closed",
+    )
+    for field, expected in FILE_PAYLOAD_ADAPTER_FIELDS.items():
+        errors.require(
+            adapter.get(field) == expected, f"file payload adapter {field} must be {expected!r}"
+        )
+    errors.require(
+        adapter.get("implementation") == FILE_PAYLOAD_ADAPTER_IMPLEMENTATION,
+        "file payload adapter implementation record is not closed",
+    )
+    source = root / FILE_PAYLOAD_ADAPTER_IMPLEMENTATION["source"]
+    try:
+        text = source.read_text(encoding="utf-8")
+    except OSError:
+        errors.require(False, f"file payload adapter source is missing: {source}")
+        return
+    errors.require(
+        "#define R_RUNTIME_DARWIN_IO_FILE_MAX_ENTERED_TRANSFERS "
+        f"{FILE_PAYLOAD_ADAPTER_FIELDS['maximum_entered_transfers']}U" in text,
+        "runtime file payload admission bound differs from the manifest",
     )
 
 
@@ -2476,7 +2617,7 @@ def validate_freestanding_manifest(
         return 1
     print(
         "target manifest valid: arm64-apple-darwin freestanding, "
-        "495 Core rules, 439 Library rules, environment panic handler, "
+        "496 Core rules, 440 Library rules, environment panic handler, "
         "environment stack bounds, no allocator"
     )
     return 0
@@ -2508,14 +2649,14 @@ def main() -> int:
             core_specification,
             core_inventory_path,
             CORE_REQUIRED_RULES,
-            495,
+            496,
             errors,
         )
         library_inventory = validate_catalog(
             library_specification,
             library_inventory_path,
             LIBRARY_REQUIRED_RULES,
-            439,
+            440,
             errors,
         )
         identity = manifest.get("identity")
@@ -2631,13 +2772,14 @@ def main() -> int:
             )
         validate_lane(manifest, errors)
         validate_blocking_pool(manifest, root, errors)
+        validate_file_payload_adapter(manifest, root, errors)
         if errors.messages:
             for message in errors.messages:
                 print(f"target manifest error: {message}", file=sys.stderr)
             return 1
         print(
             "target manifest valid: arm64-apple-darwin hosted-native-async, "
-            "495 Core rules, 439 Library rules, 4 filesystem-lane threads, "
+            "496 Core rules, 440 Library rules, 4 filesystem-lane threads, "
             "4 blocking-pool threads, 262144-byte generated-frame ceiling"
         )
         return 0

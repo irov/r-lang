@@ -126,6 +126,10 @@ static RRuntimeArrayStatus r_runtime_array_reserve_valid(RRuntimeArray *array, s
 }
 
 static void r_runtime_array_clear_valid(RRuntimeArray *array) {
+    if (array->element.drop == NULL) {
+        array->length = 0U;
+        return;
+    }
     while (array->length != 0U) {
         array->length -= 1U;
         if (array->element.drop != NULL) {

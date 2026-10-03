@@ -369,7 +369,7 @@ static void fill_native_result(RLibraryFsOpenPayload *payload,
             if (descriptor < 0 || payload->file_storage == NULL) {
                 fs_panic();
             }
-            io_created = r_runtime_darwin_io_handle_create(
+            io_created = r_library_internal_fs_payload_handle_create(
                 payload->file_storage->handle.allocator, descriptor, R_RUNTIME_DARWIN_IO_STREAM);
             if (io_created.status != R_RUNTIME_DARWIN_IO_START_OK) {
                 int64_t materialization_native_code;

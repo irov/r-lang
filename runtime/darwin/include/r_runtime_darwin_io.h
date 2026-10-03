@@ -146,6 +146,24 @@ RRuntimeDarwinIoHandleCreateResult r_runtime_darwin_io_handle_create(RRuntimeAll
                                                                      RRuntimeDarwinIoType type);
 
 /*
+ * Handles with direct engines, same ownership as handle_create. A file handle of a regular file
+ * belongs to the file payload adapter (R-SLIB-ASYNC-0019): at most a fixed number of its reads and
+ * writes run at once, as pread/pwrite at the request's stream position or, for RANDOM, at its
+ * offset from the descriptor position at creation (write for an append descriptor without a
+ * position), on a private Dispatch queue and never on an executor worker. A socket handle is a
+ * STREAM over a nonblocking stream socket: activation tries the nonblocking system call at once
+ * and otherwise waits for readiness on the handle's Dispatch read or write source. Neither creates
+ * Dispatch I/O channels; cleanup of the descriptor waits for every direct activity, as a
+ * channel's would.
+ */
+RRuntimeDarwinIoHandleCreateResult
+r_runtime_darwin_io_handle_create_file(RRuntimeAllocator *allocator,
+                                       int descriptor,
+                                       RRuntimeDarwinIoType type);
+RRuntimeDarwinIoHandleCreateResult
+r_runtime_darwin_io_handle_create_socket(RRuntimeAllocator *allocator, int descriptor);
+
+/*
  * Ownership: retain_view creates one allocation-free independent R view. handle_release consumes
  * one such view. Active requests hold independent retains in a separate overflow-checked counter
  * and continue through native cleanup acknowledgement. A non-console identity closes after its
@@ -222,11 +240,11 @@ r_runtime_darwin_io_prepare_shared_write(RRuntimeDarwinIoHandle *handle,
                                          uint64_t timeout_nanoseconds);
 
 /*
- * Precommit reservation for one RANDOM shared write whose descriptor is not available yet.
- * Prepare allocates the private handle and request storage, their synchronization primitives,
- * callback queue, optional deadline, Dispatch data and ordering state without borrowing an fd.
- * The immutable data borrow lasts through activate/abort and, after activation, through terminal
- * acknowledgement.
+ * Precommit reservation for one RANDOM shared write whose descriptor is not available yet; the
+ * write runs on the file payload adapter (R-SLIB-ASYNC-0019). Prepare allocates the private
+ * handle and request storage, their synchronization primitives, callback queue, optional deadline
+ * and ordering state without borrowing an fd. The immutable data borrow lasts through
+ * activate/abort and, after activation, through terminal acknowledgement.
  */
 RRuntimeDarwinIoPrepareResult
 r_runtime_darwin_io_prepare_borrowed_random_shared_write(RRuntimeAllocator *allocator,
@@ -237,18 +255,16 @@ r_runtime_darwin_io_prepare_borrowed_random_shared_write(RRuntimeAllocator *allo
 
 /*
  * Allocation-free with respect to allocator. A valid writable descriptor is borrowed without
- * duplication or ownership transfer while fixed RANDOM root and operation channels are bound.
- * Success consumes *prepared and returns that same request object. Terminal acknowledgement
- * releases the operation channel; release of the returned request releases the private root after
- * any registered request completion callback returns. cleanup then runs exactly once when Dispatch
- * no longer borrows descriptor, so it cannot precede that completion callback. Without a request
- * completion callback, cleanup follows terminal acknowledgement and request release. The caller
- * shall neither modify nor close descriptor until cleanup and still owns and closes it afterward.
- * Validation or
- * root-channel failure leaves *prepared unchanged and does not borrow descriptor. A later
- * channel/activation failure consumes *prepared and still uses cleanup to acknowledge the borrowed
- * descriptor. Generic prepared_abort consumes an unbound reservation and invokes no cleanup
- * callback.
+ * duplication or ownership transfer; RANDOM offsets are relative to its position at binding.
+ * Success consumes *prepared and returns that same request object. Release of the returned
+ * request releases the private root after any registered request completion callback returns.
+ * cleanup then runs exactly once when no admitted transfer uses descriptor any more, so it cannot
+ * precede that completion callback. Without a request completion callback, cleanup follows
+ * terminal acknowledgement and request release. The caller shall neither modify nor close
+ * descriptor until cleanup and still owns and closes it afterward. Validation or binding failure
+ * leaves *prepared unchanged and does not borrow descriptor. A later reservation or activation
+ * failure consumes *prepared and still uses cleanup to acknowledge the borrowed descriptor.
+ * Generic prepared_abort consumes an unbound reservation and invokes no cleanup callback.
  */
 RRuntimeDarwinIoSubmitResult
 r_runtime_darwin_io_prepared_bind_activate_borrowed_random_shared_write(
@@ -360,14 +376,26 @@ size_t r_runtime_darwin_io_request_progress(RRuntimeDarwinIoRequest *request);
 RRuntimeDarwinIoResult r_runtime_darwin_io_request_wait(RRuntimeDarwinIoRequest *request);
 
 /*
- * Registers the sole non-blocking terminal observer. The callback runs exactly once on the
- * handle's serial Dispatch queue after native cleanup acknowledgement. Registration remains valid
- * when the request became terminal before this call. The request and context are retained by their
- * respective owners through callback return; no allocation is performed.
+ * Registers the sole non-blocking terminal observer. The callback runs exactly once after native
+ * cleanup acknowledgement: on the handle's serial Dispatch queue, or, for a request of a direct
+ * handle that finished after the registration, in the native context that finished it (the file
+ * worker or the socket's callback queue). Registration remains valid when the request became
+ * terminal before this call. The request and context are retained by their respective owners
+ * through callback return; no allocation is performed.
  */
 _Bool r_runtime_darwin_io_request_set_completion(RRuntimeDarwinIoRequest *request,
                                                  RRuntimeDarwinIoCompletionFn completion,
                                                  void *context);
+
+/*
+ * As set_completion, except that a request which is already terminal runs the callback on the
+ * calling thread before this call returns. An adapter uses it where running its completion
+ * synchronously is safe, so that a transfer finished at activation publishes without a thread
+ * handoff.
+ */
+_Bool r_runtime_darwin_io_request_set_completion_inline(RRuntimeDarwinIoRequest *request,
+                                                        RRuntimeDarwinIoCompletionFn completion,
+                                                        void *context);
 
 /* Ownership: transfers the request buffer once after terminal completion. */
 RRuntimeDarwinIoBuffer r_runtime_darwin_io_request_take_buffer(RRuntimeDarwinIoRequest *request);
@@ -429,6 +457,30 @@ void r_runtime_darwin_io_testing_pause_next_shutdown_entry(void);
 void r_runtime_darwin_io_testing_wait_for_shutdown_entry(void);
 /* Releases the shutdown worker observed by the preceding wait call. */
 void r_runtime_darwin_io_testing_release_shutdown_entry(void);
+/* Pauses the next inline completion registration after it registered the completion and before
+   its own delivery attempt. */
+void r_runtime_darwin_io_testing_pause_next_inline_registration(void);
+/* Waits until the armed inline registration has entered its test pause. */
+void r_runtime_darwin_io_testing_wait_for_inline_registration(void);
+/* Releases the paused inline registration and waits until it has left the pause. */
+void r_runtime_darwin_io_testing_release_inline_registration(void);
+/* Pauses the next direct-engine finish on a native thread (FILE worker or SOCKET readiness
+   handler) after it dropped its request reference. */
+void r_runtime_darwin_io_testing_pause_next_direct_worker_exit(void);
+/* Waits until the armed direct-engine finish has entered its test pause. */
+void r_runtime_darwin_io_testing_wait_for_direct_worker_exit(void);
+/* Releases the paused direct-engine finish and waits until it has left the pause. */
+void r_runtime_darwin_io_testing_release_direct_worker_exit(void);
+/* Holds every admitted transfer of the file payload adapter before its system call until the
+   matching release; held transfers keep their admission slots. */
+void r_runtime_darwin_io_testing_hold_file_transfers(void);
+/* Waits until at least count admitted file transfers are held. */
+void r_runtime_darwin_io_testing_wait_for_held_file_transfers(size_t count);
+/* Releases every held file transfer. */
+void r_runtime_darwin_io_testing_release_file_transfers(void);
+/* Snapshots of the file payload adapter: admitted transfers and transfers waiting for a slot. */
+size_t r_runtime_darwin_io_testing_file_transfers_admitted(void);
+size_t r_runtime_darwin_io_testing_file_transfers_waiting(void);
 #endif
 
 #endif

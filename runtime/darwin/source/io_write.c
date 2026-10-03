@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -17,6 +18,9 @@ static _Bool write_progress_testing_armed;
 static _Bool write_progress_testing_reached;
 static _Bool write_progress_testing_release;
 static RRuntimeDarwinIoRequest *write_progress_testing_request;
+/* Unarmed hooks stay off the hot path: the hint is read without the mutex, and the mutex
+   state stays authoritative once it is set. */
+static _Atomic _Bool write_progress_testing_hint;
 
 void r_runtime_darwin_io_testing_pause_next_write_after_progress(void) {
     if (pthread_mutex_lock(&write_progress_testing_mutex) != 0) {
@@ -27,6 +31,7 @@ void r_runtime_darwin_io_testing_pause_next_write_after_progress(void) {
         abort();
     }
     write_progress_testing_armed = 1;
+    atomic_store_explicit(&write_progress_testing_hint, 1, memory_order_release);
     write_progress_testing_release = 0;
     if (pthread_mutex_unlock(&write_progress_testing_mutex) != 0) {
         abort();
@@ -94,6 +99,9 @@ void r_runtime_darwin_io_testing_release_write_after_progress(void) {
 }
 
 static void testing_pause_write_after_progress(RRuntimeDarwinIoRequest *request) {
+    if (!atomic_load_explicit(&write_progress_testing_hint, memory_order_acquire)) {
+        return;
+    }
     if (pthread_mutex_lock(&write_progress_testing_mutex) != 0) {
         abort();
     }
@@ -104,6 +112,7 @@ static void testing_pause_write_after_progress(RRuntimeDarwinIoRequest *request)
         return;
     }
     write_progress_testing_armed = 0;
+    atomic_store_explicit(&write_progress_testing_hint, 0, memory_order_release);
     write_progress_testing_reached = 1;
     write_progress_testing_request = request;
     if (pthread_cond_broadcast(&write_progress_testing_condition) != 0) {
@@ -127,11 +136,24 @@ static void testing_pause_write_after_progress(RRuntimeDarwinIoRequest *request)
         abort();
     }
 }
+
+_Bool r_runtime_darwin_io_internal_testing_write_pause_armed(void) {
+    return atomic_load_explicit(&write_progress_testing_hint, memory_order_acquire);
+}
 #else
 static void testing_pause_write_after_progress(RRuntimeDarwinIoRequest *request) {
     (void)request;
 }
+
+_Bool r_runtime_darwin_io_internal_testing_write_pause_armed(void) {
+    return 0;
+}
 #endif
+
+void r_runtime_darwin_io_internal_testing_pause_write_after_progress(
+    RRuntimeDarwinIoRequest *request) {
+    testing_pause_write_after_progress(request);
+}
 
 static _Bool write_arguments_valid(RRuntimeDarwinIoHandle *handle,
                                    off_t offset,
@@ -206,9 +228,20 @@ static RRuntimeDarwinIoPrepareResult prepare_write(RRuntimeDarwinIoHandle *handl
         return r_runtime_darwin_io_internal_prepare_failure(
             R_RUNTIME_DARWIN_IO_START_NATIVE_RETAIN_FAILED, ENOMEM);
     }
+    /* The channel and write-data failure stages also cover the native reservation of a direct
+       engine, which needs neither object: it writes from the request buffer itself. */
     if (r_runtime_darwin_io_internal_testing_should_fail_prepare(
             R_RUNTIME_DARWIN_IO_PREPARE_FAIL_CHANNEL)) {
         channel = NULL;
+    } else if (handle->engine != R_RUNTIME_DARWIN_IO_ENGINE_DISPATCH) {
+        channel = NULL;
+        if (!r_runtime_darwin_io_internal_testing_should_fail_prepare(
+                R_RUNTIME_DARWIN_IO_PREPARE_FAIL_WRITE_DATA)) {
+            if (pthread_mutex_unlock(&handle->mutex) != 0) {
+                abort();
+            }
+            return r_runtime_darwin_io_internal_prepare_success(request);
+        }
     } else {
         channel = r_runtime_darwin_io_internal_create_operation_channel(request);
     }
@@ -425,7 +458,6 @@ r_runtime_darwin_io_prepare_borrowed_random_shared_write(RRuntimeAllocator *allo
     RRuntimeDarwinIoHandle *handle;
     RRuntimeDarwinIoRequest *request;
     RRuntimeDarwinIoStartStatus status;
-    dispatch_data_t write_data;
     int native_error;
 
     if (offset < 0 || size == 0U || timeout_nanoseconds > (uint64_t)INT64_MAX) {
@@ -473,27 +505,13 @@ r_runtime_darwin_io_prepare_borrowed_random_shared_write(RRuntimeAllocator *allo
         return r_runtime_darwin_io_internal_prepare_failure(
             R_RUNTIME_DARWIN_IO_START_NATIVE_RETAIN_FAILED, ENOMEM);
     }
+    /* The file payload adapter writes straight from the borrowed bytes; the write-data stage
+       keeps its failure injection as the reservation of that borrow. */
     if (r_runtime_darwin_io_internal_testing_should_fail_prepare(
             R_RUNTIME_DARWIN_IO_PREPARE_FAIL_WRITE_DATA)) {
-        write_data = NULL;
-    } else {
-        write_data = dispatch_data_create(data,
-                                          size,
-                                          handle->callback_queue,
-                                          ^{
-                                          });
-    }
-    if (write_data == NULL) {
         r_runtime_darwin_io_prepared_abort(&request);
         return r_runtime_darwin_io_internal_prepare_failure(
             R_RUNTIME_DARWIN_IO_START_NATIVE_RETAIN_FAILED, ENOMEM);
-    }
-    if (pthread_mutex_lock(&request->mutex) != 0) {
-        abort();
-    }
-    request->prepared_write_data = write_data;
-    if (pthread_mutex_unlock(&request->mutex) != 0) {
-        abort();
     }
     return r_runtime_darwin_io_internal_prepare_success(request);
 }
@@ -508,7 +526,6 @@ r_runtime_darwin_io_prepared_bind_activate_borrowed_random_shared_write(
     RRuntimeDarwinIoHandle *handle;
     RRuntimeDarwinIoSubmitResult submission;
     RRuntimeDarwinIoStartStatus status;
-    dispatch_io_t channel;
     int native_error = 0;
     if (descriptor < 0) {
         return r_runtime_darwin_io_internal_submit_failure(
@@ -521,19 +538,14 @@ r_runtime_darwin_io_prepared_bind_activate_borrowed_random_shared_write(
     if (status != R_RUNTIME_DARWIN_IO_START_OK) {
         return r_runtime_darwin_io_internal_submit_failure(status, native_error);
     }
+    /* The channel failure stage also covers the native reservation of the file payload
+       adapter, which needs no further object. */
     if (r_runtime_darwin_io_internal_testing_should_fail_prepare(
             R_RUNTIME_DARWIN_IO_PREPARE_FAIL_CHANNEL)) {
-        channel = NULL;
-    } else {
-        channel = r_runtime_darwin_io_internal_create_operation_channel(request);
-    }
-    if (channel == NULL) {
         r_runtime_darwin_io_prepared_abort(prepared_slot);
         return r_runtime_darwin_io_internal_submit_failure(
             R_RUNTIME_DARWIN_IO_START_NATIVE_RETAIN_FAILED, ENOMEM);
     }
-    dispatch_io_set_low_water(channel, 1U);
-    dispatch_io_set_high_water(channel, R_RUNTIME_DARWIN_IO_CHUNK_SIZE);
     submission = r_runtime_darwin_io_prepared_activate(prepared_slot, NULL);
     if (submission.status != R_RUNTIME_DARWIN_IO_START_OK) {
         r_runtime_darwin_io_prepared_abort(prepared_slot);

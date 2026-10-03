@@ -419,6 +419,54 @@ async void serve_with_shares_its_state() throws std.error::fault, std.test::fail
     std.test::equal(core::atomic_load(&counts->served, core::memory_order::relaxed), 3u32);
 }
 
+struct Stopper { std.sync::sender<std.service::stop> sender; };
+
+/* Sends a drain request and returns, so the request and the outcome of the handler reach the
+   loop at almost the same moment, while the loop waits at its capacity. */
+protected async void stop_and_return(arc Stopper state, std.net::tcp_connection connection)
+    throws std.error::fault {
+    request(&state->sender, std.service::stop::drain);
+    drop connection;
+}
+
+/* One service whose only handler requests the drain itself; the sender stays in the state, so
+   a lost request would leave the service running past the limit, and a lost outcome would be
+   counted as cancelled after the timeout. True when the service stopped in time with the
+   handler counted as completed. */
+protected async bool stops_with_its_handler() throws std.error::fault {
+    std.net::tcp_listener listener = await open_listener();
+    std.net::socket_address endpoint = listener.local_address();
+    std.sync::channel<std.service::stop> factory = std.sync::channel::<std.service::stop>();
+    std.sync::sender<std.service::stop> stopper = std.sync::sender(&factory);
+    std.sync::receiver<std.service::stop> stop = std.sync::receiver(move factory);
+    arc Stopper state = new arc Stopper {.sender = move stopper};
+    std.time::instant now = std.time::monotonic_now();
+    std.time::instant limit = std.time::instant_add(now, std.time::duration_from_seconds(5i64));
+    bool exact = false;
+    task_scope(2) group {
+        auto server = std.service::serve_with(move listener,
+                                              options_of(1u32, 30000u32, std.service::overflow::wait),
+                                              move stop, move state, stop_and_return);
+        auto client = visit(endpoint);
+        select (group) {
+        case std.service::report account = await move server:
+            exact = account.accepted == 1u64 && account.completed == 1u64 && account.cancelled == 0u64;
+        case until (limit): break;
+        }
+        group.cancel_all();
+    }
+    return exact;
+}
+
+/* P4.1-5: a stop request that arrives with the outcome of a handler loses neither. */
+@test
+async void counts_a_handler_that_requests_the_stop() throws std.error::fault, std.test::failure {
+    for (u32 index = 0u32; index < 100u32; index += 1u32) {
+        bool exact = await stops_with_its_handler();
+        std.test::check(exact == true, "the request and the outcome both count");
+    }
+}
+
 @test
 async void stops_when_every_sender_is_gone() throws std.error::fault, std.test::failure {
     std.net::tcp_listener listener = await open_listener();
@@ -615,6 +663,51 @@ async void closes_idle_connections() throws std.error::fault, std.test::failure 
         std.test::equal(received, 0usize);
         std.test::equal(account.accepted, 1u64);
         std.test::equal(account.failed, 1u64);
+    }
+}
+
+/* stop_and_return for serve_all. */
+protected async void stop_and_return_any(arc Stopper state, std.service::connection connection)
+    throws std.error::fault {
+    request(&state->sender, std.service::stop::drain);
+    drop connection;
+}
+
+/* stops_with_its_handler for serve_all. */
+protected async bool all_stop_with_their_handler() throws std.error::fault {
+    std.net::tcp_listener listener = await open_listener();
+    std.net::socket_address endpoint = listener.local_address();
+    array<std.service::listener> listeners = [];
+    add_listener(&listeners, std.service::listener::tcp(move listener));
+    std.sync::channel<std.service::stop> factory = std.sync::channel::<std.service::stop>();
+    std.sync::sender<std.service::stop> stopper = std.sync::sender(&factory);
+    std.sync::receiver<std.service::stop> stop = std.sync::receiver(move factory);
+    arc Stopper state = new arc Stopper {.sender = move stopper};
+    std.time::instant now = std.time::monotonic_now();
+    std.time::instant limit = std.time::instant_add(now, std.time::duration_from_seconds(5i64));
+    bool exact = false;
+    task_scope(2) group {
+        auto server = std.service::serve_all(move listeners,
+                                             options_of(1u32, 30000u32, std.service::overflow::wait),
+                                             move stop, std.service::health::create(), move state,
+                                             stop_and_return_any);
+        auto client = visit(endpoint);
+        select (group) {
+        case std.service::report account = await move server:
+            exact = account.accepted == 1u64 && account.completed == 1u64 && account.cancelled == 0u64;
+        case until (limit): break;
+        }
+        group.cancel_all();
+    }
+    return exact;
+}
+
+/* P4.1-5 for serve_all. */
+@test
+async void serve_all_counts_a_handler_that_requests_the_stop() throws std.error::fault, std.test::failure {
+    for (u32 index = 0u32; index < 100u32; index += 1u32) {
+        bool exact = await all_stop_with_their_handler();
+        std.test::check(exact == true, "the request and the outcome both count");
     }
 }
 

@@ -58,11 +58,14 @@ protected o<std.time::instant> limit_after(std.time::duration timeout) {
 }
 
 /* The channel holds max_capacity outcomes and at most one per running handler, so the send
-   never finds it full. */
+   never finds it full. The loop takes outcomes only without waiting (collect) and waits for the
+   notification that follows each send instead: a wait that is cancelled after it took a
+   notification loses no outcome, whereas a cancelled receive could destroy one (P4.1-5). */
 protected void report_outcome(const (std.sync::sync_sender<std.service::outcome>)* done,
-                              std.service::outcome result) {
+                              const std.async::notify* ended, std.service::outcome result) {
     std.sync::try_send_result<std.service::outcome> sent = std.sync::try_send(done, result);
     drop sent;
+    ended->notify_one();
 }
 
 /* One connection: the handler runs under the connection deadline. */
@@ -70,6 +73,7 @@ protected void report_outcome(const (std.sync::sync_sender<std.service::outcome>
          H: copy & async fn once(arc S, std.net::tcp_connection) -> void throws(std.error::fault)>
 @scoped
 protected async void run(const (std.sync::sync_sender<std.service::outcome>)* done,
+                         const std.async::notify* ended,
                          H handler,
                          arc S state,
                          std.net::tcp_connection connection,
@@ -78,9 +82,61 @@ protected async void run(const (std.sync::sync_sender<std.service::outcome>)* do
         deadline (limit) {
             await (move handler).call(move state, move connection);
         }
-        report_outcome(done, std.service::outcome::completed);
+        report_outcome(done, ended, std.service::outcome::completed);
     } catch (std.error::fault failure) {
-        report_outcome(done, std.service::outcome::failed(std.error::from_fault(failure)));
+        report_outcome(done, ended, std.service::outcome::failed(std.error::from_fault(failure)));
+    }
+}
+
+/* A stop request, a drain once every stop sender is gone (R-SLIB-SERVICE-0003). */
+protected std.service::stop stop_of(o<std.service::stop> request) {
+    switch (request) {
+    case variant o::some(value): return *value;
+    case variant o::none: break;
+    }
+    return std.service::stop::drain;
+}
+
+/* Whether the watcher of the stop requests has ended. */
+protected bool stop_seen(const (atomic u32)* requested) {
+    return core::atomic_load(requested, core::memory_order::acquire) != 0u32;
+}
+
+protected void announce_stop(const (atomic u32)* requested, const std.async::notify* halted) {
+    core::atomic_store(requested, 1u32, core::memory_order::release);
+    halted->notify_one();
+}
+
+/* How the watch for a stop request ended: with the request, or with the failure to start its
+   wait, which the serve call then throws. The watcher returns the failure instead of throwing
+   it, so it is a task without effects (Core R-FUNC-0012) that every exit of the loop may leave to
+   its group. */
+protected enum watched { stopped(std.service::stop), unstarted(std.async::start_error) };
+
+/* The request that the watch ended with; a wait that could not start fails serve_with. */
+protected std.service::stop request_of(watched seen) throws std.async::start_error {
+    switch (seen) {
+    case variant watched::stopped(mode): return *mode;
+    case variant watched::unstarted(failure): throw *failure;
+    }
+    return std.service::stop::drain;
+}
+
+/* Waits for the first stop request of a serve call. This receive is the only one of the stop
+   receiver and the loop never cancels it while it serves: the loop reads `requested` at every
+   round and then takes the request from this task, while `halted` only wakes it, so a wake-up
+   that a cancelled wait took loses no request (P4.1-5). */
+@scoped
+protected async watched watch_stop(std.sync::receiver<std.service::stop>* stop,
+                                   const (atomic u32)* requested,
+                                   const std.async::notify* halted) {
+    try {
+        o<std.service::stop> request = await stop->receive();
+        announce_stop(requested, halted);
+        return watched::stopped(stop_of(request));
+    } catch (std.async::start_error failure) {
+        announce_stop(requested, halted);
+        return watched::unstarted(failure);
     }
 }
 
@@ -134,112 +190,105 @@ async std.service::report serve_with(std.net::tcp_listener listener,
         std.sync::sync_channel::<std.service::outcome>(1024usize);
     std.sync::sync_sender<std.service::outcome> done = std.sync::sync_sender(&factory);
     std.sync::receiver<std.service::outcome> finished = std.sync::sync_receiver(move factory);
+    std.async::notify ended = std.async::notify_new();
+    std.async::notify halted = std.async::notify_new();
+    atomic u32 requested = 0u32;
     std.service::report account = {.accepted = 0u64, .rejected = 0u64, .completed = 0u64,
                                    .failed = 0u64, .cancelled = 0u64, .last_failure = o::none};
     u32 active = 0u32;
     std.service::stop mode = std.service::stop::drain;
-    task_scope(1024) handlers {
-        bool serving = true;
-        while (serving == true) {
-            collect(&finished, &account, &active);
-            if (settings.overflow == std.service::overflow::wait && active >= settings.capacity) {
-                // At capacity nothing is accepted until a handler task ends. Its outcome arrives
-                // before its slot in the group is free, so the round then waits for a vacancy.
-                task_scope(2) full {
-                    auto next = finished.receive();
-                    auto signal = stop.receive();
-                    select (full) {
-                    case o<std.service::outcome> result = await move next:
-                        switch (result) {
-                        case variant o::some(value):
-                            record(&account, *value);
-                            active -= 1u32;
-                        case variant o::none: break;
-                        }
-                    case o<std.service::stop> request = await move signal:
-                        switch (request) {
-                        case variant o::some(value): mode = *value;
-                        case variant o::none: mode = std.service::stop::drain;
-                        }
-                        serving = false;
-                    }
-                    full.cancel_all();
+    task_scope(1) watching {
+        auto watcher = watch_stop(&stop, &requested, &halted);
+        task_scope(1024) handlers {
+            while (true) {
+                collect(&finished, &account, &active);
+                if (stop_seen(&requested) == true) {
+                    watched seen = await move watcher;
+                    mode = request_of(seen);
+                    break;
                 }
-                if (serving == true) { await handlers.vacancy(); }
-                continue;
-            }
-            // Each round races the next accept against the stop receiver; the loser is
-            // cancelled, which loses no stop request.
-            o<std.net::tcp_connection> accepted = o::none;
-            task_scope(2) waiting {
-                auto incoming = accept_next(&listener);
-                auto signal = stop.receive();
-                select (waiting) {
-                case std.net::tcp_connection connection = await move incoming:
-                    accepted = o::some(move connection);
-                case o<std.service::stop> request = await move signal:
-                    switch (request) {
-                    case variant o::some(value): mode = *value;
-                    case variant o::none: mode = std.service::stop::drain;
+                if (settings.overflow == std.service::overflow::wait && active >= settings.capacity) {
+                    // At capacity nothing is accepted until a handler task ends. Its outcome
+                    // arrives before its slot in the group is free, so the round then waits for
+                    // a vacancy.
+                    task_scope(2) full {
+                        auto end = ended.notified();
+                        auto halt = halted.notified();
+                        select (full) {
+                        case await move end: break;
+                        case await move halt: break;
+                        }
+                        full.cancel_all();
                     }
-                    serving = false;
+                    collect(&finished, &account, &active);
+                    if (active < settings.capacity) { await handlers.vacancy(); }
+                    continue;
                 }
-                waiting.cancel_all();
-            }
-            collect(&finished, &account, &active);
-            switch (move accepted) {
-            case variant o::some(move connection):
-                if (active < settings.capacity) {
-                    o<std.time::instant> limit = limit_after(settings.timeout);
-                    try {
-                        auto member = run(&done, handler, std.arc::clone(&state), move connection,
-                                          limit);
-                        std.async::detach(move member);
-                        active += 1u32;
-                        account.accepted += 1u64;
-                    } catch (std.async::start_error failure) {
+                // Each round races the next accept against the wake-up of a stop request; a
+                // connection whose accept completes as the request arrives is closed.
+                o<std.net::tcp_connection> accepted = o::none;
+                task_scope(2) waiting {
+                    auto incoming = accept_next(&listener);
+                    auto halt = halted.notified();
+                    select (waiting) {
+                    case std.net::tcp_connection connection = await move incoming:
+                        accepted = o::some(move connection);
+                    case await move halt: break;
+                    }
+                    waiting.cancel_all();
+                }
+                collect(&finished, &account, &active);
+                switch (move accepted) {
+                case variant o::some(move connection):
+                    if (active < settings.capacity) {
+                        o<std.time::instant> limit = limit_after(settings.timeout);
+                        try {
+                            auto member = run(&done, &ended, handler, std.arc::clone(&state),
+                                              move connection, limit);
+                            std.async::detach(move member);
+                            active += 1u32;
+                            account.accepted += 1u64;
+                        } catch (std.async::start_error failure) {
+                            account.rejected += 1u64;
+                        }
+                    } else {
+                        drop connection;
                         account.rejected += 1u64;
                     }
-                } else {
-                    drop connection;
-                    account.rejected += 1u64;
+                case variant o::none: break;
                 }
-            case variant o::none: break;
             }
-        }
-        // A drain waits for the outcomes of the running handlers until none runs or the timeout
-        // has passed; each round races one receive against the limit in a group of its own,
-        // which takes no handler slot.
-        if (mode == std.service::stop::drain) {
-            try {
-                std.time::instant now = std.time::monotonic_now();
-                std.time::instant limit = std.time::instant_add(now, settings.timeout);
-                bool waiting = active > 0u32;
-                while (waiting == true) {
-                    task_scope(1) pending {
-                        auto next = finished.receive();
-                        select (pending) {
-                        case o<std.service::outcome> result = await move next:
-                            switch (result) {
-                            case variant o::some(value):
-                                record(&account, *value);
-                                active -= 1u32;
-                            case variant o::none: waiting = false;
+            // A drain waits for the outcomes of the running handlers until none runs or the
+            // timeout has passed; each round waits for the next notification of a handler, or
+            // for the limit, in a group of its own, which takes no handler slot.
+            if (mode == std.service::stop::drain) {
+                try {
+                    std.time::instant now = std.time::monotonic_now();
+                    std.time::instant limit = std.time::instant_add(now, settings.timeout);
+                    bool waiting = active > 0u32;
+                    while (waiting == true) {
+                        task_scope(1) pending {
+                            auto end = ended.notified();
+                            select (pending) {
+                            case await move end: break;
+                            case until (limit): waiting = false;
                             }
-                        case until (limit): waiting = false;
+                            pending.cancel_all();
                         }
-                        pending.cancel_all();
+                        collect(&finished, &account, &active);
+                        if (active == 0u32) { waiting = false; }
                     }
-                    if (active == 0u32) { waiting = false; }
+                    limit as void;
+                } catch (std.time::time_error failure) {
+                    failure as void;
                 }
-                limit as void;
-            } catch (std.time::time_error failure) {
-                failure as void;
             }
+            handlers.cancel_all();
         }
-        handlers.cancel_all();
     }
     // Every handler is terminal: each one that returned or threw has sent its outcome.
+    drop ended;
+    drop halted;
     drop done;
     collect(&finished, &account, &active);
     account.cancelled += active as u64;
@@ -516,6 +565,7 @@ protected async std.service::connection open_arrival(arrival accepted, o<std.tim
          H: copy & async fn once(arc S, std.service::connection) -> void throws(std.error::fault)>
 @scoped
 protected async void run_any(const (std.sync::sync_sender<std.service::outcome>)* done,
+                             const std.async::notify* ended,
                              H handler,
                              arc S state,
                              arrival accepted,
@@ -528,9 +578,9 @@ protected async void run_any(const (std.sync::sync_sender<std.service::outcome>)
                 await (move handler).call(move state, move connection);
             }
         }
-        report_outcome(done, std.service::outcome::completed);
+        report_outcome(done, ended, std.service::outcome::completed);
     } catch (std.error::fault failure) {
-        report_outcome(done, std.service::outcome::failed(std.error::from_fault(failure)));
+        report_outcome(done, ended, std.service::outcome::failed(std.error::from_fault(failure)));
     }
 }
 
@@ -543,23 +593,60 @@ protected o<signals> listen_signals(bool wanted) throws std.process::process_err
                             .interrupt = std.signal::listen(std.signal::kind::interrupt)});
 }
 
-/* What one round of the loop waited for. */
-protected enum round { arrived(arrival), stopped(std.service::stop), finished(o<std.service::outcome>) };
+/* watched for serve_all, whose watch also waits for signals. */
+protected enum watched_all {
+    stopped(std.service::stop),
+    unstarted(std.async::start_error),
+    unwatched(std.process::process_error)
+};
 
-protected std.service::stop stop_of(o<std.service::stop> request) {
-    switch (request) {
-    case variant o::some(value): return *value;
-    case variant o::none: break;
+/* The request that the watch of serve_all ended with; a failed wait fails serve_all. */
+protected std.service::stop request_of_all(watched_all seen)
+    throws std.async::start_error, std.process::process_error {
+    switch (seen) {
+    case variant watched_all::stopped(mode): return *mode;
+    case variant watched_all::unstarted(failure): throw *failure;
+    case variant watched_all::unwatched(failure): throw *failure;
     }
     return std.service::stop::drain;
 }
 
-protected round arrival_round(o<arrival> item) {
-    switch (move item) {
-    case variant o::some(move value): return round::arrived(move value);
-    case variant o::none: break;
+/* Waits for the first stop request of serve_all: a stop value, the end of every stop sender
+   or, when watch holds listeners, SIGTERM or SIGINT, both a drain (R-SLIB-SERVICE-0007). Like
+   watch_stop, it is the only wait for them, and the loop never cancels it while it serves. */
+@scoped
+protected async watched_all watch_requests(std.sync::receiver<std.service::stop>* stop,
+                                           const (o<signals>)* watch,
+                                           const (atomic u32)* requested,
+                                           const std.async::notify* halted) {
+    std.service::stop mode = std.service::stop::drain;
+    try {
+        switch (*watch) {
+        case variant o::some(listening):
+            task_scope(3) waiting {
+                auto request = stop->receive();
+                auto term = listening->terminate.next();
+                auto intr = listening->interrupt.next();
+                select (waiting) {
+                case o<std.service::stop> asked = await move request: mode = stop_of(asked);
+                case u64 count = await move term: count as void;
+                case u64 count = await move intr: count as void;
+                }
+                waiting.cancel_all();
+            }
+        case variant o::none:
+            o<std.service::stop> asked = await stop->receive();
+            mode = stop_of(asked);
+        }
+    } catch (std.async::start_error failure) {
+        announce_stop(requested, halted);
+        return watched_all::unstarted(failure);
+    } catch (std.process::process_error failure) {
+        announce_stop(requested, halted);
+        return watched_all::unwatched(failure);
     }
-    return round::stopped(std.service::stop::drain);
+    announce_stop(requested, halted);
+    return watched_all::stopped(mode);
 }
 
 protected void set_serving(const std.service::health* status, bool serving) {
@@ -599,6 +686,9 @@ async std.service::report serve_all(array<std.service::listener> listeners,
     std.sync::sync_channel<arrival> arrival_factory = std.sync::sync_channel::<arrival>(16usize);
     std.sync::sync_sender<arrival> handing = std.sync::sync_sender(&arrival_factory);
     std.sync::receiver<arrival> arrivals = std.sync::sync_receiver(move arrival_factory);
+    std.async::notify ended = std.async::notify_new();
+    std.async::notify halted = std.async::notify_new();
+    atomic u32 requested = 0u32;
     std.service::report account = {.accepted = 0u64, .rejected = 0u64, .completed = 0u64,
                                    .failed = 0u64, .cancelled = 0u64, .last_failure = o::none};
     u32 active = 0u32;
@@ -611,170 +701,121 @@ async std.service::report serve_all(array<std.service::listener> listeners,
             std.async::detach(move member);
         }
         drop handing;
-        set_serving(&status, true);
-        task_scope(1024) handlers {
-            bool serving = true;
-            while (serving == true) {
-                collect(&finished, &account, &active);
-                set_active(&status, active);
-                bool full = settings.overflow == std.service::overflow::wait && active >= settings.capacity;
-                // Each round races the next arrival, or the outcome of a handler at capacity,
-                // against the stop requests; the losers are cancelled, which loses no request.
-                o<round> waited = o::none;
-                // The listeners leave watch for the round, so that its waits borrow a place.
-                switch (move watch) {
-                case variant o::some(move listening):
-                    if (full == true) {
-                        task_scope(4) waiting {
-                            auto outcome = finished.receive();
-                            auto request = stop.receive();
-                            auto term = listening.terminate.next();
-                            auto intr = listening.interrupt.next();
-                            select (waiting) {
-                            case o<std.service::outcome> result = await move outcome:
-                                waited = o::some(round::finished(result));
-                            case o<std.service::stop> asked = await move request:
-                                waited = o::some(round::stopped(stop_of(asked)));
-                            case u64 count = await move term:
-                                count as void;
-                                waited = o::some(round::stopped(std.service::stop::drain));
-                            case u64 count = await move intr:
-                                count as void;
-                                waited = o::some(round::stopped(std.service::stop::drain));
+        task_scope(1) watching {
+            auto watcher = watch_requests(&stop, &watch, &requested, &halted);
+            set_serving(&status, true);
+            task_scope(1024) handlers {
+                while (true) {
+                    collect(&finished, &account, &active);
+                    set_active(&status, active);
+                    if (stop_seen(&requested) == true) {
+                        watched_all seen = await move watcher;
+                        mode = request_of_all(seen);
+                        break;
+                    }
+                    if (settings.overflow == std.service::overflow::wait && active >= settings.capacity) {
+                        // At capacity nothing is taken until a handler task ends; then the round
+                        // waits for its slot, as in serve_with.
+                        task_scope(2) full {
+                            auto end = ended.notified();
+                            auto halt = halted.notified();
+                            select (full) {
+                            case await move end: break;
+                            case await move halt: break;
                             }
-                            waiting.cancel_all();
+                            full.cancel_all();
                         }
-                    }
-                    if (full == false) {
-                        task_scope(4) waiting {
-                            auto arrived = arrivals.receive();
-                            auto request = stop.receive();
-                            auto term = listening.terminate.next();
-                            auto intr = listening.interrupt.next();
-                            select (waiting) {
-                            case o<arrival> item = await move arrived: waited = o::some(arrival_round(move item));
-                            case o<std.service::stop> asked = await move request:
-                                waited = o::some(round::stopped(stop_of(asked)));
-                            case u64 count = await move term:
-                                count as void;
-                                waited = o::some(round::stopped(std.service::stop::drain));
-                            case u64 count = await move intr:
-                                count as void;
-                                waited = o::some(round::stopped(std.service::stop::drain));
-                            }
-                            waiting.cancel_all();
-                        }
-                    }
-                    watch = o::some(move listening);
-                case variant o::none:
-                    watch = o::none;
-                    if (full == true) {
-                        task_scope(2) waiting {
-                            auto outcome = finished.receive();
-                            auto request = stop.receive();
-                            select (waiting) {
-                            case o<std.service::outcome> result = await move outcome:
-                                waited = o::some(round::finished(result));
-                            case o<std.service::stop> asked = await move request:
-                                waited = o::some(round::stopped(stop_of(asked)));
-                            }
-                            waiting.cancel_all();
-                        }
-                    }
-                    if (full == false) {
-                        task_scope(2) waiting {
-                            auto arrived = arrivals.receive();
-                            auto request = stop.receive();
-                            select (waiting) {
-                            case o<arrival> item = await move arrived: waited = o::some(arrival_round(move item));
-                            case o<std.service::stop> asked = await move request:
-                                waited = o::some(round::stopped(stop_of(asked)));
-                            }
-                            waiting.cancel_all();
-                        }
-                    }
-                }
-                round next = round::stopped(std.service::stop::drain);
-                switch (move waited) {
-                case variant o::some(move value): next = move value;
-                case variant o::none: break;
-                }
-                switch (move next) {
-                case variant round::finished(result):
-                    switch (*result) {
-                    case variant o::some(value):
-                        record(&account, *value);
-                        active -= 1u32;
-                    case variant o::none: break;
-                    }
-                case variant round::stopped(asked):
-                    mode = *asked;
-                    serving = false;
-                case variant round::arrived(move item):
-                    o<std.net::net_error> failure = item.failure;
-                    switch (failure) {
-                    case variant o::some(error):
-                        broken = o::some(*error);
-                        serving = false;
-                        drop item;
-                    case variant o::none:
                         collect(&finished, &account, &active);
-                        if (active < settings.capacity) {
-                            o<std.time::instant> limit = limit_after(settings.timeout);
-                            try {
-                                auto member = run_any(&done, handler, std.arc::clone(&state), move item,
-                                                      settings.idle_timeout, limit);
-                                std.async::detach(move member);
-                                active += 1u32;
-                                account.accepted += 1u64;
-                                core::atomic_fetch_add(&status.core->accepted, 1u64, core::memory_order::relaxed)
-                                    as void;
-                            } catch (std.async::start_error rejected) {
-                                rejected as void;
+                        set_active(&status, active);
+                        if (active < settings.capacity) { await handlers.vacancy(); }
+                        continue;
+                    }
+                    // Each round races the next arrival against the wake-up of a stop request; an
+                    // arrival taken as the request arrives is closed.
+                    bool taken = false;
+                    o<arrival> arrived = o::none;
+                    task_scope(2) waiting {
+                        auto next = arrivals.receive();
+                        auto halt = halted.notified();
+                        select (waiting) {
+                        case o<arrival> item = await move next:
+                            taken = true;
+                            arrived = move item;
+                        case await move halt: break;
+                        }
+                        waiting.cancel_all();
+                    }
+                    // Accepting also ends when a listener fails or every acceptor has ended.
+                    bool accepting = true;
+                    switch (move arrived) {
+                    case variant o::some(move item):
+                        o<std.net::net_error> failure = item.failure;
+                        switch (failure) {
+                        case variant o::some(error):
+                            broken = o::some(*error);
+                            accepting = false;
+                            drop item;
+                        case variant o::none:
+                            collect(&finished, &account, &active);
+                            if (active < settings.capacity) {
+                                o<std.time::instant> limit = limit_after(settings.timeout);
+                                try {
+                                    auto member = run_any(&done, &ended, handler, std.arc::clone(&state),
+                                                          move item, settings.idle_timeout, limit);
+                                    std.async::detach(move member);
+                                    active += 1u32;
+                                    account.accepted += 1u64;
+                                    core::atomic_fetch_add(&status.core->accepted, 1u64,
+                                                           core::memory_order::relaxed) as void;
+                                } catch (std.async::start_error rejected) {
+                                    rejected as void;
+                                    account.rejected += 1u64;
+                                }
+                            } else {
+                                drop item;
                                 account.rejected += 1u64;
                             }
-                        } else {
-                            drop item;
-                            account.rejected += 1u64;
                         }
+                    case variant o::none:
+                        if (taken == true) { accepting = false; }
+                    }
+                    if (accepting == false) {
+                        std.async::cancel(move watcher);
+                        break;
                     }
                 }
-                if (serving == true && full == true) { await handlers.vacancy(); }
-            }
-            set_serving(&status, false);
-            acceptors.cancel_all();
-            if (mode == std.service::stop::drain) {
-                try {
-                    std.time::instant now = std.time::monotonic_now();
-                    std.time::instant limit = std.time::instant_add(now, settings.timeout);
-                    bool waiting = active > 0u32;
-                    while (waiting == true) {
-                        task_scope(1) pending {
-                            auto next = finished.receive();
-                            select (pending) {
-                            case o<std.service::outcome> result = await move next:
-                                switch (result) {
-                                case variant o::some(value):
-                                    record(&account, *value);
-                                    active -= 1u32;
-                                case variant o::none: waiting = false;
+                set_serving(&status, false);
+                acceptors.cancel_all();
+                if (mode == std.service::stop::drain) {
+                    try {
+                        std.time::instant now = std.time::monotonic_now();
+                        std.time::instant limit = std.time::instant_add(now, settings.timeout);
+                        bool waiting = active > 0u32;
+                        while (waiting == true) {
+                            task_scope(1) pending {
+                                auto end = ended.notified();
+                                select (pending) {
+                                case await move end: break;
+                                case until (limit): waiting = false;
                                 }
-                            case until (limit): waiting = false;
+                                pending.cancel_all();
                             }
-                            pending.cancel_all();
+                            collect(&finished, &account, &active);
+                            set_active(&status, active);
+                            if (active == 0u32) { waiting = false; }
                         }
-                        set_active(&status, active);
-                        if (active == 0u32) { waiting = false; }
+                        limit as void;
+                    } catch (std.time::time_error failure) {
+                        failure as void;
                     }
-                    limit as void;
-                } catch (std.time::time_error failure) {
-                    failure as void;
                 }
+                handlers.cancel_all();
             }
-            handlers.cancel_all();
         }
         acceptors.cancel_all();
     }
+    drop ended;
+    drop halted;
     drop done;
     drop arrivals;
     drop watch;

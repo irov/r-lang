@@ -349,8 +349,9 @@ typedef struct RStdSyncReceiveStartResult {
 /*
  * Ownership: borrows the receiver only for the call and retains its channel until the task is
  * terminal. The task completes with the oldest queued or next sent value, or with none once
- * every sender is gone and the queue is empty. Pending receives are served in start order, and
- * cancelling one never loses a value.
+ * every sender is gone and the queue is empty. Pending receives are served in start order;
+ * cancelling a pending one leaves the value queued, whereas one selected before its cancellation
+ * has taken its value, which is destroyed with its unobserved result.
  */
 RStdSyncReceiveStartResult r_std_sync_receive(const RStdSyncReceiver *endpoint,
                                               RStdSyncReceiveLayout layout);

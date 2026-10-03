@@ -51,7 +51,54 @@ protected const usize WINDOW_MAX = 32768usize;
 protected const usize WINDOW_MIN = 256usize;
 protected const usize ONE_SHOT_CHUNK = 4096usize;
 protected const u32 ADLER_MODULUS = 65521u32;
-protected const u32 CRC_POLYNOMIAL = 0xedb88320u32;
+/* The most bytes whose Adler-32 sums stay below 2^32 when the modulo is taken only after them. */
+protected const usize ADLER_BLOCK = 5552usize;
+/* RFC 1952 CRC-32 of each byte value (reflected polynomial 0xedb88320). */
+protected const u32[256] CRC_TABLE = {
+    0x00000000u32, 0x77073096u32, 0xee0e612cu32, 0x990951bau32, 0x076dc419u32, 0x706af48fu32,
+    0xe963a535u32, 0x9e6495a3u32, 0x0edb8832u32, 0x79dcb8a4u32, 0xe0d5e91eu32, 0x97d2d988u32,
+    0x09b64c2bu32, 0x7eb17cbdu32, 0xe7b82d07u32, 0x90bf1d91u32, 0x1db71064u32, 0x6ab020f2u32,
+    0xf3b97148u32, 0x84be41deu32, 0x1adad47du32, 0x6ddde4ebu32, 0xf4d4b551u32, 0x83d385c7u32,
+    0x136c9856u32, 0x646ba8c0u32, 0xfd62f97au32, 0x8a65c9ecu32, 0x14015c4fu32, 0x63066cd9u32,
+    0xfa0f3d63u32, 0x8d080df5u32, 0x3b6e20c8u32, 0x4c69105eu32, 0xd56041e4u32, 0xa2677172u32,
+    0x3c03e4d1u32, 0x4b04d447u32, 0xd20d85fdu32, 0xa50ab56bu32, 0x35b5a8fau32, 0x42b2986cu32,
+    0xdbbbc9d6u32, 0xacbcf940u32, 0x32d86ce3u32, 0x45df5c75u32, 0xdcd60dcfu32, 0xabd13d59u32,
+    0x26d930acu32, 0x51de003au32, 0xc8d75180u32, 0xbfd06116u32, 0x21b4f4b5u32, 0x56b3c423u32,
+    0xcfba9599u32, 0xb8bda50fu32, 0x2802b89eu32, 0x5f058808u32, 0xc60cd9b2u32, 0xb10be924u32,
+    0x2f6f7c87u32, 0x58684c11u32, 0xc1611dabu32, 0xb6662d3du32, 0x76dc4190u32, 0x01db7106u32,
+    0x98d220bcu32, 0xefd5102au32, 0x71b18589u32, 0x06b6b51fu32, 0x9fbfe4a5u32, 0xe8b8d433u32,
+    0x7807c9a2u32, 0x0f00f934u32, 0x9609a88eu32, 0xe10e9818u32, 0x7f6a0dbbu32, 0x086d3d2du32,
+    0x91646c97u32, 0xe6635c01u32, 0x6b6b51f4u32, 0x1c6c6162u32, 0x856530d8u32, 0xf262004eu32,
+    0x6c0695edu32, 0x1b01a57bu32, 0x8208f4c1u32, 0xf50fc457u32, 0x65b0d9c6u32, 0x12b7e950u32,
+    0x8bbeb8eau32, 0xfcb9887cu32, 0x62dd1ddfu32, 0x15da2d49u32, 0x8cd37cf3u32, 0xfbd44c65u32,
+    0x4db26158u32, 0x3ab551ceu32, 0xa3bc0074u32, 0xd4bb30e2u32, 0x4adfa541u32, 0x3dd895d7u32,
+    0xa4d1c46du32, 0xd3d6f4fbu32, 0x4369e96au32, 0x346ed9fcu32, 0xad678846u32, 0xda60b8d0u32,
+    0x44042d73u32, 0x33031de5u32, 0xaa0a4c5fu32, 0xdd0d7cc9u32, 0x5005713cu32, 0x270241aau32,
+    0xbe0b1010u32, 0xc90c2086u32, 0x5768b525u32, 0x206f85b3u32, 0xb966d409u32, 0xce61e49fu32,
+    0x5edef90eu32, 0x29d9c998u32, 0xb0d09822u32, 0xc7d7a8b4u32, 0x59b33d17u32, 0x2eb40d81u32,
+    0xb7bd5c3bu32, 0xc0ba6cadu32, 0xedb88320u32, 0x9abfb3b6u32, 0x03b6e20cu32, 0x74b1d29au32,
+    0xead54739u32, 0x9dd277afu32, 0x04db2615u32, 0x73dc1683u32, 0xe3630b12u32, 0x94643b84u32,
+    0x0d6d6a3eu32, 0x7a6a5aa8u32, 0xe40ecf0bu32, 0x9309ff9du32, 0x0a00ae27u32, 0x7d079eb1u32,
+    0xf00f9344u32, 0x8708a3d2u32, 0x1e01f268u32, 0x6906c2feu32, 0xf762575du32, 0x806567cbu32,
+    0x196c3671u32, 0x6e6b06e7u32, 0xfed41b76u32, 0x89d32be0u32, 0x10da7a5au32, 0x67dd4accu32,
+    0xf9b9df6fu32, 0x8ebeeff9u32, 0x17b7be43u32, 0x60b08ed5u32, 0xd6d6a3e8u32, 0xa1d1937eu32,
+    0x38d8c2c4u32, 0x4fdff252u32, 0xd1bb67f1u32, 0xa6bc5767u32, 0x3fb506ddu32, 0x48b2364bu32,
+    0xd80d2bdau32, 0xaf0a1b4cu32, 0x36034af6u32, 0x41047a60u32, 0xdf60efc3u32, 0xa867df55u32,
+    0x316e8eefu32, 0x4669be79u32, 0xcb61b38cu32, 0xbc66831au32, 0x256fd2a0u32, 0x5268e236u32,
+    0xcc0c7795u32, 0xbb0b4703u32, 0x220216b9u32, 0x5505262fu32, 0xc5ba3bbeu32, 0xb2bd0b28u32,
+    0x2bb45a92u32, 0x5cb36a04u32, 0xc2d7ffa7u32, 0xb5d0cf31u32, 0x2cd99e8bu32, 0x5bdeae1du32,
+    0x9b64c2b0u32, 0xec63f226u32, 0x756aa39cu32, 0x026d930au32, 0x9c0906a9u32, 0xeb0e363fu32,
+    0x72076785u32, 0x05005713u32, 0x95bf4a82u32, 0xe2b87a14u32, 0x7bb12baeu32, 0x0cb61b38u32,
+    0x92d28e9bu32, 0xe5d5be0du32, 0x7cdcefb7u32, 0x0bdbdf21u32, 0x86d3d2d4u32, 0xf1d4e242u32,
+    0x68ddb3f8u32, 0x1fda836eu32, 0x81be16cdu32, 0xf6b9265bu32, 0x6fb077e1u32, 0x18b74777u32,
+    0x88085ae6u32, 0xff0f6a70u32, 0x66063bcau32, 0x11010b5cu32, 0x8f659effu32, 0xf862ae69u32,
+    0x616bffd3u32, 0x166ccf45u32, 0xa00ae278u32, 0xd70dd2eeu32, 0x4e048354u32, 0x3903b3c2u32,
+    0xa7672661u32, 0xd06016f7u32, 0x4969474du32, 0x3e6e77dbu32, 0xaed16a4au32, 0xd9d65adcu32,
+    0x40df0b66u32, 0x37d83bf0u32, 0xa9bcae53u32, 0xdebb9ec5u32, 0x47b2cf7fu32, 0x30b5ffe9u32,
+    0xbdbdf21cu32, 0xcabac28au32, 0x53b39330u32, 0x24b4a3a6u32, 0xbad03605u32, 0xcdd70693u32,
+    0x54de5729u32, 0x23d967bfu32, 0xb3667a2eu32, 0xc4614ab8u32, 0x5d681b02u32, 0x2a6f2b94u32,
+    0xb40bbe37u32, 0xc30c8ea1u32, 0x5a05df1bu32, 0x2d02ef8du32,
+};
 
 /* Canonical Huffman decoding table: codes per length and symbols ordered by code. */
 protected struct huffman {
@@ -75,6 +122,7 @@ protected struct cursor {
     usize total_out;
     u32 check_a;
     u32 check_b;
+    usize check_pos;
 };
 
 protected bool window_is_valid(usize window_size) {
@@ -97,13 +145,37 @@ protected usize window_log2(usize window_size) {
     return bits;
 }
 
-protected u32 crc32_update(u32 crc, u8 value) {
-    u32 current = crc ^ (value as u32);
-    for (usize bit = 0usize; bit < 8usize; bit += 1usize) {
-        u32 mask = (current & 1u32) * CRC_POLYNOMIAL;
-        current = (current >> 1usize) ^ mask;
+/* The running stream checksum, Adler-32 for zlib and CRC-32 for gzip. */
+protected struct checksum_pair {
+    u32 a;
+    u32 b;
+};
+
+/* Advances the checksum over bytes. Adler-32 takes its modulo once per ADLER_BLOCK bytes. */
+protected checksum_pair checksum_update(format form, u32 a, u32 b, const u8[] bytes) {
+    usize count = len(bytes);
+    u32 first = a;
+    u32 second = b;
+    if (form == format::rfc1950) {
+        usize index = 0usize;
+        while (index < count) {
+            usize stop = (count - index > ADLER_BLOCK) ? index + ADLER_BLOCK : count;
+            while (index < stop) {
+                first += bytes[index] as u32;
+                second += first;
+                index += 1usize;
+            }
+            first %= ADLER_MODULUS;
+            second %= ADLER_MODULUS;
+        }
     }
-    return current;
+    if (form == format::rfc1952) {
+        for (usize index = 0usize; index < count; index += 1usize) {
+            usize slot = ((first ^ (bytes[index] as u32)) & 0xffu32) as usize;
+            first = CRC_TABLE[slot] ^ (first >> 8usize);
+        }
+    }
+    return checksum_pair { .a = first, .b = second };
 }
 
 /* Builds the canonical table from code lengths; false when the lengths do not form a
@@ -198,21 +270,24 @@ protected u32 extract(u64 bits, u32 offset, u32 width) {
     return (shifted & mask) as u32;
 }
 
-protected void emit_byte(cursor* at, u8 value, u8[] output, u8[] window, usize window_mask,
-                         format form) {
+/* The checksum covers the emitted bytes later, a range at a time (flush_checksum). */
+protected void emit_byte(cursor* at, u8 value, u8[] output, u8[] window, usize window_mask) {
     output[at->out_pos] = value;
     at->out_pos += 1usize;
     window[at->window_pos] = value;
     at->window_pos = (at->window_pos + 1usize) & window_mask;
     if (at->window_fill <= window_mask) { at->window_fill += 1usize; }
     at->total_out += 1usize;
-    if (form == format::rfc1950) {
-        at->check_a = (at->check_a + (value as u32)) % ADLER_MODULUS;
-        at->check_b = (at->check_b + at->check_a) % ADLER_MODULUS;
-    }
-    if (form == format::rfc1952) {
-        at->check_a = crc32_update(at->check_a, value);
-    }
+}
+
+/* Brings the cursor's checksum up to every byte emitted into output so far. */
+protected void flush_checksum(cursor* at, const u8[] output, format form) {
+    if (at->check_pos == at->out_pos) { return; }
+    checksum_pair next = checksum_update(form, at->check_a, at->check_b,
+                                         output[at->check_pos..at->out_pos]);
+    at->check_a = next.a;
+    at->check_b = next.b;
+    at->check_pos = at->out_pos;
 }
 
 /* The gzip header stage that follows the part just completed, in header order. */
@@ -397,7 +472,7 @@ protected u8 decode_next(inflater* this, u64* bits, u32* bit_count, cursor* at, 
     if (code.symbol < 256) {
         if (at->total_out >= this->output_limit) { return STEP_LIMIT; }
         take_bits(bits, bit_count, code.used);
-        emit_byte(at, code.symbol as u8, output, window, this->window_mask, this->form);
+        emit_byte(at, code.symbol as u8, output, window, this->window_mask);
         return STEP_CONTINUE;
     }
     if (code.symbol == 256) {
@@ -436,7 +511,7 @@ protected u8 copy_match(inflater* this, cursor* at, u8[] output, u8[] window) {
         if (at->total_out >= this->output_limit) { return STEP_LIMIT; }
         usize source = (at->window_pos + this->window_size - this->copy_distance) & this->window_mask;
         u8 byte = window[source];
-        emit_byte(at, byte, output, window, this->window_mask, this->form);
+        emit_byte(at, byte, output, window, this->window_mask);
         this->remaining -= 1usize;
     }
     return STEP_DONE;
@@ -544,6 +619,7 @@ progress inflater::inflate(inflater* this, const u8[] input, u8[] output) throws
         .total_out = this->total_out,
         .check_a = this->check_a,
         .check_b = this->check_b,
+        .check_pos = 0usize,
     };
     u64 bits = this->bits;
     u32 bit_count = this->bit_count;
@@ -648,7 +724,7 @@ progress inflater::inflate(inflater* this, const u8[] input, u8[] output) throws
             if (at.total_out >= this->output_limit) { outcome = STEP_LIMIT; break; }
             u8 stored_byte = extract(bits, 0u32, 8u32) as u8;
             take_bits(&bits, &bit_count, 8u32);
-            emit_byte(&at, stored_byte, output, window, this->window_mask, form);
+            emit_byte(&at, stored_byte, output, window, this->window_mask);
             this->remaining -= 1usize;
             break;
         case 9:
@@ -718,6 +794,7 @@ progress inflater::inflate(inflater* this, const u8[] input, u8[] output) throws
                 stage = 15;
                 break;
             }
+            flush_checksum(&at, output, form);
             outcome = read_trailer(this, &bits, &bit_count, &at);
             if (outcome == STEP_CORRUPT) { failure = error_code::checksum_mismatch; }
             if (outcome == STEP_DONE) {
@@ -749,6 +826,7 @@ progress inflater::inflate(inflater* this, const u8[] input, u8[] output) throws
             stop = true;
         }
     }
+    flush_checksum(&at, output, form);
     this->window = move window_owner;
     this->window_pos = at.window_pos;
     this->window_fill = at.window_fill;
@@ -1366,15 +1444,17 @@ struct deflater {
     protected bool poisoned;
 };
 
-protected array<u32> filled_u32(usize count, u32 value) throws std.alloc::alloc_error {
+/* The capacity is reserved first, so no push can fail; the error is caught once per table. */
+protected array<u32> pushed_u32(usize count, u32 value)
+    throws std.alloc::alloc_error, std.array::push_error<u32> {
     array<u32> result = std.array::with_capacity::<u32>(count);
-    for (usize index = 0usize; index < count; index += 1usize) {
-        bool failed = false;
-        try { std.array::push(&result, value); }
-        catch (std.array::push_error<u32> failure) { failed = true; }
-        if (failed == true) { panic("reserved table insertion failed"); }
-    }
+    for (usize index = 0usize; index < count; index += 1usize) { std.array::push(&result, value); }
     return move result;
+}
+
+protected array<u32> filled_u32(usize count, u32 value) throws std.alloc::alloc_error {
+    try { return pushed_u32(count, value); }
+    catch (std.array::push_error<u32> failure) { panic("reserved table insertion failed"); }
 }
 
 deflater deflater::create(format form, u8 level, usize window_size)
@@ -1655,14 +1735,12 @@ protected usize intake(deflater* this, u8[] buffer, const u8[] input, usize pos)
     usize available = len(input) - pos;
     usize count = (room < available) ? room : available;
     for (usize index = 0usize; index < count; index += 1usize) {
-        u8 value = input[pos + index];
-        buffer[this->fill + index] = value;
-        if (this->form == format::rfc1950) {
-            this->check_a = (this->check_a + (value as u32)) % ADLER_MODULUS;
-            this->check_b = (this->check_b + this->check_a) % ADLER_MODULUS;
-        }
-        if (this->form == format::rfc1952) { this->check_a = crc32_update(this->check_a, value); }
+        buffer[this->fill + index] = input[pos + index];
     }
+    checksum_pair next = checksum_update(this->form, this->check_a, this->check_b,
+                                         input[pos..pos + count]);
+    this->check_a = next.a;
+    this->check_b = next.b;
     this->fill += count;
     this->total_in += count;
     return count;

@@ -74,8 +74,8 @@ class SpecificationContractTests(unittest.TestCase):
 
     def test_repository_catalogs_and_target_manifest_are_current(self) -> None:
         for specification, inventory, expected_count in (
-            (CORE_SPECIFICATION, CORE_INVENTORY, "495 rules"),
-            (LIBRARY_SPECIFICATION, LIBRARY_INVENTORY, "439 rules"),
+            (CORE_SPECIFICATION, CORE_INVENTORY, "496 rules"),
+            (LIBRARY_SPECIFICATION, LIBRARY_INVENTORY, "440 rules"),
         ):
             result = run_tool(
                 str(RULE_GENERATOR),
@@ -825,25 +825,59 @@ class SpecificationContractTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("integrated std.io operation set is not closed", result.stderr)
 
-    def test_payload_adapter_requires_final_handler_acknowledgement(self) -> None:
+    def test_console_payload_requires_final_handler_acknowledgement(self) -> None:
         value = json.loads(TARGET_MANIFEST.read_text(encoding="utf-8"))
         matrix = value["hosted_native_async"]["capability_matrix"]
-        record = next(item for item in matrix if item["family"] == "file_payload_read_write")
+        record = next(
+            item for item in matrix if item["family"] == "console_and_process_pipe_payload"
+        )
         record["acknowledgement"] = "Dispatch I/O cleanup completion"
         result = self.run_target_with_manifest(value)
         self.assertEqual(result.returncode, 1)
         self.assertIn("final Dispatch I/O handler", result.stderr)
 
-    def test_tcp_payload_requires_final_handler_acknowledgement(self) -> None:
+    def test_file_payload_requires_adapter_mode(self) -> None:
+        value = json.loads(TARGET_MANIFEST.read_text(encoding="utf-8"))
+        matrix = value["hosted_native_async"]["capability_matrix"]
+        record = next(item for item in matrix if item["family"] == "file_payload_read_write")
+        record["cancellation"] = "native"
+        result = self.run_target_with_manifest(value)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("queued_or_acknowledged_after_return", result.stderr)
+
+    def test_tcp_payload_requires_terminal_transition_acknowledgement(self) -> None:
         value = json.loads(TARGET_MANIFEST.read_text(encoding="utf-8"))
         matrix = value["hosted_native_async"]["capability_matrix"]
         record = next(item for item in matrix if item["family"] == "tcp_payload")
-        record["acknowledgement"] = "Dispatch source cancellation handler"
+        record["acknowledgement"] = "final Dispatch I/O handler"
         result = self.run_target_with_manifest(value)
         self.assertEqual(result.returncode, 1)
         self.assertIn(
-            "tcp_payload must acknowledge at the final Dispatch I/O handler", result.stderr
+            "tcp_payload must acknowledge at the request terminal transition", result.stderr
         )
+
+    def test_file_payload_adapter_record_is_closed(self) -> None:
+        mutations = (
+            ("maximum_entered_transfers", 8, "maximum_entered_transfers must be 4"),
+            ("may_execute_r_code", True, "may_execute_r_code must be False"),
+            ("native_entries", ["pread", "pwrite", "write", "fsync"], "native_entries must be"),
+        )
+        for field, replacement, message in mutations:
+            with self.subTest(field=field):
+                value = json.loads(TARGET_MANIFEST.read_text(encoding="utf-8"))
+                value["hosted_native_async"]["file_payload_adapter"][field] = replacement
+                result = self.run_target_with_manifest(value)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(message, result.stderr)
+
+    def test_payload_engine_assignment_is_closed(self) -> None:
+        value = json.loads(TARGET_MANIFEST.read_text(encoding="utf-8"))
+        value["hosted_native_async"]["dispatch_io_payload_adapter"]["implementation"]["engines"][
+            "dispatch_io"
+        ].append("stream_file")
+        result = self.run_target_with_manifest(value)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("payload adapter engine assignment is not closed", result.stderr)
 
     def test_dns_resolver_adapter_contract_is_closed(self) -> None:
         mutations = (
@@ -986,17 +1020,17 @@ class SpecificationContractTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("must record implemented per-direction submission ordering", result.stderr)
 
-    def test_std_fs_payload_requires_persistent_stream_root(self) -> None:
+    def test_std_fs_payload_requires_one_file_adapter_handle(self) -> None:
         value = json.loads(TARGET_MANIFEST.read_text(encoding="utf-8"))
         implementation = value["hosted_native_async"]["dispatch_io_payload_adapter"][
             "implementation"
         ]
-        implementation["std_fs_payload_channel"] = "one RANDOM child per operation"
+        implementation["std_fs_payload_handle"] = "one Dispatch I/O channel per operation"
         result = self.run_target_with_manifest(value)
         self.assertEqual(result.returncode, 1)
-        self.assertIn("must use one persistent STREAM root", result.stderr)
+        self.assertIn("must use one file payload adapter handle", result.stderr)
 
-    def test_std_fs_nonappend_positioning_requires_stream_root_barrier(self) -> None:
+    def test_std_fs_nonappend_positioning_requires_positioned_calls(self) -> None:
         value = json.loads(TARGET_MANIFEST.read_text(encoding="utf-8"))
         implementation = value["hosted_native_async"]["dispatch_io_payload_adapter"][
             "implementation"
@@ -1006,7 +1040,7 @@ class SpecificationContractTests(unittest.TestCase):
         )
         result = self.run_target_with_manifest(value)
         self.assertEqual(result.returncode, 1)
-        self.assertIn("must position only in the STREAM root barrier", result.stderr)
+        self.assertIn("must pass their position to pread or pwrite", result.stderr)
 
     def test_std_fs_append_positioning_requires_stream_root_and_o_append(self) -> None:
         value = json.loads(TARGET_MANIFEST.read_text(encoding="utf-8"))
@@ -1030,7 +1064,7 @@ class SpecificationContractTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("must recompute the continuous-clock remainder and re-arm", result.stderr)
 
-    def test_std_fs_explicit_close_requires_persistent_root_acknowledgement(self) -> None:
+    def test_std_fs_explicit_close_requires_handle_root_acknowledgement(self) -> None:
         value = json.loads(TARGET_MANIFEST.read_text(encoding="utf-8"))
         implementation = value["hosted_native_async"]["dispatch_io_payload_adapter"][
             "implementation"
@@ -1038,7 +1072,7 @@ class SpecificationContractTests(unittest.TestCase):
         implementation["std_fs_explicit_close"] = "release root view and return immediately"
         result = self.run_target_with_manifest(value)
         self.assertEqual(result.returncode, 1)
-        self.assertIn("must wait for persistent root cleanup", result.stderr)
+        self.assertIn("must wait for handle root cleanup", result.stderr)
 
     def test_std_fs_whole_file_read_contract_is_closed(self) -> None:
         mutations = (
@@ -1070,7 +1104,7 @@ class SpecificationContractTests(unittest.TestCase):
             (
                 "std_fs_whole_file_read_terminal_acknowledgement",
                 "publish after the final byte",
-                "must wait for descriptor close and Dispatch root cleanup",
+                "must wait for descriptor close and handle root cleanup",
             ),
         )
 

@@ -1406,9 +1406,26 @@ void r_runtime_task_external_start_ready(RRuntimeTaskExternalExecution *executio
     }
 }
 
+/*
+ * The selection is itself the event, so its sequence is taken under the task lock and a selected
+ * cancellation is never replaced. Taking the sequence before the lock let a cancellation chosen in
+ * between be replaced while its cancel callback, which acknowledges a withdrawn waiter, was
+ * already scheduled: the waiter was acknowledged twice (P4.1-8).
+ */
 _Bool r_runtime_task_external_try_select_completion(RRuntimeTaskExternalExecution *execution) {
-    return r_runtime_task_external_try_select_completion_at(execution,
-                                                            r_runtime_darwin_event_sequence_next());
+    RRuntimeTask *task = external_task(execution);
+    _Bool selected = 0;
+
+    task_lock(task);
+    if (!task->external_acknowledged &&
+        task->external_selection == R_RUNTIME_TASK_EXTERNAL_SELECTION_NONE) {
+        task->external_selection = R_RUNTIME_TASK_EXTERNAL_SELECTION_COMPLETION;
+        task->external_selection_sequence = r_runtime_darwin_event_sequence_next();
+        task->terminal_decided = 1;
+        selected = 1;
+    }
+    task_unlock(task);
+    return selected;
 }
 
 _Bool r_runtime_task_external_try_select_completion_at(RRuntimeTaskExternalExecution *execution,

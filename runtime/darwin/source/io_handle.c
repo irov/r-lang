@@ -164,18 +164,26 @@ static void handle_deallocate(RRuntimeDarwinIoHandle *handle) {
     r_runtime_allocator_deallocate(handle, _Alignof(RRuntimeDarwinIoHandle));
 }
 
+/* The root of a handle is released once only its own reference remains. A Dispatch I/O root
+   channel is returned for closing; a direct handle sets *release_direct instead. */
 static dispatch_io_t handle_release_reference_locked(RRuntimeDarwinIoHandle *handle,
-                                                     _Bool *destroy) {
+                                                     _Bool *destroy,
+                                                     _Bool *release_direct) {
     dispatch_io_t root_channel = NULL;
 
+    *release_direct = 0;
     if (handle->references == 0U) {
         abort();
     }
     handle->references -= 1U;
     if (handle->references == 1U && handle->view_count == 0U && !handle->runtime_root_owned &&
         !handle->root_released) {
-        root_channel = handle->root_channel;
-        handle->root_channel = NULL;
+        if (handle->engine == R_RUNTIME_DARWIN_IO_ENGINE_DISPATCH) {
+            root_channel = handle->root_channel;
+            handle->root_channel = NULL;
+        } else {
+            *release_direct = 1;
+        }
         handle->root_released = 1;
         handle->closed = 1;
     }
@@ -189,11 +197,16 @@ static dispatch_io_t handle_release_reference_locked(RRuntimeDarwinIoHandle *han
     return root_channel;
 }
 
-static void
-handle_finish_release(RRuntimeDarwinIoHandle *handle, dispatch_io_t root_channel, _Bool destroy) {
+static void handle_finish_release(RRuntimeDarwinIoHandle *handle,
+                                  dispatch_io_t root_channel,
+                                  _Bool release_direct,
+                                  _Bool destroy) {
     if (root_channel != NULL) {
         dispatch_io_close(root_channel, 0);
         dispatch_release(root_channel);
+    }
+    if (release_direct) {
+        r_runtime_darwin_io_internal_direct_release_root(handle);
     }
     if (destroy) {
         handle_deallocate(handle);
@@ -202,20 +215,22 @@ handle_finish_release(RRuntimeDarwinIoHandle *handle, dispatch_io_t root_channel
 
 void r_runtime_darwin_io_internal_handle_release_reference(RRuntimeDarwinIoHandle *handle) {
     dispatch_io_t root_channel;
+    _Bool release_direct;
     _Bool destroy;
 
     if (pthread_mutex_lock(&handle->mutex) != 0) {
         abort();
     }
-    root_channel = handle_release_reference_locked(handle, &destroy);
+    root_channel = handle_release_reference_locked(handle, &destroy, &release_direct);
     if (pthread_mutex_unlock(&handle->mutex) != 0) {
         abort();
     }
-    handle_finish_release(handle, root_channel, destroy);
+    handle_finish_release(handle, root_channel, release_direct, destroy);
 }
 
 void r_runtime_darwin_io_internal_handle_release_request(RRuntimeDarwinIoHandle *handle) {
     dispatch_io_t root_channel;
+    _Bool release_direct;
     _Bool destroy;
 
     if (pthread_mutex_lock(&handle->mutex) != 0) {
@@ -226,11 +241,11 @@ void r_runtime_darwin_io_internal_handle_release_request(RRuntimeDarwinIoHandle 
         abort();
     }
     handle->request_count -= 1U;
-    root_channel = handle_release_reference_locked(handle, &destroy);
+    root_channel = handle_release_reference_locked(handle, &destroy, &release_direct);
     if (pthread_mutex_unlock(&handle->mutex) != 0) {
         abort();
     }
-    handle_finish_release(handle, root_channel, destroy);
+    handle_finish_release(handle, root_channel, release_direct, destroy);
 }
 
 static RRuntimeDarwinIoRequest *next_close_to_report_locked(RRuntimeDarwinIoHandle *handle) {
@@ -351,7 +366,8 @@ void r_runtime_darwin_io_internal_handle_root_cleanup(RRuntimeDarwinIoHandle *ha
 static RRuntimeDarwinIoHandleCreateResult handle_create(RRuntimeAllocator *allocator,
                                                         int descriptor,
                                                         RRuntimeDarwinIoType type,
-                                                        _Bool runtime_root) {
+                                                        _Bool runtime_root,
+                                                        RRuntimeDarwinIoEngine engine) {
     RRuntimeDarwinIoHandleCreateResult result;
     RRuntimeDarwinIoHandle *handle = NULL;
     RRuntimeAllocationStatus allocation_status;
@@ -435,6 +451,36 @@ static RRuntimeDarwinIoHandleCreateResult handle_create(RRuntimeAllocator *alloc
     handle->runtime_root_owned = runtime_root;
     handle->console_identity = runtime_root;
     handle->type = type;
+    handle->engine = engine;
+    if (engine != R_RUNTIME_DARWIN_IO_ENGINE_DISPATCH) {
+        /* A direct handle owns no Dispatch I/O root; its root reference ends in the cleanup that
+           direct_release_root schedules. */
+        native_error = 0;
+        if (engine == R_RUNTIME_DARWIN_IO_ENGINE_FILE && type == R_RUNTIME_DARWIN_IO_RANDOM) {
+            handle->direct_random_base = lseek(handle->retained_descriptor, 0, SEEK_CUR);
+            if (handle->direct_random_base < 0) {
+                native_error = errno;
+            }
+        } else if (engine == R_RUNTIME_DARWIN_IO_ENGINE_SOCKET &&
+                   !r_runtime_darwin_io_internal_direct_create_sources(handle)) {
+            native_error = ENOMEM;
+        }
+        if (native_error != 0) {
+            dispatch_release(handle->callback_queue);
+            handle->callback_queue = NULL;
+            (void)close(handle->retained_descriptor);
+            handle->retained_descriptor = -1;
+            (void)pthread_cond_destroy(&handle->condition);
+            (void)pthread_mutex_destroy(&handle->mutex);
+            r_runtime_allocator_deallocate(handle, _Alignof(RRuntimeDarwinIoHandle));
+            return handle_create_failure(R_RUNTIME_DARWIN_IO_START_NATIVE_RETAIN_FAILED,
+                                         native_error);
+        }
+        result.handle = handle;
+        result.status = R_RUNTIME_DARWIN_IO_START_OK;
+        result.native_error = 0;
+        return result;
+    }
     dispatch_type = type == R_RUNTIME_DARWIN_IO_STREAM ? DISPATCH_IO_STREAM : DISPATCH_IO_RANDOM;
     handle->root_channel = dispatch_io_create(
         dispatch_type, handle->retained_descriptor, handle->callback_queue, ^(int error) {
@@ -506,9 +552,11 @@ r_runtime_darwin_io_internal_handle_prepare_borrowed_random(RRuntimeAllocator *a
         return handle_create_failure(R_RUNTIME_DARWIN_IO_START_NATIVE_RETAIN_FAILED, ENOMEM);
     }
 #endif
-    /* One reference is reserved for the future Dispatch root cleanup callback. */
+    /* One reference is reserved for the root cleanup of the descriptor bound later. The write
+       runs on the file payload adapter (R-SLIB-ASYNC-0019). */
     handle->references = 1U;
     handle->type = R_RUNTIME_DARWIN_IO_RANDOM;
+    handle->engine = R_RUNTIME_DARWIN_IO_ENGINE_FILE;
     handle->borrowed_shared_write_pipeline = 1;
     result.handle = handle;
     result.status = R_RUNTIME_DARWIN_IO_START_OK;
@@ -522,30 +570,25 @@ r_runtime_darwin_io_internal_handle_bind_borrowed_random(RRuntimeDarwinIoHandle 
                                                          RRuntimeDarwinIoHandleCleanupFn cleanup,
                                                          void *context,
                                                          int *native_error) {
-    dispatch_io_t root_channel;
+    off_t base;
 
     if (descriptor < 0 || pthread_mutex_lock(&handle->mutex) != 0) {
         return R_RUNTIME_DARWIN_IO_START_INVALID_ARGUMENT;
     }
-    handle->retained_descriptor = descriptor;
-    handle->retained_descriptor_owned = 0;
-    handle->cleanup_observer = cleanup;
-    handle->cleanup_observer_context = context;
-    root_channel =
-        dispatch_io_create(DISPATCH_IO_RANDOM, descriptor, handle->callback_queue, ^(int error) {
-          r_runtime_darwin_io_internal_handle_root_cleanup(handle, error);
-        });
-    if (root_channel == NULL) {
-        handle->retained_descriptor = -1;
-        handle->cleanup_observer = NULL;
-        handle->cleanup_observer_context = NULL;
-        *native_error = EINVAL;
+    /* RANDOM offsets are relative to the position of the borrowed descriptor at binding. */
+    base = lseek(descriptor, 0, SEEK_CUR);
+    if (base < 0) {
+        *native_error = errno;
         if (pthread_mutex_unlock(&handle->mutex) != 0) {
             abort();
         }
         return R_RUNTIME_DARWIN_IO_START_NATIVE_RETAIN_FAILED;
     }
-    handle->root_channel = root_channel;
+    handle->retained_descriptor = descriptor;
+    handle->retained_descriptor_owned = 0;
+    handle->cleanup_observer = cleanup;
+    handle->cleanup_observer_context = context;
+    handle->direct_random_base = base;
     *native_error = 0;
     if (pthread_mutex_unlock(&handle->mutex) != 0) {
         abort();
@@ -554,7 +597,7 @@ r_runtime_darwin_io_internal_handle_bind_borrowed_random(RRuntimeDarwinIoHandle 
 }
 
 void r_runtime_darwin_io_internal_handle_release_borrowed_root(RRuntimeDarwinIoHandle *handle) {
-    dispatch_io_t root_channel = NULL;
+    _Bool release_bound = 0;
     _Bool release_unbound_reservation = 0;
 
     if (pthread_mutex_lock(&handle->mutex) != 0) {
@@ -565,12 +608,14 @@ void r_runtime_darwin_io_internal_handle_release_borrowed_root(RRuntimeDarwinIoH
         abort();
     }
     if (!handle->root_released) {
-        root_channel = handle->root_channel;
-        handle->root_channel = NULL;
         handle->root_released = 1;
         handle->closed = 1;
-        if (root_channel == NULL) {
-            if (handle->retained_descriptor >= 0 || handle->root_cleanup_done) {
+        if (handle->retained_descriptor >= 0) {
+            /* A bound descriptor is acknowledged by the direct root cleanup, after the last
+               admitted transfer. */
+            release_bound = 1;
+        } else {
+            if (handle->root_cleanup_done) {
                 (void)pthread_mutex_unlock(&handle->mutex);
                 abort();
             }
@@ -587,9 +632,8 @@ void r_runtime_darwin_io_internal_handle_release_borrowed_root(RRuntimeDarwinIoH
     if (pthread_mutex_unlock(&handle->mutex) != 0) {
         abort();
     }
-    if (root_channel != NULL) {
-        dispatch_io_close(root_channel, 0);
-        dispatch_release(root_channel);
+    if (release_bound) {
+        r_runtime_darwin_io_internal_direct_release_root(handle);
     } else if (release_unbound_reservation) {
         r_runtime_darwin_io_internal_handle_release_reference(handle);
     }
@@ -598,12 +642,25 @@ void r_runtime_darwin_io_internal_handle_release_borrowed_root(RRuntimeDarwinIoH
 RRuntimeDarwinIoHandleCreateResult r_runtime_darwin_io_handle_create(RRuntimeAllocator *allocator,
                                                                      int descriptor,
                                                                      RRuntimeDarwinIoType type) {
-    return handle_create(allocator, descriptor, type, 0);
+    return handle_create(allocator, descriptor, type, 0, R_RUNTIME_DARWIN_IO_ENGINE_DISPATCH);
+}
+
+RRuntimeDarwinIoHandleCreateResult
+r_runtime_darwin_io_handle_create_file(RRuntimeAllocator *allocator,
+                                       int descriptor,
+                                       RRuntimeDarwinIoType type) {
+    return handle_create(allocator, descriptor, type, 0, R_RUNTIME_DARWIN_IO_ENGINE_FILE);
+}
+
+RRuntimeDarwinIoHandleCreateResult
+r_runtime_darwin_io_handle_create_socket(RRuntimeAllocator *allocator, int descriptor) {
+    return handle_create(
+        allocator, descriptor, R_RUNTIME_DARWIN_IO_STREAM, 0, R_RUNTIME_DARWIN_IO_ENGINE_SOCKET);
 }
 
 RRuntimeDarwinIoHandleCreateResult r_runtime_darwin_io_internal_handle_create_runtime_root(
     RRuntimeAllocator *allocator, int descriptor, RRuntimeDarwinIoType type) {
-    return handle_create(allocator, descriptor, type, 1);
+    return handle_create(allocator, descriptor, type, 1, R_RUNTIME_DARWIN_IO_ENGINE_DISPATCH);
 }
 
 _Bool r_runtime_darwin_io_handle_retain_view(RRuntimeDarwinIoHandle *handle) {
@@ -612,8 +669,9 @@ _Bool r_runtime_darwin_io_handle_retain_view(RRuntimeDarwinIoHandle *handle) {
     if (handle == NULL || pthread_mutex_lock(&handle->mutex) != 0) {
         return 0;
     }
-    if (handle->root_channel != NULL && !handle->root_released && !handle->closed &&
-        handle->references != SIZE_MAX && handle->view_count != SIZE_MAX) {
+    if ((handle->engine != R_RUNTIME_DARWIN_IO_ENGINE_DISPATCH || handle->root_channel != NULL) &&
+        !handle->root_released && !handle->closed && handle->references != SIZE_MAX &&
+        handle->view_count != SIZE_MAX) {
         handle->references += 1U;
         handle->view_count += 1U;
         retained = 1;
@@ -626,6 +684,7 @@ _Bool r_runtime_darwin_io_handle_retain_view(RRuntimeDarwinIoHandle *handle) {
 
 void r_runtime_darwin_io_handle_release(RRuntimeDarwinIoHandle *handle) {
     dispatch_io_t root_channel;
+    _Bool release_direct;
     _Bool destroy;
 
     if (handle == NULL) {
@@ -639,17 +698,18 @@ void r_runtime_darwin_io_handle_release(RRuntimeDarwinIoHandle *handle) {
         abort();
     }
     handle->view_count -= 1U;
-    root_channel = handle_release_reference_locked(handle, &destroy);
+    root_channel = handle_release_reference_locked(handle, &destroy, &release_direct);
     if (pthread_mutex_unlock(&handle->mutex) != 0) {
         abort();
     }
-    handle_finish_release(handle, root_channel, destroy);
+    handle_finish_release(handle, root_channel, release_direct, destroy);
 }
 
 _Bool r_runtime_darwin_io_handle_release_with_cleanup(RRuntimeDarwinIoHandle *handle,
                                                       RRuntimeDarwinIoHandleCleanupFn cleanup,
                                                       void *context) {
     dispatch_io_t root_channel;
+    _Bool release_direct;
     _Bool cleanup_done;
     _Bool destroy;
     int cleanup_error;
@@ -670,14 +730,14 @@ _Bool r_runtime_darwin_io_handle_release_with_cleanup(RRuntimeDarwinIoHandle *ha
         handle->cleanup_observer_context = context;
     }
     handle->view_count -= 1U;
-    root_channel = handle_release_reference_locked(handle, &destroy);
+    root_channel = handle_release_reference_locked(handle, &destroy, &release_direct);
     if (pthread_mutex_unlock(&handle->mutex) != 0) {
         abort();
     }
     if (cleanup_done) {
         cleanup(context, cleanup_error);
     }
-    handle_finish_release(handle, root_channel, destroy);
+    handle_finish_release(handle, root_channel, release_direct, destroy);
     return 1;
 }
 
@@ -737,6 +797,7 @@ void r_runtime_darwin_io_internal_handle_notify_request_terminal(RRuntimeDarwinI
 void r_runtime_darwin_io_internal_handle_release_runtime_root_and_wait(
     RRuntimeDarwinIoHandle *handle, _Bool stop_pending) {
     dispatch_io_t root_channel;
+    _Bool release_direct;
     _Bool destroy;
 
     if (pthread_mutex_lock(&handle->mutex) != 0) {
@@ -773,9 +834,9 @@ void r_runtime_darwin_io_internal_handle_release_runtime_root_and_wait(
             abort();
         }
     }
-    root_channel = handle_release_reference_locked(handle, &destroy);
+    root_channel = handle_release_reference_locked(handle, &destroy, &release_direct);
     if (pthread_mutex_unlock(&handle->mutex) != 0) {
         abort();
     }
-    handle_finish_release(handle, root_channel, destroy);
+    handle_finish_release(handle, root_channel, release_direct, destroy);
 }

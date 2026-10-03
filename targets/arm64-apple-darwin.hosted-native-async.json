@@ -8,8 +8,8 @@
     "target_triple": "arm64-apple-darwin",
     "profile": "hosted-native-async",
     "minimum_os_version": "26.5",
-    "core_specification_revision": "0.1.0-draft.95",
-    "standard_library_specification_revision": "0.1.0-draft.60"
+    "core_specification_revision": "0.1.0-draft.96",
+    "standard_library_specification_revision": "0.1.0-draft.61"
   },
   "toolchain": {
     "c_compiler": "Apple clang",
@@ -1111,6 +1111,43 @@
         "pending_bound_runtime_constant": "R_RUNTIME_BLOCKING_MAX_PENDING_CALLS"
       }
     },
+    "file_payload_adapter": {
+      "enabled": true,
+      "maximum_entered_transfers": 4,
+      "executes": "regular-file payload byte transfer of std.fs (Library R-SLIB-ASYNC-0019)",
+      "transfer_operations": [
+        "std.fs::read",
+        "std.fs::write",
+        "std.fs::write_all",
+        "std.fs::read_at",
+        "std.fs::write_all_at",
+        "std.fs::read_file",
+        "std.fs::read_file_beneath",
+        "std.fs::write_file_atomic_no_replace",
+        "std.fs::write_file_atomic_no_replace_beneath"
+      ],
+      "native_entries": [
+        "pread",
+        "pwrite",
+        "write"
+      ],
+      "worker_backend": "work items of the private libdispatch concurrent queue r.io.file targeting the default-QoS global queue",
+      "disjoint_from_executor_workers": true,
+      "disjoint_from_filesystem_adapter_lane": true,
+      "disjoint_from_blocking_call_pool": true,
+      "may_execute_r_code": false,
+      "admission_policy": "admitted at activation while fewer than maximum_entered_transfers are admitted, otherwise queued in one process-wide FIFO by activation order; a finishing work item takes the FIFO head on its own thread",
+      "queued_cancellation": "a transfer waiting for admission is removed and finished on its handle serial queue without a native call; an admitted transfer that has not entered its call finishes without it",
+      "entered_cancellation": "record the event, make no further native call and acknowledge after the call returns",
+      "cancellation_mode": "queued_or_acknowledged_after_return",
+      "retention": "request, buffer, handle and task frame through the native return",
+      "descriptor_release": "root cleanup of a closed or dropped handle runs after its last admitted transfer finished",
+      "implementation": {
+        "cmake_target": "r_runtime_darwin_io",
+        "source": "runtime/darwin/source/io_direct.c",
+        "bound_runtime_constant": "R_RUNTIME_DARWIN_IO_FILE_MAX_ENTERED_TRANSFERS"
+      }
+    },
     "dispatch_io_payload_adapter": {
       "implementation": {
         "status": "std.io-console-close-and-std.fs-payload-task-bridge-integrated-partial",
@@ -1129,9 +1166,25 @@
         "descriptor_classes": [
           "random_access_file",
           "stream_file",
+          "special_file",
           "console",
-          "process_pipe"
+          "process_pipe",
+          "stream_socket"
         ],
+        "engines": {
+          "dispatch_io": [
+            "special_file",
+            "console",
+            "process_pipe"
+          ],
+          "file_payload_adapter": [
+            "random_access_file",
+            "stream_file"
+          ],
+          "nonblocking_socket": [
+            "stream_socket"
+          ]
+        },
         "blocks_enabled_units": [
           "source/io_deadline.c",
           "source/io_dispatch.c",
@@ -1147,10 +1200,10 @@
         "start_failure_operand_preservation": "implemented and failure-injected",
         "partial_progress": "implemented",
         "eof": "implemented",
-        "cancellation": "per-operation dispatch_io_close(DISPATCH_IO_STOP)",
-        "deadline": "DispatchSourceTimer followed by per-operation DISPATCH_IO_STOP",
-        "terminal_acknowledgement": "final Dispatch I/O handler or root close cleanup handler",
-        "retention": "request and owned buffer or immutable shared owner retained through final native handler",
+        "cancellation": "Dispatch I/O handles: per-operation dispatch_io_close(DISPATCH_IO_STOP); file handles: file_payload_adapter queued or entered cancellation; socket handles: the readiness wait is withdrawn on the handle serial queue",
+        "deadline": "DispatchSourceTimer followed by the cancellation of the handle engine",
+        "terminal_acknowledgement": "final Dispatch I/O handler or root close cleanup handler for Dispatch I/O handles; for file and socket handles the request terminal transition after the last native call returned and root cleanup after the last direct activity",
+        "retention": "request and owned buffer or immutable shared owner retained through the final native handler or native call",
         "child_cleanup_handler": "captures no R request and may be deferred until root close",
         "flush_semantics": "Dispatch I/O ordering barrier only; no durability claim",
         "flush_submission": "serialized after terminal acknowledgement of every prior accepted payload operation",
@@ -1162,24 +1215,24 @@
         "console_root_lifecycle": "runtime-owned roots survive view close/drop; hosted finish drains output and flush barriers, cancels input, waits for acknowledgement, then releases roots",
         "same_direction_submission_order": "reads serialize independently; writes and flushes share one ordered output queue",
         "queued_cancellation_deadline": "terminalize without payload submission, preserve owned buffer or shared owner, acknowledge exactly once and release the next request",
-        "low_level_relative_deadline": "runtime Dispatch I/O requests receive an adapter-computed relative timeout; std.fs payload requests pass no native timeout because std_fs_deadline_clock governs their absolute deadline",
+        "low_level_relative_deadline": "runtime payload requests receive an adapter-computed relative timeout; std.fs payload requests pass no native timeout because std_fs_deadline_clock governs their absolute deadline",
         "std_fs_shared_position_order": "std.fs::read, std.fs::write, std.fs::write_all, std.fs::read_at, std.fs::write_all_at, std.fs::seek, std.fs::flush and std.fs::sync share one synchronized FIFO in successful-start submission order",
-        "std_fs_payload_channel": "successful std.fs file output materialization creates and owns one persistent DISPATCH_IO_STREAM root before file-result publication, materialization failure publishes no file handle, and every payload start only retains that root for its prepared STREAM child",
-        "std_fs_nonappend_positioning": "every read and non-append write applies the shared logical absolute position, or the explicit offset of a positional operation, with lseek(SEEK_SET) only inside dispatch_io_barrier on the persistent STREAM root before payload submission; a positional operation leaves the shared logical position unchanged",
-        "std_fs_append_positioning": "append writes use the persistent STREAM root with a descriptor retaining O_APPEND, select end atomically for each write and do not change the shared read/seek observation position",
+        "std_fs_payload_handle": "successful std.fs file output materialization creates and owns one payload handle over a duplicated descriptor before file-result publication, a file payload adapter handle for a regular file and a Dispatch I/O STREAM handle for any other file type; materialization failure publishes no file handle, and every payload start only retains that handle",
+        "std_fs_nonappend_positioning": "every read and non-append write of a regular file passes the shared logical absolute position, or the explicit offset of a positional operation, as the offset of pread or pwrite on the file payload adapter and never moves the descriptor offset; for any other file type the position is applied with lseek(SEEK_SET) inside dispatch_io_barrier on its STREAM handle; a positional operation leaves the shared logical position unchanged",
+        "std_fs_append_positioning": "append writes use write on a regular file and the STREAM handle for any other file type, on a descriptor retaining O_APPEND, select end atomically for each write and do not change the shared read/seek observation position",
         "std_fs_deadline_clock": "std.fs payload operations retain the absolute std.time instant in the mach_continuous_time domain; activation and every Dispatch timer wake recompute the remaining continuous duration and re-arm until the absolute deadline is reached",
         "std_fs_absolute_deadline": "for std.fs payload operations the absolute std.time instant is fixed before task commit, is never converted once into a stored relative timeout and remains effective while waiting in the shared position FIFO and during native I/O",
-        "std_fs_cancellation_deadline_acknowledgement": "queued cancellation or deadline removes the position reservation before acknowledgement; cancellation during a position barrier retains the handle, buffer and task frame through barrier acknowledgement without payload submission; cancellation after payload submission retains them through the final Dispatch I/O handler",
-        "std_fs_explicit_close": "std.fs::close_file reserves the handle before task commit, rejects new operations, cancels and drains registered operations, waits for persistent STREAM root cleanup acknowledgement, propagates its native error and releases its view exactly once",
+        "std_fs_cancellation_deadline_acknowledgement": "queued cancellation or deadline removes the position reservation before acknowledgement; cancellation before the transfer enters its native call finishes it without that call; cancellation after entry is acknowledged after the call returns, or for a file that is not regular after the final Dispatch I/O handler, and the handle, buffer and task frame are retained until then",
+        "std_fs_explicit_close": "std.fs::close_file reserves the handle before task commit, rejects new operations, cancels and drains registered operations, waits for the handle root cleanup that follows the last native activity, propagates its native error and releases its view exactly once",
         "std_fs_whole_file_read_operations": [
           "std.fs::read_file",
           "std.fs::read_file_beneath"
         ],
-        "std_fs_whole_file_read_pipeline": "filesystem-lane open, one per-operation DISPATCH_IO_RANDOM root, filesystem-lane close of the original descriptor, repeated offset-ordered reads and Dispatch I/O root cleanup",
+        "std_fs_whole_file_read_pipeline": "filesystem-lane open, one per-operation RANDOM payload handle over a duplicated descriptor (file payload adapter for a regular file, Dispatch I/O otherwise), filesystem-lane close of the original descriptor, repeated offset-ordered reads and handle root cleanup",
         "std_fs_whole_file_read_path_policy": "std.fs::read_file follows an ordinary path final symbolic link; std.fs::read_file_beneath opens relative to the retained directory with O_RESOLVE_BENEATH and O_NOFOLLOW_ANY and rejects intermediate and final symbolic links",
         "std_fs_whole_file_read_chunk_bytes": 65536,
-        "std_fs_whole_file_read_limit_eof": "each Dispatch I/O request is bounded by the 65536-byte chunk and the remaining limit-plus-one probe; EOF is authoritative, including a one-byte probe when limit is zero; at most limit bytes succeeds and an observed byte beyond limit returns file_too_large",
-        "std_fs_whole_file_read_terminal_acknowledgement": "publish the task terminal outcome only after filesystem-lane close acknowledgement for the original descriptor and the DISPATCH_IO_RANDOM root cleanup handler; every error destroys the partial array before publication",
+        "std_fs_whole_file_read_limit_eof": "each read is bounded by the 65536-byte chunk and the remaining limit-plus-one probe; EOF is authoritative, including a one-byte probe when limit is zero; at most limit bytes succeeds and an observed byte beyond limit returns file_too_large",
+        "std_fs_whole_file_read_terminal_acknowledgement": "publish the task terminal outcome only after filesystem-lane close acknowledgement for the original descriptor and the root cleanup of the RANDOM payload handle; every error destroys the partial array before publication",
         "task_runtime_integration": true,
         "public_std_fs_integration": true,
         "public_std_fs_integrated_operations": [
@@ -1247,7 +1300,7 @@
           "runtime/darwin",
           "library/internal/networking"
         ],
-        "backend": "non-blocking BSD socket establishment with Dispatch readiness sources; TCP payload through a cached Dispatch I/O STREAM root",
+        "backend": "non-blocking BSD socket establishment with Dispatch readiness sources; TCP and Unix stream payload through immediate nonblocking system calls and per-handle Dispatch readiness sources",
         "supported_operations": [
           "std.net::tcp_listen",
           "std.net::tcp_accept",
@@ -1284,7 +1337,7 @@
         ],
         "descriptor_publication": "FD_CLOEXEC and O_NONBLOCK are established before any descriptor enters a runtime-retained handle; connected and accepted TCP streams also enable SO_NOSIGPIPE before publication",
         "native_reservation_before_task_commit": true,
-        "start_failure_operand_preservation": "implemented and failure-injected for task frame, handle storage, connect/accept/listener-close control, close deadline control, lazy TCP payload root, shutdown request, consuming stream-close request, UDP queue/request/bounce storage and consuming UDP-close control; failed tcp_close or udp_close start leaves the named handle owner unchanged and failed UDP data start leaves the named array owner byte-for-byte unchanged",
+        "start_failure_operand_preservation": "implemented and failure-injected for task frame, handle storage, connect/accept/listener-close control, close deadline control, lazy TCP payload handle, shutdown request, consuming stream-close request, UDP queue/request/bounce storage and consuming UDP-close control; failed tcp_close or udp_close start leaves the named handle owner unchanged and failed UDP data start leaves the named array owner byte-for-byte unchanged",
         "address_validation": "v4 scope zero and v6 target interface index validation precede socket creation",
         "listen_bind_submission": "bounded socket, setsockopt, bind and listen calls run after successful task commit without occupying a blocking worker lane",
         "listen_bind_cancellation": "cancellation observed before native submission performs no socket operation; successful bind or listen is the non-cancellable establishment commit",
@@ -1298,19 +1351,19 @@
         "accept_cancellation_deadline_acknowledgement": "native readiness, cancellation and deadline candidates use the shared monotonic event sequence; the listener retain, task frame, accepted descriptor, FIFO node and sources remain live until every Dispatch cancel handler acknowledges cleanup; the selected result becomes immutable before callback delivery, and only then is the node removed and the next ready head activated",
         "listener_close_submission": "successful task start consumes the listener and atomically marks its identity closing before returning; new accepts and address observations report closed; all FIFO accept reservations and active native requests are cancelled and acknowledged before the listener descriptor is closed",
         "listener_close_cancellation_deadline_acknowledgement": "close duties, descriptor release and the consumed listener release continue after task cancellation or deadline; an independently armed strict Dispatch timer rechecks the absolute mach-continuous deadline and records one shared event sequence at expiry; terminal publication waits for accept drain and timer cancellation acknowledgement, and a pre-existing close failure retains precedence",
-        "tcp_payload_root": "the first data operation lazily reserves one hidden duplicated-descriptor Dispatch I/O STREAM root under the tcp_stream mutex before task commit; stream storage owns the cached view and every committed request owns an independent native retain through the final handler acknowledgement",
-        "tcp_read_submission": "tcp_read reserves its complete request, deadline source, operation channel and same-direction FIFO position before task commit; failed reservation preserves the complete named array owner and performs no payload I/O",
+        "tcp_payload_handle": "the first data operation lazily reserves one hidden duplicated-descriptor payload handle with read and write readiness sources under the tcp_stream mutex before task commit; stream storage owns the cached view and every committed request owns an independent retain through its terminal transition",
+        "tcp_read_submission": "tcp_read reserves its complete request, deadline source and same-direction FIFO position before task commit; failed reservation preserves the complete named array owner and performs no payload I/O",
         "tcp_read_completion": "one read returns after the first positive payload progress, EOF or failure; the original array owner is returned with exact progress while untouched tail bytes remain unchanged; reads are FIFO by submission sequence and the output direction remains independently schedulable",
-        "tcp_read_cancellation_deadline_acknowledgement": "native completion, cancellation and strict continuous-clock deadline use the shared event sequence; task outcome is immutable after first selection, while buffer, request, cached root and descriptor remain live through the final Dispatch I/O handler acknowledgement",
-        "tcp_write_submission": "tcp_write and tcp_write_all reserve the complete request, deadline source, Dispatch data, operation channel and write FIFO position before task commit; failed reservation preserves the complete named array owner and performs no payload I/O",
+        "tcp_read_cancellation_deadline_acknowledgement": "native completion, cancellation and strict continuous-clock deadline use the shared event sequence; task outcome is immutable after first selection, while buffer, request, cached handle and descriptor remain live through the request terminal transition",
+        "tcp_write_submission": "tcp_write and tcp_write_all reserve the complete request, deadline source and write FIFO position before task commit; failed reservation preserves the complete named array owner and performs no payload I/O",
         "tcp_write_completion": "tcp_write publishes success only after one positive native prefix; tcp_write_all continues until every byte is accepted or a terminal condition wins; every outcome returns the exact owner without mutating any byte and preserves positive partial progress",
         "tcp_write_ordering": "nonempty writes share one submission-order FIFO independently from reads; an empty buffer bypasses that FIFO and an expired deadline as a successful side-effect-free no-op",
-        "tcp_write_cancellation_deadline_acknowledgement": "native completion, cancellation and strict continuous-clock deadline use the shared event sequence; task outcome is immutable after first selection, while buffer, request, Dispatch data, cached root and descriptor remain live through the final Dispatch I/O handler acknowledgement",
+        "tcp_write_cancellation_deadline_acknowledgement": "native completion, cancellation and strict continuous-clock deadline use the shared event sequence; task outcome is immutable after first selection, while buffer, request, cached handle and descriptor remain live through the request terminal transition",
         "tcp_shutdown_submission": "tcp_shutdown reserves the complete native request, optional deadline source, direction-specific FIFO position and independent stream retain before task commit; failed reservation performs no half-close, while an already committed direction succeeds without repeating native shutdown and before an expired deadline",
         "tcp_shutdown_ordering": "read shutdown follows earlier reads, write shutdown follows earlier writes, both waits at the head of both direction FIFOs, and the opposite direction remains independently schedulable; later empty payload operations retain their side-effect-free no-op result",
-        "tcp_shutdown_commit_cancellation_deadline_acknowledgement": "successful native shutdown is the idempotent half-close commit and cannot be replaced by a later cancellation or deadline; storage state is published before later same-direction work, and the task frame, request, cached root and descriptor remain live through native acknowledgement",
-        "tcp_close_submission": "tcp_close reserves the cached STREAM root, terminal close request and deadline state before task commit; successful commit consumes the named stream and atomically rejects later stream operations, while every start failure leaves that owner unchanged",
-        "tcp_close_terminal_cleanup": "tcp_close cancels pending read and write requests, waits for their final native handlers and root cleanup, closes the original descriptor, detaches the cached root and releases the consumed stream exactly once; cancellation, deadline and close failure never skip these duties, and a pre-existing close failure precedes an expired deadline",
+        "tcp_shutdown_commit_cancellation_deadline_acknowledgement": "successful native shutdown is the idempotent half-close commit and cannot be replaced by a later cancellation or deadline; storage state is published before later same-direction work, and the task frame, request, cached handle and descriptor remain live through native acknowledgement",
+        "tcp_close_submission": "tcp_close reserves the cached payload handle, terminal close request and deadline state before task commit; successful commit consumes the named stream and atomically rejects later stream operations, while every start failure leaves that owner unchanged",
+        "tcp_close_terminal_cleanup": "tcp_close cancels pending read and write requests, waits for their terminal transitions and the handle root cleanup, closes the original descriptor, detaches the cached handle and releases the consumed stream exactly once; cancellation, deadline and close failure never skip these duties, and a pre-existing close failure precedes an expired deadline",
         "tcp_close_cancellation_deadline_acknowledgement": "close completion, cancellation and strict continuous-clock deadline use one immutable event-sequence outcome; task acknowledgement occurs only after terminal descriptor and retained-resource cleanup, including when the task observer has already cancelled or dropped",
         "udp_datagram_submission_and_ownership": "udp_send_to and udp_receive_from reserve the task, independent socket retain, direction FIFO node, native request, optional strict timer and receive bounce storage before task commit; failed start preserves the complete named array owner byte-for-byte and performs no native datagram operation",
         "udp_receive_buffer_contract": "receive reads one datagram into independent bounce storage, commits only the received prefix into the returned array, leaves its tail unchanged and reports truncation exactly when the datagram exceeded the supplied buffer; native failure, cancellation and deadline preserve every byte, while send never mutates the array",
@@ -1367,11 +1420,11 @@
     "capability_matrix": [
       {
         "family": "file_payload_read_write",
-        "backend": "dispatch_io_read/dispatch_io_write",
+        "backend": "file payload adapter for regular files: pread, pwrite and write as work items of a private libdispatch concurrent queue with a bounded admission count; other file types opened through std.fs use Dispatch I/O",
         "lane": false,
-        "cancellation": "native",
-        "deadline": "native",
-        "acknowledgement": "final Dispatch I/O handler"
+        "cancellation": "queued_or_acknowledged_after_return",
+        "deadline": "queued_or_acknowledged_after_return",
+        "acknowledgement": "native call return and request terminal transition"
       },
       {
         "family": "filesystem_metadata_cursor_namespace_durability",
@@ -1407,11 +1460,11 @@
       },
       {
         "family": "tcp_payload",
-        "backend": "Dispatch I/O STREAM over a hidden duplicated descriptor",
+        "backend": "non-blocking BSD stream sockets: immediate system calls, then per-handle DispatchSourceRead/DispatchSourceWrite readiness",
         "lane": false,
         "cancellation": "native",
         "deadline": "native",
-        "acknowledgement": "final Dispatch I/O handler"
+        "acknowledgement": "request terminal transition after the last nonblocking system call"
       },
       {
         "family": "udp_datagram",

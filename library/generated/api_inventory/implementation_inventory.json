@@ -2,8 +2,8 @@
   "schema_version": 3,
   "generated_from": {
     "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-    "revision": "0.1.0-draft.60",
-    "sha256": "0507e9992d44eb80b5d66a92c46b6f40e2adb08072eac2a3ecdfc4ad94b439f4"
+    "revision": "0.1.0-draft.61",
+    "sha256": "9e41e7c969d09400d0fbadf3df90ebfd4a05429152b965974c411fe4c93c1fdc"
   },
   "extraction": {
     "qualified_item_pattern": "(?<![A-Za-z0-9_.])((?:core|std\\.[a-z][a-z0-9]*)::[A-Za-z_][A-Za-z0-9_]*)",

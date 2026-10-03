@@ -385,6 +385,12 @@ _Bool r_runtime_task_execution_cancel_requested(const RRuntimeTaskExecution *exe
  * result storage as initialized; a cancellation acknowledgement does not.
  */
 void r_runtime_task_external_start_ready(RRuntimeTaskExternalExecution *execution);
+
+/*
+ * Selects completion only while no terminal event is selected: the call is itself the event and
+ * never replaces a cancellation, so an adapter whose cancel callback runs may rely on no
+ * completion following it.
+ */
 _Bool r_runtime_task_external_try_select_completion(RRuntimeTaskExternalExecution *execution);
 
 /*

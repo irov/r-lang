@@ -3,6 +3,7 @@
 #include <dispatch/dispatch.h>
 #include <errno.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -12,6 +13,9 @@ static pthread_cond_t stream_position_test_condition = PTHREAD_COND_INITIALIZER;
 static _Bool stream_position_test_armed;
 static _Bool stream_position_test_reached;
 static _Bool stream_position_test_released;
+/* Unarmed hooks stay off the hot path: the hint is read without the mutex, and the mutex
+   state stays authoritative once it is set. */
+static _Atomic _Bool stream_position_test_hint;
 
 void r_runtime_darwin_io_testing_pause_next_stream_position_barrier(void) {
     if (pthread_mutex_lock(&stream_position_test_mutex) != 0) {
@@ -22,6 +26,7 @@ void r_runtime_darwin_io_testing_pause_next_stream_position_barrier(void) {
         abort();
     }
     stream_position_test_armed = 1;
+    atomic_store_explicit(&stream_position_test_hint, 1, memory_order_release);
     stream_position_test_reached = 0;
     stream_position_test_released = 0;
     if (pthread_mutex_unlock(&stream_position_test_mutex) != 0) {
@@ -68,6 +73,9 @@ void r_runtime_darwin_io_testing_release_stream_position_barrier(void) {
 }
 
 static void testing_pause_stream_position_barrier(void) {
+    if (!atomic_load_explicit(&stream_position_test_hint, memory_order_acquire)) {
+        return;
+    }
     if (pthread_mutex_lock(&stream_position_test_mutex) != 0) {
         abort();
     }
@@ -85,6 +93,7 @@ static void testing_pause_stream_position_barrier(void) {
             }
         }
         stream_position_test_armed = 0;
+        atomic_store_explicit(&stream_position_test_hint, 0, memory_order_release);
         stream_position_test_reached = 0;
         stream_position_test_released = 0;
     }
@@ -96,6 +105,10 @@ static void testing_pause_stream_position_barrier(void) {
 static void testing_pause_stream_position_barrier(void) {
 }
 #endif
+
+void r_runtime_darwin_io_internal_testing_pause_position_entry(void) {
+    testing_pause_stream_position_barrier();
+}
 
 dispatch_io_t
 r_runtime_darwin_io_internal_create_operation_channel(RRuntimeDarwinIoRequest *request) {

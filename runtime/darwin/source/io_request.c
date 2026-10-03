@@ -18,6 +18,9 @@ static pthread_cond_t native_completion_test_condition = PTHREAD_COND_INITIALIZE
 static _Bool native_completion_test_armed;
 static _Bool native_completion_test_reached;
 static _Bool native_completion_test_released;
+/* Unarmed hooks stay off the hot path: the hint is read without the mutex, and the mutex
+   state stays authoritative once it is set. */
+static _Atomic _Bool native_completion_test_hint;
 
 void r_runtime_darwin_io_testing_pause_next_native_completion(void) {
     if (pthread_mutex_lock(&native_completion_test_mutex) != 0) {
@@ -28,6 +31,7 @@ void r_runtime_darwin_io_testing_pause_next_native_completion(void) {
         abort();
     }
     native_completion_test_armed = 1;
+    atomic_store_explicit(&native_completion_test_hint, 1, memory_order_release);
     native_completion_test_reached = 0;
     native_completion_test_released = 0;
     if (pthread_mutex_unlock(&native_completion_test_mutex) != 0) {
@@ -75,6 +79,9 @@ void r_runtime_darwin_io_testing_release_native_completion(void) {
 }
 
 static void testing_pause_native_completion(void) {
+    if (!atomic_load_explicit(&native_completion_test_hint, memory_order_acquire)) {
+        return;
+    }
     if (pthread_mutex_lock(&native_completion_test_mutex) != 0) {
         abort();
     }
@@ -92,6 +99,7 @@ static void testing_pause_native_completion(void) {
             }
         }
         native_completion_test_armed = 0;
+        atomic_store_explicit(&native_completion_test_hint, 0, memory_order_release);
         native_completion_test_reached = 0;
         native_completion_test_released = 0;
     }
@@ -99,8 +107,137 @@ static void testing_pause_native_completion(void) {
         abort();
     }
 }
+
+_Bool r_runtime_darwin_io_internal_testing_native_completion_pause_armed(void) {
+    return atomic_load_explicit(&native_completion_test_hint, memory_order_acquire);
+}
 #else
 static void testing_pause_native_completion(void) {
+}
+
+_Bool r_runtime_darwin_io_internal_testing_native_completion_pause_armed(void) {
+    return 0;
+}
+#endif
+
+void r_runtime_darwin_io_internal_testing_pause_native_completion(void) {
+    testing_pause_native_completion();
+}
+
+#if defined(R_RUNTIME_DARWIN_IO_TESTING)
+void r_runtime_darwin_io_internal_test_pause_arm(RRuntimeDarwinIoTestPause *pause) {
+    if (pthread_mutex_lock(&pause->mutex) != 0) {
+        abort();
+    }
+    if (pause->armed) {
+        (void)pthread_mutex_unlock(&pause->mutex);
+        abort();
+    }
+    pause->armed = 1;
+    pause->reached = 0;
+    pause->released = 0;
+    atomic_store_explicit(&pause->hint, 1, memory_order_release);
+    if (pthread_mutex_unlock(&pause->mutex) != 0) {
+        abort();
+    }
+}
+
+void r_runtime_darwin_io_internal_test_pause_wait(RRuntimeDarwinIoTestPause *pause) {
+    if (pthread_mutex_lock(&pause->mutex) != 0) {
+        abort();
+    }
+    if (!pause->armed) {
+        (void)pthread_mutex_unlock(&pause->mutex);
+        abort();
+    }
+    while (!pause->reached) {
+        if (pthread_cond_wait(&pause->condition, &pause->mutex) != 0) {
+            (void)pthread_mutex_unlock(&pause->mutex);
+            abort();
+        }
+    }
+    if (pthread_mutex_unlock(&pause->mutex) != 0) {
+        abort();
+    }
+}
+
+void r_runtime_darwin_io_internal_test_pause_release(RRuntimeDarwinIoTestPause *pause) {
+    if (pthread_mutex_lock(&pause->mutex) != 0) {
+        abort();
+    }
+    if (!pause->armed || !pause->reached || pause->released) {
+        (void)pthread_mutex_unlock(&pause->mutex);
+        abort();
+    }
+    pause->released = 1;
+    if (pthread_cond_broadcast(&pause->condition) != 0) {
+        (void)pthread_mutex_unlock(&pause->mutex);
+        abort();
+    }
+    while (pause->armed) {
+        if (pthread_cond_wait(&pause->condition, &pause->mutex) != 0) {
+            (void)pthread_mutex_unlock(&pause->mutex);
+            abort();
+        }
+    }
+    if (pthread_mutex_unlock(&pause->mutex) != 0) {
+        abort();
+    }
+}
+
+void r_runtime_darwin_io_internal_test_pause_point(RRuntimeDarwinIoTestPause *pause) {
+    if (!atomic_load_explicit(&pause->hint, memory_order_acquire)) {
+        return;
+    }
+    if (pthread_mutex_lock(&pause->mutex) != 0) {
+        abort();
+    }
+    if (pause->armed && !pause->reached) {
+        pause->reached = 1;
+        if (pthread_cond_broadcast(&pause->condition) != 0) {
+            (void)pthread_mutex_unlock(&pause->mutex);
+            abort();
+        }
+        while (!pause->released) {
+            if (pthread_cond_wait(&pause->condition, &pause->mutex) != 0) {
+                (void)pthread_mutex_unlock(&pause->mutex);
+                abort();
+            }
+        }
+        pause->armed = 0;
+        pause->reached = 0;
+        pause->released = 0;
+        atomic_store_explicit(&pause->hint, 0, memory_order_release);
+        if (pthread_cond_broadcast(&pause->condition) != 0) {
+            (void)pthread_mutex_unlock(&pause->mutex);
+            abort();
+        }
+    }
+    if (pthread_mutex_unlock(&pause->mutex) != 0) {
+        abort();
+    }
+}
+
+static RRuntimeDarwinIoTestPause inline_registration_test_pause =
+    R_RUNTIME_DARWIN_IO_TEST_PAUSE_INITIALIZER;
+
+void r_runtime_darwin_io_testing_pause_next_inline_registration(void) {
+    r_runtime_darwin_io_internal_test_pause_arm(&inline_registration_test_pause);
+}
+
+void r_runtime_darwin_io_testing_wait_for_inline_registration(void) {
+    r_runtime_darwin_io_internal_test_pause_wait(&inline_registration_test_pause);
+}
+
+void r_runtime_darwin_io_testing_release_inline_registration(void) {
+    r_runtime_darwin_io_internal_test_pause_release(&inline_registration_test_pause);
+}
+
+static void testing_pause_inline_registration(void) {
+    r_runtime_darwin_io_internal_test_pause_point(&inline_registration_test_pause);
+}
+#else
+static void testing_pause_inline_registration(void) {
 }
 #endif
 
@@ -323,7 +460,8 @@ static RRuntimeDarwinIoRequest *first_pending_request_locked(RRuntimeDarwinIoHan
 }
 
 static void schedule_direction_locked(RRuntimeDarwinIoHandle *handle,
-                                      RRuntimeDarwinIoDirection direction) {
+                                      RRuntimeDarwinIoDirection direction,
+                                      RRuntimeDarwinIoRequest **finished) {
     for (;;) {
         RRuntimeDarwinIoRequest *request = first_pending_request_locked(handle, direction);
         RRuntimeDarwinIoRequestState state;
@@ -361,10 +499,14 @@ static void schedule_direction_locked(RRuntimeDarwinIoHandle *handle,
         }
         switch (request->operation) {
         case R_RUNTIME_DARWIN_IO_READ:
-            activated = r_runtime_darwin_io_internal_activate_read(request);
+            activated = handle->engine == R_RUNTIME_DARWIN_IO_ENGINE_DISPATCH
+                            ? r_runtime_darwin_io_internal_activate_read(request)
+                            : r_runtime_darwin_io_internal_direct_activate(request, finished);
             break;
         case R_RUNTIME_DARWIN_IO_WRITE:
-            activated = r_runtime_darwin_io_internal_activate_write(request);
+            activated = handle->engine == R_RUNTIME_DARWIN_IO_ENGINE_DISPATCH
+                            ? r_runtime_darwin_io_internal_activate_write(request)
+                            : r_runtime_darwin_io_internal_direct_activate(request, finished);
             break;
         case R_RUNTIME_DARWIN_IO_FLUSH:
             activated = r_runtime_darwin_io_internal_activate_flush(request);
@@ -381,14 +523,30 @@ static void schedule_direction_locked(RRuntimeDarwinIoHandle *handle,
     }
 }
 
+/* A direct request whose transfer ended during activation is finished after the handle mutex is
+   released, and scheduling repeats so the next same-direction request starts. */
 void r_runtime_darwin_io_internal_schedule_ready_requests(RRuntimeDarwinIoHandle *handle) {
-    if (pthread_mutex_lock(&handle->mutex) != 0) {
-        abort();
-    }
-    schedule_direction_locked(handle, R_RUNTIME_DARWIN_IO_DIRECTION_INPUT);
-    schedule_direction_locked(handle, R_RUNTIME_DARWIN_IO_DIRECTION_OUTPUT);
-    if (pthread_mutex_unlock(&handle->mutex) != 0) {
-        abort();
+    for (;;) {
+        RRuntimeDarwinIoRequest *finished_input = NULL;
+        RRuntimeDarwinIoRequest *finished_output = NULL;
+
+        if (pthread_mutex_lock(&handle->mutex) != 0) {
+            abort();
+        }
+        schedule_direction_locked(handle, R_RUNTIME_DARWIN_IO_DIRECTION_INPUT, &finished_input);
+        schedule_direction_locked(handle, R_RUNTIME_DARWIN_IO_DIRECTION_OUTPUT, &finished_output);
+        if (pthread_mutex_unlock(&handle->mutex) != 0) {
+            abort();
+        }
+        if (finished_input == NULL && finished_output == NULL) {
+            return;
+        }
+        if (finished_input != NULL) {
+            r_runtime_darwin_io_internal_direct_finish_activated(finished_input);
+        }
+        if (finished_output != NULL) {
+            r_runtime_darwin_io_internal_direct_finish_activated(finished_output);
+        }
     }
 }
 
@@ -528,6 +686,10 @@ static _Bool request_finalize_locked(RRuntimeDarwinIoRequest *request) {
     return 1;
 }
 
+_Bool r_runtime_darwin_io_internal_request_finalize_locked(RRuntimeDarwinIoRequest *request) {
+    return request_finalize_locked(request);
+}
+
 void r_runtime_darwin_io_internal_progress(RRuntimeDarwinIoRequest *request,
                                            size_t bytes_transferred,
                                            size_t bytes_remaining) {
@@ -624,6 +786,7 @@ static _Bool request_signal(RRuntimeDarwinIoRequest *request,
                             _Bool include_prepared) {
     _Bool accepted = 0;
     _Bool finalized_without_submission = 0;
+    _Bool direct = request->handle->engine != R_RUNTIME_DARWIN_IO_ENGINE_DISPATCH;
     dispatch_data_t prepared_write_data = NULL;
 
     if (pthread_mutex_lock(&request->mutex) != 0) {
@@ -670,6 +833,9 @@ static _Bool request_signal(RRuntimeDarwinIoRequest *request,
             r_runtime_darwin_io_internal_schedule_completion(request);
             r_runtime_darwin_io_internal_schedule_ready_requests(request->handle);
             r_runtime_darwin_io_internal_try_complete_console_closes(request->handle);
+        } else if (direct && (request->operation == R_RUNTIME_DARWIN_IO_READ ||
+                              request->operation == R_RUNTIME_DARWIN_IO_WRITE)) {
+            r_runtime_darwin_io_internal_direct_signal(request);
         } else if (request->operation == R_RUNTIME_DARWIN_IO_READ ||
                    request->operation == R_RUNTIME_DARWIN_IO_WRITE) {
             r_runtime_darwin_io_internal_close_operation_channel(request, DISPATCH_IO_STOP);
@@ -776,6 +942,66 @@ RRuntimeDarwinIoResult r_runtime_darwin_io_request_wait(RRuntimeDarwinIoRequest 
         abort();
     }
     return result;
+}
+
+_Bool r_runtime_darwin_io_internal_deliver_completion(RRuntimeDarwinIoRequest *request) {
+    RRuntimeDarwinIoCompletionFn completion = NULL;
+    void *completion_context = NULL;
+
+    if (pthread_mutex_lock(&request->mutex) != 0) {
+        abort();
+    }
+    if (request->state == R_RUNTIME_DARWIN_IO_REQUEST_TERMINAL && request->completion != NULL &&
+        !request->completion_scheduled) {
+        if (request->references == SIZE_MAX) {
+            (void)pthread_mutex_unlock(&request->mutex);
+            abort();
+        }
+        request->references += 1U;
+        request->completion_scheduled = 1;
+        completion = request->completion;
+        completion_context = request->completion_context;
+    }
+    if (pthread_mutex_unlock(&request->mutex) != 0) {
+        abort();
+    }
+    if (completion == NULL) {
+        return 0;
+    }
+    completion(request, completion_context);
+    r_runtime_darwin_io_internal_request_release(request);
+    return 1;
+}
+
+_Bool r_runtime_darwin_io_request_set_completion_inline(RRuntimeDarwinIoRequest *request,
+                                                        RRuntimeDarwinIoCompletionFn completion,
+                                                        void *context) {
+    _Bool accepted = 0;
+
+    if (pthread_mutex_lock(&request->mutex) != 0) {
+        abort();
+    }
+    /* Once registered, the completion may run on a native thread and release the caller's
+       reference, so the delivery attempt below holds a reference of its own. */
+    if (request->completion == NULL && !request->completion_scheduled) {
+        if (request->references == SIZE_MAX) {
+            (void)pthread_mutex_unlock(&request->mutex);
+            abort();
+        }
+        request->references += 1U;
+        request->completion = completion;
+        request->completion_context = context;
+        accepted = 1;
+    }
+    if (pthread_mutex_unlock(&request->mutex) != 0) {
+        abort();
+    }
+    if (accepted) {
+        testing_pause_inline_registration();
+        (void)r_runtime_darwin_io_internal_deliver_completion(request);
+        r_runtime_darwin_io_internal_request_release(request);
+    }
+    return accepted;
 }
 
 _Bool r_runtime_darwin_io_request_set_completion(RRuntimeDarwinIoRequest *request,

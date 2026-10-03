@@ -171,6 +171,11 @@ r_library_internal_fs_directory_handle_storage(const RStdFsDirectory *directory)
 RLibraryFsHandleStorage *r_library_internal_fs_file_handle_storage(const RStdFsFile *file);
 void r_library_internal_fs_directory_storage_release(RStdFsDirectoryStorage *storage);
 void r_library_internal_fs_file_storage_release(RStdFsFileStorage *storage);
+/* R-SLIB-ASYNC-0019: a regular file's payload handle belongs to the file payload adapter; any
+   other descriptor (FIFO, terminal, device, socket) keeps a Dispatch I/O handle, whose waits do not
+   block a thread. */
+RRuntimeDarwinIoHandleCreateResult r_library_internal_fs_payload_handle_create(
+    RRuntimeAllocator *allocator, int descriptor, RRuntimeDarwinIoType type);
 void r_library_internal_fs_directory_iter_storage_release(RStdFsDirectoryIterStorage *storage);
 _Bool r_library_internal_fs_handle_retain(RLibraryFsHandleStorage *storage);
 /* Adds one reference to a storage that an operation registration still holds: the caller saw the

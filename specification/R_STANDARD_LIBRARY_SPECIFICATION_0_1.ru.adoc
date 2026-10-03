@@ -15,7 +15,7 @@
 |Поле |Значение
 |Документ |R Standard Library Specification
 |Версия языка |0.1
-|Редакция документа |0.1.0-draft.60
+|Редакция документа |0.1.0-draft.61
 |Статус |Перевод нормативного черновика; не является стабильным стандартом R 1.0
 |Язык документа |Русский перевод; ключевые нормативные термины приведены на английском
 |Требуемый стандарт языка |R Core Language Specification 0.1
@@ -168,9 +168,9 @@ modules, написанные на R,
 translation программы, если у выбранного target отсутствует conforming native backend для
 любого обязательного средства. Реализация shall not незаметно подставлять блокирующий
 worker pool либо удалять operation из profile. Разрешёнными blocking adapters являются
-закрытый filesystem adapter lane Core R-TERM-0014/R-CMAP-0039 и R-SLIB-ASYNC-0011 и пул
-блокирующих вызовов Core R-TERM-0015 и R-SLIB-ASYNC-0017; ни один из них не является
-worker pool executor.
+закрытый filesystem adapter lane Core R-TERM-0014/R-CMAP-0039 и R-SLIB-ASYNC-0011, пул
+блокирующих вызовов Core R-TERM-0015 и R-SLIB-ASYNC-0017 и адаптер файловых передач Core
+R-TERM-0016 и R-SLIB-ASYNC-0019; ни один из них не является worker pool executor.
 
 [[R-SLIB-PROFILE-0003]]
 *R-SLIB-PROFILE-0003* — Target manifest shall называть native backend и фиксировать режим
@@ -183,7 +183,9 @@ interval, shall указывать `+before_commit_only+` и эту точную
 обязательное family shall определять один из этих закрытых modes; любой другой mode
 завершает profile selection ошибкой. Пул блокирующих вызовов R-SLIB-ASYNC-0017 shall
 указывать число своих threads, предел ожидающих calls и mode
-`+queued_removed_or_acknowledged_after_return+`.
+`+queued_removed_or_acknowledged_after_return+`. Payload transfer обычных файлов в адаптере
+файловых передач R-SLIB-ASYNC-0019 shall указывать `+queued_or_acknowledged_after_return+`,
+предел одновременно начатых transfers и policy admission.
 
 [[R-SLIB-PROFILE-0004]]
 *R-SLIB-PROFILE-0004* — Реализация библиотеки shall публиковать для каждой public
@@ -676,8 +678,9 @@ disconnect зафиксирована R-MEM-0024..R-MEM-0025 и абзацем �
 или следующего значения, которое отправит sender во время ожидания, и с `+o::none+`, когда
 не осталось sender endpoints и очередь пуста либо receiver уничтожен. Ожидающие приёмы
 одного канала обслуживаются в порядке запуска и получают значения раньше, чем те попадут в
-очередь. Отмена удаляет ожидающий приём: значение либо перемещается в результат, выбранный
-раньше отмены, либо остаётся в очереди, поэтому отмена приёма никогда не теряет значение.
+очередь. Отмена удаляет ожидающий приём, и его значение остаётся в очереди; приём,
+выбранный раньше отмены, уже переместил значение в свой результат, и значение уничтожается
+вместе с этим результатом, если тот остаётся ненаблюдаемым (Core R-STMT-0018).
 Асинхронный for из Core R-STMT-0021 по заимствованному receiver запускает этот приём на
 каждой итерации и заканчивается на его `+o::none+`.
 У операции нет параметра дедлайна; как и `+await+`, её ограничивают select с ветвью until
@@ -2350,8 +2353,9 @@ bounded runtime code submission/completion и ready R computation. Ожидан�
 console, DNS, socket и child process представляется native submissions и records
 completion, а не worker executor, заблокированным в C17 I/O function. Закрытыми
 исключениями являются filesystem operations, допускаемые R-SLIB-ASYNC-0011, которые
-исполняются только в отдельном filesystem adapter lane, и entries R-SLIB-ASYNC-0017,
-которые исполняются только в пуле блокирующих вызовов.
+исполняются только в отдельном filesystem adapter lane, payload transfers обычных файлов
+R-SLIB-ASYNC-0019, которые исполняются только в адаптере файловых передач, и entries
+R-SLIB-ASYNC-0017, которые исполняются только в пуле блокирующих вызовов.
 
 [[R-SLIB-ASYNC-0011]]
 *R-SLIB-ASYNC-0011* — Filesystem adapter lane имеет ровно четыре принадлежащих runtime
@@ -2479,8 +2483,8 @@ void+`; их называют методы `+notify_one+`, `+notify_all+`, `+not
 сохраняет одно уведомление, не больше одного, которое следующий `+notified+` потребляет
 сразу. `+notify_all+` завершает все ожидающие `+notified+` и ничего не сохраняет.
 Отменённый ожидающий пропускается, поэтому уведомление достаётся следующему ожидающему или
-сохраняется и никогда не теряется. Время жизни, ожидание и отмена следуют
-R-SLIB-ASYNC-0013.
+сохраняется; ожидающий, завершённый раньше отмены, уже потребил своё уведомление. Время
+жизни, ожидание и отмена следуют R-SLIB-ASYNC-0013.
 
 [[R-SLIB-ASYNC-0016]]
 *R-SLIB-ASYNC-0016* — `+std.async::broadcast<T>+` — Move-only handle, публикующий значения
@@ -2554,6 +2558,24 @@ Calls, ожидающие друг друга, могут исчерпать п�
 сообщает идентификатор задачи этого вызова. Вне всякой задачи, например в синхронном `+main+`
 или в потоке `+std.thread+`, возвращается ноль. Ничего не выделяет и не может завершиться
 ошибкой.
+
+[[R-SLIB-ASYNC-0019]]
+*R-SLIB-ASYNC-0019* — В profile hosted-native-async адаптер файловых передач Core
+R-TERM-0016 выполняет byte transfer operations std.fs над обычными файлами: reads и writes
+открытого file в его shared position либо в явном offset positional operation, append
+writes, reads whole-file read и data write atomic file write. Допущенный transfer
+исполняется как calls native entry points, записанных target manifest, на thread, который
+в это время не является worker executor. Одновременно допускается не больше
+`+maximum_entered_transfers+` target manifest; transfer сверх этого предела ожидает
+admission в порядке поступления и не занимает worker executor. Submission удерживает
+request, buffer, handle и task frame до task commit. Cancellation либо истечение deadline
+transfer, который ещё не вошёл в свой native call, завершает его как cancelled либо timed
+out без входа в call. Начатый call не прерывается: наблюдённые в это время cancellation
+либо deadline записываются, следующий native call для этого transfer не выполняется, а
+acknowledgement и publication ждут return, причём handle, buffer и frame остаются live до
+него. Outcome следует R-SLIB-IO-0007 с точным progress возвращённых calls. Descriptor
+закрытого либо dropped file освобождается только после того, как его не использует ни
+один допущенный transfer.
 
 [[io]]
 == 15. Native асинхронные byte streams
@@ -8071,7 +8093,7 @@ attach/detach с transactional failure
 |Owned buffers, partial progress, EOF, ordering, cancel и deadline
 
 |Filesystem
-|Target-native asynchronous payload transfer; закрытый adapter lane для metadata,
+|Ограниченный адаптер файловых передач для payload transfer; закрытый adapter lane для metadata,
 namespace, cursor и durability
 |Native error захватывается немедленно; capability-relative resolution, acknowledged
 cancellation и atomic publication
@@ -8128,7 +8150,8 @@ hosted-native-async, демонстрирует, что file payload, console, D
 child не занимает worker thread, заблокированный в C I/O call. Bounded native call,
 сообщающий немедленные readiness, completion либо error, удовлетворяет этому rule.
 Блокироваться may только отдельный filesystem adapter lane — для закрытых семейств
-operations R-SLIB-ASYNC-0011 — и пул блокирующих вызовов — для entries R-SLIB-ASYNC-0017.
+operations R-SLIB-ASYNC-0011, адаптер файловых передач — для payload transfers обычных
+файлов R-SLIB-ASYNC-0019 и пул блокирующих вызовов — для entries R-SLIB-ASYNC-0017.
 
 [[R-SLIB-MAP-B006]]
 *R-SLIB-MAP-B006* — Средство C, раскрывающее shared state locale, environment, error text,
@@ -8314,7 +8337,9 @@ growth R-LIB-0019.
 cancellation и deadline до и после entry; external commit point каждой mutating либо
 durability operation; и tracing mechanism, доказывающий закрытый admission list. Record
 shall явно указывать, что payload I/O, console, DNS, sockets, child waiting, callbacks и
-R continuations исключены из lane.
+R continuations исключены из lane. Target, использующий адаптер файловых передач, shall
+документировать предел одновременно начатых transfers, policy admission, точные native
+entry points и linearization cancellation и deadline до admission, до entry и после entry.
 
 [[R-SLIB-IDB-0017]]
 *R-SLIB-IDB-0017* — Она документирует библиотеку SQLite, которую вызывает `+std.sqlite+`
@@ -8634,7 +8659,8 @@ deadline должны выполнять ровно одну logical cleanup sta
 cancellation либо deadline.
 Для mapping private-directory whole-file из R-SLIB-FS-0010 fixtures должны дополнительно
 доказывать staging directory 0700, его единственный regular payload file 0600, complete
-Dispatch I/O transfer payload и pre-publication durability file. Каждый terminal path
+payload transfer через адаптер файловых передач и pre-publication durability file.
+Каждый terminal path
 после создания staging, включая successful publication, shall выполнять ровно одну
 cleanup staging directory. Beneath publication shall разрешать оба path rename из
 independently retained original root во время races rename parent. Cancellation,
@@ -8778,7 +8804,10 @@ strict C17, а units runtime adapter должны компилироваться
 считаться errors. Применимые sanitizers либо документированные заменители должны
 охватывать memory, race и undefined behavior. Target, использующий filesystem adapter
 lane, shall также исполнять trace, queue/entered cancellation, deadline, commit-race,
-retention и progress scenarios, требуемые Core R-CONF-G012 и R-SLIB-MAP-B009.
+retention и progress scenarios, требуемые Core R-CONF-G012 и R-SLIB-MAP-B009. Target,
+использующий адаптер файловых передач, shall исполнять scenarios предела admission,
+cancellation в queue и после entry, deadline, retention и progress, которые требует от
+него Core R-CONF-G012.
 
 [[R-SLIB-CONF-D016]]
 *R-SLIB-CONF-D016* — Английский и русский файлы одной revision библиотеки должны иметь

@@ -1,4 +1,4 @@
-(mir version=1 core_revision="0.1.0-draft.95"
+(mir version=1 core_revision="0.1.0-draft.96"
   (function name="test.codegen.value_types::character_literals" visibility=protected return=(struct "test.codegen.value_types"::"character_literal_set") state=definition
     (block bb0
       (local place=%local0 name="value" type=(struct "test.codegen.value_types"::"character_literal_set"))

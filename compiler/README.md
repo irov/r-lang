@@ -1,7 +1,7 @@
 # R Frontend Parser 0.1
 
 This directory contains the bootstrap frontend for the normative English R Core
-Specification `0.1.0-draft.95`.
+Specification `0.1.0-draft.96`.
 
 ```text
 UTF-8 source

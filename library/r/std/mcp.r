@@ -3374,28 +3374,30 @@ protected async void watch(arc server<S> host, std.jsonrpc::request_id id, filte
     }
     while (open == true) {
         o<std.async::broadcast_result<std.string::string>> next = o::none;
-        bool quiet = false;
-        if (keepalive == true) {
-            std.time::instant now = std.time::monotonic_now();
-            std.time::instant limit = std.time::instant_add(now, std.time::duration_from_seconds(15i64));
-            task_scope(1) wait {
-                auto receiving = events.receive();
-                select (wait) {
-                case std.async::broadcast_result<std.string::string> got = await move receiving:
-                    next = o::some(move got);
-                case until (limit): quiet = true;
+        task_scope(1) wait {
+            // The receive stays pending across the keep-alives: cancelling one that has already
+            // taken a change would lose it (P4.1-6).
+            auto receiving = events.receive();
+            bool waiting = keepalive;
+            while (waiting == true) {
+                std.time::instant now = std.time::monotonic_now();
+                std.time::instant limit = std.time::instant_add(now, std.time::duration_from_seconds(15i64));
+                o<usize> ready = await wait.first_until(limit, &receiving);
+                switch (ready) {
+                case variant o::some(index):
+                    index as void;
+                    waiting = false;
+                case variant o::none:
+                    task_scope(1) io { open = await deliver(&out, outgoing {.message = o::none, .status = 200u16}); }
+                    if (open == false) { waiting = false; }
                 }
-                wait.cancel_all();
             }
-        } else {
-            task_scope(1) wait {
-                std.async::broadcast_result<std.string::string> got = await events.receive();
+            if (open == true) {
+                std.async::broadcast_result<std.string::string> got = await move receiving;
                 next = o::some(move got);
+            } else {
+                std.async::cancel(move receiving);
             }
-        }
-        if (quiet == true) {
-            task_scope(1) io { open = await deliver(&out, outgoing {.message = o::none, .status = 200u16}); }
-            continue;
         }
         o<outgoing> note = o::none;
         bool lagged = false;

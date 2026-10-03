@@ -15,7 +15,7 @@ Normative draft of the R programming language
 |Field |Value
 |Document|R Core Language Specification
 |Language version|0.1
-|Document revision|0.1.0-draft.95
+|Document revision|0.1.0-draft.96
 |Status|Normative draft; not a stable R 1.0 standard
 |Document language|English; normative original
 |Target backend|ISO/IEC 9899:2018 (C17)
@@ -200,6 +200,14 @@ worker and from the filesystem adapter lane, that executes only the entries pass
 `+std.async::blocking+` (Library R-SLIB-ASYNC-0017). A pool thread runs one entry at a
 time, to its return, as ordinary R code on its own stack and never executes continuations;
 the pool adds a thread only while every existing one is busy.
+
+[[R-TERM-0016]]
+*R-TERM-0016* — A *file payload adapter* is a closed target-runtime service that executes
+only the regular-file payload byte transfer of Library R-SLIB-ASYNC-0019, never on a
+process-executor worker, a filesystem adapter lane thread or a blocking call pool thread,
+with at most the number of concurrently entered transfers recorded by the selected target
+manifest. It never executes R code, continuations, console, pipe, DNS, socket or
+child-process waiting.
 
 [[conformance]]
 == 4. Conformance
@@ -7451,8 +7459,10 @@ executor, task runtime and complete native asynchronous library contract from R-
 Selection shall fail with `+R-DIAG-PROFILE-001+` when the target lacks any required
 backend, cancellation acknowledgement or deadline facility. Its runtime shall not
 implement potentially blocking I/O on an executor worker. The permitted blocking adapters
-are the filesystem adapter lane of R-TERM-0014/R-CMAP-0039 and R-REF-0005 and the blocking
-call pool of R-TERM-0015, which executes only entries passed to `+std.async::blocking+`.
+are the filesystem adapter lane of R-TERM-0014/R-CMAP-0039 and R-REF-0005, the blocking
+call pool of R-TERM-0015, which executes only entries passed to `+std.async::blocking+`,
+and the file payload adapter of R-TERM-0016, which executes only regular-file payload byte
+transfer.
 
 === G.4 Minimal normative examples
 
@@ -8414,7 +8424,12 @@ blocking call pool of R-TERM-0015 shall likewise prove that the pool never runs 
 threads than its manifest records, is disjoint from executor workers and from the lane,
 never enters a call cancelled while queued and acknowledges an entered call only after it
 returns; saturating the pool shall not prevent ready R continuations or native completions
-from progressing.
+from progressing. A target providing the file payload adapter of R-TERM-0016 shall prove
+that it never has more transfers entered than its manifest records, runs only regular-file
+payload transfer through the manifest entry points and never on an executor worker, never
+enters a transfer cancelled or expired before admission and acknowledges an entered
+transfer only after its call returns; saturating the adapter shall not prevent ready R
+continuations or native completions from progressing.
 
 [appendix]
 [[annex-h]]

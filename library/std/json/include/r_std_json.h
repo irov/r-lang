@@ -195,8 +195,13 @@ typedef struct RStdJsonProgress {
     size_t consumed;
     RStdJsonDecoderStatus state;
 } RStdJsonProgress;
+/* frames holds the open containers, children their completed members and elements and key_bytes
+ * the keys of open objects; a container node is created when it closes and takes its children in
+ * one allocation. */
 typedef struct RStdJsonTreeBuilder {
     RRuntimeArray frames;
+    RRuntimeArray children;
+    RRuntimeArray key_bytes;
     RStdJsonValue value;
     bool started;
     bool complete;

@@ -15,7 +15,7 @@
 |Поле |Значение
 |Документ |R Core Language Specification
 |Версия языка |0.1
-|Редакция документа |0.1.0-draft.95
+|Редакция документа |0.1.0-draft.96
 |Статус |Перевод нормативного черновика; не является стабильным стандартом R 1.0
 |Язык документа |Русский перевод; ключевые нормативные термины приведены на английском
 |Целевой backend |ISO/IEC 9899:2018 (C17)
@@ -207,6 +207,14 @@ executor и от filesystem adapter lane, который исполняет то
 `+std.async::blocking+` (Library R-SLIB-ASYNC-0017). Thread пула исполняет одну entry за
 раз до её return как обычный R code на собственном stack и никогда не исполняет
 continuations; пул добавляет thread, только пока каждый существующий занят.
+
+[[R-TERM-0016]]
+*R-TERM-0016* — *адаптер файловых передач* является закрытым target-runtime service,
+который исполняет только payload byte transfer обычных файлов по Library
+R-SLIB-ASYNC-0019, никогда не на worker process executor, не на thread filesystem adapter
+lane и не на thread пула блокирующих вызовов, причём одновременно начатых transfers не
+больше числа, записанного выбранным target manifest. Он никогда не исполняет R code,
+continuations, ожидание console, pipe, DNS, socket либо child process.
 
 [[conformance]]
 == 4. Conformance
@@ -7517,9 +7525,10 @@ executor, task runtime и complete native asynchronous library contract R-REF-00
 Selection shall fail с `+R-DIAG-PROFILE-001+`, если у target отсутствует хотя бы один
 required backend либо обязательная cancellation acknowledgement/deadline facility. Его
 runtime shall not реализовывать potentially blocking I/O на worker executor. Разрешённые
-blocking adapters — filesystem adapter lane из R-TERM-0014/R-CMAP-0039 и R-REF-0005 и пул
+blocking adapters — filesystem adapter lane из R-TERM-0014/R-CMAP-0039 и R-REF-0005, пул
 блокирующих вызовов из R-TERM-0015, который исполняет только entries, переданные
-`+std.async::blocking+`.
+`+std.async::blocking+`, и адаптер файловых передач из R-TERM-0016, который исполняет только
+payload byte transfer обычных файлов.
 
 === G.4 Minimal normative examples
 
@@ -8486,7 +8495,13 @@ continuations, console, network, DNS, timer либо child-process completions. 
 никогда не запускает больше threads, чем записано в его manifest, отделён от workers
 executor и от lane, никогда не входит в call, отменённый в queue, и подтверждает начатый
 call только после его return; saturation пула не должно препятствовать progress ready R
-continuations либо native completions.
+continuations либо native completions. Target, предоставляющий адаптер файловых передач
+R-TERM-0016, shall доказать, что в нём никогда не начато больше transfers, чем записано в
+его manifest, что он исполняет только payload transfer обычных файлов через entry points
+manifest и никогда не на worker executor, никогда не входит в transfer, отменённый либо
+истёкший до admission, и подтверждает начатый transfer только после return его call;
+saturation адаптера не должно препятствовать progress ready R continuations либо native
+completions.
 
 [appendix]
 [[annex-h]]

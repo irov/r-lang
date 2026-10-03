@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,6 +19,9 @@ static _Bool read_progress_testing_armed;
 static _Bool read_progress_testing_reached;
 static _Bool read_progress_testing_release;
 static RRuntimeDarwinIoRequest *read_progress_testing_request;
+/* Unarmed hooks stay off the hot path: the hint is read without the mutex, and the mutex
+   state stays authoritative once it is set. */
+static _Atomic _Bool read_progress_testing_hint;
 
 void r_runtime_darwin_io_testing_pause_next_read_after_progress(void) {
     if (pthread_mutex_lock(&read_progress_testing_mutex) != 0) {
@@ -28,6 +32,7 @@ void r_runtime_darwin_io_testing_pause_next_read_after_progress(void) {
         abort();
     }
     read_progress_testing_armed = 1;
+    atomic_store_explicit(&read_progress_testing_hint, 1, memory_order_release);
     read_progress_testing_release = 0;
     if (pthread_mutex_unlock(&read_progress_testing_mutex) != 0) {
         abort();
@@ -95,6 +100,9 @@ void r_runtime_darwin_io_testing_release_read_after_progress(void) {
 }
 
 static void testing_pause_read_after_progress(RRuntimeDarwinIoRequest *request) {
+    if (!atomic_load_explicit(&read_progress_testing_hint, memory_order_acquire)) {
+        return;
+    }
     if (pthread_mutex_lock(&read_progress_testing_mutex) != 0) {
         abort();
     }
@@ -105,6 +113,7 @@ static void testing_pause_read_after_progress(RRuntimeDarwinIoRequest *request) 
         return;
     }
     read_progress_testing_armed = 0;
+    atomic_store_explicit(&read_progress_testing_hint, 0, memory_order_release);
     read_progress_testing_reached = 1;
     read_progress_testing_request = request;
     if (pthread_cond_broadcast(&read_progress_testing_condition) != 0) {
@@ -128,11 +137,24 @@ static void testing_pause_read_after_progress(RRuntimeDarwinIoRequest *request) 
         abort();
     }
 }
+
+_Bool r_runtime_darwin_io_internal_testing_read_pause_armed(void) {
+    return atomic_load_explicit(&read_progress_testing_hint, memory_order_acquire);
+}
 #else
 static void testing_pause_read_after_progress(RRuntimeDarwinIoRequest *request) {
     (void)request;
 }
+
+_Bool r_runtime_darwin_io_internal_testing_read_pause_armed(void) {
+    return 0;
+}
 #endif
+
+void r_runtime_darwin_io_internal_testing_pause_read_after_progress(
+    RRuntimeDarwinIoRequest *request) {
+    testing_pause_read_after_progress(request);
+}
 
 static _Bool read_arguments_valid(RRuntimeDarwinIoHandle *handle,
                                   off_t offset,
@@ -239,9 +261,16 @@ static RRuntimeDarwinIoPrepareResult prepare_read(RRuntimeDarwinIoHandle *handle
         return r_runtime_darwin_io_internal_prepare_failure(
             R_RUNTIME_DARWIN_IO_START_NATIVE_RETAIN_FAILED, ENOMEM);
     }
+    /* The channel failure stage also covers the native reservation of a direct engine, which
+       needs no further object. */
     if (r_runtime_darwin_io_internal_testing_should_fail_prepare(
             R_RUNTIME_DARWIN_IO_PREPARE_FAIL_CHANNEL)) {
         channel = NULL;
+    } else if (handle->engine != R_RUNTIME_DARWIN_IO_ENGINE_DISPATCH) {
+        if (pthread_mutex_unlock(&handle->mutex) != 0) {
+            abort();
+        }
+        return r_runtime_darwin_io_internal_prepare_success(request);
     } else {
         channel = r_runtime_darwin_io_internal_create_operation_channel(request);
     }

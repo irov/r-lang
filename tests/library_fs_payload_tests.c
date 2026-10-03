@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/resource.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -1168,6 +1169,101 @@ static void test_non_recursive_position_pump(RRuntimeAllocator *allocator) {
     require(pthread_mutex_destroy(&stress.mutex) == 0, "destroy position pump mutex");
 }
 
+/* R-SLIB-ASYNC-0019: the payload handle of a regular file belongs to the file payload adapter; a
+   FIFO keeps a Dispatch I/O handle, so a read that waits for data holds no admission slot. */
+static void test_payload_engine_follows_file_type(RRuntimeAllocator *allocator) {
+    char directory[] = "/tmp/r-fs-engine-XXXXXX";
+    char fifo_path[64];
+    char file_path[64];
+    RRuntimeDarwinIoHandleCreateResult created;
+    RRuntimeDarwinIoBufferResult buffer;
+    RRuntimeDarwinIoPrepareResult preparation;
+    RRuntimeDarwinIoSubmitResult submission;
+    RRuntimeDarwinIoResult result;
+    RRuntimeDarwinIoBuffer returned;
+    RRuntimeDarwinIoSubmitResult closing;
+    int regular;
+    int fifo;
+    unsigned int spin;
+
+    require(mkdtemp(directory) != NULL, "create engine test directory");
+    (void)snprintf(fifo_path, sizeof(fifo_path), "%s/fifo", directory);
+    (void)snprintf(file_path, sizeof(file_path), "%s/file", directory);
+    require(mkfifo(fifo_path, 0600) == 0, "create engine test fifo");
+    regular = open(file_path, O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+    require(regular >= 0 && write(regular, "regular", 7U) == 7, "create engine test file");
+    fifo = open(fifo_path, O_RDWR | O_NONBLOCK | O_CLOEXEC);
+    require(fifo >= 0, "open engine test fifo");
+
+    created = r_library_internal_fs_payload_handle_create(allocator, regular,
+                                                          R_RUNTIME_DARWIN_IO_STREAM);
+    require(created.status == R_RUNTIME_DARWIN_IO_START_OK, "regular payload handle");
+    buffer = r_runtime_darwin_io_buffer_allocate(allocator, 7U);
+    require(buffer.status == R_RUNTIME_DARWIN_IO_START_OK, "regular read buffer");
+    r_runtime_darwin_io_testing_hold_file_transfers();
+    preparation = r_runtime_darwin_io_prepare_read_some(created.handle, (off_t)0, &buffer.buffer,
+                                                        UINT64_C(0));
+    require(preparation.status == R_RUNTIME_DARWIN_IO_START_OK &&
+                r_runtime_darwin_io_prepared_set_stream_position(preparation.prepared, (off_t)0),
+            "prepare regular read");
+    submission = r_runtime_darwin_io_prepared_activate(&preparation.prepared, &buffer.buffer);
+    require(submission.status == R_RUNTIME_DARWIN_IO_START_OK, "activate regular read");
+    r_runtime_darwin_io_testing_wait_for_held_file_transfers(1U);
+    require(r_runtime_darwin_io_testing_file_transfers_admitted() == 1U,
+            "regular read is admitted to the file payload adapter");
+    r_runtime_darwin_io_testing_release_file_transfers();
+    result = r_runtime_darwin_io_request_wait(submission.request);
+    require(result.terminal_event == R_RUNTIME_DARWIN_IO_TERMINAL_NATIVE &&
+                result.bytes_transferred == 7U,
+            "regular read completes");
+    returned = r_runtime_darwin_io_request_take_buffer(submission.request);
+    r_runtime_darwin_io_buffer_release(&returned);
+    r_runtime_darwin_io_request_release(submission.request);
+    closing = r_runtime_darwin_io_submit_close(created.handle);
+    require(closing.status == R_RUNTIME_DARWIN_IO_START_OK, "close regular handle");
+    (void)r_runtime_darwin_io_request_wait(closing.request);
+    r_runtime_darwin_io_request_release(closing.request);
+    r_runtime_darwin_io_handle_release(created.handle);
+
+    created = r_library_internal_fs_payload_handle_create(allocator, fifo,
+                                                          R_RUNTIME_DARWIN_IO_STREAM);
+    require(created.status == R_RUNTIME_DARWIN_IO_START_OK, "fifo payload handle");
+    buffer = r_runtime_darwin_io_buffer_allocate(allocator, 4U);
+    require(buffer.status == R_RUNTIME_DARWIN_IO_START_OK, "fifo read buffer");
+    preparation = r_runtime_darwin_io_prepare_read_some(created.handle, (off_t)0, &buffer.buffer,
+                                                        UINT64_C(0));
+    require(preparation.status == R_RUNTIME_DARWIN_IO_START_OK, "prepare fifo read");
+    submission = r_runtime_darwin_io_prepared_activate(&preparation.prepared, &buffer.buffer);
+    require(submission.status == R_RUNTIME_DARWIN_IO_START_OK, "activate fifo read");
+    for (spin = 0U; spin < 20U; ++spin) {
+        require(r_runtime_darwin_io_testing_file_transfers_admitted() == 0U &&
+                    r_runtime_darwin_io_testing_file_transfers_waiting() == 0U,
+                "fifo read takes no admission slot");
+        (void)usleep(1000U);
+    }
+    require(r_runtime_darwin_io_request_state(submission.request) ==
+                R_RUNTIME_DARWIN_IO_REQUEST_ACTIVE,
+            "fifo read waits for data");
+    require(write(fifo, "fifo", 4U) == 4, "write fifo data");
+    result = r_runtime_darwin_io_request_wait(submission.request);
+    require(result.terminal_event == R_RUNTIME_DARWIN_IO_TERMINAL_NATIVE &&
+                result.bytes_transferred == 4U,
+            "fifo read completes after data");
+    returned = r_runtime_darwin_io_request_take_buffer(submission.request);
+    require(memcmp(returned.data, "fifo", 4U) == 0, "fifo read data");
+    r_runtime_darwin_io_buffer_release(&returned);
+    r_runtime_darwin_io_request_release(submission.request);
+    closing = r_runtime_darwin_io_submit_close(created.handle);
+    require(closing.status == R_RUNTIME_DARWIN_IO_START_OK, "close fifo handle");
+    (void)r_runtime_darwin_io_request_wait(closing.request);
+    r_runtime_darwin_io_request_release(closing.request);
+    r_runtime_darwin_io_handle_release(created.handle);
+
+    require(close(fifo) == 0 && close(regular) == 0, "close engine test descriptors");
+    require(unlink(fifo_path) == 0 && unlink(file_path) == 0 && rmdir(directory) == 0,
+            "remove engine test files");
+}
+
 int main(void) {
     RRuntimeAllocator allocator;
     RRuntimeDarwinFsServiceStartResult service;
@@ -1193,6 +1289,7 @@ int main(void) {
     test_task_cancel_after_deadline_selection(&allocator);
     test_late_task_cancel_outlives_file(&allocator);
     test_non_recursive_position_pump(&allocator);
+    test_payload_engine_follows_file_type(&allocator);
     require(r_runtime_executor_lifecycle_stop(), "stop task executor");
     r_runtime_darwin_fs_service_stop();
     return 0;

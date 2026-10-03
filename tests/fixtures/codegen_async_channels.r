@@ -1,8 +1,9 @@
 module test.codegen.async_channels;
 
 /* R-LIB-0016 (L24): std.sync::receive is an asynchronous operation that a task group, a select
-   and a timer compose with; pending receives are served in start order, a cancelled receive
-   loses no value, and the end of every sender or of the receiver completes it with none. */
+   and a timer compose with; pending receives are served in start order, a receive cancelled
+   while it waits loses no value, and the end of every sender or of the receiver completes it
+   with none. */
 
 error Stop { };
 
@@ -51,7 +52,8 @@ async i32 drained() throws std.alloc::alloc_error, std.async::start_error {
     return 0;
 }
 
-// 2. select: a timer wins against an idle channel, the cancelled receive loses no value.
+// 2. select: a timer wins against an idle channel, and the receive cancelled while it waits
+// loses no value.
 async i32 selected() throws std.alloc::alloc_error, std.async::start_error, std.time::time_error,
     std.time::duration_error {
     std.sync::channel<i32> factory = std.sync::channel::<i32>();

@@ -6,7 +6,7 @@
 |----|----|
 | Документ | R Core Language Specification |
 | Версия языка | 0.1 |
-| Редакция документа | 0.1.0-draft.95 |
+| Редакция документа | 0.1.0-draft.96 |
 | Статус | Перевод нормативного черновика; не является стабильным стандартом R 1.0 |
 | Язык документа | Русский перевод; ключевые нормативные термины приведены на английском |
 | Целевой backend | ISO/IEC 9899:2018 (C17) |
@@ -161,6 +161,10 @@
 <a id="R-TERM-0015"></a>
 
 **R-TERM-0015** — **пул блокирующих вызовов** является target-runtime service не более чем из числа threads, записанного выбранным target manifest, отдельным от каждого worker process executor и от filesystem adapter lane, который исполняет только entries, переданные `std.async::blocking` (Library R-SLIB-ASYNC-0017). Thread пула исполняет одну entry за раз до её return как обычный R code на собственном stack и никогда не исполняет continuations; пул добавляет thread, только пока каждый существующий занят.
+
+<a id="R-TERM-0016"></a>
+
+**R-TERM-0016** — **адаптер файловых передач** является закрытым target-runtime service, который исполняет только payload byte transfer обычных файлов по Library R-SLIB-ASYNC-0019, никогда не на worker process executor, не на thread filesystem adapter lane и не на thread пула блокирующих вызовов, причём одновременно начатых transfers не больше числа, записанного выбранным target manifest. Он никогда не исполняет R code, continuations, ожидание console, pipe, DNS, socket либо child process.
 
 <a id="conformance"></a>
 
@@ -3584,16 +3588,11 @@ call-free-initializer-item = call-free-initializer
 
 <a id="R-CONF-G005"></a>
 
-**R-CONF-G005** — Profile selection shall occur before translation and form part of interface fingerprint. Unsupported profile feature shall be diagnosed, not linked to a trap stub. `hosted-native-async` является hosted allocation profile, requiring process executor, task runtime и complete native asynchronous library contract R-REF-0005. Selection shall fail с `R-DIAG-PROFILE-001`, если у target отсутствует хотя бы один required backend либо обязательная cancellation acknowledgement/deadline facility. Его runtime shall not реализовывать potentially blocking I/O на worker executor. Разрешённые blocking adapters — filesystem adapter lane из R-TERM-0014/R-CMAP-0039 и R-REF-0005 и пул блокирующих вызовов из R-TERM-0015, который исполняет только entries, переданные `std.async::blocking`.
+**R-CONF-G005** — Profile selection shall occur before translation and form part of interface fingerprint. Unsupported profile feature shall be diagnosed, not linked to a trap stub. `hosted-native-async` является hosted allocation profile, requiring process executor, task runtime и complete native asynchronous library contract R-REF-0005. Selection shall fail с `R-DIAG-PROFILE-001`, если у target отсутствует хотя бы один required backend либо обязательная cancellation acknowledgement/deadline facility. Его runtime shall not реализовывать potentially blocking I/O на worker executor. Разрешённые blocking adapters — filesystem adapter lane из R-TERM-0014/R-CMAP-0039 и R-REF-0005, пул блокирующих вызовов из R-TERM-0015, который исполняет только entries, переданные `std.async::blocking`, и адаптер файловых передач из R-TERM-0016, который исполняет только payload byte transfer обычных файлов.
 
-### G.4 Minimal normative examples
+=== G.4 Minimal normative examples
 
-<div class="formalpara">
-
-<div class="title">
-
-Positive: ownership, borrow and deterministic drop
-
+.Positive: ownership, borrow and deterministic drop
 
 ```r
 module example.owner;
@@ -3620,13 +3619,7 @@ i32 main() {
 }
 ```
 
-
-<div class="formalpara">
-
-<div class="title">
-
-Negative: named owner copied without move
-
+.Negative: named owner copied without move
 
 ```r
 void rejected_owner_copy() {
@@ -3635,13 +3628,7 @@ void rejected_owner_copy() {
 }
 ```
 
-
-<div class="formalpara">
-
-<div class="title">
-
-Negative: conflicting borrow
-
+.Negative: conflicting borrow
 
 ```r
 i32 rejected_conflicting_borrow() {
@@ -3652,13 +3639,7 @@ i32 rejected_conflicting_borrow() {
 }
 ```
 
-
-<div class="formalpara">
-
-<div class="title">
-
-Positive: explicit `arc` clone transferred to a typed thread
-
+.Positive: explicit `arc` clone transferred to a typed thread
 
 ```r
 protected struct Payload {
@@ -3678,13 +3659,7 @@ std.thread::join_result<i32> run_worker() throws std.thread::thread_error {
 }
 ```
 
-
-<div class="formalpara">
-
-<div class="title">
-
-Positive: fast single-thread `rc` with explicit clone
-
+.Positive: fast single-thread `rc` with explicit clone
 
 ```r
 bool same_local_allocation() {
@@ -3696,13 +3671,7 @@ bool same_local_allocation() {
 }
 ```
 
-
-<div class="formalpara">
-
-<div class="title">
-
-Negative: `rc` cannot cross a thread boundary
-
+.Negative: `rc` cannot cross a thread boundary
 
 ```r
 void consume_local(rc i32 value) {
@@ -3716,13 +3685,7 @@ void rejected_rc_transfer() throws std.thread::thread_error {
 }
 ```
 
-
-<div class="formalpara">
-
-<div class="title">
-
-Positive: scoped thread borrows an automatic local
-
+.Positive: scoped thread borrows an automatic local
 
 ```r
 i32 read_borrowed(const i32* value) {
@@ -3739,13 +3702,7 @@ void scoped_read() throws std.thread::thread_error {
 }
 ```
 
-
-<div class="formalpara">
-
-<div class="title">
-
-Positive: checked error propagation
-
+.Positive: checked error propagation
 
 ```r
 error Error {
@@ -3765,13 +3722,7 @@ u8 twice_first(const u8[] bytes) throws Error {
 }
 ```
 
-
-<div class="formalpara">
-
-<div class="title">
-
-Positive: range-for по range, sequence и core iterator с membership test
-
+.Positive: range-for по range, sequence и core iterator с membership test
 
 ```r
 module example.iteration;
@@ -3803,13 +3754,7 @@ i32 main() {
 }
 ```
 
-
-<div class="formalpara">
-
-<div class="title">
-
-Positive: collection expressions, comprehension и variadic sum
-
+.Positive: collection expressions, comprehension и variadic sum
 
 ```r
 module example.collections;
@@ -3842,13 +3787,7 @@ i32 main() {
 }
 ```
 
-
-<div class="formalpara">
-
-<div class="title">
-
-Positive: tuple result и recursion по type pack
-
+.Positive: tuple result и recursion по type pack
 
 ```r
 module example.packs;
@@ -3878,13 +3817,7 @@ i32 main() {
 }
 ```
 
-
-<div class="formalpara">
-
-<div class="title">
-
-Positive: builder с методами @chain
-
+.Positive: builder с методами @chain
 
 ```r
 module example.builder;
@@ -3910,13 +3843,7 @@ i32 main() {
 }
 ```
 
-
-<div class="formalpara">
-
-<div class="title">
-
-Positive: строковые метки, ветвь с throw и clauses без break
-
+.Positive: строковые метки, ветвь с throw и clauses без break
 
 ```r
 module example.labels;
@@ -3945,13 +3872,7 @@ i32 main() {
 }
 ```
 
-
-<div class="formalpara">
-
-<div class="title">
-
-Positive: family ошибок, ближайший ancestor и повторный throw
-
+.Positive: family ошибок, ближайший ancestor и повторный throw
 
 ```r
 module example.errors;
@@ -3979,13 +3900,7 @@ i32 main() {
 }
 ```
 
-
-<div class="formalpara">
-
-<div class="title">
-
-Positive: checked errors, значения с плавающей точкой и замороженный dictionary при трансляции
-
+.Positive: checked errors, значения с плавающей точкой и замороженный dictionary при трансляции
 
 ```r
 module spec.translation;
@@ -4039,13 +3954,7 @@ i32 main() {
 }
 ```
 
-
-<div class="formalpara">
-
-<div class="title">
-
-Positive: блок дедлайна ограничивает запущенные в нём операции
-
+.Positive: блок дедлайна ограничивает запущенные в нём операции
 
 ```r
 module example.deadline;
@@ -4067,13 +3976,7 @@ async usize total(std.fs::path first, std.fs::path second)
 }
 ```
 
-
-<div class="formalpara">
-
-<div class="title">
-
-Positive: форматирование пользовательских типов через core::Format
-
+.Positive: форматирование пользовательских типов через core::Format
 
 ```r
 module example.formatting;
@@ -4104,13 +4007,7 @@ std.string::string report() throws std.alloc::alloc_error {
 }
 ```
 
-
-<div class="formalpara">
-
-<div class="title">
-
-Positive: инициализаторы полей и вариант по умолчанию
-
+.Positive: инициализаторы полей и вариант по умолчанию
 
 ```r
 module example.defaults;
@@ -4131,13 +4028,7 @@ u32 total(u32 extra) {
 }
 ```
 
-
-<div class="formalpara">
-
-<div class="title">
-
-Negative: unsafe operation outside boundary
-
+.Negative: unsafe operation outside boundary
 
 ```r
 i32 rejected_raw_deref(raw i32* p) {
@@ -4145,13 +4036,7 @@ i32 rejected_raw_deref(raw i32* p) {
 }
 ```
 
-
-<div class="formalpara">
-
-<div class="title">
-
-Positive: dynamically linked C library with verified header
-
+.Positive: dynamically linked C library with verified header
 
 ```r
 module example.zlib;
@@ -4177,13 +4062,7 @@ raw const c_char* read_zlib_version() {
 }
 ```
 
-
-<div class="formalpara">
-
-<div class="title">
-
-Positive: opaque C handle, output pointer and verified C constant
-
+.Positive: opaque C handle, output pointer and verified C constant
 
 ```r
 @link(name = "sqlite3", kind = "dynamic")
@@ -4207,13 +4086,7 @@ extern "C" {
 }
 ```
 
-
-<div class="formalpara">
-
-<div class="title">
-
-Positive: exported callback has an exact raw function-pointer type
-
+.Positive: exported callback has an exact raw function-pointer type
 
 ```r
 @callback
@@ -4231,13 +4104,7 @@ void prepare_callback() {
 }
 ```
 
-
-<div class="formalpara">
-
-<div class="title">
-
-Negative: source embeds a host-specific library path
-
+.Negative: source embeds a host-specific library path
 
 ```r
 @link(name = "/usr/local/lib/libz.dylib", kind = "dynamic") // R-DIAG-LINK-001
@@ -4245,13 +4112,7 @@ Negative: source embeds a host-specific library path
 extern "C" { }
 ```
 
-
-<div class="formalpara">
-
-<div class="title">
-
-Negative: non-empty block has no ABI evidence
-
+.Negative: non-empty block has no ABI evidence
 
 ```r
 @link(name = "zlib", kind = "dynamic")
@@ -4260,7 +4121,6 @@ extern "C" {
     raw const c_char* zlibVersion(); // R-DIAG-FFI-006
 }
 ```
-
 
 <a id="R-CONF-G006"></a>
 
@@ -4371,7 +4231,9 @@ Implementation с managed-owner C adapters shall statically reject direct/nested
 
 <a id="R-CONF-G012"></a>
 
-**R-CONF-G012** — Target, заявляющий `hosted-native-async` с filesystem adapter lane, shall доказать runtime trace, что lane имеет ровно четыре threads, отделён от workers executor, допускает только manifest operations, разрешённые R-CMAP-0039, и никогда не исполняет R code либо payload I/O. Conformance tests shall отменять либо завершать по deadline operation в queue и внутри каждого разрешённого семейства native calls, проверять, что queued work не входит в native call, и проверять acknowledgement, retention и exactly-once cleanup для begun work. Tests namespace и durability shall покрывать cancellation до и после документированной commit point и наблюдать committed success после late cancellation. Saturation lane не должно препятствовать progress ready R continuations, console, network, DNS, timer либо child-process completions. Target, предоставляющий пул блокирующих вызовов R-TERM-0015, shall так же доказать, что пул никогда не запускает больше threads, чем записано в его manifest, отделён от workers executor и от lane, никогда не входит в call, отменённый в queue, и подтверждает начатый call только после его return; saturation пула не должно препятствовать progress ready R continuations либо native completions.
+**R-CONF-G012** — Target, заявляющий `hosted-native-async` с filesystem adapter lane, shall доказать runtime trace, что lane имеет ровно четыре threads, отделён от workers executor, допускает только manifest operations, разрешённые R-CMAP-0039, и никогда не исполняет R code либо payload I/O. Conformance tests shall отменять либо завершать по deadline operation в queue и внутри каждого разрешённого семейства native calls, проверять, что queued work не входит в native call, и проверять acknowledgement, retention и exactly-once cleanup для begun work. Tests namespace и durability shall покрывать cancellation до и после документированной commit point и наблюдать committed success после late cancellation. Saturation lane не должно препятствовать progress ready R continuations, console, network, DNS, timer либо child-process completions. Target, предоставляющий пул блокирующих вызовов R-TERM-0015, shall так же доказать, что пул никогда не запускает больше threads, чем записано в его manifest, отделён от workers executor и от lane, никогда не входит в call, отменённый в queue, и подтверждает начатый call только после его return; saturation пула не должно препятствовать progress ready R continuations либо native completions. Target, предоставляющий адаптер файловых передач R-TERM-0016, shall доказать, что в нём никогда не начато больше transfers, чем записано в его manifest, что он исполняет только payload transfer обычных файлов через entry points manifest и никогда не на worker executor, никогда не входит в transfer, отменённый либо истёкший до admission, и подтверждает начатый transfer только после return его call; saturation адаптера не должно препятствовать progress ready R continuations либо native completions.
+
+[appendix]
 
 <a id="annex-h"></a>
 

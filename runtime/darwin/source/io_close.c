@@ -238,6 +238,7 @@ r_runtime_darwin_io_prepared_activate_close(RRuntimeDarwinIoPreparedRequest **pr
     RRuntimeDarwinIoRequest *request;
     RRuntimeDarwinIoHandle *handle;
     dispatch_io_t root_channel = NULL;
+    _Bool release_direct = 0;
     _Bool console_identity;
 
     request = *prepared_slot;
@@ -263,8 +264,12 @@ r_runtime_darwin_io_prepared_activate_close(RRuntimeDarwinIoPreparedRequest **pr
     if (!console_identity) {
         handle->closed = 1;
         if (!handle->root_released) {
-            root_channel = handle->root_channel;
-            handle->root_channel = NULL;
+            if (handle->engine == R_RUNTIME_DARWIN_IO_ENGINE_DISPATCH) {
+                root_channel = handle->root_channel;
+                handle->root_channel = NULL;
+            } else {
+                release_direct = 1;
+            }
             handle->root_released = 1;
         }
     }
@@ -281,6 +286,9 @@ r_runtime_darwin_io_prepared_activate_close(RRuntimeDarwinIoPreparedRequest **pr
     if (root_channel != NULL) {
         dispatch_io_close(root_channel, DISPATCH_IO_STOP);
         dispatch_release(root_channel);
+    }
+    if (release_direct) {
+        r_runtime_darwin_io_internal_direct_release_root(handle);
     }
     if (console_identity) {
         r_runtime_darwin_io_internal_try_complete_console_closes(handle);

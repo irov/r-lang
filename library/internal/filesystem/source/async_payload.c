@@ -1309,7 +1309,8 @@ static void position_activate(void *context, uint64_t position) {
         payload_panic();
     }
     r_library_internal_fs_position_activation_commit(&control->position_node);
-    if (!r_runtime_darwin_io_request_set_completion(io_submission.request, io_completed, control)) {
+    if (!r_runtime_darwin_io_request_set_completion_inline(
+            io_submission.request, io_completed, control)) {
         payload_panic();
     }
 }

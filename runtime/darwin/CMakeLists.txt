@@ -94,6 +94,7 @@ add_library(
         source/io_close.c
         source/io_console.c
         source/io_deadline.c
+        source/io_direct.c
         source/io_dispatch.c
         source/io_flush.c
         source/io_handle.c
@@ -224,6 +225,19 @@ if(R_RUNTIME_DARWIN_BUILD_TESTS)
     r_runtime_darwin_apply_c17_contract(r_runtime_darwin_io_tests)
     add_test(NAME r_runtime_darwin_io COMMAND r_runtime_darwin_io_tests)
     set_tests_properties(r_runtime_darwin_io PROPERTIES TIMEOUT 20)
+
+    add_executable(r_runtime_darwin_io_direct_tests tests/io_direct_tests.c)
+    target_compile_definitions(
+        r_runtime_darwin_io_direct_tests
+        PRIVATE R_RUNTIME_DARWIN_IO_TESTING=1
+    )
+    target_link_libraries(
+        r_runtime_darwin_io_direct_tests
+        PRIVATE r_runtime_darwin_io r_runtime_darwin_test_allocator Threads::Threads
+    )
+    r_runtime_darwin_apply_c17_contract(r_runtime_darwin_io_direct_tests)
+    add_test(NAME r_runtime_darwin_io_direct COMMAND r_runtime_darwin_io_direct_tests)
+    set_tests_properties(r_runtime_darwin_io_direct PROPERTIES TIMEOUT 60)
 
     add_executable(r_runtime_darwin_task_tests tests/task_tests.c)
     target_link_libraries(

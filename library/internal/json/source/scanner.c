@@ -4,7 +4,13 @@
 #include <string.h>
 
 /* Grammar and lexical state are independent. Every consumed input byte is processed once;
- * only unfinished token bytes and the active objects' key sets are retained. */
+ * only unfinished token bytes and the active objects' keys are retained.
+ *
+ * Token text borrows the fed input while a string, key or number lies inside one feed and has
+ * no escape: the token then carries a view of those input bytes, valid until the next feed
+ * (R-SLIB-JSON feed: a fragment is consumed only for the call). An escape, or a feed that ends
+ * inside a token, copies the bytes seen so far into the scanner's own text buffer first, so an
+ * unfinished token never refers to a previous fragment. */
 typedef enum RJsonGrammar {
     R_JSON_OBJECT_FIRST,
     R_JSON_OBJECT_KEY,
@@ -15,12 +21,23 @@ typedef enum RJsonGrammar {
     R_JSON_ARRAY_VALUE,
     R_JSON_ARRAY_AFTER
 } RJsonGrammar;
+/* The keys of all open objects share one stack of entries and bytes; a frame owns the entries
+ * from key_first on and truncates the stack when it closes. Duplicate detection scans an
+ * object's entries linearly up to R_JSON_LINEAR_KEYS keys and uses the frame's open-addressing
+ * buckets beyond. */
 typedef struct RJsonFrame {
     RJsonGrammar grammar;
     size_t index;
-    RRuntimeArray keys;
+    size_t key_first;
+    size_t bytes_first;
     RRuntimeArray buckets;
 } RJsonFrame;
+typedef struct RJsonKeyEntry {
+    size_t offset;
+    size_t length;
+    uint64_t hash;
+} RJsonKeyEntry;
+enum { R_JSON_LINEAR_KEYS = 16 };
 typedef enum RJsonLex {
     R_JSON_LEX_IDLE,
     R_JSON_LEX_STRING,
@@ -36,6 +53,14 @@ struct RJsonScannerState {
     RStdJsonOptions options;
     RRuntimeArray frames;
     RRuntimeArray text;
+    RRuntimeArray key_bytes;
+    RRuntimeArray key_entries;
+    /* The byte being processed and, while view is set, the borrowed token bytes. */
+    const uint8_t *input_at;
+    const uint8_t *view_data;
+    size_t view_length;
+    /* An allocation failure of take_text, reported by the next feed. */
+    RStdJsonResult take_failure;
     RJsonLex lex;
     RStdJsonTokenKind token_kind;
     size_t offset;
@@ -51,6 +76,7 @@ struct RJsonScannerState {
     unsigned number_state;
     unsigned literal_index;
     const char *literal;
+    bool view;
     bool active;
     bool ready;
     bool delivered;
@@ -63,12 +89,8 @@ struct RJsonScannerState {
     bool stream_comma;
 };
 
-static void r_json_key_drop(void *value) {
-    r_runtime_string_destroy(value);
-}
 static void r_json_frame_drop(void *value) {
     RJsonFrame *frame = value;
-    r_runtime_array_destroy(&frame->keys);
     r_runtime_array_destroy(&frame->buckets);
 }
 static RJsonFrame *r_json_top(struct RJsonScannerState *s) {
@@ -76,10 +98,57 @@ static RJsonFrame *r_json_top(struct RJsonScannerState *s) {
         return NULL;
     return &((RJsonFrame *)s->frames.data)[s->frames.length - 1U];
 }
+static RJsonKeyEntry *r_json_entries(struct RJsonScannerState *s) {
+    return s->key_entries.data;
+}
+static RStdJsonByteView r_json_entry_view(struct RJsonScannerState *s, size_t index) {
+    const RJsonKeyEntry *entry = &r_json_entries(s)[index];
+    return (RStdJsonByteView){(const uint8_t *)s->key_bytes.data + entry->offset, entry->length};
+}
 static bool r_json_space(uint8_t c) {
     return c == ' ' || c == '\t' || c == '\r' || c == '\n';
 }
+/* A string byte that stands for itself and needs no further state: printable ASCII other than
+ * the quote and the backslash. */
+static bool r_json_plain(uint8_t c) {
+    return c >= 0x20U && c < 0x80U && c != '"' && c != '\\';
+}
+static RStdJsonByteView r_json_token_text(const struct RJsonScannerState *s) {
+    if (s->view)
+        return (RStdJsonByteView){s->view_data, s->view_length};
+    return (RStdJsonByteView){s->text.data, s->text.length};
+}
+static RStdJsonResult r_json_append_text(struct RJsonScannerState *s,
+                                         const uint8_t *bytes,
+                                         size_t length) {
+    RStdJsonResult result;
+    if (length == 0U)
+        return (RStdJsonResult){0};
+    result = r_json_array_result(r_runtime_array_reserve(&s->text, length));
+    if (result.status != R_STD_JSON_CALL_SUCCESS)
+        return result;
+    memcpy((uint8_t *)s->text.data + s->text.length, bytes, length);
+    s->text.length += length;
+    return result;
+}
+/* Ends the borrow of the current token: its bytes so far move into the owned text buffer. */
+static RStdJsonResult r_json_own_text(struct RJsonScannerState *s) {
+    if (!s->view)
+        return (RStdJsonResult){0};
+    s->view = false;
+    return r_json_append_text(s, s->view_data, s->view_length);
+}
+static void r_json_begin_view(struct RJsonScannerState *s, const uint8_t *first) {
+    s->view = true;
+    s->view_data = first;
+    s->view_length = 0U;
+}
+/* Adds one verbatim input byte (the one being processed) or, after an escape, a decoded byte. */
 static RStdJsonResult r_json_byte(struct RJsonScannerState *s, uint8_t c) {
+    if (s->view) {
+        ++s->view_length;
+        return (RStdJsonResult){0};
+    }
     return r_json_array_result(r_runtime_array_push(&s->text, &c));
 }
 static uint64_t r_json_key_hash(RStdJsonByteView key) {
@@ -90,56 +159,97 @@ static uint64_t r_json_key_hash(RStdJsonByteView key) {
     }
     return hash;
 }
-static RStdJsonResult r_json_key_add(struct RJsonScannerState *s) {
-    RJsonFrame *frame = r_json_top(s);
-    RStdJsonByteView text = {s->text.data, s->text.length};
-    RStdString key = {0};
+static bool r_json_entry_equal(struct RJsonScannerState *s,
+                               size_t index,
+                               uint64_t hash,
+                               RStdJsonByteView key) {
+    const RJsonKeyEntry *entry = &r_json_entries(s)[index];
+    return entry->hash == hash && r_json_view_equal(r_json_entry_view(s, index), key);
+}
+/* Rebuilds the frame's buckets for count keys at a load of at most one half. */
+static RStdJsonResult r_json_rebuild_buckets(struct RJsonScannerState *s, RJsonFrame *frame) {
+    const size_t count = s->key_entries.length - frame->key_first;
+    size_t capacity = frame->buckets.length == 0U ? 64U : frame->buckets.length;
+    RRuntimeArray fresh;
     RStdJsonResult result;
-    size_t slot;
     size_t *buckets;
-    if (frame->buckets.length == 0U || frame->keys.length >= frame->buckets.length / 2U) {
-        RRuntimeArray fresh;
-        size_t count = frame->buckets.length == 0U ? 16U : frame->buckets.length * 2U;
-        if (count < frame->buckets.length)
+    while (count + 1U > capacity / 2U) {
+        if (capacity > SIZE_MAX / 2U)
             return r_json_allocation_result(R_RUNTIME_ALLOCATION_SIZE_OVERFLOW);
-        result = r_json_array_result(r_runtime_array_with_capacity(
-            &fresh,
-            s->allocator,
-            (RRuntimeTypeInfo){sizeof(size_t), alignof(size_t), NULL, NULL},
-            count));
-        if (result.status != R_STD_JSON_CALL_SUCCESS)
-            return result;
-        memset(fresh.data, 0, count * sizeof(size_t));
-        fresh.length = count;
-        buckets = fresh.data;
-        for (size_t i = 0U; i < frame->keys.length; ++i) {
-            RStdString *existing = &((RStdString *)frame->keys.data)[i];
-            slot = (size_t)r_json_key_hash(r_json_string_view(existing)) & (count - 1U);
-            while (buckets[slot] != 0U)
-                slot = (slot + 1U) & (count - 1U);
-            buckets[slot] = i + 1U;
-        }
-        r_runtime_array_destroy(&frame->buckets);
-        frame->buckets = fresh;
+        capacity *= 2U;
     }
-    buckets = frame->buckets.data;
-    slot = (size_t)r_json_key_hash(text) & (frame->buckets.length - 1U);
-    while (buckets[slot] != 0U) {
-        RStdString *existing = &((RStdString *)frame->keys.data)[buckets[slot] - 1U];
-        if (r_json_view_equal(r_json_string_view(existing), text))
-            return r_json_failure(R_STD_JSON_ERROR_DUPLICATE_KEY, s->token_offset);
-        slot = (slot + 1U) & (frame->buckets.length - 1U);
-    }
-    result = r_json_copy_text(&key, s->allocator, text);
+    if (capacity == frame->buckets.length)
+        return (RStdJsonResult){0};
+    result = r_json_array_result(r_runtime_array_with_capacity(
+        &fresh, s->allocator, (RRuntimeTypeInfo){sizeof(size_t), alignof(size_t), NULL, NULL},
+        capacity));
     if (result.status != R_STD_JSON_CALL_SUCCESS)
         return result;
-    result = r_json_array_result(r_runtime_array_push(&frame->keys, &key));
-    if (result.status != R_STD_JSON_CALL_SUCCESS) {
-        r_runtime_string_destroy(&key);
-        return result;
+    memset(fresh.data, 0, capacity * sizeof(size_t));
+    fresh.length = capacity;
+    buckets = fresh.data;
+    for (size_t i = 0U; i < count; ++i) {
+        size_t slot = (size_t)r_json_entries(s)[frame->key_first + i].hash & (capacity - 1U);
+        while (buckets[slot] != 0U)
+            slot = (slot + 1U) & (capacity - 1U);
+        buckets[slot] = i + 1U;
     }
-    buckets[slot] = frame->keys.length;
+    r_runtime_array_destroy(&frame->buckets);
+    frame->buckets = fresh;
     return result;
+}
+static RStdJsonResult r_json_key_add(struct RJsonScannerState *s) {
+    RJsonFrame *frame = r_json_top(s);
+    const RStdJsonByteView text = r_json_token_text(s);
+    const uint64_t hash = r_json_key_hash(text);
+    const size_t count = s->key_entries.length - frame->key_first;
+    size_t slot = 0U;
+    RJsonKeyEntry entry;
+    RStdJsonResult result;
+    if (count < R_JSON_LINEAR_KEYS) {
+        for (size_t i = frame->key_first; i < s->key_entries.length; ++i)
+            if (r_json_entry_equal(s, i, hash, text))
+                return r_json_failure(R_STD_JSON_ERROR_DUPLICATE_KEY, s->token_offset);
+    } else {
+        size_t *buckets;
+        result = r_json_rebuild_buckets(s, frame);
+        if (result.status != R_STD_JSON_CALL_SUCCESS)
+            return result;
+        buckets = frame->buckets.data;
+        slot = (size_t)hash & (frame->buckets.length - 1U);
+        while (buckets[slot] != 0U) {
+            if (r_json_entry_equal(s, frame->key_first + buckets[slot] - 1U, hash, text))
+                return r_json_failure(R_STD_JSON_ERROR_DUPLICATE_KEY, s->token_offset);
+            slot = (slot + 1U) & (frame->buckets.length - 1U);
+        }
+    }
+    if (s->key_bytes.capacity - s->key_bytes.length < text.length) {
+        result = r_json_array_result(
+            r_runtime_array_reserve(&s->key_bytes, text.length < 256U ? 256U : text.length));
+        if (result.status != R_STD_JSON_CALL_SUCCESS)
+            return result;
+    }
+    if (s->key_entries.length == s->key_entries.capacity) {
+        result = r_json_array_result(r_runtime_array_reserve(&s->key_entries, 32U));
+        if (result.status != R_STD_JSON_CALL_SUCCESS)
+            return result;
+    }
+    if (text.length != 0U)
+        memcpy((uint8_t *)s->key_bytes.data + s->key_bytes.length, text.data, text.length);
+    entry = (RJsonKeyEntry){s->key_bytes.length, text.length, hash};
+    s->key_bytes.length += text.length;
+    r_json_entries(s)[s->key_entries.length] = entry;
+    ++s->key_entries.length;
+    if (count >= R_JSON_LINEAR_KEYS)
+        ((size_t *)frame->buckets.data)[slot] = count + 1U;
+    return (RStdJsonResult){0};
+}
+static void r_json_pop_frame(struct RJsonScannerState *s) {
+    RJsonFrame *frame = r_json_top(s);
+    s->key_entries.length = frame->key_first;
+    s->key_bytes.length = frame->bytes_first;
+    r_json_frame_drop(frame);
+    --s->frames.length;
 }
 static RRuntimeStringStatus r_json_pointer_key(RStdString *pointer, RStdJsonByteView key) {
     RRuntimeStringStatus status = r_runtime_string_append(pointer, (const uint8_t *)"/", 1U);
@@ -176,17 +286,17 @@ static RStdJsonResult r_json_scanner_error(struct RJsonScannerState *s, RStdJson
         status = r_json_pointer_index(&result.error.pointer, s->stream_index);
     for (size_t i = 0U; status == R_RUNTIME_STRING_OK && i < s->frames.length; ++i) {
         RJsonFrame *frame = &((RJsonFrame *)s->frames.data)[i];
+        const size_t key_end = i + 1U < s->frames.length
+                                   ? ((RJsonFrame *)s->frames.data)[i + 1U].key_first
+                                   : s->key_entries.length;
         if (frame->grammar >= R_JSON_ARRAY_FIRST) {
             status = r_json_pointer_index(&result.error.pointer, frame->index);
         } else if (i + 1U == s->frames.length &&
                    result.error.code == R_STD_JSON_ERROR_DUPLICATE_KEY) {
-            status = r_json_pointer_key(&result.error.pointer,
-                                        (RStdJsonByteView){s->text.data, s->text.length});
-        } else if (frame->keys.length != 0U && (frame->grammar == R_JSON_OBJECT_COLON ||
-                                                frame->grammar == R_JSON_OBJECT_VALUE)) {
-            status = r_json_pointer_key(
-                &result.error.pointer,
-                r_json_string_view(&((RStdString *)frame->keys.data)[frame->keys.length - 1U]));
+            status = r_json_pointer_key(&result.error.pointer, r_json_token_text(s));
+        } else if (key_end > frame->key_first && (frame->grammar == R_JSON_OBJECT_COLON ||
+                                                  frame->grammar == R_JSON_OBJECT_VALUE)) {
+            status = r_json_pointer_key(&result.error.pointer, r_json_entry_view(s, key_end - 1U));
         }
     }
     if (status != R_RUNTIME_STRING_OK) {
@@ -287,12 +397,7 @@ static RStdJsonResult r_json_emit_scalar(struct RJsonScannerState *s, uint32_t s
         bytes[3] = (uint8_t)(0x80U | (scalar & 0x3fU));
         length = 4U;
     }
-    for (size_t i = 0U; i < length; ++i) {
-        RStdJsonResult result = r_json_byte(s, bytes[i]);
-        if (result.status != R_STD_JSON_CALL_SUCCESS)
-            return result;
-    }
-    return (RStdJsonResult){0};
+    return r_json_append_text(s, bytes, length);
 }
 static RStdJsonResult r_json_lex_byte(struct RJsonScannerState *s, uint8_t c) {
     if (s->lex == R_JSON_LEX_LITERAL) {
@@ -340,30 +445,38 @@ static RStdJsonResult r_json_lex_byte(struct RJsonScannerState *s, uint8_t c) {
             return r_json_emit_scalar(s, scalar);
         }
     } else if (s->lex == R_JSON_LEX_ESCAPE) {
+        uint8_t decoded;
         s->lex = R_JSON_LEX_STRING;
         switch (c) {
         case '"':
         case '\\':
         case '/':
-            return r_json_byte(s, c);
+            decoded = c;
+            break;
         case 'b':
-            return r_json_byte(s, '\b');
+            decoded = '\b';
+            break;
         case 'f':
-            return r_json_byte(s, '\f');
+            decoded = '\f';
+            break;
         case 'n':
-            return r_json_byte(s, '\n');
+            decoded = '\n';
+            break;
         case 'r':
-            return r_json_byte(s, '\r');
+            decoded = '\r';
+            break;
         case 't':
-            return r_json_byte(s, '\t');
+            decoded = '\t';
+            break;
         case 'u':
             s->lex = R_JSON_LEX_UNICODE;
             s->scalar = 0U;
             s->digits = 0U;
-            break;
+            return (RStdJsonResult){0};
         default:
             return r_json_failure(R_STD_JSON_ERROR_SYNTAX, s->offset);
         }
+        return r_json_append_text(s, &decoded, 1U);
     } else if (s->utf8_remaining != 0U) {
         if ((c & 0xc0U) != 0x80U)
             return r_json_failure(R_STD_JSON_ERROR_INVALID_UTF8, s->offset);
@@ -376,7 +489,9 @@ static RStdJsonResult r_json_lex_byte(struct RJsonScannerState *s, uint8_t c) {
     } else if (c == '"') {
         return r_json_finish_token(s);
     } else if (c == '\\') {
+        /* Escapes decode into owned text; the borrowed prefix moves there first. */
         s->lex = R_JSON_LEX_ESCAPE;
+        return r_json_own_text(s);
     } else if (c < 0x20U) {
         return r_json_failure(R_STD_JSON_ERROR_SYNTAX, s->offset);
     } else {
@@ -412,13 +527,16 @@ static RStdJsonResult r_json_start_value(struct RJsonScannerState *s, uint8_t c)
         if (s->frames.length >= s->options.max_depth)
             return r_json_failure(R_STD_JSON_ERROR_DEPTH_LIMIT, s->offset);
         frame.grammar = c == '{' ? R_JSON_OBJECT_FIRST : R_JSON_ARRAY_FIRST;
-        r_runtime_array_initialize(
-            &frame.keys,
-            s->allocator,
-            (RRuntimeTypeInfo){sizeof(RStdString), alignof(RStdString), NULL, r_json_key_drop});
+        frame.key_first = s->key_entries.length;
+        frame.bytes_first = s->key_bytes.length;
         r_runtime_array_initialize(&frame.buckets,
                                    s->allocator,
                                    (RRuntimeTypeInfo){sizeof(size_t), alignof(size_t), NULL, NULL});
+        if (s->frames.length == s->frames.capacity) {
+            result = r_json_array_result(r_runtime_array_reserve(&s->frames, 8U));
+            if (result.status != R_STD_JSON_CALL_SUCCESS)
+                return result;
+        }
         result = r_json_array_result(r_runtime_array_push(&s->frames, &frame));
         if (result.status != R_STD_JSON_CALL_SUCCESS)
             return result;
@@ -427,10 +545,12 @@ static RStdJsonResult r_json_start_value(struct RJsonScannerState *s, uint8_t c)
     } else if (c == '"') {
         s->token_kind = R_STD_JSON_TOKEN_STRING;
         s->lex = R_JSON_LEX_STRING;
+        r_json_begin_view(s, s->input_at + 1U);
     } else if (c == '-' || (c >= '0' && c <= '9')) {
         s->token_kind = R_STD_JSON_TOKEN_NUMBER;
         s->lex = R_JSON_LEX_NUMBER;
         s->number_state = r_json_number_step(0U, c);
+        r_json_begin_view(s, s->input_at);
         return r_json_byte(s, c);
     } else if (c == 't' || c == 'f' || c == 'n') {
         s->token_kind = c == 't' ? R_STD_JSON_TOKEN_TRUE
@@ -453,6 +573,7 @@ static RStdJsonResult r_json_grammar_byte(struct RJsonScannerState *s, uint8_t c
             s->lex = R_JSON_LEX_STRING;
             s->token_kind = R_STD_JSON_TOKEN_KEY;
             s->token_offset = s->offset;
+            r_json_begin_view(s, s->input_at + 1U);
             return (RStdJsonResult){0};
         }
         if (frame->grammar == R_JSON_OBJECT_FIRST && c == '}')
@@ -487,8 +608,7 @@ static RStdJsonResult r_json_grammar_byte(struct RJsonScannerState *s, uint8_t c
             return r_json_failure(R_STD_JSON_ERROR_SYNTAX, s->offset);
         break;
     }
-    r_json_frame_drop(frame);
-    --s->frames.length;
+    r_json_pop_frame(s);
     s->token_kind = c == '}' ? R_STD_JSON_TOKEN_OBJECT_END : R_STD_JSON_TOKEN_ARRAY_END;
     s->token_offset = s->offset;
     s->token_delivered = true;
@@ -519,6 +639,13 @@ RStdJsonResult r_json_scanner_initialize(RStdJsonScanner *scanner,
     r_runtime_array_initialize(&scanner->state->text,
                                allocator,
                                (RRuntimeTypeInfo){sizeof(uint8_t), alignof(uint8_t), NULL, NULL});
+    r_runtime_array_initialize(&scanner->state->key_bytes,
+                               allocator,
+                               (RRuntimeTypeInfo){sizeof(uint8_t), alignof(uint8_t), NULL, NULL});
+    r_runtime_array_initialize(
+        &scanner->state->key_entries,
+        allocator,
+        (RRuntimeTypeInfo){sizeof(RJsonKeyEntry), alignof(RJsonKeyEntry), NULL, NULL});
     return result;
 }
 RStdJsonFeedResult
@@ -530,8 +657,15 @@ r_json_scanner_feed(RStdJsonScanner *scanner, RStdJsonByteView input, bool final
         result.outcome = r_json_failure(R_STD_JSON_ERROR_INVALID_STATE, s == NULL ? 0U : s->offset);
         return result;
     }
+    if (s->take_failure.status != R_STD_JSON_CALL_SUCCESS) {
+        result.outcome = s->take_failure;
+        s->take_failure = (RStdJsonResult){0};
+        s->poisoned = true;
+        return result;
+    }
     if (s->token_delivered) {
         s->text.length = 0U;
+        s->view = false;
         s->token_delivered = false;
     }
     if (s->delivered && s->options.mode != R_STD_JSON_MODE_DOCUMENT) {
@@ -551,8 +685,14 @@ r_json_scanner_feed(RStdJsonScanner *scanner, RStdJsonByteView input, bool final
             return result;
         }
         if (result.consumed == input.length) {
-            if (!final)
+            if (!final) {
+                /* The fragment is consumed only for this call: an unfinished token owns its
+                   bytes from here on. */
+                result.outcome = r_json_own_text(s);
+                if (result.outcome.status != R_STD_JSON_CALL_SUCCESS)
+                    break;
                 return result;
+            }
             if (s->lex == R_JSON_LEX_NUMBER && r_json_number_accept(s->number_state)) {
                 result.outcome = r_json_finish_token(s);
                 break;
@@ -573,6 +713,33 @@ r_json_scanner_feed(RStdJsonScanner *scanner, RStdJsonByteView input, bool final
             return result;
         }
         c = input.data[result.consumed];
+        if (s->lex == R_JSON_LEX_STRING && s->utf8_remaining == 0U && s->active &&
+            r_json_plain(c)) {
+            /* A run of plain string bytes in one pass. It stops before a byte that would exceed
+               the value-size limit or the offset range, which the byte path then reports. */
+            size_t limit = input.length - result.consumed;
+            size_t run = 0U;
+            if (limit > s->options.max_value_bytes - s->value_bytes)
+                limit = s->options.max_value_bytes - s->value_bytes;
+            if (limit > (s->offset < SIZE_MAX - 1U ? SIZE_MAX - 1U - s->offset : 0U))
+                limit = s->offset < SIZE_MAX - 1U ? SIZE_MAX - 1U - s->offset : 0U;
+            while (run < limit && r_json_plain(input.data[result.consumed + run]))
+                ++run;
+            if (run != 0U) {
+                if (s->view)
+                    s->view_length += run;
+                else {
+                    result.outcome = r_json_append_text(s, input.data + result.consumed, run);
+                    if (result.outcome.status != R_STD_JSON_CALL_SUCCESS)
+                        break;
+                }
+                s->value_bytes += run;
+                s->offset += run;
+                result.consumed += run;
+                continue;
+            }
+        }
+        s->input_at = input.data + result.consumed;
         if (s->lex == R_JSON_LEX_NUMBER && r_json_number_step(s->number_state, c) == 9U) {
             if (!r_json_number_accept(s->number_state) ||
                 !(r_json_space(c) || c == ',' || c == ']' || c == '}')) {
@@ -640,19 +807,35 @@ r_json_scanner_feed(RStdJsonScanner *scanner, RStdJsonByteView input, bool final
         return result;
     }
     result.state = R_STD_JSON_FEED_TOKEN;
-    result.token = (RStdJsonToken){s->token_kind, s->token_offset, {s->text.data, s->text.length}};
+    result.token = (RStdJsonToken){s->token_kind, s->token_offset, r_json_token_text(s)};
     return result;
 }
+/* Owned text of the delivered key, string or number token. Accumulated text moves out; a
+ * borrowed token is copied, and if that copy cannot be allocated the result is empty and the
+ * next feed reports the allocation failure. */
 RStdString r_json_scanner_take_text(RStdJsonScanner *scanner) {
     RStdString result = {0};
     struct RJsonScannerState *s = scanner->state;
+    RRuntimeStringStatus status;
     if (s == NULL || !s->token_delivered ||
         (s->token_kind != R_STD_JSON_TOKEN_KEY && s->token_kind != R_STD_JSON_TOKEN_STRING &&
          s->token_kind != R_STD_JSON_TOKEN_NUMBER))
         return result;
-    result.bytes = s->text;
-    r_runtime_array_initialize(
-        &s->text, s->allocator, (RRuntimeTypeInfo){sizeof(uint8_t), alignof(uint8_t), NULL, NULL});
+    if (!s->view) {
+        result.bytes = s->text;
+        r_runtime_array_initialize(&s->text,
+                                   s->allocator,
+                                   (RRuntimeTypeInfo){sizeof(uint8_t), alignof(uint8_t), NULL,
+                                                      NULL});
+        return result;
+    }
+    status = r_runtime_string_from_valid_utf8(&result, s->allocator, s->view_data, s->view_length);
+    if (status != R_RUNTIME_STRING_OK) {
+        if (s->take_failure.status == R_STD_JSON_CALL_SUCCESS)
+            s->take_failure = r_json_string_result(status);
+        return (RStdString){0};
+    }
+    s->view_length = 0U;
     return result;
 }
 void r_json_scanner_destroy(RStdJsonScanner *scanner) {
@@ -661,6 +844,8 @@ void r_json_scanner_destroy(RStdJsonScanner *scanner) {
         return;
     r_runtime_array_destroy(&s->frames);
     r_runtime_array_destroy(&s->text);
+    r_runtime_array_destroy(&s->key_bytes);
+    r_runtime_array_destroy(&s->key_entries);
     r_runtime_allocator_deallocate(s, alignof(struct RJsonScannerState));
     scanner->state = NULL;
 }
