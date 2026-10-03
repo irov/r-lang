@@ -4266,6 +4266,10 @@ if(NOT MSVC)
             async_array_create
             array_filled
             async_array_filled
+            index_proofs
+            async_index_proofs
+            index_proofs_bounds
+            async_index_proofs_bounds
             generic_example
             method_example
             reflection_example
@@ -5121,7 +5125,7 @@ if(NOT MSVC)
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_EXPECTED_PANIC "")
             set(R_CODEGEN_TEST_MODE ON)
-        elseif(R_CODEGEN_CASE MATCHES "^(async_)?array_(create|filled)$")
+        elseif(R_CODEGEN_CASE MATCHES "^(async_)?(array_(create|filled)|index_proofs)$")
             set(R_CODEGEN_SOURCE_1
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
             set(R_CODEGEN_SOURCE_2 "")
@@ -6325,7 +6329,7 @@ if(NOT MSVC)
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_bounds.r")
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_EXPECTED_PANIC "bounds")
-        elseif(R_CODEGEN_CASE MATCHES "^(async_)?array_index_bounds$")
+        elseif(R_CODEGEN_CASE MATCHES "^(async_)?(array_index|index_proofs)_bounds$")
             set(R_CODEGEN_SOURCE_1
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
             set(R_CODEGEN_SOURCE_2 "")
@@ -6972,6 +6976,12 @@ if(NOT MSVC)
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/check_static_conditions.py"
             --front $<TARGET_FILE:r-front>)
     set_tests_properties(r_frontend_static_condition_metadata PROPERTIES LABELS "semantic;generics")
+    add_test(NAME r_frontend_index_proofs
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/check_index_proofs.py"
+            --front $<TARGET_FILE:r-front>
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_index_proofs.r"
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_async_index_proofs.r")
+    set_tests_properties(r_frontend_index_proofs PROPERTIES LABELS "codegen;bounds")
     add_test(NAME r_frontend_const_generic_metadata
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/check_const_generics.py"
             --front "$<TARGET_FILE:r-front>")

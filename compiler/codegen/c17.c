@@ -230,6 +230,30 @@ typedef struct RC17Switch {
     bool break_label_used;
 } RC17Switch;
 
+/* Index proofs (index_proofs.inc): an inclusive range of non-negative values, and one fact of
+   the walk over a synchronous body. */
+typedef struct RC17IndexRange {
+    uint64_t low;
+    uint64_t high;
+} RC17IndexRange;
+
+typedef enum RC17IndexFactKind {
+    R_C17_INDEX_FACT_RANGE = 1,
+    R_C17_INDEX_FACT_BELOW,
+    R_C17_INDEX_FACT_LENGTH,
+    R_C17_INDEX_FACT_MINIMUM,
+    R_C17_INDEX_FACT_AT_MOST
+} RC17IndexFactKind;
+
+typedef struct RC17IndexFact {
+    RC17IndexFactKind kind;
+    RSymbolId subject;
+    RSymbolId base;
+    uint64_t low;
+    uint64_t high;
+    bool live;
+} RC17IndexFact;
+
 typedef struct RC17Emitter {
     const RFrontendContext *frontend;
     const RFrontendArtifactOptions *artifact_options;
@@ -245,6 +269,21 @@ typedef struct RC17Emitter {
     uint32_t *type_ordinals;
     uint32_t *program_string_ordinals;
     uint32_t *direct_copy_carrier_temporaries;
+    /* Index proofs (index_proofs.inc): per HIR node the generation that proved it, per symbol
+       the generation in which it carries no facts and the serial of its last change. */
+    uint32_t *index_proven;
+    uint32_t *index_unstable;
+    uint32_t *index_stamp;
+    RC17IndexFact *index_facts;
+    size_t index_fact_count;
+    size_t index_fact_capacity;
+    size_t *index_kill_log; /* Facts in the order the walk killed them. */
+    size_t index_kill_count;
+    size_t index_kill_capacity;
+    uint32_t index_proof_generation;
+    uint32_t index_proof_serial;
+    uint32_t index_proof_active; /* Generation of the body being emitted, or 0. */
+    bool index_proof_abandoned;
     unsigned char *async_wrapper_functions;
     unsigned char *sync_initializer_functions;
     unsigned char *thread_entry_functions;
@@ -17700,6 +17739,8 @@ r_c17_emit_index_conversion_failure(RC17Emitter *emitter, RTypeId type, uint32_t
            r_c17_write(emitter, " > (uintmax_t)SIZE_MAX");
 }
 
+#include "index_proofs.inc"
+
 static bool r_c17_emit_index_bound_condition(RC17Emitter *emitter,
                                              const RSemanticType *base_type,
                                              const RHirNode *base,
@@ -17767,7 +17808,13 @@ static bool r_c17_prepare_place(RC17Emitter *emitter,
         return false;
     }
     base_type = r_c17_type(emitter, r_c17_value_type(emitter, base->type));
-    if ((base_type == NULL) || !r_c17_indent(emitter, depth) || !r_c17_write(emitter, "if ((") ||
+    if (base_type == NULL) {
+        return false;
+    }
+    if (r_c17_index_check_is_redundant(emitter, place, base_type)) {
+        return r_c17_prepared_place_push(emitter, prepared, place, index.temporary);
+    }
+    if (!r_c17_indent(emitter, depth) || !r_c17_write(emitter, "if ((") ||
         !r_c17_emit_index_conversion_failure(emitter, index.type, index.temporary) ||
         !r_c17_write(emitter, ")")) {
         return false;
@@ -18361,6 +18408,7 @@ r_c17_emit_cast(RC17Emitter *emitter, const RHirNode *node, uint32_t depth, RC17
     } else if ((node->operation == R_TOKEN_KW_AS) &&
                (source_integer_kind != R_SEMANTIC_TYPE_INVALID) &&
                (target_integer_kind != R_SEMANTIC_TYPE_INVALID) &&
+               !r_c17_index_cast_is_redundant(emitter, node) &&
                !r_c17_emit_integer_cast_guard(emitter,
                                               source_integer_kind,
                                               target_integer_kind,
@@ -32294,7 +32342,15 @@ static bool r_c17_emit_async_index_bounds(RC17Emitter *emitter,
             : r_c17_type(emitter, r_c17_value_type(emitter, base_definition->type));
     const RMirInstruction *index = r_c17_mir_value_definition(emitter, mir, instruction->operand1);
     size_t condition_continuation;
+    RC17IndexRange range;
 
+    /* P4.3: an index whose value range lies below a fixed-array bound needs no check. */
+    if ((base_type != NULL) && (index != NULL) &&
+        (base_type->kind == R_SEMANTIC_TYPE_FIXED_ARRAY) &&
+        r_c17_index_mir_range(emitter, mir, instruction->operand1, UINT32_C(0), &range) &&
+        (range.high < base_type->length)) {
+        return true;
+    }
     if ((base_type == NULL) || (index == NULL) || !r_c17_indent(emitter, depth) ||
         !r_c17_write(emitter, "if ((") ||
         !r_c17_emit_async_index_conversion_failure(
@@ -42346,6 +42402,10 @@ static bool r_c17_emit_async_integer_cast_guard(RC17Emitter *emitter,
     const char *maximum;
     bool lower = false;
     bool upper = false;
+    bool bounded_signed = true;
+    uint32_t bounded_width = UINT32_C(0);
+    RC17IndexRange target_range;
+    RC17IndexRange operand_range;
 
     if ((source_kind == R_SEMANTIC_TYPE_INVALID) || (target_kind == R_SEMANTIC_TYPE_INVALID) ||
         ((instruction->operation != R_TOKEN_KW_AS) &&
@@ -42357,6 +42417,13 @@ static bool r_c17_emit_async_integer_cast_guard(RC17Emitter *emitter,
         return false;
     }
     if (overflow_panic && !target_signed) {
+        return true;
+    }
+    /* P4.3: a value whose range fits the target cannot fail the conversion. */
+    if (r_c17_index_type_range(
+            emitter, instruction->type, &bounded_signed, &bounded_width, &target_range) &&
+        r_c17_index_mir_range(emitter, mir, instruction->operand0, UINT32_C(0), &operand_range) &&
+        (operand_range.high <= target_range.high)) {
         return true;
     }
     minimum = r_c17_integer_minimum(target_kind);
@@ -44769,7 +44836,9 @@ static bool r_c17_emit_function(RC17Emitter *emitter, RSymbolId function_id) {
         }
     }
     body_start = emitter->output.length;
-    if (!r_c17_emit_block_contents(emitter, body, 1U)) {
+    if (!r_c17_index_proofs_analyze(emitter,
+                                    r_c17_child(emitter, node, function->parameter_count)) ||
+        !r_c17_emit_block_contents(emitter, body, 1U)) {
         goto cleanup;
     }
     /* A body that neither completes nor throws, such as one that only panics, leaves the
@@ -44809,6 +44878,7 @@ cleanup:
         emitter->finalies[finally_index].route_count = 0U;
         emitter->finalies[finally_index].route_capacity = 0U;
     }
+    emitter->index_proof_active = UINT32_C(0);
     emitter->current_function = R_SYMBOL_ID_INVALID;
     emitter->effect_handler_count = 0U;
     emitter->finally_count = 0U;
@@ -49429,6 +49499,11 @@ static void r_c17_dispose(RC17Emitter *emitter) {
     r_c17_free(emitter, emitter->type_ordinals);
     r_c17_free(emitter, emitter->program_string_ordinals);
     r_c17_free(emitter, emitter->direct_copy_carrier_temporaries);
+    r_c17_free(emitter, emitter->index_proven);
+    r_c17_free(emitter, emitter->index_unstable);
+    r_c17_free(emitter, emitter->index_stamp);
+    r_c17_free(emitter, emitter->index_facts);
+    r_c17_free(emitter, emitter->index_kill_log);
     r_c17_free(emitter, emitter->async_wrapper_functions);
     r_c17_free(emitter, emitter->sync_initializer_functions);
     r_c17_free(emitter, emitter->thread_entry_functions);

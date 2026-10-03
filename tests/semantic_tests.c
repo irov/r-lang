@@ -5829,10 +5829,14 @@ static void r_semantic_test_cross_module_bindings(void) {
                          R_FRONTEND_OK);
         R_SEMANTIC_CHECK((selected_c17.bytes != NULL) && (selected_c17.length != 0U));
         R_SEMANTIC_CHECK((qualified_c17.bytes != NULL) && (qualified_c17.length != 0U));
+        /* The imported select() reads values[index] after `index >= size` returned, so the
+           index is proven and emitted without its bounds check (index_proofs.inc). */
         R_SEMANTIC_CHECK((selected_c17.bytes != NULL) &&
-                         (strstr(selected_c17.bytes, "R_RUNTIME_PANIC_BOUNDS") != NULL));
+                         (strstr(selected_c17.bytes, ".r_data[(size_t)") != NULL) &&
+                         (strstr(selected_c17.bytes, "R_RUNTIME_PANIC_BOUNDS") == NULL));
         R_SEMANTIC_CHECK((qualified_c17.bytes != NULL) &&
-                         (strstr(qualified_c17.bytes, "R_RUNTIME_PANIC_BOUNDS") != NULL));
+                         (strstr(qualified_c17.bytes, ".r_data[(size_t)") != NULL) &&
+                         (strstr(qualified_c17.bytes, "R_RUNTIME_PANIC_BOUNDS") == NULL));
     }
     free(selected_c17.bytes);
     free(qualified_c17.bytes);

@@ -241,6 +241,15 @@ these rules are the ones that most often reject otherwise reasonable code:
 - R-FUNC-0012: a task with checked errors must be awaited, cancelled or detached on every path,
   throws included, so a member that lives across a whole loop returns its failure as a value
   instead of throwing it (`watch_stop` in `std.service`).
+- `u8` and `u16` operands of arithmetic, bitwise operators and shifts promote to `i32`, as in C;
+  narrow the result back with `as` (`(entry >> 4usize) as u16`).
+- Hot loops: the compiler leaves out a bounds check it can prove (compiler/README.md, *Index
+  and conversion proofs*). Index a local slice or `array<T>` (one the body never borrows
+  exclusively) with a local that a condition bounds (`i < len(b)`, or `n == len(b)` and
+  `i < n`); take a sub-slice `b[lo..hi]` once and index inside it (`b[a..a + 16]` holds 16);
+  mask by a constant, or by a local checked once (`if (mask >= len(t)) { return; }`, then
+  `t[x & mask]`). An index through a field (`this->table[i]`) or with an offset (`b[i + 1]`)
+  keeps its check. `tests/fixtures/codegen_index_proofs.r` lists proven and checked forms.
 
 One rule is not a compile error but has cost real defects (P4.1-5): a member that a `select` did
 not choose, or a wait that lost to an until clause, may already have taken its value, and

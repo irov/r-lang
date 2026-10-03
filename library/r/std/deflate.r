@@ -100,10 +100,99 @@ protected const u32[256] CRC_TABLE = {
     0xb40bbe37u32, 0xc30c8ea1u32, 0x5a05df1bu32, 0x2d02ef8du32,
 };
 
-/* Canonical Huffman decoding table: codes per length and symbols ordered by code. */
+/* Slicing by eight: slice k holds the CRC-32 of a byte followed by k zero bytes, so eight
+   lookups advance the CRC over eight bytes. Slice 0 is CRC_TABLE. */
+protected u32[2048] crc_slices() {
+    u32[2048] table = {};
+    for (usize value = 0usize; value < 256usize; value += 1usize) { table[value] = CRC_TABLE[value]; }
+    for (usize slice = 1usize; slice < 8usize; slice += 1usize) {
+        for (usize value = 0usize; value < 256usize; value += 1usize) {
+            u32 previous = table[(slice - 1usize) * 256usize + value];
+            table[slice * 256usize + value] = (previous >> 8usize) ^ CRC_TABLE[(previous & 255u32) as usize];
+        }
+    }
+    return table;
+}
+
+protected const u32[2048] CRC_SLICES = crc_slices();
+
+/* RFC 1951 3.2.5: base values and extra bits of the length codes 257..285 and of the distance
+   codes, and the order of the code-length code lengths in a dynamic block header. */
+protected const u16[29] LENGTH_BASE = {
+    3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31,
+    35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258,
+};
+protected const u8[29] LENGTH_EXTRA = {
+    0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2,
+    3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0,
+};
+protected const u16[30] DISTANCE_BASE = {
+    1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193,
+    257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577,
+};
+protected const u8[30] DISTANCE_EXTRA = {
+    0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6,
+    7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13,
+};
+protected const u8[19] CODE_LENGTH_ORDER = {
+    16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15,
+};
+protected const usize MIN_MATCH = 3usize;
+protected const usize MAX_MATCH = 258usize;
+
+/* The length code (0..28) of each match length 3..258, at length - 3. */
+protected u8[256] length_code_table() {
+    u8[256] table = {};
+    usize code = 0usize;
+    for (usize length = MIN_MATCH; length <= MAX_MATCH; length += 1usize) {
+        while ((code < 28usize) && (length >= (LENGTH_BASE[code + 1usize] as usize))) { code += 1usize; }
+        table[length - MIN_MATCH] = code as u8;
+    }
+    return table;
+}
+
+/* The distance code of each distance minus one: below 256 at that value, from 256 on at
+   256 + (value >> 7), as in zlib. */
+protected u8[512] distance_code_table() {
+    u8[512] table = {};
+    for (usize code = 0usize; code < 30usize; code += 1usize) {
+        usize first = (DISTANCE_BASE[code] as usize) - 1usize;
+        usize stop = first + (1usize << (DISTANCE_EXTRA[code] as usize));
+        for (usize value = first; value < stop; value += 1usize) {
+            if (value < 256usize) {
+                table[value] = code as u8;
+            } else {
+                table[256usize + (value >> 7usize)] = code as u8;
+            }
+        }
+    }
+    return table;
+}
+
+protected const u8[256] LENGTH_CODE = length_code_table();
+protected const u8[512] DISTANCE_CODE = distance_code_table();
+
+protected usize length_slot(usize length) {
+    return LENGTH_CODE[(length - MIN_MATCH) & 255usize] as usize;
+}
+
+protected usize distance_slot(usize distance) {
+    usize value = distance - 1usize;
+    if (value < 256usize) { return DISTANCE_CODE[value] as usize; }
+    return DISTANCE_CODE[256usize + ((value >> 7usize) & 255usize)] as usize;
+}
+
+/* Canonical Huffman decoding table: codes per length and symbols ordered by code. A code of up
+   to FAST_BITS bits also decodes with one lookup in `fast`, at every index whose low bits are
+   the code read first bit first: entry = symbol << 4 | length; 0 sends a longer or invalid
+   code to the canonical search. */
+protected const usize FAST_BITS = 9usize;
+protected const usize FAST_SIZE = 512usize;
+
 protected struct huffman {
     u16[16] count;
     u16[288] symbols;
+    u16[512] fast;
     usize symbol_count;
 };
 
@@ -114,7 +203,8 @@ protected struct decoded {
     u8 status;
 };
 
-/* Output position shared by the emitting stages of the inflater. */
+/* Output position shared by the emitting stages of the inflater. The window holds the bytes
+   of the calls before this one: window_fill of them, the next written at window_pos. */
 protected struct cursor {
     usize out_pos;
     usize window_pos;
@@ -151,7 +241,8 @@ protected struct checksum_pair {
     u32 b;
 };
 
-/* Advances the checksum over bytes. Adler-32 takes its modulo once per ADLER_BLOCK bytes. */
+/* Advances the checksum over bytes. Adler-32 takes its modulo once per ADLER_BLOCK bytes and
+   sums sixteen bytes per step. */
 protected checksum_pair checksum_update(format form, u32 a, u32 b, const u8[] bytes) {
     usize count = len(bytes);
     u32 first = a;
@@ -160,22 +251,101 @@ protected checksum_pair checksum_update(format form, u32 a, u32 b, const u8[] by
         usize index = 0usize;
         while (index < count) {
             usize stop = (count - index > ADLER_BLOCK) ? index + ADLER_BLOCK : count;
-            while (index < stop) {
-                first += bytes[index] as u32;
-                second += first;
-                index += 1usize;
+            const u8[] block = bytes[index..stop];
+            /* Over the n bytes b0..b(n-1) of a block the first sum grows by their sum and the
+               second by n * first + sum((n - j) * bj), the sequential sums in closed form:
+               one reduction with no chain from byte to byte. Within ADLER_BLOCK bytes every
+               term stays below 2^32 (zlib's NMAX bound), so u32 arithmetic is exact. */
+            u32 sum = 0u32;
+            u32 weighted = 0u32;
+            u32 weight = (len(block) & 0xffffusize) as u32;
+            for (usize offset = 0usize; offset < len(block); offset += 1usize) {
+                u32 value = block[offset] as u32;
+                sum += value;
+                weighted += weight * value;
+                weight -= 1u32;
             }
+            second += ((len(block) & 0xffffusize) as u32) * first + weighted;
+            first += sum;
             first %= ADLER_MODULUS;
             second %= ADLER_MODULUS;
+            index = stop;
         }
     }
     if (form == format::rfc1952) {
-        for (usize index = 0usize; index < count; index += 1usize) {
+        usize index = 0usize;
+        while (count - index >= 8usize) {
+            const u8[] chunk = bytes[index..index + 8usize];
+            u32 low = first ^ ((chunk[0] as u32) | ((chunk[1] as u32) << 8usize) |
+                               ((chunk[2] as u32) << 16usize) | ((chunk[3] as u32) << 24usize));
+            first = CRC_SLICES[1792usize + ((low & 255u32) as usize)] ^
+                    CRC_SLICES[1536usize + (((low >> 8usize) & 255u32) as usize)] ^
+                    CRC_SLICES[1280usize + (((low >> 16usize) & 255u32) as usize)] ^
+                    CRC_SLICES[1024usize + ((low >> 24usize) as usize)] ^
+                    CRC_SLICES[768usize + (chunk[4] as usize)] ^ CRC_SLICES[512usize + (chunk[5] as usize)] ^
+                    CRC_SLICES[256usize + (chunk[6] as usize)] ^ CRC_TABLE[chunk[7] as usize];
+            index += 8usize;
+        }
+        while (index < count) {
             usize slot = ((first ^ (bytes[index] as u32)) & 0xffu32) as usize;
             first = CRC_TABLE[slot] ^ (first >> 8usize);
+            index += 1usize;
         }
     }
     return checksum_pair { .a = first, .b = second };
+}
+
+/* Copies source to the start of target; the shorter of the two bounds the copy. */
+protected void copy_bytes(u8[] target, const u8[] source) {
+    for (usize index = 0usize; (index < len(target)) && (index < len(source)); index += 1usize) {
+        target[index] = source[index];
+    }
+}
+
+/* Sixteen bytes of a buffer as a value, so that a copy within the buffer reads its source
+   before it borrows the destination. */
+protected u8[16] read_chunk(const u8[] buffer, usize from) {
+    u8[16] chunk = {};
+    const u8[] source = buffer[from..from + 16usize];
+    for (usize index = 0usize; index < 16usize; index += 1usize) { chunk[index] = source[index]; }
+    return chunk;
+}
+
+protected void write_chunk(u8[] buffer, usize to, u8[16] chunk) {
+    u8[] target = buffer[to..to + 16usize];
+    for (usize index = 0usize; index < 16usize; index += 1usize) { target[index] = chunk[index]; }
+}
+
+protected u8[64] read_block(const u8[] buffer, usize from) {
+    u8[64] block = {};
+    const u8[] source = buffer[from..from + 64usize];
+    for (usize index = 0usize; index < 64usize; index += 1usize) { block[index] = source[index]; }
+    return block;
+}
+
+protected void write_block(u8[] buffer, usize to, u8[64] block) {
+    u8[] target = buffer[to..to + 64usize];
+    for (usize index = 0usize; index < 64usize; index += 1usize) { target[index] = block[index]; }
+}
+
+/* Each byte with its bits reversed. */
+protected u8[256] reversed_bytes() {
+    u8[256] table = {};
+    for (usize value = 1usize; value < 256usize; value += 1usize) {
+        table[value] = (((table[value >> 1usize] as usize) >> 1usize) | ((value & 1usize) << 7usize)) as u8;
+    }
+    return table;
+}
+
+protected const u8[256] REVERSED_BYTE = reversed_bytes();
+
+/* A canonical code of width 1..15 read first bit first: the 15-bit reversal from two byte
+   reversals, shifted down to the width. */
+protected usize reversed_code(u32 code, usize width) {
+    usize value = (code as usize) & 0x7fffusize;
+    usize reversed = ((REVERSED_BYTE[value & 255usize] as usize) << 7usize) |
+                     ((REVERSED_BYTE[(value >> 8usize) & 255usize] as usize) >> 1usize);
+    return reversed >> ((15usize - width) & 15usize);
 }
 
 /* Builds the canonical table from code lengths; false when the lengths do not form a
@@ -214,10 +384,34 @@ protected bool build(huffman* table, const u8[] lengths, bool allow_single) {
     for (usize symbol = 0usize; symbol < symbol_count; symbol += 1usize) {
         u8 length = lengths[symbol];
         if (length != 0) {
-            usize slot = length as usize;
+            usize slot = (length as usize) & 15usize;
             usize destination = offsets[slot] as usize;
             table->symbols[destination] = symbol as u16;
             offsets[slot] += 1;
+        }
+    }
+    /* RFC 1951 3.2.2: the canonical code of each symbol, entered at every index of the fast
+       table whose low bits are that code read first bit first. */
+    for (usize slot = 0usize; slot < FAST_SIZE; slot += 1usize) { table->fast[slot] = 0; }
+    u32[16] next_code = {};
+    u32 code = 0u32;
+    for (usize bits = 1usize; bits <= MAX_BITS; bits += 1usize) {
+        code = (code + (table->count[bits - 1usize] as u32)) << 1usize;
+        next_code[bits] = code;
+    }
+    for (usize symbol = 0usize; symbol < symbol_count; symbol += 1usize) {
+        usize length = (lengths[symbol] as usize) & 15usize;
+        if (length != 0usize) {
+            u32 assigned = next_code[length];
+            next_code[length] = assigned + 1u32;
+            if (length <= FAST_BITS) {
+                usize step = 1usize << length;
+                u16 entry = ((symbol << 4usize) | length) as u16;
+                usize first_slot = reversed_code(assigned, length);
+                for (usize slot = first_slot; slot < FAST_SIZE; slot += step) {
+                    table->fast[slot] = entry;
+                }
+            }
         }
     }
     return true;
@@ -238,8 +432,14 @@ protected bool build_fixed(huffman* literals, huffman* distances) {
     return build(distances, distance_view, false);
 }
 
-/* Decodes one code from the low bits of the accumulator without consuming them. */
+/* Decodes one code from the low bits of the accumulator without consuming them: one lookup
+   for a short code, otherwise the canonical search one bit at a time. */
 protected decoded decode_symbol(const huffman* table, u64 bits, u32 available) {
+    u16 entry = table->fast[(bits & 511u64) as usize];
+    u32 width = (entry & 15u16) as u32;
+    if ((width != 0u32) && (width <= available)) {
+        return decoded { .symbol = (entry >> 4usize) as u16, .used = width, .status = 0 };
+    }
     u32 code = 0u32;
     u32 first = 0u32;
     usize index = 0usize;
@@ -270,14 +470,44 @@ protected u32 extract(u64 bits, u32 offset, u32 width) {
     return (shifted & mask) as u32;
 }
 
-/* The checksum covers the emitted bytes later, a range at a time (flush_checksum). */
-protected void emit_byte(cursor* at, u8 value, u8[] output, u8[] window, usize window_mask) {
+/* The checksum covers the emitted bytes later, a range at a time (flush_checksum), and the
+   window takes them once per call (update_window). */
+protected void emit_byte(cursor* at, u8 value, u8[] output) {
     output[at->out_pos] = value;
     at->out_pos += 1usize;
-    window[at->window_pos] = value;
-    at->window_pos = (at->window_pos + 1usize) & window_mask;
-    if (at->window_fill <= window_mask) { at->window_fill += 1usize; }
     at->total_out += 1usize;
+}
+
+/* The byte `distance` positions before the next output byte: in this call's output, or in
+   the window of the calls before. */
+protected u8 history_byte(const cursor* at, const u8[] output, const u8[] window, usize distance) {
+    if (distance <= at->out_pos) { return output[at->out_pos - distance]; }
+    usize back = distance - at->out_pos;
+    usize mask = len(window) - 1usize;
+    return window[(at->window_pos + len(window) - back) & mask];
+}
+
+/* Brings the window up to the bytes this call produced: the last window bytes of the history
+   stay, in the ring order the window keeps. */
+protected void update_window(cursor* at, u8[] window, const u8[] produced) {
+    usize size = len(window);
+    usize count = len(produced);
+    if (count >= size) {
+        copy_bytes(window, produced[count - size..count]);
+        at->window_pos = 0usize;
+        at->window_fill = size;
+        return;
+    }
+    usize mask = size - 1usize;
+    if (mask >= len(window)) { return; }
+    usize position = at->window_pos;
+    for (usize index = 0usize; index < len(produced); index += 1usize) {
+        window[(position + index) & mask] = produced[index];
+    }
+    at->window_pos = (position + count) & mask;
+    usize fill = at->window_fill + count;
+    if (fill > size) { fill = size; }
+    at->window_fill = fill;
 }
 
 /* Brings the cursor's checksum up to every byte emitted into output so far. */
@@ -405,22 +635,19 @@ protected u8 read_code_lengths(inflater* this, u64* bits, u32* bit_count) {
         if (this->lengths[256] == 0) { return STEP_CORRUPT; }
         u8[320] lengths_copy = this->lengths;
         const u8[] literal_view = lengths_copy[0usize..this->literal_count];
-        huffman literals = {};
-        bool literals_ok = build(&literals, literal_view, true);
+        bool literals_ok = build(&this->literals, literal_view, true);
         if (literals_ok == false) { return STEP_CORRUPT; }
-        this->literals = literals;
         bool has_distance = false;
         for (usize index = this->literal_count; index < total; index += 1usize) {
             if (lengths_copy[index] != 0) { has_distance = true; }
         }
         if (has_distance == true) {
             const u8[] distance_view = lengths_copy[this->literal_count..total];
-            huffman distances = {};
-            bool distances_ok = build(&distances, distance_view, true);
+            bool distances_ok = build(&this->distances, distance_view, true);
             if (distances_ok == false) { return STEP_CORRUPT; }
-            this->distances = distances;
         } else {
             for (usize slot = 0usize; slot < 16usize; slot += 1usize) { this->distances.count[slot] = 0; }
+            for (usize slot = 0usize; slot < FAST_SIZE; slot += 1usize) { this->distances.fast[slot] = 0; }
             this->distances.symbol_count = this->distance_count;
         }
         return STEP_DONE;
@@ -462,59 +689,202 @@ protected u8 read_code_lengths(inflater* this, u64* bits, u32* bit_count) {
 
 /* Stage 12: one literal (emitted), the end of block (STEP_DONE) or one match, which sets
    the copy state for stage 13 and reports STEP_CONTINUE with this->remaining nonzero. */
-protected u8 decode_next(inflater* this, u64* bits, u32* bit_count, cursor* at, u8[] output,
-                         u8[] window, const u16[] length_base, const u8[] length_extra,
-                         const u16[] distance_base, const u8[] distance_extra) {
-    if (at->out_pos >= len(output)) { return STEP_NEED_OUTPUT; }
+protected u8 decode_next(inflater* this, u64* bits, u32* bit_count, cursor* at, u8[] output) {
     decoded code = decode_symbol(&this->literals, *bits, *bit_count);
     if (code.status == 1) { return STEP_NEED_INPUT; }
     if (code.status == 2) { return STEP_CORRUPT; }
+    /* Only a literal needs room now: the end of the block needs none, and a match waits for
+       room in stage 13, so a stream that fills its output exactly still ends. */
     if (code.symbol < 256) {
+        if (at->out_pos >= len(output)) { return STEP_NEED_OUTPUT; }
         if (at->total_out >= this->output_limit) { return STEP_LIMIT; }
         take_bits(bits, bit_count, code.used);
-        emit_byte(at, code.symbol as u8, output, window, this->window_mask);
+        emit_byte(at, code.symbol as u8, output);
         return STEP_CONTINUE;
     }
     if (code.symbol == 256) {
         take_bits(bits, bit_count, code.used);
         return STEP_DONE;
     }
-    if (code.symbol > 285) { return STEP_CORRUPT; }
-    usize length_index_slot = (code.symbol - 257) as usize;
-    u32 length_width = length_extra[length_index_slot] as u32;
+    usize length_slot_index = (code.symbol as usize) - 257usize;
+    if (length_slot_index >= 29usize) { return STEP_CORRUPT; }
+    u32 length_width = LENGTH_EXTRA[length_slot_index] as u32;
     u32 used = code.used + length_width;
     if (*bit_count < used) { return STEP_NEED_INPUT; }
     decoded distance_code = decode_symbol(&this->distances, *bits >> (used as usize), *bit_count - used);
     if (distance_code.status == 1) { return STEP_NEED_INPUT; }
     if (distance_code.status == 2) { return STEP_CORRUPT; }
-    if (distance_code.symbol >= 30) { return STEP_CORRUPT; }
-    usize distance_index_slot = distance_code.symbol as usize;
-    u32 distance_width = distance_extra[distance_index_slot] as u32;
+    usize distance_slot_index = distance_code.symbol as usize;
+    if (distance_slot_index >= 30usize) { return STEP_CORRUPT; }
+    u32 distance_width = DISTANCE_EXTRA[distance_slot_index] as u32;
     u32 total_used = used + distance_code.used + distance_width;
     if (*bit_count < total_used) { return STEP_NEED_INPUT; }
     u32 length_delta = extract(*bits, code.used, length_width);
     u32 distance_delta = extract(*bits, used + distance_code.used, distance_width);
-    usize match_length = (length_base[length_index_slot] as usize) + (length_delta as usize);
-    usize distance = (distance_base[distance_index_slot] as usize) + (distance_delta as usize);
-    if ((distance > at->window_fill) || (distance > this->window_size)) { return STEP_CORRUPT; }
+    usize match_length = (LENGTH_BASE[length_slot_index] as usize) + (length_delta as usize);
+    usize distance = (DISTANCE_BASE[distance_slot_index] as usize) + (distance_delta as usize);
+    if ((distance > at->window_fill + at->out_pos) || (distance > this->window_size)) { return STEP_CORRUPT; }
     take_bits(bits, bit_count, total_used);
     this->remaining = match_length;
     this->copy_distance = distance;
     return STEP_CONTINUE;
 }
 
-/* Stage 13: copies the match from the window until it is complete or the output is full. */
-protected u8 copy_match(inflater* this, cursor* at, u8[] output, u8[] window) {
+/* Stage 13: copies the match from the history until it is complete or the output is full. */
+protected u8 copy_match(inflater* this, cursor* at, u8[] output, const u8[] window) {
     usize output_size = len(output);
     while (this->remaining != 0usize) {
         if (at->out_pos >= output_size) { return STEP_NEED_OUTPUT; }
         if (at->total_out >= this->output_limit) { return STEP_LIMIT; }
-        usize source = (at->window_pos + this->window_size - this->copy_distance) & this->window_mask;
-        u8 byte = window[source];
-        emit_byte(at, byte, output, window, this->window_mask);
+        u8 byte = history_byte(at, output, window, this->copy_distance);
+        emit_byte(at, byte, output);
         this->remaining -= 1usize;
     }
     return STEP_DONE;
+}
+
+/* What the fast decoder leaves behind: the accumulator, the input position and its outcome. */
+protected struct fast_step {
+    u64 bits;
+    u32 bit_count;
+    usize pos;
+    u8 outcome;
+};
+
+/* Stage 12 while the accumulator can hold a whole literal or match and the output has room
+   for the longest match (zlib's inflate_fast): literals and matches without the stage
+   machine. STEP_CONTINUE leaves the next symbol to decode_next, STEP_DONE reports the end of
+   the block, STEP_CORRUPT an invalid code or distance. */
+protected fast_step decode_fast(const inflater* this, const u8[] input, usize start, u64 bits_in,
+                                u32 count_in, cursor* at, u8[] output, const u8[] window) {
+    u64 bits = bits_in;
+    u32 bit_count = count_in;
+    usize pos = start;
+    usize first_out = at->out_pos;
+    usize out_pos = first_out;
+    usize out_end = len(output);
+    /* The output limit ends the output as the end of the slice does. */
+    usize allowed = 0usize;
+    if (this->output_limit > at->total_out) { allowed = this->output_limit - at->total_out; }
+    if (allowed < out_end - out_pos) { out_end = out_pos + allowed; }
+    u8 outcome = STEP_CONTINUE;
+    usize window_mask = len(window) - 1usize;
+    usize history = at->window_fill;
+    usize window_base = at->window_pos + len(window);
+    if ((out_end > len(output)) || (window_mask >= len(window))) {
+        return fast_step { .bits = bits, .bit_count = bit_count, .pos = pos, .outcome = outcome };
+    }
+    while (out_pos < out_end) {
+        if (out_end - out_pos < MAX_MATCH) { break; }
+        while ((bit_count <= 56u32) && (pos < len(input))) {
+            bits |= (input[pos] as u64) << (bit_count as usize);
+            bit_count += 8u32;
+            pos += 1usize;
+        }
+        /* The longest literal or match: a 15-bit code, 5 extra bits, a 15-bit distance code
+           and 13 extra bits. */
+        if (bit_count < 48u32) { break; }
+        u16 entry = this->literals.fast[(bits & 511u64) as usize];
+        u32 used = (entry & 15u16) as u32;
+        usize symbol = (entry >> 4usize) as usize;
+        if (used == 0u32) {
+            decoded long_code = decode_symbol(&this->literals, bits, bit_count);
+            if (long_code.status != 0) {
+                outcome = STEP_CORRUPT;
+                break;
+            }
+            used = long_code.used;
+            symbol = long_code.symbol as usize;
+        }
+        if (symbol < 256usize) {
+            output[out_pos] = (symbol & 255usize) as u8;
+            out_pos += 1usize;
+            bits >>= (used as usize);
+            bit_count -= used;
+            continue;
+        }
+        if (symbol == 256usize) {
+            bits >>= (used as usize);
+            bit_count -= used;
+            outcome = STEP_DONE;
+            break;
+        }
+        usize slot = symbol - 257usize;
+        if (slot >= 29usize) {
+            outcome = STEP_CORRUPT;
+            break;
+        }
+        u32 length_width = LENGTH_EXTRA[slot] as u32;
+        u32 length_bits = used + length_width;
+        u64 rest = bits >> (length_bits as usize);
+        u16 distance_entry = this->distances.fast[(rest & 511u64) as usize];
+        u32 distance_used = (distance_entry & 15u16) as u32;
+        usize distance_symbol = (distance_entry >> 4usize) as usize;
+        if (distance_used == 0u32) {
+            decoded long_distance = decode_symbol(&this->distances, rest, bit_count - length_bits);
+            if (long_distance.status != 0) {
+                outcome = STEP_CORRUPT;
+                break;
+            }
+            distance_used = long_distance.used;
+            distance_symbol = long_distance.symbol as usize;
+        }
+        if (distance_symbol >= 30usize) {
+            outcome = STEP_CORRUPT;
+            break;
+        }
+        u32 distance_width = DISTANCE_EXTRA[distance_symbol] as u32;
+        usize match_length = (LENGTH_BASE[slot] as usize) + (extract(bits, used, length_width) as usize);
+        usize distance = (DISTANCE_BASE[distance_symbol] as usize) +
+                         (extract(bits, length_bits + distance_used, distance_width) as usize);
+        if ((distance > history + (out_pos - first_out) + first_out) || (distance > this->window_size)) {
+            outcome = STEP_CORRUPT;
+            break;
+        }
+        usize copy_end = out_pos + match_length;
+        if (copy_end > out_end) { break; }
+        u32 total_used = length_bits + distance_used + distance_width;
+        bits >>= (total_used as usize);
+        bit_count -= total_used;
+        if (distance > out_pos) {
+            /* The start of the match lies in the window of the calls before. */
+            usize back = distance - out_pos;
+            usize source = window_base - back;
+            while ((back > 0usize) && (out_pos < copy_end)) {
+                output[out_pos] = window[source & window_mask];
+                source += 1usize;
+                back -= 1usize;
+                out_pos += 1usize;
+            }
+        }
+        usize from = out_pos - distance;
+        /* At a distance of at least a block (64) or a chunk (16) bytes, the source of each
+           block or chunk is complete before the bytes it is copied to begin. */
+        if (distance >= 64usize) {
+            while (copy_end - out_pos >= 64usize) {
+                u8[64] block = read_block(output, from);
+                write_block(output, out_pos, block);
+                from += 64usize;
+                out_pos += 64usize;
+            }
+        }
+        if (distance >= 16usize) {
+            while (copy_end - out_pos >= 16usize) {
+                u8[16] chunk = read_chunk(output, from);
+                write_chunk(output, out_pos, chunk);
+                from += 16usize;
+                out_pos += 16usize;
+            }
+        }
+        while ((out_pos < copy_end) && (from < out_pos)) {
+            output[out_pos] = output[from];
+            from += 1usize;
+            out_pos += 1usize;
+        }
+    }
+    at->total_out += out_pos - first_out;
+    at->out_pos = out_pos;
+    return fast_step { .bits = bits, .bit_count = bit_count, .pos = pos, .outcome = outcome };
 }
 
 /* Stage 14: the trailer bytes, then their verification against the running checksum. */
@@ -588,28 +958,6 @@ protected u8 read_zlib_header(inflater* this, u64* bits, u32* bit_count) {
 progress inflater::inflate(inflater* this, const u8[] input, u8[] output) throws error {
     throw (this->poisoned == true) error { .code = error_code::poisoned, .offset = this->total_in };
     throw (this->stage == 15) error { .code = error_code::finished, .offset = this->total_in };
-    u16[29] length_base = {
-        3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31,
-        35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258,
-    };
-    u8[29] length_extra = {
-        0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2,
-        3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0,
-    };
-    u16[30] distance_base = {
-        1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193,
-        257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577,
-    };
-    u8[30] distance_extra = {
-        0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6,
-        7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13,
-    };
-    u8[19] order = { 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 };
-    const u16[] length_base_view = &length_base;
-    const u8[] length_extra_view = &length_extra;
-    const u16[] distance_base_view = &distance_base;
-    const u8[] distance_extra_view = &distance_extra;
-
     array<u8> window_owner = core::replace(&this->window, std.array::create::<u8>());
     u8[] window = std.array::as_slice_mut(&window_owner);
     cursor at = cursor {
@@ -694,12 +1042,8 @@ progress inflater::inflate(inflater* this, const u8[] input, u8[] output) throws
             if (kind == 2u32) { stage = 9; }
             if (kind == 3u32) { outcome = STEP_CORRUPT; }
             if (kind == 1u32) {
-                huffman fixed_literals = {};
-                huffman fixed_distances = {};
-                bool built = build_fixed(&fixed_literals, &fixed_distances);
+                bool built = build_fixed(&this->literals, &this->distances);
                 if (built == false) { outcome = STEP_CORRUPT; break; }
-                this->literals = fixed_literals;
-                this->distances = fixed_distances;
                 stage = 12;
             }
             break;
@@ -720,12 +1064,28 @@ progress inflater::inflate(inflater* this, const u8[] input, u8[] output) throws
                 break;
             }
             if (at.out_pos >= output_size) { outcome = STEP_NEED_OUTPUT; break; }
-            if (bit_count < 8u32) { outcome = STEP_NEED_INPUT; break; }
             if (at.total_out >= this->output_limit) { outcome = STEP_LIMIT; break; }
-            u8 stored_byte = extract(bits, 0u32, 8u32) as u8;
-            take_bits(&bits, &bit_count, 8u32);
-            emit_byte(&at, stored_byte, output, window, this->window_mask);
-            this->remaining -= 1usize;
+            /* A stored block is byte aligned: the whole bytes of the accumulator come first,
+               then the rest of the block straight from the input. */
+            if (bit_count >= 8u32) {
+                u8 stored_byte = extract(bits, 0u32, 8u32) as u8;
+                take_bits(&bits, &bit_count, 8u32);
+                emit_byte(&at, stored_byte, output);
+                this->remaining -= 1usize;
+                break;
+            }
+            if (pos >= input_size) { outcome = STEP_NEED_INPUT; break; }
+            usize stored_count = this->remaining;
+            if (input_size - pos < stored_count) { stored_count = input_size - pos; }
+            if (output_size - at.out_pos < stored_count) { stored_count = output_size - at.out_pos; }
+            if (this->output_limit - at.total_out < stored_count) {
+                stored_count = this->output_limit - at.total_out;
+            }
+            copy_bytes(output[at.out_pos..at.out_pos + stored_count], input[pos..pos + stored_count]);
+            at.out_pos += stored_count;
+            at.total_out += stored_count;
+            pos += stored_count;
+            this->remaining -= stored_count;
             break;
         case 9:
             if (bit_count < 14u32) { outcome = STEP_NEED_INPUT; break; }
@@ -748,10 +1108,8 @@ progress inflater::inflate(inflater* this, const u8[] input, u8[] output) throws
             if (this->length_index >= this->code_count) {
                 u8[19] code_copy = this->code_lengths;
                 const u8[] code_view = &code_copy;
-                huffman code_table = {};
-                bool built = build(&code_table, code_view, false);
+                bool built = build(&this->code_table, code_view, false);
                 if (built == false) { outcome = STEP_CORRUPT; break; }
-                this->code_table = code_table;
                 this->length_index = 0usize;
                 this->previous_length = 0;
                 for (usize index = 0usize; index < 320usize; index += 1usize) { this->lengths[index] = 0; }
@@ -759,7 +1117,7 @@ progress inflater::inflate(inflater* this, const u8[] input, u8[] output) throws
                 break;
             }
             if (bit_count < 3u32) { outcome = STEP_NEED_INPUT; break; }
-            usize slot = order[this->length_index] as usize;
+            usize slot = CODE_LENGTH_ORDER[this->length_index] as usize;
             this->code_lengths[slot] = extract(bits, 0u32, 3u32) as u8;
             take_bits(&bits, &bit_count, 3u32);
             this->length_index += 1usize;
@@ -772,8 +1130,14 @@ progress inflater::inflate(inflater* this, const u8[] input, u8[] output) throws
             }
             break;
         case 12:
-            outcome = decode_next(this, &bits, &bit_count, &at, output, window, length_base_view,
-                                  length_extra_view, distance_base_view, distance_extra_view);
+            fast_step fast = decode_fast(this, input, pos, bits, bit_count, &at, output, window);
+            bits = fast.bits;
+            bit_count = fast.bit_count;
+            pos = fast.pos;
+            outcome = fast.outcome;
+            if (outcome == STEP_CONTINUE) {
+                outcome = decode_next(this, &bits, &bit_count, &at, output);
+            }
             if (outcome == STEP_DONE) {
                 stage = (this->final_block == true) ? 14 : 6;
                 outcome = STEP_CONTINUE;
@@ -827,6 +1191,8 @@ progress inflater::inflate(inflater* this, const u8[] input, u8[] output) throws
         }
     }
     flush_checksum(&at, output, form);
+    /* A finished stream reads no history again. */
+    if (stage != 15) { update_window(&at, window, output[0usize..at.out_pos]); }
     this->window = move window_owner;
     this->window_pos = at.window_pos;
     this->window_fill = at.window_fill;
@@ -844,48 +1210,83 @@ progress inflater::inflate(inflater* this, const u8[] input, u8[] output) throws
     return progress { .consumed = pos, .produced = at.out_pos, .state = result };
 }
 
-protected void append_bytes(array<u8>* target, const u8[] source, usize count)
+/* Grows the output of a one-shot call to at least `minimum` bytes, keeping its first `used`. */
+protected void grow_output(array<u8>* buffer, usize used, usize minimum)
     throws std.alloc::alloc_error {
-    std.array::reserve(target, count);
-    for (usize index = 0usize; index < count; index += 1usize) {
-        bool failed = false;
-        try { std.array::push(target, source[index]); }
-        catch (std.array::push_error<u8> failure) { failed = true; }
-        if (failed == true) { panic("reserved byte insertion failed"); }
+    usize size = len(*buffer) * 2usize;
+    if (size < minimum) { size = minimum; }
+    array<u8> bigger = std.alloc::bytes(size, 0u8);
+    {
+        u8[] target = std.array::as_slice_mut(&bigger);
+        const u8[] source = std.array::as_slice(buffer);
+        copy_bytes(target, source[0usize..used]);
     }
+    array<u8> previous = core::replace(buffer, move bigger);
+    drop previous;
 }
 
-/* R-SLIB-DEFLATE-0005: one-shot decompression of one complete stream. */
+/* The first `used` bytes of a one-shot output, in an array of exactly that length: a short
+   tail is popped, a long one is left behind by a copy. */
+protected array<u8> exact_output(array<u8> buffer, usize used) throws std.alloc::alloc_error {
+    if (len(buffer) - used <= used / 16usize) {
+        while (len(buffer) > used) { std.array::pop(&buffer) as void; }
+        return move buffer;
+    }
+    array<u8> result = std.alloc::bytes(used, 0u8);
+    {
+        u8[] target = std.array::as_slice_mut(&result);
+        const u8[] source = std.array::as_slice(&buffer);
+        copy_bytes(target, source[0usize..used]);
+    }
+    drop buffer;
+    return move result;
+}
+
+/* The first size of a one-shot inflate output: four times the input, at least one window
+   and at most the output limit, which a stream that reaches the limit fills exactly. */
+protected usize first_output_size(usize input_size, usize limit) {
+    usize size = WINDOW_MAX * 2usize;
+    if (input_size < (1usize << 40usize)) { size = input_size * 4usize + ONE_SHOT_CHUNK; }
+    if (size < WINDOW_MAX * 2usize) { size = WINDOW_MAX * 2usize; }
+    if (size > limit) { size = limit; }
+    if (size < ONE_SHOT_CHUNK) { size = ONE_SHOT_CHUNK; }
+    return size;
+}
+
+/* R-SLIB-DEFLATE-0005: one-shot decompression of one complete stream, written straight into
+   the result. */
 array<u8> inflate(const u8[] input, format form, usize output_limit)
     throws error, std.alloc::alloc_error {
     inflater engine = inflater::create(form, WINDOW_MAX, output_limit);
-    array<u8> result = std.array::create::<u8>();
-    array<u8> scratch = std.alloc::bytes(ONE_SHOT_CHUNK, 0u8);
-    usize consumed = 0usize;
     usize input_size = len(input);
+    array<u8> result = std.alloc::bytes(first_output_size(input_size, output_limit), 0u8);
+    usize produced = 0usize;
+    usize consumed = 0usize;
     while (true) {
-        u8[] out_view = std.array::as_slice_mut(&scratch);
+        u8[] room = std.array::as_slice_mut(&result);
+        u8[] out_view = room[produced..len(room)];
         const u8[] rest = input[consumed..input_size];
         progress step = engine.inflate(rest, out_view);
         consumed += step.consumed;
-        append_bytes(&result, out_view, step.produced);
+        produced += step.produced;
         if (step.state == state::end) {
             throw (consumed != input_size) error { .code = error_code::corrupt_stream, .offset = consumed };
-            return move result;
+            return exact_output(move result, produced);
         }
         throw (step.state == state::need_input) error { .code = error_code::corrupt_stream, .offset = consumed };
+        grow_output(&result, produced, produced + ONE_SHOT_CHUNK);
     }
 }
 
 /* R-SLIB-DEFLATE-0004: the deflater. LZ77 over a sliding buffer of twice the window with
    hash chains, greedy matching below level 4 and lazy matching from level 4, blocks chosen
    by their exact bit cost among stored, fixed and dynamic Huffman coding. */
-protected const usize MIN_MATCH = 3usize;
-protected const usize MAX_MATCH = 258usize;
 protected const usize MIN_LOOKAHEAD = 262usize;
 protected const usize PENDING_EXTRA = 1024usize;
 protected const usize STORED_OVERHEAD_BITS = 40usize;
-protected const u32 NIL = 0xffffffffu32;
+/* The empty chain link. Positions lie below twice the window (at most 65536) and only those
+   with three bytes before fill enter the chains, so 0xffff is never a position. */
+protected const u16 NIL = 0xffffu16;
 
 protected struct level_config {
     usize good;
@@ -935,49 +1336,17 @@ protected void align_bits(bit_writer* writer, u8[] pending) {
     }
 }
 
-protected u32 reverse_bits(u32 code, usize width) {
-    u32 result = 0u32;
-    u32 rest = code;
-    for (usize index = 0usize; index < width; index += 1usize) {
-        result = (result << 1usize) | (rest & 1u32);
-        rest >>= 1usize;
-    }
-    return result;
-}
-
-protected usize length_slot(usize length) {
-    u16[29] base = {
-        3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31,
-        35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258,
-    };
-    usize slot = 28usize;
-    while (slot > 0usize) {
-        if (length >= (base[slot] as usize)) { return slot; }
-        slot -= 1usize;
-    }
-    return 0usize;
-}
-
-protected usize distance_slot(usize distance) {
-    u16[30] base = {
-        1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193,
-        257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577,
-    };
-    usize slot = 29usize;
-    while (slot > 0usize) {
-        if (distance >= (base[slot] as usize)) { return slot; }
-        slot -= 1usize;
-    }
-    return 0usize;
-}
-
 /* Length-limited canonical code lengths from frequencies (zlib's overflow adjustment); at
-   least two codes are produced so that the block can always be written. */
+   least two codes are produced so that the block can always be written. The two lightest
+   nodes, the lower index first on equal weights, merge until one tree remains; a binary
+   heap keyed by weight and index yields them. */
 protected void build_lengths(const u32[] freq, u8[] lengths, usize count, usize max_bits) {
     u32[576] weight = {};
     u16[576] parent = {};
-    u8[576] active = {};
+    u16[576] heap = {};
+    usize heap_size = 0usize;
     usize leaves = 0usize;
+    u8[576] active = {};
     for (usize symbol = 0usize; symbol < count; symbol += 1usize) {
         lengths[symbol] = 0;
         if (freq[symbol] != 0u32) {
@@ -994,37 +1363,72 @@ protected void build_lengths(const u32[] freq, u8[] lengths, usize count, usize 
         }
         forced += 1usize;
     }
-    usize node_count = count;
-    usize remaining = leaves;
-    while (remaining > 1usize) {
-        usize first = node_count;
-        usize second = node_count;
-        for (usize node = 0usize; node < node_count; node += 1usize) {
-            if (active[node] == 0) {
-                second = second;
-            } else {
-                if ((first == node_count) || (weight[node] < weight[first])) {
-                    second = first;
-                    first = node;
-                } else {
-                    if ((second == node_count) || (weight[node] < weight[second])) { second = node; }
-                }
+    for (usize node = 0usize; node < count; node += 1usize) {
+        if (active[node] != 0) {
+            /* Ascending index order keeps the heap property without sifting on equal weights;
+               a lighter node rises. */
+            usize position = heap_size;
+            heap_size += 1usize;
+            while (position > 0usize) {
+                usize above = (position - 1usize) / 2usize;
+                usize upper = heap[above] as usize;
+                if (weight[upper] <= weight[node]) { break; }
+                heap[position] = heap[above];
+                position = above;
             }
+            heap[position] = node as u16;
         }
-        active[first] = 0;
-        active[second] = 0;
+    }
+    usize node_count = count;
+    while (heap_size > 1usize) {
+        u16[2] taken = {};
+        for (usize pick = 0usize; pick < 2usize; pick += 1usize) {
+            taken[pick] = heap[0];
+            heap_size -= 1usize;
+            usize moving = heap[heap_size] as usize;
+            usize position = 0usize;
+            while (true) {
+                usize child = position * 2usize + 1usize;
+                if (child >= heap_size) { break; }
+                usize right = child + 1usize;
+                if (right < heap_size) {
+                    usize left_node = heap[child] as usize;
+                    usize right_node = heap[right] as usize;
+                    bool right_first =
+                        (weight[right_node] < weight[left_node]) ||
+                        ((weight[right_node] == weight[left_node]) && (right_node < left_node));
+                    if (right_first == true) { child = right; }
+                }
+                usize lower = heap[child] as usize;
+                bool moving_first = (weight[moving] < weight[lower]) ||
+                                    ((weight[moving] == weight[lower]) && (moving < lower));
+                if (moving_first == true) { break; }
+                heap[position] = heap[child];
+                position = child;
+            }
+            heap[position] = moving as u16;
+        }
+        usize first = taken[0] as usize;
+        usize second = taken[1] as usize;
         weight[node_count] = weight[first] + weight[second];
         parent[first] = node_count as u16;
         parent[second] = node_count as u16;
-        active[node_count] = 1;
+        /* The new node has the highest index, so it rises only past heavier nodes. */
+        usize position = heap_size;
+        heap_size += 1usize;
+        while (position > 0usize) {
+            usize above = (position - 1usize) / 2usize;
+            usize upper = heap[above] as usize;
+            if (weight[upper] <= weight[node_count]) { break; }
+            heap[position] = heap[above];
+            position = above;
+        }
+        heap[position] = node_count as u16;
         node_count += 1usize;
-        remaining -= 1usize;
     }
     usize root = node_count - 1usize;
     u16[16] bl_count = {};
     usize overflow = 0usize;
-    u16[288] leaf_order = {};
-    usize leaf_count = 0usize;
     for (usize symbol = 0usize; symbol < count; symbol += 1usize) {
         bool is_leaf = (freq[symbol] != 0u32) || (parent[symbol] != 0);
         if (is_leaf == true) {
@@ -1040,7 +1444,15 @@ protected void build_lengths(const u32[] freq, u8[] lengths, usize count, usize 
             }
             bl_count[depth] += 1;
             lengths[symbol] = depth as u8;
-            /* Insertion by ascending frequency: the least frequent leaves take the longest codes. */
+        }
+    }
+    if (overflow == 0usize) { return; }
+    /* Insertion by ascending frequency: the least frequent leaves take the longest codes. */
+    u16[288] leaf_order = {};
+    usize leaf_count = 0usize;
+    for (usize symbol = 0usize; symbol < count; symbol += 1usize) {
+        bool is_leaf = (freq[symbol] != 0u32) || (parent[symbol] != 0);
+        if (is_leaf == true) {
             usize slot = leaf_count;
             while (slot > 0usize) {
                 usize previous = leaf_order[slot - 1usize] as usize;
@@ -1052,7 +1464,6 @@ protected void build_lengths(const u32[] freq, u8[] lengths, usize count, usize 
             leaf_count += 1usize;
         }
     }
-    if (overflow == 0usize) { return; }
     while (overflow > 0usize) {
         usize bits = max_bits - 1usize;
         while (bl_count[bits] == 0) { bits -= 1usize; }
@@ -1092,7 +1503,7 @@ protected void assign_codes(const u8[] lengths, u16[] codes, usize count) {
         usize length = lengths[symbol] as usize;
         codes[symbol] = 0;
         if (length != 0usize) {
-            codes[symbol] = (reverse_bits(next_code[length] & 0x7fffu32, length) & 0xffffu32) as u16;
+            codes[symbol] = (reversed_code(next_code[length], length) & 0xffffusize) as u16;
             next_code[length] += 1u32;
         }
     }
@@ -1100,14 +1511,6 @@ protected void assign_codes(const u8[] lengths, u16[] codes, usize count) {
 
 protected usize token_cost(const u32[] tokens, usize token_count, const u8[] literal_lengths,
                            const u8[] distance_lengths) {
-    u8[29] length_extra = {
-        0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2,
-        3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0,
-    };
-    u8[30] distance_extra = {
-        0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6,
-        7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13,
-    };
     usize bits = literal_lengths[256] as usize;
     for (usize index = 0usize; index < token_count; index += 1usize) {
         u32 token = tokens[index];
@@ -1117,9 +1520,9 @@ protected usize token_cost(const u32[] tokens, usize token_count, const u8[] lit
             bits += literal_lengths[value] as usize;
         } else {
             usize slot = length_slot(value);
-            bits += (literal_lengths[257usize + slot] as usize) + (length_extra[slot] as usize);
+            bits += (literal_lengths[257usize + slot] as usize) + (LENGTH_EXTRA[slot] as usize);
             usize distance_code = distance_slot(distance);
-            bits += (distance_lengths[distance_code] as usize) + (distance_extra[distance_code] as usize);
+            bits += (distance_lengths[distance_code] as usize) + (DISTANCE_EXTRA[distance_code] as usize);
         }
     }
     return bits;
@@ -1128,22 +1531,6 @@ protected usize token_cost(const u32[] tokens, usize token_count, const u8[] lit
 protected void write_tokens(bit_writer* writer, u8[] pending, const u32[] tokens, usize token_count,
                             const u8[] literal_lengths, const u16[] literal_codes,
                             const u8[] distance_lengths, const u16[] distance_codes) {
-    u16[29] length_base = {
-        3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31,
-        35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258,
-    };
-    u8[29] length_extra = {
-        0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2,
-        3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0,
-    };
-    u16[30] distance_base = {
-        1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193,
-        257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577,
-    };
-    u8[30] distance_extra = {
-        0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6,
-        7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13,
-    };
     for (usize index = 0usize; index < token_count; index += 1usize) {
         u32 token = tokens[index];
         usize distance = (token >> 16usize) as usize;
@@ -1154,15 +1541,15 @@ protected void write_tokens(bit_writer* writer, u8[] pending, const u32[] tokens
             usize slot = length_slot(value);
             usize symbol = 257usize + slot;
             put_bits(writer, pending, literal_codes[symbol] as u32, literal_lengths[symbol] as u32);
-            u32 extra_width = length_extra[slot] as u32;
+            u32 extra_width = LENGTH_EXTRA[slot] as u32;
             if (extra_width != 0u32) {
-                put_bits(writer, pending, (value - (length_base[slot] as usize)) as u32, extra_width);
+                put_bits(writer, pending, (value - (LENGTH_BASE[slot] as usize)) as u32, extra_width);
             }
             usize distance_code = distance_slot(distance);
             put_bits(writer, pending, distance_codes[distance_code] as u32, distance_lengths[distance_code] as u32);
-            u32 distance_width = distance_extra[distance_code] as u32;
+            u32 distance_width = DISTANCE_EXTRA[distance_code] as u32;
             if (distance_width != 0u32) {
-                put_bits(writer, pending, (distance - (distance_base[distance_code] as usize)) as u32, distance_width);
+                put_bits(writer, pending, (distance - (DISTANCE_BASE[distance_code] as usize)) as u32, distance_width);
             }
         }
     }
@@ -1244,7 +1631,6 @@ protected usize describe_lengths(const u8[] literal_lengths, usize literal_count
 protected void emit_block(bit_writer* writer, u8[] pending, const u32[] tokens, usize token_count,
                           const u8[] block_bytes, const u32[] literal_freq, const u32[] distance_freq,
                           bool final, bool stored_only) {
-    u8[19] order = { 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 };
     u32 final_bit = (final == true) ? 1u32 : 0u32;
     usize byte_count = len(block_bytes);
     usize stored_cost = byte_count * 8usize + STORED_OVERHEAD_BITS;
@@ -1302,7 +1688,7 @@ protected void emit_block(bit_writer* writer, u8[] pending, const u32[] tokens, 
         u8[] code_lengths_view = &code_lengths;
         build_lengths(code_freq_const, code_lengths_view, 19usize, 7usize);
         for (usize index = 4usize; index < 19usize; index += 1usize) {
-            usize symbol = order[index] as usize;
+            usize symbol = CODE_LENGTH_ORDER[index] as usize;
             if (code_lengths[symbol] != 0) { code_count = index + 1usize; }
         }
         dynamic_cost = 3usize + 14usize + code_count * 3usize;
@@ -1321,9 +1707,9 @@ protected void emit_block(bit_writer* writer, u8[] pending, const u32[] tokens, 
         align_bits(writer, pending);
         put_bits(writer, pending, byte_count as u32, 16u32);
         put_bits(writer, pending, (byte_count as u32) ^ 0xffffu32, 16u32);
-        for (usize index = 0usize; index < byte_count; index += 1usize) {
-            put_bits(writer, pending, block_bytes[index] as u32, 8u32);
-        }
+        /* The writer is byte aligned here, so the stored bytes are copied as they are. */
+        copy_bytes(pending[writer->length..writer->length + byte_count], block_bytes);
+        writer->length += byte_count;
         return;
     }
     if (fixed_cost <= dynamic_cost) {
@@ -1354,7 +1740,7 @@ protected void emit_block(bit_writer* writer, u8[] pending, const u32[] tokens, 
     put_bits(writer, pending, (distance_count - 1usize) as u32, 5u32);
     put_bits(writer, pending, (code_count - 4usize) as u32, 4u32);
     for (usize index = 0usize; index < code_count; index += 1usize) {
-        usize symbol = order[index] as usize;
+        usize symbol = CODE_LENGTH_ORDER[index] as usize;
         put_bits(writer, pending, code_lengths[symbol] as u32, 3u32);
     }
     for (usize index = 0usize; index < rle_count; index += 1usize) {
@@ -1370,16 +1756,11 @@ protected void emit_block(bit_writer* writer, u8[] pending, const u32[] tokens, 
                  distance_lengths_const, distance_codes_const);
 }
 
-protected usize hash_bytes(const u8[] buffer, usize position, usize hash_mask) {
-    usize first = buffer[position] as usize;
-    usize second = buffer[position + 1usize] as usize;
-    usize third = buffer[position + 2usize] as usize;
-    return ((first << 10usize) ^ (second << 5usize) ^ third) & hash_mask;
-}
+/* The hash chains key a position by its three bytes: ((b0 << 10) ^ (b1 << 5) ^ b2) & mask. */
 
 /* Longest match for the string at strstart among the chain starting at hash_head; the
    result is longer than prev_length or prev_length itself when nothing better exists. */
-protected usize longest_match(const u8[] buffer, const u32[] prev, usize strstart, u32 hash_head,
+protected usize longest_match(const u8[] buffer, const u16[] prev, usize strstart, u16 hash_head,
                               usize lookahead, usize window_size, const level_config* config,
                               usize prev_length, usize* match_start) {
     usize best = prev_length;
@@ -1388,16 +1769,22 @@ protected usize longest_match(const u8[] buffer, const u32[] prev, usize strstar
     usize limit = (strstart > window_size) ? strstart - window_size : 0usize;
     usize chain = config->chain;
     if (prev_length >= config->good) { chain >>= 2usize; }
-    u32 current = hash_head;
+    if ((strstart >= len(prev)) || (max_length < MIN_MATCH)) { return best; }
+    const u8[] scan = buffer[strstart..strstart + max_length];
+    if (len(scan) < MIN_MATCH) { return best; }
+    u8 scan_first = scan[0];
+    u8 scan_second = scan[1];
+    u16 current = hash_head;
     while ((chain > 0usize) && (current != NIL)) {
         usize candidate = current as usize;
         if ((candidate < limit) || (candidate >= strstart)) { break; }
-        if (best >= max_length) { break; }
-        if ((buffer[candidate + best] == buffer[strstart + best]) &&
-            (buffer[candidate] == buffer[strstart]) &&
-            (buffer[candidate + 1usize] == buffer[strstart + 1usize])) {
+        if (best >= len(scan)) { break; }
+        /* The candidate precedes strstart, so its string of the same length lies in the buffer. */
+        const u8[] match = buffer[candidate..candidate + len(scan)];
+        if ((best < len(match)) && (len(match) > 2usize) && (match[best] == scan[best]) &&
+            (match[0] == scan_first) && (match[1] == scan_second)) {
             usize length = 2usize;
-            while ((length < max_length) && (buffer[candidate + length] == buffer[strstart + length])) {
+            while ((length < len(scan)) && (length < len(match)) && (scan[length] == match[length])) {
                 length += 1usize;
             }
             if (length > best) {
@@ -1414,12 +1801,12 @@ protected usize longest_match(const u8[] buffer, const u32[] prev, usize strstar
 
 struct deflater {
     protected array<u8> buffer;
-    protected array<u32> head;
-    protected array<u32> prev;
+    protected array<u16> head;
+    protected array<u16> prev;
     protected array<u32> tokens;
     protected array<u8> pending;
     protected u32[286] literal_freq;
-    protected u32[30] distance_freq;
+    protected u32[32] distance_freq;
     protected format form;
     protected u8 level;
     protected usize window_size;
@@ -1444,6 +1831,11 @@ struct deflater {
     protected bool poisoned;
 };
 
+protected void reset_block_frequencies(deflater* this) {
+    for (usize index = 0usize; index < 286usize; index += 1usize) { this->literal_freq[index] = 0u32; }
+    for (usize index = 0usize; index < 32usize; index += 1usize) { this->distance_freq[index] = 0u32; }
+}
+
 deflater deflater::create(format form, u8 level, usize window_size)
     throws error, std.alloc::alloc_error {
     throw (level > 9) error { .code = error_code::invalid_level, .offset = 0usize };
@@ -1453,8 +1845,8 @@ deflater deflater::create(format form, u8 level, usize window_size)
     if (hash_bits > 15usize) { hash_bits = 15usize; }
     usize hash_size = 1usize << hash_bits;
     array<u8> buffer = std.alloc::bytes(window_size * 2usize, 0u8);
-    array<u32> head = std.array::filled(hash_size, NIL);
-    array<u32> prev = std.array::filled(window_size * 2usize, NIL);
+    array<u16> head = std.array::filled(hash_size, NIL);
+    array<u16> prev = std.array::filled(window_size * 2usize, NIL);
     array<u32> tokens = std.array::filled(window_size, 0u32);
     array<u8> pending = std.alloc::bytes(window_size + MAX_MATCH + PENDING_EXTRA, 0u8);
     deflater result = deflater {
@@ -1475,8 +1867,7 @@ deflater deflater::create(format form, u8 level, usize window_size)
 
 /* Returns the state to the start of a new stream; every allocation is kept. */
 void deflater::reset(deflater* this) {
-    for (usize index = 0usize; index < 286usize; index += 1usize) { this->literal_freq[index] = 0u32; }
-    for (usize index = 0usize; index < 30usize; index += 1usize) { this->distance_freq[index] = 0u32; }
+    reset_block_frequencies(this);
     this->fill = 0usize;
     this->strstart = 0usize;
     this->block_start = 0usize;
@@ -1496,17 +1887,12 @@ void deflater::reset(deflater* this) {
     this->prev_match = 0usize;
     this->match_available = false;
     this->poisoned = false;
-    u32[] head = std.array::as_slice_mut(&this->head);
+    u16[] head = std.array::as_slice_mut(&this->head);
     for (usize index = 0usize; index < len(head); index += 1usize) { head[index] = NIL; }
 }
 
 usize deflater::consumed_bytes(const deflater* this) { return this->total_in; }
 usize deflater::produced_bytes(const deflater* this) { return this->total_out; }
-
-protected void reset_block_frequencies(deflater* this) {
-    for (usize index = 0usize; index < 286usize; index += 1usize) { this->literal_freq[index] = 0u32; }
-    for (usize index = 0usize; index < 30usize; index += 1usize) { this->distance_freq[index] = 0u32; }
-}
 
 protected usize tokenized_end(const deflater* this) {
     if (this->match_available == true) { return this->strstart - 1usize; }
@@ -1528,13 +1914,16 @@ protected void flush_block(deflater* this, bit_writer* writer, u8[] pending, con
 }
 
 /* Moves the upper window down once the buffer is full; positions in the chains follow. */
-protected void slide_window(deflater* this, u8[] buffer, u32[] head, u32[] prev) {
+protected void slide_window(deflater* this, u8[] buffer, u16[] head, u16[] prev) {
     usize window_size = this->window_size;
+    usize stop = this->fill;
     /* The upper part moves down; the destination precedes the source, so a forward copy is
        exact even where the two overlap. */
-    usize moving = this->fill - window_size;
-    for (usize index = 0usize; index < moving; index += 1usize) {
-        buffer[index] = buffer[window_size + index];
+    usize target = 0usize;
+    for (usize source = window_size; (source < stop) && (source < len(buffer)) && (target < source);
+         source += 1usize) {
+        buffer[target] = buffer[source];
+        target += 1usize;
     }
     this->fill -= window_size;
     this->strstart -= window_size;
@@ -1544,128 +1933,164 @@ protected void slide_window(deflater* this, u8[] buffer, u32[] head, u32[] prev)
     } else {
         this->prev_length = MIN_MATCH - 1usize;
     }
-    u32 shift = window_size as u32;
-    for (usize index = 0usize; index < this->hash_size; index += 1usize) {
-        u32 value = head[index];
-        head[index] = ((value != NIL) && (value >= shift)) ? value - shift : NIL;
+    u16 shift = (window_size & 0xffffusize) as u16;
+    for (usize index = 0usize; index < len(head); index += 1usize) {
+        u16 value = head[index];
+        head[index] = ((value != NIL) && (value >= shift)) ? (value - shift) as u16 : NIL;
     }
-    for (usize index = 0usize; index < window_size; index += 1usize) {
-        u32 value = prev[index + window_size];
-        prev[index] = ((value != NIL) && (value >= shift)) ? value - shift : NIL;
+    usize lower = 0usize;
+    for (usize upper = window_size; (upper < len(prev)) && (lower < upper) && (lower < window_size);
+         upper += 1usize) {
+        u16 value = prev[upper];
+        prev[lower] = ((value != NIL) && (value >= shift)) ? (value - shift) as u16 : NIL;
+        lower += 1usize;
     }
 }
 
-protected void insert_string(deflater* this, const u8[] buffer, u32[] head, u32[] prev, usize position) {
-    usize hash = hash_bytes(buffer, position, this->hash_mask);
-    u32 chained = head[hash];
-    prev[position] = chained;
-    head[hash] = position as u32;
-}
-
-protected void push_literal(deflater* this, u32[] tokens, u8 literal) {
-    tokens[this->token_count] = literal as u32;
-    this->token_count += 1usize;
-    this->literal_freq[literal as usize] += 1u32;
-}
-
-protected void push_match(deflater* this, u32[] tokens, usize length, usize distance) {
-    tokens[this->token_count] = ((distance as u32) << 16usize) | (length as u32);
-    this->token_count += 1usize;
-    this->literal_freq[257usize + length_slot(length)] += 1u32;
-    this->distance_freq[distance_slot(distance)] += 1u32;
-}
-
-/* Greedy matching (levels 1 through 3) and level 0: one token per call. */
-protected void tokenize_greedy(deflater* this, const level_config* config, const u8[] buffer,
-                               u32[] head, u32[] prev, u32[] tokens, u32 hash_head, usize* lookahead) {
-    usize strstart = this->strstart;
-    usize match_length = MIN_MATCH - 1usize;
-    usize match_start = 0usize;
-    if (hash_head != NIL) {
-        match_length = longest_match(buffer, prev, strstart, hash_head, *lookahead, this->window_size,
-                                     config, MIN_MATCH - 1usize, &match_start);
-    }
-    if (match_length < MIN_MATCH) {
-        u8 literal = buffer[strstart];
-        push_literal(this, tokens, literal);
-        this->strstart = strstart + 1usize;
-        *lookahead -= 1usize;
+/* Inserts the positions first..last into the hash chains while three bytes remain before
+   fill. The two earlier bytes of each hash come along from the position before, so a
+   position loads one byte and no hash waits for the previous one. */
+protected void insert_run(const u8[] buffer, u16[] head, u16[] prev, usize fill, usize mask,
+                          usize first, usize last) {
+    usize middle = first + 1usize;
+    usize ahead = first + 2usize;
+    if ((fill > len(buffer)) || (fill > len(prev)) || (mask >= len(head)) || (ahead >= fill) ||
+        (middle >= ahead) || (first >= middle)) {
         return;
     }
-    push_match(this, tokens, match_length, strstart - match_start);
-    *lookahead -= match_length;
-    if ((match_length > config->lazy) || (config->chain == 0usize)) {
-        this->strstart = strstart + match_length;
-        return;
+    usize earlier = buffer[first] as usize;
+    usize previous = buffer[middle] as usize;
+    usize position = first;
+    while ((ahead < fill) && (position < ahead) && (position <= last)) {
+        usize current = buffer[ahead] as usize;
+        usize hash = ((earlier << 10usize) ^ (previous << 5usize) ^ current) & mask;
+        prev[position] = head[hash & mask];
+        head[hash & mask] = (position & 0xffffusize) as u16;
+        earlier = previous;
+        previous = current;
+        position += 1usize;
+        ahead += 1usize;
     }
-    usize insert_limit = this->fill - MIN_MATCH;
-    for (usize inserted = 1usize; inserted < match_length; inserted += 1usize) {
-        strstart += 1usize;
-        if (strstart <= insert_limit) { insert_string(this, buffer, head, prev, strstart); }
-    }
-    this->strstart = strstart + 1usize;
 }
 
-/* Lazy matching (levels 4 through 9): a match is emitted only when the next position does
-   not start a longer one; otherwise the current byte becomes a literal. */
-protected void tokenize_lazy(deflater* this, const level_config* config, const u8[] buffer,
-                             u32[] head, u32[] prev, u32[] tokens, u32 hash_head, usize* lookahead) {
+/* Tokenizes from strstart while the lookahead allows: MIN_LOOKAHEAD bytes, or the rest of the
+   buffer when it is full or the input is drained. Greedy matching below level 4; lazy
+   matching from level 4, where a match is emitted only when the next position does not
+   start a longer one and otherwise the current byte becomes a literal. True when the block
+   is full and must be written first. */
+protected bool tokenize(deflater* this, const level_config* config, const u8[] buffer, u16[] head,
+                        u16[] prev, u32[] tokens, bool buffer_full, bool draining) {
+    usize fill = this->fill;
+    usize mask = this->hash_mask;
+    if ((fill > len(buffer)) || (fill > len(prev)) || (mask >= len(head))) { return false; }
+    usize window_size = this->window_size;
+    usize block_start = this->block_start;
     usize strstart = this->strstart;
+    usize token_count = this->token_count;
     usize prev_length = this->prev_length;
     usize prev_match = this->prev_match;
-    usize match_length = prev_length;
-    usize match_start = prev_match;
-    if ((hash_head != NIL) && (prev_length < config->lazy)) {
-        usize found_start = 0usize;
-        usize found = longest_match(buffer, prev, strstart, hash_head, *lookahead, this->window_size,
-                                    config, prev_length, &found_start);
-        bool too_far = (found == MIN_MATCH) && (strstart - found_start > 4096usize);
-        if ((found > prev_length) && (too_far == false)) {
-            match_length = found;
-            match_start = found_start;
+    bool match_available = this->match_available;
+    bool lazy = config->lazy_matching;
+    bool chained = config->chain != 0usize;
+    usize lazy_limit = config->lazy;
+    bool full = false;
+    u8 held = 0u8;
+    if ((match_available == true) && (strstart != 0usize)) { held = buffer[strstart - 1usize]; }
+    while (strstart < fill) {
+        usize lookahead = fill - strstart;
+        if ((lookahead < MIN_LOOKAHEAD) && (buffer_full == false) && (draining == false)) { break; }
+        if (token_count >= len(tokens)) {
+            full = true;
+            break;
         }
-    }
-    if ((prev_length >= MIN_MATCH) && (match_length <= prev_length)) {
-        push_match(this, tokens, prev_length, (strstart - 1usize) - prev_match);
-        usize insert_limit = strstart + *lookahead - MIN_MATCH;
-        *lookahead -= prev_length - 1usize;
-        for (usize inserted = 2usize; inserted < prev_length; inserted += 1usize) {
-            strstart += 1usize;
-            if ((strstart <= insert_limit) && (config->chain != 0usize)) {
-                insert_string(this, buffer, head, prev, strstart);
+        u16 hash_head = NIL;
+        usize middle = strstart + 1usize;
+        usize ahead = strstart + 2usize;
+        if ((chained == true) && (ahead < fill) && (middle < ahead)) {
+            usize hash = (((buffer[strstart] as usize) << 10usize) ^ ((buffer[middle] as usize) << 5usize) ^
+                          (buffer[ahead] as usize)) & mask;
+            hash_head = head[hash & mask];
+            prev[strstart] = hash_head;
+            head[hash & mask] = (strstart & 0xffffusize) as u16;
+        }
+        if (lazy == false) {
+            usize match_length = MIN_MATCH - 1usize;
+            usize match_start = 0usize;
+            if (hash_head != NIL) {
+                match_length = longest_match(buffer, prev, strstart, hash_head, lookahead, window_size,
+                                             config, MIN_MATCH - 1usize, &match_start);
+            }
+            if (match_length < MIN_MATCH) {
+                u8 literal = buffer[strstart];
+                tokens[token_count] = literal as u32;
+                token_count += 1usize;
+                this->literal_freq[literal as usize] += 1u32;
+                strstart += 1usize;
+            } else {
+                usize distance = strstart - match_start;
+                tokens[token_count] = ((distance as u32) << 16usize) | (match_length as u32);
+                token_count += 1usize;
+                this->literal_freq[257usize + length_slot(match_length)] += 1u32;
+                this->distance_freq[distance_slot(distance) & 31usize] += 1u32;
+                if ((match_length <= lazy_limit) && (chained == true)) {
+                    insert_run(buffer, head, prev, fill, mask, strstart + 1usize,
+                               strstart + match_length - 1usize);
+                }
+                strstart += match_length;
+            }
+        } else {
+            usize match_length = prev_length;
+            usize match_start = prev_match;
+            if ((hash_head != NIL) && (prev_length < lazy_limit)) {
+                usize found_start = 0usize;
+                usize found = longest_match(buffer, prev, strstart, hash_head, lookahead, window_size,
+                                            config, prev_length, &found_start);
+                bool too_far = (found == MIN_MATCH) && (strstart - found_start > 4096usize);
+                if ((found > prev_length) && (too_far == false)) {
+                    match_length = found;
+                    match_start = found_start;
+                }
+            }
+            if ((prev_length >= MIN_MATCH) && (match_length <= prev_length)) {
+                usize distance = (strstart - 1usize) - prev_match;
+                tokens[token_count] = ((distance as u32) << 16usize) | (prev_length as u32);
+                token_count += 1usize;
+                this->literal_freq[257usize + length_slot(prev_length)] += 1u32;
+                this->distance_freq[distance_slot(distance) & 31usize] += 1u32;
+                if (chained == true) {
+                    insert_run(buffer, head, prev, fill, mask, strstart + 1usize,
+                               strstart + prev_length - 2usize);
+                }
+                strstart += prev_length - 1usize;
+                match_available = false;
+                prev_length = MIN_MATCH - 1usize;
+                prev_match = 0usize;
+            } else {
+                if (match_available == true) {
+                    tokens[token_count] = held as u32;
+                    token_count += 1usize;
+                    this->literal_freq[held as usize] += 1u32;
+                }
+                match_available = true;
+                held = buffer[strstart];
+                prev_length = match_length;
+                prev_match = match_start;
+                strstart += 1usize;
             }
         }
-        this->match_available = false;
-        this->prev_length = MIN_MATCH - 1usize;
-        this->prev_match = 0usize;
-        this->strstart = strstart + 1usize;
-        return;
+        usize tokenized = strstart;
+        if (match_available == true) { tokenized = strstart - 1usize; }
+        if ((token_count >= window_size) || (tokenized - block_start >= window_size)) {
+            full = true;
+            break;
+        }
     }
-    if (this->match_available == true) {
-        u8 held = buffer[strstart - 1usize];
-        push_literal(this, tokens, held);
-    }
-    this->match_available = true;
-    this->prev_length = match_length;
-    this->prev_match = match_start;
-    this->strstart = strstart + 1usize;
-    *lookahead -= 1usize;
-}
-
-protected void tokenize_one(deflater* this, const level_config* config, const u8[] buffer, u32[] head,
-                            u32[] prev, u32[] tokens, usize* lookahead) {
-    u32 hash_head = NIL;
-    if ((*lookahead >= MIN_MATCH) && (config->chain != 0usize)) {
-        usize hash = hash_bytes(buffer, this->strstart, this->hash_mask);
-        hash_head = head[hash];
-        prev[this->strstart] = hash_head;
-        head[hash] = this->strstart as u32;
-    }
-    if (config->lazy_matching == true) {
-        tokenize_lazy(this, config, buffer, head, prev, tokens, hash_head, lookahead);
-    } else {
-        tokenize_greedy(this, config, buffer, head, prev, tokens, hash_head, lookahead);
-    }
+    this->strstart = strstart;
+    this->token_count = token_count;
+    this->prev_length = prev_length;
+    this->prev_match = prev_match;
+    this->match_available = match_available;
+    return full;
 }
 
 protected void write_stream_header(const deflater* this, bit_writer* writer, u8[] pending) {
@@ -1721,11 +2146,9 @@ protected usize intake(deflater* this, u8[] buffer, const u8[] input, usize pos)
     usize room = capacity - this->fill;
     usize available = len(input) - pos;
     usize count = (room < available) ? room : available;
-    for (usize index = 0usize; index < count; index += 1usize) {
-        buffer[this->fill + index] = input[pos + index];
-    }
-    checksum_pair next = checksum_update(this->form, this->check_a, this->check_b,
-                                         input[pos..pos + count]);
+    const u8[] taken = input[pos..pos + count];
+    copy_bytes(buffer[this->fill..this->fill + count], taken);
+    checksum_pair next = checksum_update(this->form, this->check_a, this->check_b, taken);
     this->check_a = next.a;
     this->check_b = next.b;
     this->fill += count;
@@ -1750,21 +2173,25 @@ progress deflater::deflate(deflater* this, const u8[] input, u8[] output, flush 
     bit_writer writer = bit_writer { .acc = this->bits, .count = this->bit_count, .length = this->pending_len };
 
     array<u8> buffer_owner = core::replace(&this->buffer, std.array::create::<u8>());
-    array<u32> head_owner = core::replace(&this->head, std.array::create::<u32>());
-    array<u32> prev_owner = core::replace(&this->prev, std.array::create::<u32>());
+    array<u16> head_owner = core::replace(&this->head, std.array::create::<u16>());
+    array<u16> prev_owner = core::replace(&this->prev, std.array::create::<u16>());
     array<u32> tokens_owner = core::replace(&this->tokens, std.array::create::<u32>());
     array<u8> pending_owner = core::replace(&this->pending, std.array::create::<u8>());
     u8[] buffer = std.array::as_slice_mut(&buffer_owner);
-    u32[] head = std.array::as_slice_mut(&head_owner);
-    u32[] prev = std.array::as_slice_mut(&prev_owner);
+    u16[] head = std.array::as_slice_mut(&head_owner);
+    u16[] prev = std.array::as_slice_mut(&prev_owner);
     u32[] tokens = std.array::as_slice_mut(&tokens_owner);
     u8[] pending = std.array::as_slice_mut(&pending_owner);
     while (stop == false) {
         /* 1. Drain staged output before anything else is produced. */
-        while ((this->pending_pos < writer.length) && (out_pos < output_size)) {
-            output[out_pos] = pending[this->pending_pos];
-            out_pos += 1usize;
-            this->pending_pos += 1usize;
+        if ((this->pending_pos < writer.length) && (out_pos < output_size)) {
+            usize waiting = writer.length - this->pending_pos;
+            usize room = output_size - out_pos;
+            usize count = (waiting < room) ? waiting : room;
+            copy_bytes(output[out_pos..out_pos + count],
+                       pending[this->pending_pos..this->pending_pos + count]);
+            out_pos += count;
+            this->pending_pos += count;
         }
         if (this->pending_pos < writer.length) {
             result = state::need_output;
@@ -1802,18 +2229,12 @@ progress deflater::deflate(deflater* this, const u8[] input, u8[] output, flush 
         bool input_exhausted = pos >= input_size;
         bool buffer_full = this->fill == capacity;
         bool draining = (mode != flush::none) && (input_exhausted == true);
-        bool block_emitted = false;
-        usize lookahead = this->fill - this->strstart;
-        while ((lookahead > 0usize) && (block_emitted == false) &&
-               ((lookahead >= MIN_LOOKAHEAD) || (buffer_full == true) || (draining == true))) {
-            tokenize_one(this, settings, buffer, head, prev, tokens, &lookahead);
-            if ((this->token_count >= window_size) || (tokenized_end(this) - this->block_start >= window_size)) {
-                usize block_end = tokenized_end(this);
-                flush_block(this, &writer, pending, tokens, buffer, block_end, false);
-                block_emitted = true;
-            }
+        bool block_full = tokenize(this, settings, buffer, head, prev, tokens, buffer_full, draining);
+        if (block_full == true) {
+            usize block_end = tokenized_end(this);
+            flush_block(this, &writer, pending, tokens, buffer, block_end, false);
+            continue;
         }
-        if (block_emitted == true) { continue; }
         if (input_exhausted == false) { continue; }
         if (mode == flush::none) {
             stop = true;
@@ -1826,7 +2247,9 @@ progress deflater::deflate(deflater* this, const u8[] input, u8[] output, flush 
         /* 6. Flush: the pending literal of lazy matching, the block, then the terminator. */
         if (this->match_available == true) {
             u8 last_literal = buffer[this->strstart - 1usize];
-            push_literal(this, tokens, last_literal);
+            tokens[this->token_count] = last_literal as u32;
+            this->token_count += 1usize;
+            this->literal_freq[last_literal as usize] += 1u32;
             this->match_available = false;
             this->prev_length = MIN_MATCH - 1usize;
         }
@@ -1858,19 +2281,22 @@ progress deflater::deflate(deflater* this, const u8[] input, u8[] output, flush 
     return progress { .consumed = pos, .produced = out_pos, .state = result };
 }
 
-/* R-SLIB-DEFLATE-0005: one-shot compression of one complete input. */
+/* R-SLIB-DEFLATE-0005: one-shot compression of one complete input, written straight into the
+   result. */
 array<u8> deflate(const u8[] input, format form, u8 level) throws error, std.alloc::alloc_error {
     deflater engine = deflater::create(form, level, WINDOW_MAX);
-    array<u8> result = std.array::create::<u8>();
-    array<u8> scratch = std.alloc::bytes(ONE_SHOT_CHUNK, 0u8);
-    usize consumed = 0usize;
     usize input_size = len(input);
+    array<u8> result = std.alloc::bytes(input_size / 2usize + ONE_SHOT_CHUNK, 0u8);
+    usize produced = 0usize;
+    usize consumed = 0usize;
     while (true) {
-        u8[] out_view = std.array::as_slice_mut(&scratch);
+        u8[] room = std.array::as_slice_mut(&result);
+        u8[] out_view = room[produced..len(room)];
         const u8[] rest = input[consumed..input_size];
         progress step = engine.deflate(rest, out_view, flush::finish);
         consumed += step.consumed;
-        append_bytes(&result, out_view, step.produced);
-        if (step.state == state::end) { return move result; }
+        produced += step.produced;
+        if (step.state == state::end) { return exact_output(move result, produced); }
+        if (step.state == state::need_output) { grow_output(&result, produced, produced + ONE_SHOT_CHUNK); }
     }
 }

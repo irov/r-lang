@@ -31,8 +31,9 @@ typed throws, handler dispatch, rethrow, pending completion, LIFO `finally` rout
 Move places, async suspension, and cleanup state explicit. Automatic propagation is
 resolved before C generation; each normalized checked-effect set has one deterministic
 tagged carrier rather than nested source-level result values. Generated slices are
-pointer/length pairs, every index and range is checked before access, and an invalid
-access reports `R_RUNTIME_PANIC_BOUNDS`. Call-bounded borrow metadata covers the full
+pointer/length pairs, every index and range is checked before access unless the check is
+proven unable to fail (see *Index and conversion proofs*), and an invalid access reports
+`R_RUNTIME_PANIC_BOUNDS`. Call-bounded borrow metadata covers the full
 normative limit of 127 arguments.
 
 The backend preserves left-to-right evaluation, implements checked signed arithmetic
@@ -76,6 +77,34 @@ generated hosted C `main` blocks while observing the root task. Frame cleanup ca
 every still-owned task. Native async filesystem and I/O operations, owned values,
 fixed-array and `std.array` slices, and the complete async `examples/unzip` entry path
 are executable in the Darwin profile.
+
+### Index and conversion proofs
+
+`compiler/codegen/index_proofs.inc` leaves out bounds checks (R-EXPR-0021) and explicit integer
+conversion checks (R-EXPR-0015) that cannot fail; R-AM-0003 admits it because the observable
+behavior is unchanged. Before a synchronous body is emitted, one forward walk over its HIR keeps
+facts about local and parameter objects: a range of an unsigned integer, `i < len(b)`,
+`i <= len(b)`, `n == len(b)` and `len(b) >= k` for a local slice or `array<T>` b. Facts come from
+initializers and plain assignments (a slice `b[a..a + K]` holds K elements), the conditions of
+`if`, `while` and `for`, the operands of `&&`, `||` and `?:`, and an `if` whose only branch always
+leaves the block. A statement first forgets every fact about an object it may change; a loop,
+`switch` or `try` forgets the facts about everything it changes before its first part is walked;
+the deaths in one branch of an `if` do not reach the other branch, nor the rest of the block when
+the branch always leaves it. An object whose storage is borrowed exclusively or by raw address,
+that receives an output argument, or that is named where the walk cannot see a change, carries
+no facts in that body.
+
+An index is proven when its value range lies below a fixed-array bound; when it is no larger
+than a subject known below the length of its local slice or `array<T>` base (the subject, an AND
+with it, a right shift, quotient or unsigned narrowing of it); when it is a remainder by that
+length or by a subject that does not exceed it; or when its range lies below a known minimum
+length. Ranges come from literals, unsigned types, casts, masks, shifts, quotients and
+remainders, and arithmetic that cannot wrap. A conversion is proven when its operand range fits
+the target. Ranges never depend on a fact outside the walk, so the same evaluation without facts
+proves constant, masked and narrow-typed indices and conversions anywhere: in the synchronous
+parts of async bodies and, over MIR values (each defined once), in async frames. The proofs
+mark HIR nodes with the generation of the walk; only the body being emitted reads them.
+`tests/check_index_proofs.py` compares marked fixture lines with the checks left in generated C.
 
 ### Hosted main error boundary
 

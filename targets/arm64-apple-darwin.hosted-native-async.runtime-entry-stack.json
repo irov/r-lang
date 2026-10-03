@@ -49,6 +49,7 @@
       "compiler/codegen/fs_async_emit.inc",
       "compiler/codegen/fs_async_preflight.inc",
       "compiler/codegen/hosted_main.inc",
+      "compiler/codegen/index_proofs.inc",
       "compiler/codegen/json.inc",
       "compiler/codegen/json_decode.inc",
       "compiler/codegen/json_defaults.inc",
