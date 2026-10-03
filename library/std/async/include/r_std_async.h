@@ -19,8 +19,8 @@ typedef enum RStdAsyncStartError {
 /* The start_error of a start refused for allocation, read right after it on the same thread:
  * budget_exhausted when a budget refused the frame or the task (Core R-STMT-0020),
  * allocation_failed otherwise. */
-#define R_STD_ASYNC_START_REFUSAL()                                                               \
-    (r_runtime_allocation_refused_by_budget() ? R_STD_ASYNC_START_BUDGET_EXHAUSTED                \
+#define R_STD_ASYNC_START_REFUSAL()                                                                \
+    (r_runtime_allocation_refused_by_budget() ? R_STD_ASYNC_START_BUDGET_EXHAUSTED                 \
                                               : R_STD_ASYNC_START_ALLOCATION_FAILED)
 
 typedef struct RStdAsyncStartResult {

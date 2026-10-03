@@ -2570,8 +2570,8 @@ static bool r_mir_lower_standard_call(RMirBuildContext *build,
                 build->frontend, start_type->second, "std.async::start_error") ||
             (task_type == NULL) || (task_type->kind != R_SEMANTIC_TYPE_TASK) ||
             (logical_type == NULL) ||
-            (is_spawn ? !r_mir_standard_type_is_exact(
-                            build->frontend, logical_type, "std.process::spawn_result")
+            (is_spawn  ? !r_mir_standard_type_is_exact(
+                             build->frontend, logical_type, "std.process::spawn_result")
              : is_wait ? !r_mir_standard_type_is_exact(
                              build->frontend, logical_type, "std.process::wait_result")
                        : ((logical_type->kind !=
@@ -3017,7 +3017,7 @@ static bool r_mir_lower_standard_call(RMirBuildContext *build,
         : (node->standard_operation == R_STANDARD_CALL_FORMAT_APPEND_INTEGER) ? UINT32_C(3)
         : (node->standard_operation == R_STANDARD_CALL_PROCESS_ENVIRONMENT)   ? UINT32_C(3)
         : (node->standard_operation == R_STANDARD_CALL_BYTES_COPY_WITHIN)     ? UINT32_C(4)
-        : (node->standard_operation == R_STANDARD_CALL_CORE_FORMAT_RENDER) ? UINT32_C(1)
+        : (node->standard_operation == R_STANDARD_CALL_CORE_FORMAT_RENDER)    ? UINT32_C(1)
         : ((node->standard_operation == R_STANDARD_CALL_CORE_FORMAT_APPEND) ||
            (node->standard_operation == R_STANDARD_CALL_CORE_REPLACE) ||
            (node->standard_operation == R_STANDARD_CALL_CORE_TAKE) ||
@@ -5789,18 +5789,18 @@ static bool r_mir_lower_statement(RMirBuildContext *build, RHirNodeId node_id, u
         return r_mir_lower_for(build, node, depth);
     }
     if ((node->kind == R_HIR_BREAK) || (node->kind == R_HIR_CONTINUE)) {
-        const RMirLoopTarget *loop = (node->loop_target != 0U) &&
-                                             (node->loop_target <= build->loop_count)
-                                         ? &build->loops[build->loop_count - node->loop_target]
-                                         : NULL;
+        const RMirLoopTarget *loop =
+            (node->loop_target != 0U) && (node->loop_target <= build->loop_count)
+                ? &build->loops[build->loop_count - node->loop_target]
+                : NULL;
         if ((node->loop_target != 0U) && (loop == NULL)) {
             return false;
         }
-        const size_t target = loop != NULL ? (node->kind == R_HIR_BREAK ? loop->break_target
-                                                                        : loop->continue_target)
-                              : node->kind == R_HIR_BREAK ? build->break_target
-                                                          : build->continue_target;
-        const size_t finally_count = loop != NULL ? loop->finally_count
+        const size_t target =
+            loop != NULL ? (node->kind == R_HIR_BREAK ? loop->break_target : loop->continue_target)
+            : node->kind == R_HIR_BREAK ? build->break_target
+                                        : build->continue_target;
+        const size_t finally_count = loop != NULL                ? loop->finally_count
                                      : node->kind == R_HIR_BREAK ? build->break_finally_count
                                                                  : build->continue_finally_count;
         const RMirPendingCompletionReason reason = node->kind == R_HIR_BREAK
@@ -6148,7 +6148,8 @@ static uint32_t r_mir_std_sync_guard_category(const RFrontendContext *context, R
     const char *guard = NULL;
     size_t index;
 
-    if ((type == NULL) || (type->base == R_TYPE_ID_INVALID) || (type->second != R_TYPE_ID_INVALID)) {
+    if ((type == NULL) || (type->base == R_TYPE_ID_INVALID) ||
+        (type->second != R_TYPE_ID_INVALID)) {
         return 0U;
     }
     for (index = 0U; r_standard_sync_outcome_at(index) != NULL; ++index) {
@@ -6247,12 +6248,13 @@ static bool r_mir_validate_await_liveness(RMirBuildContext *build,
         if ((place->symbol != startup_parameter) &&
             ((startup_parameter == R_SYMBOL_ID_INVALID) ||
              (symbol->borrow_origin != startup_parameter))) {
-            const uint32_t sync_guard = r_mir_std_sync_guard_category(build->frontend, symbol->type);
+            const uint32_t sync_guard =
+                r_mir_std_sync_guard_category(build->frontend, symbol->type);
 
             if (sync_guard != 0U) {
                 eligible[slot] |= (unsigned char)sync_guard;
             } else if (!function->is_scoped &&
-                r_semantic_type_crosses_await(build->frontend, symbol->type)) {
+                       r_semantic_type_crosses_await(build->frontend, symbol->type)) {
                 eligible[slot] |= R_MIR_AWAIT_LIVENESS_BORROW;
             } else if (!r_semantic_type_is_send(build->frontend, symbol->type)) {
                 eligible[slot] |= R_MIR_AWAIT_LIVENESS_NON_SEND;
@@ -6584,11 +6586,10 @@ r_mir_collect_functions(RFrontendContext *context, RHirNodeId **functions, size_
     return true;
 }
 
-static bool
-r_mir_hir_is_supported(const RFrontendContext *context,
-                       RHirNodeId node_id,
-                       uint32_t depth,
-                       bool *too_deep) {
+static bool r_mir_hir_is_supported(const RFrontendContext *context,
+                                   RHirNodeId node_id,
+                                   uint32_t depth,
+                                   bool *too_deep) {
     const RHirNode *node = r_mir_hir_node(context, node_id);
     uint32_t child_index;
 
@@ -7999,8 +8000,9 @@ static bool r_mir_dump_instruction(const RFrontendContext *context,
             break;
         case R_STANDARD_CALL_CORE_SLICE_FROM_RAW_PARTS:
             /* L38: an anchored slice is the same descriptor; only its region differs. */
-            operation_name = instruction->integer_value == UINT64_C(1) ? "core::slice_from_raw_parts_in"
-                                                                 : "core::slice_from_raw_parts";
+            operation_name = instruction->integer_value == UINT64_C(1)
+                                 ? "core::slice_from_raw_parts_in"
+                                 : "core::slice_from_raw_parts";
             break;
         case R_STANDARD_CALL_CORE_SLICE_FROM_RAW_PARTS_MUT:
             operation_name = instruction->integer_value == UINT64_C(1)
@@ -9197,10 +9199,9 @@ static bool r_mir_dump_instruction(const RFrontendContext *context,
         if (!r_write_text(writer, user_data, " operation=") ||
             ((instruction->standard_operation == R_STANDARD_CALL_MATH_OPERATION) &&
              !r_write_text(writer, user_data, "std.math::")) ||
-            ((async_sync != NULL) &&
-             (!r_write_text(writer, user_data, "std.") ||
-              !r_write_text(writer, user_data, async_sync->module) ||
-              !r_write_text(writer, user_data, "::"))) ||
+            ((async_sync != NULL) && (!r_write_text(writer, user_data, "std.") ||
+                                      !r_write_text(writer, user_data, async_sync->module) ||
+                                      !r_write_text(writer, user_data, "::"))) ||
             !r_write_text(writer, user_data, operation_name)) {
             return false;
         }
@@ -10995,9 +10996,8 @@ typedef struct RMirLinkLibraries {
 } RMirLinkLibraries;
 
 /* R-TYPE-0046 (L32): whether the standard formatting of `type_id` writes a std.net address. */
-static bool r_mir_type_formats_net_address(const RFrontendContext *context,
-                                           RTypeId type_id,
-                                           uint32_t depth) {
+static bool
+r_mir_type_formats_net_address(const RFrontendContext *context, RTypeId type_id, uint32_t depth) {
     const RSemanticType *type = r_semantic_type(context, type_id);
     const RSemanticAggregate *aggregate;
 
@@ -11026,7 +11026,9 @@ static bool r_mir_type_formats_net_address(const RFrontendContext *context,
     }
     for (uint32_t index = 0U; index < aggregate->field_count; ++index) {
         if (r_mir_type_formats_net_address(
-                context, context->semantic_fields[aggregate->first_field + index].type, depth + 1U)) {
+                context,
+                context->semantic_fields[aggregate->first_field + index].type,
+                depth + 1U)) {
             return true;
         }
     }
@@ -11056,8 +11058,8 @@ static RMirLinkLibraries r_mir_link_libraries(const RFrontendContext *context) {
          ++instruction_index) {
         const RMirInstruction *instruction = &context->mir_instructions[instruction_index];
 
-        const RSemanticType *address_type = r_semantic_type(
-            context, r_semantic_representation_type(context, instruction->type));
+        const RSemanticType *address_type =
+            r_semantic_type(context, r_semantic_representation_type(context, instruction->type));
         /* R-TYPE-0054 (L28): a function value is the number of an R function, not a C address. */
         if ((instruction->kind == R_MIR_INSTRUCTION_FUNCTION_ADDRESS &&
              (address_type == NULL || address_type->kind != R_SEMANTIC_TYPE_FUNCTION)) ||
@@ -11107,8 +11109,8 @@ static RMirLinkLibraries r_mir_link_libraries(const RFrontendContext *context) {
             libraries.std_format = true;
             libraries.std_string = true;
             libraries.std_convert = true;
-            libraries.std_net =
-                libraries.std_net || r_mir_type_formats_net_address(context, instruction->runtime_type, 0U);
+            libraries.std_net = libraries.std_net || r_mir_type_formats_net_address(
+                                                         context, instruction->runtime_type, 0U);
             continue;
         }
         if ((instruction->standard_operation == R_STANDARD_CALL_ALLOC_TRY_NEW) ||

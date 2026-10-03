@@ -606,11 +606,8 @@ int32_t r_std_tls_native_session_handshake(void *handle, int64_t *native) {
     return status;
 }
 
-int32_t r_std_tls_native_session_read(void *handle,
-                                      uint8_t *target,
-                                      size_t capacity,
-                                      size_t *count,
-                                      int64_t *native) {
+int32_t r_std_tls_native_session_read(
+    void *handle, uint8_t *target, size_t capacity, size_t *count, int64_t *native) {
     RStdTlsNativeSession *session = handle;
     int32_t status = R_STD_TLS_NATIVE_OK;
     *count = 0U;
@@ -649,10 +646,8 @@ int32_t r_std_tls_native_session_read(void *handle,
     return status;
 }
 
-int32_t r_std_tls_native_session_write(void *handle,
-                                       const uint8_t *data,
-                                       size_t length,
-                                       int64_t *native) {
+int32_t
+r_std_tls_native_session_write(void *handle, const uint8_t *data, size_t length, int64_t *native) {
     RStdTlsNativeSession *session = handle;
     int32_t status = R_STD_TLS_NATIVE_OK;
     size_t written = 0U;
@@ -704,8 +699,8 @@ const uint8_t *r_std_tls_native_session_protocol(void *handle, size_t *length) {
     RStdTlsNativeSession *session = handle;
     (void)pthread_mutex_lock(&session->lock);
     /* Mbed TLS selects an entry of the protocol list of the configuration, protocol_names. */
-    const char *name = session->handshake_done ? mbedtls_ssl_get_alpn_protocol(&session->ssl)
-                                               : NULL;
+    const char *name =
+        session->handshake_done ? mbedtls_ssl_get_alpn_protocol(&session->ssl) : NULL;
     (void)pthread_mutex_unlock(&session->lock);
     *length = name != NULL ? strlen(name) : 0U;
     return (const uint8_t *)name;
@@ -716,8 +711,7 @@ int32_t r_std_tls_native_session_version(void *handle) {
     int32_t version = 0;
     (void)pthread_mutex_lock(&session->lock);
     if (session->handshake_done) {
-        const mbedtls_ssl_protocol_version number =
-            mbedtls_ssl_get_version_number(&session->ssl);
+        const mbedtls_ssl_protocol_version number = mbedtls_ssl_get_version_number(&session->ssl);
         version = number == MBEDTLS_SSL_VERSION_TLS1_3   ? 13
                   : number == MBEDTLS_SSL_VERSION_TLS1_2 ? 12
                                                          : 0;

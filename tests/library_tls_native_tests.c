@@ -9,12 +9,12 @@
 
 static int r_tls_failures;
 
-#define R_TLS_CHECK(condition)                                                                    \
-    do {                                                                                          \
-        if (!(condition)) {                                                                       \
+#define R_TLS_CHECK(condition)                                                                     \
+    do {                                                                                           \
+        if (!(condition)) {                                                                        \
             (void)fprintf(stderr, "%s:%d: check failed: %s\n", __FILE__, __LINE__, #condition);    \
-            ++r_tls_failures;                                                                     \
-        }                                                                                         \
+            ++r_tls_failures;                                                                      \
+        }                                                                                          \
     } while (0)
 
 typedef struct RTlsFile {
@@ -80,7 +80,8 @@ static void r_tls_pump(void *from, void *to) {
 }
 
 /* Runs both handshakes to completion or to the first failure of either side. */
-static void r_tls_handshake(void *client, void *server, int32_t *client_status, int32_t *server_status) {
+static void
+r_tls_handshake(void *client, void *server, int32_t *client_status, int32_t *server_status) {
     int64_t native = 0;
     *client_status = R_STD_TLS_NATIVE_WANT_INPUT;
     *server_status = R_STD_TLS_NATIVE_WANT_INPUT;
@@ -116,9 +117,12 @@ static void r_tls_exchange(const char *authority, const char *name, bool alpn) {
     int32_t status = 0;
     int64_t native = 0;
     if (alpn) {
-        R_TLS_CHECK(r_std_tls_native_config_add_protocol(client_config, (const uint8_t *)"h2", 2U) == 0);
-        R_TLS_CHECK(r_std_tls_native_config_add_protocol(client_config, (const uint8_t *)"http/1.1", 8U) == 0);
-        R_TLS_CHECK(r_std_tls_native_config_add_protocol(server_config, (const uint8_t *)"http/1.1", 8U) == 0);
+        R_TLS_CHECK(
+            r_std_tls_native_config_add_protocol(client_config, (const uint8_t *)"h2", 2U) == 0);
+        R_TLS_CHECK(r_std_tls_native_config_add_protocol(
+                        client_config, (const uint8_t *)"http/1.1", 8U) == 0);
+        R_TLS_CHECK(r_std_tls_native_config_add_protocol(
+                        server_config, (const uint8_t *)"http/1.1", 8U) == 0);
     }
     void *client = r_std_tls_native_session_create(
         client_config, (const uint8_t *)name, strlen(name), &status, &native);
@@ -126,7 +130,8 @@ static void r_tls_exchange(const char *authority, const char *name, bool alpn) {
     void *server = r_std_tls_native_session_create(server_config, NULL, 0U, &status, &native);
     R_TLS_CHECK((server != NULL) && (status == R_STD_TLS_NATIVE_OK));
     /* The configurations are frozen by their sessions and released by the last of them. */
-    R_TLS_CHECK(r_std_tls_native_config_set_verification(client_config, 0) == R_STD_TLS_NATIVE_FROZEN);
+    R_TLS_CHECK(r_std_tls_native_config_set_verification(client_config, 0) ==
+                R_STD_TLS_NATIVE_FROZEN);
     r_std_tls_native_config_release(client_config);
     r_std_tls_native_config_release(server_config);
     int32_t client_status;
@@ -170,7 +175,8 @@ static void r_tls_exchange(const char *authority, const char *name, bool alpn) {
     do {
         status = r_std_tls_native_session_read(client, reply, sizeof(reply), &count, &native);
     } while ((status == R_STD_TLS_NATIVE_OK) && (count == 0U));
-    R_TLS_CHECK((status == R_STD_TLS_NATIVE_OK) && (count == 4U) && (memcmp(reply, "pong", 4U) == 0));
+    R_TLS_CHECK((status == R_STD_TLS_NATIVE_OK) && (count == 4U) &&
+                (memcmp(reply, "pong", 4U) == 0));
     /* Nothing more to read, then close_notify ends the session for the peer. */
     status = r_std_tls_native_session_read(server, reply, sizeof(reply), &count, &native);
     R_TLS_CHECK((status == R_STD_TLS_NATIVE_WANT_INPUT) && (count == 0U));
@@ -182,7 +188,8 @@ static void r_tls_exchange(const char *authority, const char *name, bool alpn) {
     r_std_tls_native_session_release(server);
 }
 
-static void r_tls_rejected(const char *authority, const char *certificate, const char *name, int32_t expected) {
+static void
+r_tls_rejected(const char *authority, const char *certificate, const char *name, int32_t expected) {
     void *client_config = r_tls_client_config(authority);
     void *server_config = r_tls_server_config(certificate, "server_key.pem");
     int32_t status = 0;
@@ -211,7 +218,8 @@ static void r_tls_configuration_errors(void) {
     void *config = r_std_tls_native_config_create(0);
     int64_t native = 0;
     int32_t status = 0;
-    R_TLS_CHECK(r_std_tls_native_config_add_authority(config, (const uint8_t *)"not a certificate", 17U, &native) ==
+    R_TLS_CHECK(r_std_tls_native_config_add_authority(
+                    config, (const uint8_t *)"not a certificate", 17U, &native) ==
                 R_STD_TLS_NATIVE_INVALID_CERTIFICATE);
     R_TLS_CHECK(r_std_tls_native_config_add_authority(config, NULL, 0U, &native) ==
                 R_STD_TLS_NATIVE_INVALID_CERTIFICATE);
@@ -230,16 +238,19 @@ static void r_tls_configuration_errors(void) {
     RTlsFile chain = r_tls_read("server.pem");
     RTlsFile other = r_tls_read("other_authority.pem");
     RTlsFile key = r_tls_read("server_key.der");
-    R_TLS_CHECK(r_std_tls_native_config_set_identity(server, chain.data, chain.length, (const uint8_t *)"junk", 4U, &native) ==
+    R_TLS_CHECK(r_std_tls_native_config_set_identity(
+                    server, chain.data, chain.length, (const uint8_t *)"junk", 4U, &native) ==
                 R_STD_TLS_NATIVE_INVALID_KEY);
     /* The key of another certificate does not match. */
-    R_TLS_CHECK(r_std_tls_native_config_set_identity(server, other.data, other.length, key.data, key.length, &native) ==
+    R_TLS_CHECK(r_std_tls_native_config_set_identity(
+                    server, other.data, other.length, key.data, key.length, &native) ==
                 R_STD_TLS_NATIVE_INVALID_KEY);
     /* A server needs an identity. */
     R_TLS_CHECK(r_std_tls_native_session_create(server, NULL, 0U, &status, &native) == NULL);
     R_TLS_CHECK(status == R_STD_TLS_NATIVE_INVALID_ARGUMENT);
     /* A DER key with its certificate. */
-    R_TLS_CHECK(r_std_tls_native_config_set_identity(server, chain.data, chain.length, key.data, key.length, &native) == 0);
+    R_TLS_CHECK(r_std_tls_native_config_set_identity(
+                    server, chain.data, chain.length, key.data, key.length, &native) == 0);
     free(chain.data);
     free(other.data);
     free(key.data);
@@ -248,11 +259,14 @@ static void r_tls_configuration_errors(void) {
     uint8_t byte;
     size_t count;
     /* Reading and writing need a complete handshake. */
-    R_TLS_CHECK(r_std_tls_native_session_read(session, &byte, 1U, &count, &native) == R_STD_TLS_NATIVE_INVALID_ARGUMENT);
-    R_TLS_CHECK(r_std_tls_native_session_write(session, &byte, 1U, &native) == R_STD_TLS_NATIVE_INVALID_ARGUMENT);
+    R_TLS_CHECK(r_std_tls_native_session_read(session, &byte, 1U, &count, &native) ==
+                R_STD_TLS_NATIVE_INVALID_ARGUMENT);
+    R_TLS_CHECK(r_std_tls_native_session_write(session, &byte, 1U, &native) ==
+                R_STD_TLS_NATIVE_INVALID_ARGUMENT);
     R_TLS_CHECK(r_std_tls_native_session_version(session) == 0);
     /* Garbage instead of a ClientHello fails the handshake of the server. */
-    R_TLS_CHECK(r_std_tls_native_session_feed(session, (const uint8_t *)"GET / HTTP/1.1\r\n\r\n", 18U) == 0);
+    R_TLS_CHECK(r_std_tls_native_session_feed(
+                    session, (const uint8_t *)"GET / HTTP/1.1\r\n\r\n", 18U) == 0);
     R_TLS_CHECK(r_std_tls_native_session_handshake(session, &native) < 0);
     r_std_tls_native_session_release(session);
     r_std_tls_native_config_release(server);
@@ -267,8 +281,10 @@ int main(int argc, char **argv) {
     r_tls_exchange("authority.pem", "localhost", true);
     r_tls_exchange("authority.der", "127.0.0.1", false);
     r_tls_rejected("authority.pem", "server.pem", "example.com", R_STD_TLS_NATIVE_NAME_MISMATCH);
-    r_tls_rejected("other_authority.pem", "server.pem", "localhost", R_STD_TLS_NATIVE_UNTRUSTED_CERTIFICATE);
-    r_tls_rejected("authority.pem", "expired.pem", "localhost", R_STD_TLS_NATIVE_EXPIRED_CERTIFICATE);
+    r_tls_rejected(
+        "other_authority.pem", "server.pem", "localhost", R_STD_TLS_NATIVE_UNTRUSTED_CERTIFICATE);
+    r_tls_rejected(
+        "authority.pem", "expired.pem", "localhost", R_STD_TLS_NATIVE_EXPIRED_CERTIFICATE);
     r_tls_configuration_errors();
     if (r_tls_failures != 0) {
         (void)fprintf(stderr, "%d TLS checks failed\n", r_tls_failures);

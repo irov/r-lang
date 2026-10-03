@@ -345,10 +345,9 @@ static int test_wide_document(void) {
         RStdJsonStringResult text = r_std_json_stringify(&allocator, &result.value);
         RStdJsonValueResult again;
         CHECK(text.outcome.status == R_STD_JSON_CALL_SUCCESS);
-        again = r_std_json_parse(
-            &allocator,
-            (RStdJsonByteView){r_runtime_string_bytes(&text.value),
-                               r_runtime_string_length(&text.value)});
+        again = r_std_json_parse(&allocator,
+                                 (RStdJsonByteView){r_runtime_string_bytes(&text.value),
+                                                    r_runtime_string_length(&text.value)});
         CHECK(again.outcome.status == R_STD_JSON_CALL_SUCCESS);
         CHECK(r_std_json_len(&again.value) == 24U);
         r_json_value_destroy(&again.value);

@@ -63,7 +63,7 @@ static RRuntimeArrayStatus r_runtime_array_map_allocation(RRuntimeAllocationStat
 }
 
 static RRuntimeArrayStatus r_runtime_array_reallocate_trivial(RRuntimeArray *array,
-                                                               size_t capacity) {
+                                                              size_t capacity) {
     void *replacement = NULL;
     RRuntimeArrayStatus status;
 

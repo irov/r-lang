@@ -1562,8 +1562,7 @@ static bool r_parse_type_atom(RParser *parser, bool allow_unresolved_name) {
         if (!r_parse_qualified_tail(parser, false)) {
             return false;
         }
-        if (parameter_name && (parser->cursor != tail_start) &&
-            r_parser_at(parser, R_TOKEN_LESS)) {
+        if (parameter_name && (parser->cursor != tail_start) && r_parser_at(parser, R_TOKEN_LESS)) {
             /* R-TYPE-0045 (L16.3): P::Name<T> applies an associated type with parameters. */
             return r_parse_type_argument_list(parser, true, UINT32_C(1), UINT32_MAX);
         }
@@ -4074,9 +4073,9 @@ static bool r_parse_error_declaration(RParser *parser) {
         return r_parse_struct_declaration(parser, true);
     }
     /* The first member, after its attributes (`@json` of a field, `@default` of a variant). */
-    index = r_skip_trivia(parser->source,
-                          r_scan_skip_leading_attributes(
-                              parser->source, r_skip_trivia(parser->source, index + 1U)));
+    index = r_skip_trivia(
+        parser->source,
+        r_scan_skip_leading_attributes(parser->source, r_skip_trivia(parser->source, index + 1U)));
     if (r_scan_kind(parser->source, index) != R_TOKEN_IDENTIFIER) {
         return r_parse_struct_declaration(parser, true);
     }

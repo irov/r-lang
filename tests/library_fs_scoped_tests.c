@@ -282,7 +282,8 @@ static RStdFsDeadline deadline_after_milliseconds(uint32_t milliseconds) {
     uint64_t nanoseconds;
 
     require(now.is_ok, "read the monotonic clock");
-    nanoseconds = (uint64_t)now.value.storage_nanoseconds + (uint64_t)milliseconds * UINT64_C(1000000);
+    nanoseconds =
+        (uint64_t)now.value.storage_nanoseconds + (uint64_t)milliseconds * UINT64_C(1000000);
     deadline.value.storage_seconds =
         now.value.storage_seconds + (int64_t)(nanoseconds / UINT64_C(1000000000));
     deadline.value.storage_nanoseconds = (uint32_t)(nanoseconds % UINT64_C(1000000000));
@@ -319,12 +320,12 @@ static void test_locks(RRuntimeAllocator *allocator) {
             "lock times out while the conflict lasts");
 
     /* A waiting lock takes the range once the holder unlocks it. */
-    waiting = r_std_fs_lock(
-        &other, R_STD_FS_LOCK_KIND_EXCLUSIVE, UINT64_C(0), UINT64_C(0), no_deadline);
+    waiting =
+        r_std_fs_lock(&other, R_STD_FS_LOCK_KIND_EXCLUSIVE, UINT64_C(0), UINT64_C(0), no_deadline);
     require(waiting.is_ok && waiting.task != NULL, "start a waiting lock");
     (void)usleep(20000U);
-    void_result = await_fs_void(
-        r_std_fs_unlock(&fixture.file, UINT64_C(0), UINT64_C(0), no_deadline));
+    void_result =
+        await_fs_void(r_std_fs_unlock(&fixture.file, UINT64_C(0), UINT64_C(0), no_deadline));
     require(void_result.r_tag == UINT32_C(0), "unlock");
     void_result = await_fs_void(waiting);
     require(void_result.r_tag == UINT32_C(0), "the waiting lock acquires after unlock");
@@ -342,8 +343,7 @@ static void test_locks(RRuntimeAllocator *allocator) {
     r_runtime_task_cancel(&waiting.task);
     require(waiting.task == NULL, "cancel consumes the task");
     (void)usleep(100000U);
-    void_result =
-        await_fs_void(r_std_fs_unlock(&other, UINT64_C(0), UINT64_C(0), no_deadline));
+    void_result = await_fs_void(r_std_fs_unlock(&other, UINT64_C(0), UINT64_C(0), no_deadline));
     require(void_result.r_tag == UINT32_C(0), "unlock the second file");
     (void)usleep(100000U);
     bool_result = await_fs_bool(r_std_fs_try_lock(
@@ -362,11 +362,8 @@ static void test_locks(RRuntimeAllocator *allocator) {
     require(bool_result.r_tag == UINT32_C(1) &&
                 bool_result.r_payload.r_err.code == R_STD_FS_ERROR_INVALID_OPERATION,
             "an exclusive lock needs write access");
-    bool_result = await_fs_bool(r_std_fs_try_lock(&fixture.file,
-                                                  R_STD_FS_LOCK_KIND_SHARED,
-                                                  (uint64_t)INT64_MAX,
-                                                  UINT64_C(2),
-                                                  no_deadline));
+    bool_result = await_fs_bool(r_std_fs_try_lock(
+        &fixture.file, R_STD_FS_LOCK_KIND_SHARED, (uint64_t)INT64_MAX, UINT64_C(2), no_deadline));
     require(bool_result.r_tag == UINT32_C(1) &&
                 bool_result.r_payload.r_err.code == R_STD_FS_ERROR_INVALID_OPERATION,
             "a range past i64 is invalid_operation");

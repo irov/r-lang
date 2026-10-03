@@ -269,13 +269,13 @@ static void datagram_ready(void *context_pointer) {
     if (native_error != 0) {
         transferred = -1;
     } else if (request->operation == R_RUNTIME_DARWIN_SOCKET_DATAGRAM_SEND) {
-        transferred = sendto(request->descriptor,
-                             request->send_data,
-                             request->size,
-                             0,
-                             request->peer_length == 0U ? NULL
-                                                        : (const struct sockaddr *)&request->peer,
-                             request->peer_length);
+        transferred =
+            sendto(request->descriptor,
+                   request->send_data,
+                   request->size,
+                   0,
+                   request->peer_length == 0U ? NULL : (const struct sockaddr *)&request->peer,
+                   request->peer_length);
         native_error = transferred < 0 ? errno : 0;
     } else {
         /* Darwin marks even an empty datagram truncated for a zero-sized iovec.

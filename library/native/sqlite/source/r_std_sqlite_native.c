@@ -105,10 +105,8 @@ static void r_std_sqlite_native_note_statement(RStdSqliteNativeStatement *statem
         statement->message, sqlite3_errmsg(sqlite3_db_handle(statement->statement)));
 }
 
-static size_t r_std_sqlite_native_copy(const void *data,
-                                       size_t length,
-                                       uint8_t *target,
-                                       size_t capacity) {
+static size_t
+r_std_sqlite_native_copy(const void *data, size_t length, uint8_t *target, size_t capacity) {
     if ((data != NULL) && (target != NULL) && (capacity != 0U)) {
         (void)memcpy(target, data, length < capacity ? length : capacity);
     }
@@ -120,11 +118,8 @@ r_std_sqlite_native_statement_mutex(const RStdSqliteNativeStatement *statement) 
     return sqlite3_db_mutex(sqlite3_db_handle(statement->statement));
 }
 
-int32_t r_std_sqlite_native_open(const uint8_t *path,
-                                 size_t path_length,
-                                 int32_t flags,
-                                 int32_t busy_timeout,
-                                 void **database) {
+int32_t r_std_sqlite_native_open(
+    const uint8_t *path, size_t path_length, int32_t flags, int32_t busy_timeout, void **database) {
     RStdSqliteNativeDatabase *opened = NULL;
     char *name = NULL;
     int mode = SQLITE_OPEN_FULLMUTEX | SQLITE_OPEN_EXRESCODE;
@@ -247,11 +242,8 @@ int32_t r_std_sqlite_native_execute(void *database, const uint8_t *sql, size_t l
     return status;
 }
 
-int32_t r_std_sqlite_native_prepare(void *database,
-                                    const uint8_t *sql,
-                                    size_t length,
-                                    void **statement,
-                                    size_t *consumed) {
+int32_t r_std_sqlite_native_prepare(
+    void *database, const uint8_t *sql, size_t length, void **statement, size_t *consumed) {
     RStdSqliteNativeDatabase *source = database;
     RStdSqliteNativeStatement *prepared = NULL;
     sqlite3_mutex *mutex = sqlite3_db_mutex(source->connection);
@@ -355,39 +347,32 @@ int32_t r_std_sqlite_native_bind_real(void *statement, int32_t index, double val
     return status;
 }
 
-int32_t r_std_sqlite_native_bind_text(void *statement,
-                                      int32_t index,
-                                      const uint8_t *data,
-                                      size_t length) {
+int32_t
+r_std_sqlite_native_bind_text(void *statement, int32_t index, const uint8_t *data, size_t length) {
     RStdSqliteNativeStatement *target = statement;
     sqlite3_mutex *mutex = r_std_sqlite_native_statement_mutex(target);
     static const char empty[1] = {'\0'};
     const char *text = (length == 0U) ? empty : (const char *)data;
     int32_t status = SQLITE_OK;
     sqlite3_mutex_enter(mutex);
-    status = r_std_sqlite_native_bound(target,
-                                       sqlite3_bind_text64(target->statement,
-                                                           index,
-                                                           text,
-                                                           (sqlite3_uint64)length,
-                                                           SQLITE_TRANSIENT,
-                                                           SQLITE_UTF8));
+    status = r_std_sqlite_native_bound(
+        target,
+        sqlite3_bind_text64(
+            target->statement, index, text, (sqlite3_uint64)length, SQLITE_TRANSIENT, SQLITE_UTF8));
     sqlite3_mutex_leave(mutex);
     return status;
 }
 
-int32_t r_std_sqlite_native_bind_blob(void *statement,
-                                      int32_t index,
-                                      const uint8_t *data,
-                                      size_t length) {
+int32_t
+r_std_sqlite_native_bind_blob(void *statement, int32_t index, const uint8_t *data, size_t length) {
     RStdSqliteNativeStatement *target = statement;
     sqlite3_mutex *mutex = r_std_sqlite_native_statement_mutex(target);
     int32_t status = SQLITE_OK;
     sqlite3_mutex_enter(mutex);
     if (length == 0U) {
         /* A null address would bind NULL; an empty blob stays a blob. */
-        status = r_std_sqlite_native_bound(target,
-                                           sqlite3_bind_zeroblob(target->statement, index, 0));
+        status =
+            r_std_sqlite_native_bound(target, sqlite3_bind_zeroblob(target->statement, index, 0));
     } else {
         status = r_std_sqlite_native_bound(
             target,
@@ -482,10 +467,8 @@ size_t r_std_sqlite_native_column_bytes(void *statement,
     return length;
 }
 
-size_t r_std_sqlite_native_column_name(void *statement,
-                                       int32_t column,
-                                       uint8_t *target,
-                                       size_t capacity) {
+size_t
+r_std_sqlite_native_column_name(void *statement, int32_t column, uint8_t *target, size_t capacity) {
     RStdSqliteNativeStatement *source = statement;
     sqlite3_mutex *mutex = r_std_sqlite_native_statement_mutex(source);
     const char *name = NULL;

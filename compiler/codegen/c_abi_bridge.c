@@ -225,19 +225,18 @@ static bool r_c_abi_spell_function_pointer(const RFrontendContext *context,
     bool spelled;
 
     r_c_abi_spell_init(&declarator, context);
-    spelled =
-        r_c_abi_spell_append(&declarator, "(*") && r_c_abi_spell_append(&declarator, inner) &&
-        r_c_abi_spell_append(&declarator, ")(") &&
-        r_c_abi_spell_parameters(context,
-                                 type->second,
-                                 type->length,
-                                 (type->flags & R_SEMANTIC_TYPE_FLAG_VARIADIC) != 0U,
-                                 &declarator,
-                                 depth,
-                                 speller) &&
-        r_c_abi_spell_append(&declarator, ")") &&
-        r_c_abi_spell_type(
-            context, type->base, declarator.bytes, spell, depth + UINT32_C(1), speller);
+    spelled = r_c_abi_spell_append(&declarator, "(*") && r_c_abi_spell_append(&declarator, inner) &&
+              r_c_abi_spell_append(&declarator, ")(") &&
+              r_c_abi_spell_parameters(context,
+                                       type->second,
+                                       type->length,
+                                       (type->flags & R_SEMANTIC_TYPE_FLAG_VARIADIC) != 0U,
+                                       &declarator,
+                                       depth,
+                                       speller) &&
+              r_c_abi_spell_append(&declarator, ")") &&
+              r_c_abi_spell_type(
+                  context, type->base, declarator.bytes, spell, depth + UINT32_C(1), speller);
     r_c_abi_spell_dispose(&declarator);
     return spelled;
 }
@@ -300,8 +299,7 @@ static bool r_c_abi_spell_opaque(const RFrontendContext *context,
                     return false;
                 }
             } else if ((node->tag_name == NULL) || !r_c_abi_spell_append(spell, "struct ") ||
-                       !r_c_abi_spell_append_bytes(
-                           spell, node->tag_name, node->tag_name_length)) {
+                       !r_c_abi_spell_append_bytes(spell, node->tag_name, node->tag_name_length)) {
                 return false;
             }
         }
@@ -406,9 +404,9 @@ static bool r_c_abi_spell_type_with(const RFrontendContext *context,
 
         r_c_abi_spell_clear(declarator);
         (void)snprintf(length, sizeof(length), "[%" PRIu64 "]", type->length);
-        if (((inner[0] == '*') && (!r_c_abi_spell_append(declarator, "(") ||
-                                   !r_c_abi_spell_append(declarator, inner) ||
-                                   !r_c_abi_spell_append(declarator, ")"))) ||
+        if (((inner[0] == '*') &&
+             (!r_c_abi_spell_append(declarator, "(") || !r_c_abi_spell_append(declarator, inner) ||
+              !r_c_abi_spell_append(declarator, ")"))) ||
             ((inner[0] != '*') && !r_c_abi_spell_append(declarator, inner)) ||
             !r_c_abi_spell_append(declarator, length)) {
             return false;
@@ -449,8 +447,7 @@ static bool r_c_abi_spell_type(const RFrontendContext *context,
     bool spelled;
 
     r_c_abi_spell_init(&declarator, context);
-    spelled =
-        r_c_abi_spell_type_with(context, type_id, inner, spell, depth, speller, &declarator);
+    spelled = r_c_abi_spell_type_with(context, type_id, inner, spell, depth, speller, &declarator);
     r_c_abi_spell_dispose(&declarator);
     return spelled;
 }
@@ -1260,8 +1257,7 @@ static bool r_c_abi_write_aggregate_probes_with(const RFrontendContext *context,
         aggregate = &context->semantic_aggregates[(size_t)pair->aggregate_id - 1U];
         type = &context->abi_types[pair->abi_type];
         r_c_abi_spell_clear(spelling);
-        if (((type->kind != R_C_TYPE_KIND_TYPEDEF) &&
-             !r_c_abi_spell_append(spelling, "struct ")) ||
+        if (((type->kind != R_C_TYPE_KIND_TYPEDEF) && !r_c_abi_spell_append(spelling, "struct ")) ||
             !r_c_abi_spell_append_bytes(spelling, type->c_name, type->c_name_length)) {
             return false;
         }
@@ -1674,8 +1670,8 @@ static bool r_c_abi_spell_bridge_signature(const RFrontendContext *context,
     bool spelled;
 
     r_c_abi_spell_init(&declarator, context);
-    spelled = r_c_abi_spell_bridge_signature_with(
-        context, symbol, name, with_names, spell, &declarator);
+    spelled =
+        r_c_abi_spell_bridge_signature_with(context, symbol, name, with_names, spell, &declarator);
     r_c_abi_spell_dispose(&declarator);
     return spelled;
 }
@@ -1938,8 +1934,7 @@ static bool r_c_abi_write_private_members(const RFrontendContext *context,
                                           RCAbiSpell *spelling) {
     RCAbiSpeller private_speller = r_c_abi_plain_speller(R_C_ABI_SPELL_PRIVATE);
 
-    for (uint32_t field_index = UINT32_C(0); field_index < aggregate->field_count;
-         ++field_index) {
+    for (uint32_t field_index = UINT32_C(0); field_index < aggregate->field_count; ++field_index) {
         const RSemanticField *field =
             &context->semantic_fields[(size_t)aggregate->first_field + (size_t)field_index];
         const char *name;

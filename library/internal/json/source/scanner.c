@@ -37,7 +37,9 @@ typedef struct RJsonKeyEntry {
     size_t length;
     uint64_t hash;
 } RJsonKeyEntry;
-enum { R_JSON_LINEAR_KEYS = 16 };
+enum {
+    R_JSON_LINEAR_KEYS = 16
+};
 typedef enum RJsonLex {
     R_JSON_LEX_IDLE,
     R_JSON_LEX_STRING,
@@ -118,9 +120,8 @@ static RStdJsonByteView r_json_token_text(const struct RJsonScannerState *s) {
         return (RStdJsonByteView){s->view_data, s->view_length};
     return (RStdJsonByteView){s->text.data, s->text.length};
 }
-static RStdJsonResult r_json_append_text(struct RJsonScannerState *s,
-                                         const uint8_t *bytes,
-                                         size_t length) {
+static RStdJsonResult
+r_json_append_text(struct RJsonScannerState *s, const uint8_t *bytes, size_t length) {
     RStdJsonResult result;
     if (length == 0U)
         return (RStdJsonResult){0};
@@ -159,10 +160,8 @@ static uint64_t r_json_key_hash(RStdJsonByteView key) {
     }
     return hash;
 }
-static bool r_json_entry_equal(struct RJsonScannerState *s,
-                               size_t index,
-                               uint64_t hash,
-                               RStdJsonByteView key) {
+static bool
+r_json_entry_equal(struct RJsonScannerState *s, size_t index, uint64_t hash, RStdJsonByteView key) {
     const RJsonKeyEntry *entry = &r_json_entries(s)[index];
     return entry->hash == hash && r_json_view_equal(r_json_entry_view(s, index), key);
 }
@@ -181,7 +180,9 @@ static RStdJsonResult r_json_rebuild_buckets(struct RJsonScannerState *s, RJsonF
     if (capacity == frame->buckets.length)
         return (RStdJsonResult){0};
     result = r_json_array_result(r_runtime_array_with_capacity(
-        &fresh, s->allocator, (RRuntimeTypeInfo){sizeof(size_t), alignof(size_t), NULL, NULL},
+        &fresh,
+        s->allocator,
+        (RRuntimeTypeInfo){sizeof(size_t), alignof(size_t), NULL, NULL},
         capacity));
     if (result.status != R_STD_JSON_CALL_SUCCESS)
         return result;
@@ -823,10 +824,10 @@ RStdString r_json_scanner_take_text(RStdJsonScanner *scanner) {
         return result;
     if (!s->view) {
         result.bytes = s->text;
-        r_runtime_array_initialize(&s->text,
-                                   s->allocator,
-                                   (RRuntimeTypeInfo){sizeof(uint8_t), alignof(uint8_t), NULL,
-                                                      NULL});
+        r_runtime_array_initialize(
+            &s->text,
+            s->allocator,
+            (RRuntimeTypeInfo){sizeof(uint8_t), alignof(uint8_t), NULL, NULL});
         return result;
     }
     status = r_runtime_string_from_valid_utf8(&result, s->allocator, s->view_data, s->view_length);

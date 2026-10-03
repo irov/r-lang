@@ -67,9 +67,8 @@ static _Bool wait_semaphore(dispatch_semaphore_t semaphore) {
                                    dispatch_time(DISPATCH_TIME_NOW, INT64_C(5000000000))) == 0L;
 }
 
-static RRuntimeDarwinIoBuffer allocate_buffer(RRuntimeAllocator *allocator,
-                                              size_t capacity,
-                                              unsigned char fill) {
+static RRuntimeDarwinIoBuffer
+allocate_buffer(RRuntimeAllocator *allocator, size_t capacity, unsigned char fill) {
     RRuntimeDarwinIoBufferResult result = r_runtime_darwin_io_buffer_allocate(allocator, capacity);
 
     if (result.status != R_RUNTIME_DARWIN_IO_START_OK) {
@@ -166,8 +165,8 @@ static int test_file_positioned_transfers_leave_the_offset(void) {
     r_runtime_allocator_initialize(&allocator);
     descriptor = temporary_file(initial, 10U, O_RDWR);
     CHECK(descriptor >= 0);
-    created = r_runtime_darwin_io_handle_create_file(
-        &allocator, descriptor, R_RUNTIME_DARWIN_IO_STREAM);
+    created =
+        r_runtime_darwin_io_handle_create_file(&allocator, descriptor, R_RUNTIME_DARWIN_IO_STREAM);
     CHECK(created.status == R_RUNTIME_DARWIN_IO_START_OK && created.handle != NULL);
 
     CHECK(file_transfer(created.handle, &allocator, 0, 1, (off_t)4, NULL, 4U, &result, &returned) ==
@@ -178,8 +177,9 @@ static int test_file_positioned_transfers_leave_the_offset(void) {
     r_runtime_darwin_io_buffer_release(&returned);
     CHECK(lseek(descriptor, 0, SEEK_CUR) == 0);
 
-    CHECK(file_transfer(created.handle, &allocator, 1, 1, (off_t)2, replacement, 3U, &result,
-                        &returned) == 0);
+    CHECK(file_transfer(
+              created.handle, &allocator, 1, 1, (off_t)2, replacement, 3U, &result, &returned) ==
+          0);
     CHECK(result.terminal_event == R_RUNTIME_DARWIN_IO_TERMINAL_NATIVE && result.native_error == 0);
     CHECK(result.bytes_transferred == 3U);
     r_runtime_darwin_io_buffer_release(&returned);
@@ -187,8 +187,8 @@ static int test_file_positioned_transfers_leave_the_offset(void) {
     CHECK(memcmp(observed, "01ABC56789", sizeof(observed)) == 0);
     CHECK(lseek(descriptor, 0, SEEK_CUR) == 0);
 
-    CHECK(file_transfer(created.handle, &allocator, 0, 1, (off_t)10, NULL, 4U, &result,
-                        &returned) == 0);
+    CHECK(file_transfer(
+              created.handle, &allocator, 0, 1, (off_t)10, NULL, 4U, &result, &returned) == 0);
     CHECK(result.terminal_event == R_RUNTIME_DARWIN_IO_TERMINAL_NATIVE && result.native_error == 0);
     CHECK(result.bytes_transferred == 0U && result.eof);
     CHECK(returned.size == 0U && returned.data[0] == 0xeeU);
@@ -212,11 +212,12 @@ static int test_file_append_and_native_error(void) {
     r_runtime_allocator_initialize(&allocator);
     descriptor = temporary_file(initial, sizeof(initial), O_RDWR | O_APPEND);
     CHECK(descriptor >= 0);
-    created = r_runtime_darwin_io_handle_create_file(
-        &allocator, descriptor, R_RUNTIME_DARWIN_IO_STREAM);
+    created =
+        r_runtime_darwin_io_handle_create_file(&allocator, descriptor, R_RUNTIME_DARWIN_IO_STREAM);
     CHECK(created.status == R_RUNTIME_DARWIN_IO_START_OK);
-    CHECK(file_transfer(created.handle, &allocator, 1, 0, (off_t)0, tail, sizeof(tail), &result,
-                        &returned) == 0);
+    CHECK(file_transfer(
+              created.handle, &allocator, 1, 0, (off_t)0, tail, sizeof(tail), &result, &returned) ==
+          0);
     CHECK(result.terminal_event == R_RUNTIME_DARWIN_IO_TERMINAL_NATIVE && result.native_error == 0);
     CHECK(result.bytes_transferred == sizeof(tail));
     r_runtime_darwin_io_buffer_release(&returned);
@@ -227,11 +228,12 @@ static int test_file_append_and_native_error(void) {
 
     descriptor = temporary_file(initial, sizeof(initial), O_RDONLY);
     CHECK(descriptor >= 0);
-    created = r_runtime_darwin_io_handle_create_file(
-        &allocator, descriptor, R_RUNTIME_DARWIN_IO_STREAM);
+    created =
+        r_runtime_darwin_io_handle_create_file(&allocator, descriptor, R_RUNTIME_DARWIN_IO_STREAM);
     CHECK(created.status == R_RUNTIME_DARWIN_IO_START_OK);
-    CHECK(file_transfer(created.handle, &allocator, 1, 1, (off_t)0, tail, sizeof(tail), &result,
-                        &returned) == 0);
+    CHECK(file_transfer(
+              created.handle, &allocator, 1, 1, (off_t)0, tail, sizeof(tail), &result, &returned) ==
+          0);
     CHECK(result.terminal_event == R_RUNTIME_DARWIN_IO_TERMINAL_NATIVE);
     CHECK(result.native_error == EBADF && result.bytes_transferred == 0U);
     r_runtime_darwin_io_buffer_release(&returned);
@@ -258,8 +260,8 @@ static int test_file_cancel_before_entry_and_close_waits(void) {
     r_runtime_allocator_initialize(&allocator);
     descriptor = temporary_file(initial, sizeof(initial), O_RDWR);
     CHECK(descriptor >= 0);
-    created = r_runtime_darwin_io_handle_create_file(
-        &allocator, descriptor, R_RUNTIME_DARWIN_IO_STREAM);
+    created =
+        r_runtime_darwin_io_handle_create_file(&allocator, descriptor, R_RUNTIME_DARWIN_IO_STREAM);
     CHECK(created.status == R_RUNTIME_DARWIN_IO_START_OK);
     CHECK(r_runtime_darwin_io_handle_retain_view(created.handle));
 
@@ -453,8 +455,8 @@ static int test_socket_wait_cancel_and_deadline(void) {
     r_runtime_darwin_io_request_release(submission.request);
     dispatch_release(observation.semaphore);
 
-    CHECK(submit_socket_read(created.handle, &allocator, UINT64_C(5000000), &observation,
-                             &submission) == 0);
+    CHECK(submit_socket_read(
+              created.handle, &allocator, UINT64_C(5000000), &observation, &submission) == 0);
     CHECK(wait_semaphore(observation.semaphore));
     CHECK(observation.result.terminal_event == R_RUNTIME_DARWIN_IO_TERMINAL_TIMED_OUT);
     CHECK(observation.result.bytes_transferred == 0U);
@@ -640,8 +642,8 @@ static int test_inline_registration_races_worker_completion(void) {
     r_runtime_allocator_initialize(&allocator);
     descriptor = temporary_file(initial, sizeof(initial), O_RDONLY);
     CHECK(descriptor >= 0);
-    created = r_runtime_darwin_io_handle_create_file(
-        &allocator, descriptor, R_RUNTIME_DARWIN_IO_STREAM);
+    created =
+        r_runtime_darwin_io_handle_create_file(&allocator, descriptor, R_RUNTIME_DARWIN_IO_STREAM);
     CHECK(created.status == R_RUNTIME_DARWIN_IO_START_OK);
     completion.semaphore = dispatch_semaphore_create(0L);
     for (round = 0U; round != 4000U; ++round) {
@@ -704,8 +706,8 @@ static int test_inline_registration_outlives_worker_completion(void) {
     r_runtime_allocator_initialize(&allocator);
     descriptor = temporary_file(initial, sizeof(initial), O_RDONLY);
     CHECK(descriptor >= 0);
-    created = r_runtime_darwin_io_handle_create_file(
-        &allocator, descriptor, R_RUNTIME_DARWIN_IO_STREAM);
+    created =
+        r_runtime_darwin_io_handle_create_file(&allocator, descriptor, R_RUNTIME_DARWIN_IO_STREAM);
     CHECK(created.status == R_RUNTIME_DARWIN_IO_START_OK);
     buffer = allocate_buffer(&allocator, sizeof(initial), 0U);
     CHECK(buffer.data != NULL);
@@ -762,8 +764,8 @@ static int test_file_random_offsets_follow_the_creation_position(void) {
     descriptor = temporary_file(initial, 10U, O_RDONLY);
     CHECK(descriptor >= 0);
     CHECK(lseek(descriptor, 3, SEEK_SET) == 3);
-    created = r_runtime_darwin_io_handle_create_file(&allocator, descriptor,
-                                                     R_RUNTIME_DARWIN_IO_RANDOM);
+    created =
+        r_runtime_darwin_io_handle_create_file(&allocator, descriptor, R_RUNTIME_DARWIN_IO_RANDOM);
     CHECK(created.status == R_RUNTIME_DARWIN_IO_START_OK);
     buffer = allocate_buffer(&allocator, 4U, 0x55U);
     preparation =
@@ -833,8 +835,7 @@ static int test_file_admission_bound_and_cancellation(void) {
         preparation =
             r_runtime_darwin_io_prepare_read_some(handles[index], (off_t)0, &buffer, UINT64_C(0));
         CHECK(preparation.status == R_RUNTIME_DARWIN_IO_START_OK);
-        CHECK(r_runtime_darwin_io_prepared_set_stream_position(preparation.prepared,
-                                                               (off_t)index));
+        CHECK(r_runtime_darwin_io_prepared_set_stream_position(preparation.prepared, (off_t)index));
         submissions[index] = r_runtime_darwin_io_prepared_activate(&preparation.prepared, &buffer);
         CHECK(submissions[index].status == R_RUNTIME_DARWIN_IO_START_OK);
         observation_init(&observations[index]);
@@ -900,8 +901,8 @@ static int test_file_cancel_after_entry_keeps_native_outcome(void) {
     r_runtime_allocator_initialize(&allocator);
     descriptor = temporary_file(initial, sizeof(initial), O_RDONLY);
     CHECK(descriptor >= 0);
-    created = r_runtime_darwin_io_handle_create_file(
-        &allocator, descriptor, R_RUNTIME_DARWIN_IO_STREAM);
+    created =
+        r_runtime_darwin_io_handle_create_file(&allocator, descriptor, R_RUNTIME_DARWIN_IO_STREAM);
     CHECK(created.status == R_RUNTIME_DARWIN_IO_START_OK);
     buffer = allocate_buffer(&allocator, sizeof(initial), 0U);
     preparation =
@@ -975,8 +976,9 @@ static int test_saturated_file_adapter_leaves_sockets_running(void) {
     CHECK(socket_pair(descriptors) == 0);
     socket_created = r_runtime_darwin_io_handle_create_socket(&allocator, descriptors[0]);
     CHECK(socket_created.status == R_RUNTIME_DARWIN_IO_START_OK);
-    CHECK(submit_socket_read(socket_created.handle, &allocator, UINT64_C(0), &socket_observation,
-                             &socket_read) == 0);
+    CHECK(submit_socket_read(
+              socket_created.handle, &allocator, UINT64_C(0), &socket_observation, &socket_read) ==
+          0);
     CHECK(write(descriptors[1], ping, sizeof(ping)) == (ssize_t)sizeof(ping));
     CHECK(wait_semaphore(socket_observation.semaphore));
     CHECK(socket_observation.result.terminal_event == R_RUNTIME_DARWIN_IO_TERMINAL_NATIVE);

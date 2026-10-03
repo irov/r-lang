@@ -70,16 +70,11 @@ size_t r_std_tls_native_session_pending(void *session);
 /* Advances the handshake: OK when complete, WANT_INPUT, or a failure. */
 int32_t r_std_tls_native_session_handshake(void *session, int64_t *native);
 /* Reads application data: OK with *count > 0, WANT_INPUT, CLOSED or a failure. */
-int32_t r_std_tls_native_session_read(void *session,
-                                      uint8_t *target,
-                                      size_t capacity,
-                                      size_t *count,
-                                      int64_t *native);
+int32_t r_std_tls_native_session_read(
+    void *session, uint8_t *target, size_t capacity, size_t *count, int64_t *native);
 /* Encrypts all of data into records for the peer. */
-int32_t r_std_tls_native_session_write(void *session,
-                                       const uint8_t *data,
-                                       size_t length,
-                                       int64_t *native);
+int32_t
+r_std_tls_native_session_write(void *session, const uint8_t *data, size_t length, int64_t *native);
 /* Queues close_notify for the peer. */
 int32_t r_std_tls_native_session_close(void *session, int64_t *native);
 /* The negotiated ALPN name and its length in *length, NULL and zero for none. The name is one

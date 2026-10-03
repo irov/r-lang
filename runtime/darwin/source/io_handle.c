@@ -645,10 +645,8 @@ RRuntimeDarwinIoHandleCreateResult r_runtime_darwin_io_handle_create(RRuntimeAll
     return handle_create(allocator, descriptor, type, 0, R_RUNTIME_DARWIN_IO_ENGINE_DISPATCH);
 }
 
-RRuntimeDarwinIoHandleCreateResult
-r_runtime_darwin_io_handle_create_file(RRuntimeAllocator *allocator,
-                                       int descriptor,
-                                       RRuntimeDarwinIoType type) {
+RRuntimeDarwinIoHandleCreateResult r_runtime_darwin_io_handle_create_file(
+    RRuntimeAllocator *allocator, int descriptor, RRuntimeDarwinIoType type) {
     return handle_create(allocator, descriptor, type, 0, R_RUNTIME_DARWIN_IO_ENGINE_FILE);
 }
 

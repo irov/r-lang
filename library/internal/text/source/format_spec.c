@@ -235,9 +235,8 @@ RStdFormatAllocResult r_library_internal_format_text(RStdFormatBuilder *target,
 }
 
 /* One Unicode scalar supplied by the compiler's char lowering, padded like text. */
-RStdFormatAllocResult r_library_internal_format_char(RStdFormatBuilder *target,
-                                                     uint32_t value,
-                                                     RStdFormatSpec spec) {
+RStdFormatAllocResult
+r_library_internal_format_char(RStdFormatBuilder *target, uint32_t value, RStdFormatSpec spec) {
     uint8_t text[4];
     size_t length;
     if (value < 0x80U) {

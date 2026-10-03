@@ -12,6 +12,7 @@
 #include "standard_net_operations.h"
 #include "standard_scoped_operations.h"
 #include "standard_sync.h"
+
 #include "standard_async_sync.h"
 
 #include <errno.h>
@@ -1290,7 +1291,8 @@ static bool r_derive_validate(RFrontendContext *);
 static bool r_derive_reject_families(RFrontendContext *);
 static bool r_function_value_type(RFrontendContext *, RAstRef, RTypeId *);
 static bool r_function_value_convert(RBodyContext *, RTypeId, RExpressionResult *);
-static bool r_function_value_compare_operands(RBodyContext *, RExpressionResult *, RExpressionResult *);
+static bool
+r_function_value_compare_operands(RBodyContext *, RExpressionResult *, RExpressionResult *);
 static bool r_function_value_call(RFrontendContext *, RSourceId, RTypeId, uint32_t, RSymbolId *);
 static bool r_function_value_dispatcher(const RFrontendContext *, RSymbolId);
 static bool r_function_value_resolve_targets(RFrontendContext *);
@@ -1621,9 +1623,8 @@ static bool r_semantic_prepare_error_domain_schema(RFrontendContext *context,
 static bool r_semantic_prepare_error_schema(RFrontendContext *context, RTypeId *error_type);
 static bool r_semantic_prepare_fs_error_code_schema(RFrontendContext *context,
                                                     const RSemanticAggregate **aggregate);
-static bool r_semantic_fs_enum_variants(const char *name,
-                                        const char *const **variants,
-                                        uint32_t *count);
+static bool
+r_semantic_fs_enum_variants(const char *name, const char *const **variants, uint32_t *count);
 static bool r_semantic_prepare_fs_enum_schema(RFrontendContext *context,
                                               const char *name,
                                               const RSemanticAggregate **aggregate);
@@ -2092,8 +2093,7 @@ static bool r_body_select_member_pending(const RBodyContext *body,
     const bool right_open = right == R_SEMANTIC_OBJECT_STATE_INITIALIZED ||
                             right == R_SEMANTIC_OBJECT_STATE_SELECT_PENDING;
     return (left_open && right == R_SEMANTIC_OBJECT_STATE_MOVED) ||
-           (right_open && left == R_SEMANTIC_OBJECT_STATE_MOVED) ||
-           (left_open && right_open);
+           (right_open && left == R_SEMANTIC_OBJECT_STATE_MOVED) || (left_open && right_open);
 }
 
 static bool r_body_merge_branch_object_states(RBodyContext *body,
@@ -2164,8 +2164,9 @@ static void r_semantic_type_index_reset(RFrontendContext *context) {
    the linear search did, and grows the index before it is half full. */
 static bool r_semantic_type_index_update(RFrontendContext *context) {
     if (context->semantic_type_count >= context->semantic_type_index_capacity / 2U) {
-        size_t capacity =
-            context->semantic_type_index_capacity == 0U ? 1024U : context->semantic_type_index_capacity;
+        size_t capacity = context->semantic_type_index_capacity == 0U
+                              ? 1024U
+                              : context->semantic_type_index_capacity;
         uint32_t *table;
 
         while (capacity / 2U <= context->semantic_type_count) {
@@ -2194,12 +2195,13 @@ static bool r_semantic_type_index_update(RFrontendContext *context) {
         bool present = false;
 
         while (context->semantic_type_index[slot] != 0U) {
-            if (r_semantic_type_key_equal(&context->semantic_types[context->semantic_type_index[slot] - 1U],
-                                          type->kind,
-                                          type->base,
-                                          type->second,
-                                          type->length,
-                                          type->flags)) {
+            if (r_semantic_type_key_equal(
+                    &context->semantic_types[context->semantic_type_index[slot] - 1U],
+                    type->kind,
+                    type->base,
+                    type->second,
+                    type->length,
+                    type->flags)) {
                 present = true;
                 break;
             }
@@ -2784,12 +2786,13 @@ static bool r_semantic_opaque_value_diagnostic(RFrontendContext *context, RSourc
 }
 
 /* Whether the source text of a span is the given name. */
-static bool r_semantic_span_is(const RFrontendContext *context, RSourceSpan span, const char *name) {
+static bool
+r_semantic_span_is(const RFrontendContext *context, RSourceSpan span, const char *name) {
     const RSource *source = r_get_source_const(context, span.source);
     const size_t length = strlen(name);
 
-    return (source != NULL) && (span.end >= span.start) && ((size_t)(span.end - span.start) == length) &&
-           ((size_t)span.end <= source->length) &&
+    return (source != NULL) && (span.end >= span.start) &&
+           ((size_t)(span.end - span.start) == length) && ((size_t)span.end <= source->length) &&
            (memcmp(source->bytes + span.start, name, length) == 0);
 }
 
@@ -6213,7 +6216,8 @@ static bool r_semantic_owner_payload_holds_region(const RFrontendContext *contex
         return (r_generic_parameter_constraints(context, r_semantic_value_type(context, payload)) &
                 R_GENERIC_UNBORROWED) == 0U;
     }
-    if ((type->kind == R_SEMANTIC_TYPE_EFFECT_SET) || (type->kind == R_SEMANTIC_TYPE_CONSTANT_EXPR)) {
+    if ((type->kind == R_SEMANTIC_TYPE_EFFECT_SET) ||
+        (type->kind == R_SEMANTIC_TYPE_CONSTANT_EXPR)) {
         return false;
     }
     if ((type->kind == R_SEMANTIC_TYPE_STRUCT) || (type->kind == R_SEMANTIC_TYPE_ENUM)) {
@@ -6776,7 +6780,8 @@ static bool r_semantic_standard_type_has_capability(const RFrontendContext *cont
     if (r_semantic_standard_type_name_equal(context, type, "std.async::rw_lock") ||
         r_semantic_standard_type_name_equal(context, type, "std.async::mutex_guard") ||
         r_semantic_standard_type_name_equal(context, type, "std.async::rw_write_guard")) {
-        const bool rw_lock = r_semantic_standard_type_name_equal(context, type, "std.async::rw_lock");
+        const bool rw_lock =
+            r_semantic_standard_type_name_equal(context, type, "std.async::rw_lock");
         const bool write_guard =
             r_semantic_standard_type_name_equal(context, type, "std.async::rw_write_guard");
         if (type->base == R_TYPE_ID_INVALID) {
@@ -6789,8 +6794,9 @@ static bool r_semantic_standard_type_has_capability(const RFrontendContext *cont
                     r_semantic_type_has_capability_depth(
                         context, type->base, R_SEMANTIC_CAPABILITY_SYNC, visits, depth + 1U));
         }
-        return (!rw_lock || r_semantic_type_has_capability_depth(
-                                context, type->base, R_SEMANTIC_CAPABILITY_SEND, visits, depth + 1U)) &&
+        return (!rw_lock ||
+                r_semantic_type_has_capability_depth(
+                    context, type->base, R_SEMANTIC_CAPABILITY_SEND, visits, depth + 1U)) &&
                r_semantic_type_has_capability_depth(
                    context, type->base, R_SEMANTIC_CAPABILITY_SYNC, visits, depth + 1U);
     }
@@ -7581,8 +7587,7 @@ static bool r_semantic_projection_arguments(RFrontendContext *context,
         RTypeId argument;
 
         if (!r_ast_ref_child(context, type_ref, child_index, &child) ||
-            !r_ast_ref_view(context, child, &child_view) ||
-            (child_view.kind != R_SYNTAX_TYPE)) {
+            !r_ast_ref_view(context, child, &child_view) || (child_view.kind != R_SYNTAX_TYPE)) {
             continue;
         }
         *written = true;
@@ -7747,7 +7752,8 @@ static bool r_semantic_collect_aggregate_on_demand(RFrontendContext *context,
     for (uint32_t field = 0U; field < aggregate->field_count; ++field) {
         const size_t at = (size_t)aggregate->first_field + (size_t)field;
         if (at < context->semantic_field_count &&
-            !r_semantic_collect_type_on_demand_visit(context, context->semantic_fields[at].type, visit)) {
+            !r_semantic_collect_type_on_demand_visit(
+                context, context->semantic_fields[at].type, visit)) {
             return false;
         }
     }
@@ -8721,8 +8727,7 @@ static bool r_semantic_external_modifiers(RFrontendContext *context,
                                 (attribute.child_count == type_index + 1U) &&
                                 r_ast_ref_child(
                                     context, child, type_index, &modifiers->test_expect_type) &&
-                                r_ast_ref_view(
-                                    context, modifiers->test_expect_type, &first_view) &&
+                                r_ast_ref_view(context, modifiers->test_expect_type, &first_view) &&
                                 (first_view.kind == R_SYNTAX_TYPE);
                         modifiers->test_expect = valid;
                     } else if (valid && r_ast_ref_view(context, first, &first_view) &&
@@ -8947,8 +8952,7 @@ static bool r_semantic_check_test_function(RFrontendContext *context,
                                       (index < r_semantic_effect_count(context, throws_type));
                  ++index) {
                 const RTypeId declared = r_semantic_effect_at(context, throws_type, index);
-                caught =
-                    r_semantic_error_catch_distance(context, expected, declared) != UINT32_MAX;
+                caught = r_semantic_error_catch_distance(context, expected, declared) != UINT32_MAX;
             }
         } else if (context->resource_status != R_FRONTEND_OK) {
             return false;
@@ -8957,9 +8961,9 @@ static bool r_semantic_check_test_function(RFrontendContext *context,
             message = "the expected error of @test catches no error that the function declares";
         }
     }
-    return (message == NULL) || r_semantic_add_diagnostic(
-                                    context, "R-DIAG-SYN-002", "R-FUNC-0025", message,
-                                    modifiers->test_span);
+    return (message == NULL) ||
+           r_semantic_add_diagnostic(
+               context, "R-DIAG-SYN-002", "R-FUNC-0025", message, modifiers->test_span);
 }
 
 static bool r_semantic_collect_function(RFrontendContext *context,
@@ -9356,8 +9360,7 @@ static bool r_semantic_collect_function(RFrontendContext *context,
         bool mentions_poisoned =
             r_semantic_type_mentions_poisoned_aggregate(context, return_type, NULL);
 
-        for (size_t poisoned_index = 0U;
-             !mentions_poisoned && (poisoned_index < parameters.count);
+        for (size_t poisoned_index = 0U; !mentions_poisoned && (poisoned_index < parameters.count);
              ++poisoned_index) {
             mentions_poisoned = r_semantic_type_mentions_poisoned_aggregate(
                 context, parameters.items[poisoned_index], NULL);
@@ -10208,7 +10211,8 @@ static bool r_semantic_collect_struct_fields(RFrontendContext *context,
         field.layout_index = aggregate->field_count;
         field.is_protected = r_semantic_field_has_protected(context, field_ref);
         /* R-INIT-0004 (L33): the declared initializer is lowered where it is used. */
-        if (!r_ast_find_direct_child(context, field_ref, R_SYNTAX_INITIALIZER, &field.initializer)) {
+        if (!r_ast_find_direct_child(
+                context, field_ref, R_SYNTAX_INITIALIZER, &field.initializer)) {
             field.initializer.node = 0U;
         }
         if (!r_json_collect_field_attributes(context, field_ref, &field, aggregate))
@@ -10308,8 +10312,7 @@ static bool r_semantic_variant_attributes(RFrontendContext *context,
         RAstTokenView name;
 
         if (!r_ast_ref_child(context, variant_ref, index, &child) ||
-            r_ast_ref_token(context, child, &name) ||
-            !r_ast_ref_view(context, child, &attribute) ||
+            r_ast_ref_token(context, child, &name) || !r_ast_ref_view(context, child, &attribute) ||
             (attribute.kind != R_SYNTAX_ATTRIBUTE)) {
             continue;
         }
@@ -10650,7 +10653,6 @@ static const char *r_semantic_uninhabited_element_rule(const RFrontendContext *c
         return NULL;
     }
 }
-
 
 static bool r_semantic_validate_struct_layout(RFrontendContext *context,
                                               uint32_t aggregate_id,
@@ -17312,8 +17314,8 @@ static bool r_body_diagnose_active_derived_borrow_impl(RBodyContext *body,
             return false;
         }
         for (size_t index = 0U; !frozen && (index < targets.count); ++index) {
-            const RSymbolVector *list = exclusive_only ? &body->frozen_exclusive_parameters
-                                                       : &body->frozen_parameters;
+            const RSymbolVector *list =
+                exclusive_only ? &body->frozen_exclusive_parameters : &body->frozen_parameters;
 
             for (size_t item = 0U; !frozen && (item < list->count); ++item) {
                 frozen = list->items[item] == targets.items[index];
@@ -17333,9 +17335,9 @@ static bool r_body_diagnose_active_derived_borrow_impl(RBodyContext *body,
                                         ? r_body_symbol(body, target_origin)
                                         : NULL;
     const RSemanticType *target_view =
-        target == NULL ? NULL
-                       : r_semantic_type(body->frontend,
-                                         r_semantic_value_type(body->frontend, target->type));
+        target == NULL
+            ? NULL
+            : r_semantic_type(body->frontend, r_semantic_value_type(body->frontend, target->type));
     const bool target_shared_view_parameter =
         exclusive_only && (target != NULL) && (target->kind == R_SEMANTIC_SYMBOL_PARAMETER) &&
         (target_view != NULL) &&
@@ -20824,7 +20826,8 @@ r_match_field_place(RBodyContext *, RExpressionResult, uint32_t, RSourceSpan, RE
 static bool r_match_transfer(RBodyContext *, RExpressionResult, RSourceSpan, RExpressionResult *);
 static bool r_match_forget_partition(RBodyContext *, RSymbolId, RSourceSpan, RHirVector *);
 static bool r_pattern_condition(RBodyContext *, RAstRef, RAstRef *);
-static bool r_pattern_lower_if(RBodyContext *, RAstRef, RAstRef, RAstRef, RAstRef, RHirNodeId *, bool *);
+static bool
+r_pattern_lower_if(RBodyContext *, RAstRef, RAstRef, RAstRef, RAstRef, RHirNodeId *, bool *);
 static bool r_pattern_lower_while(RBodyContext *, RAstRef, RAstRef, RAstRef, RHirNodeId *, bool *);
 static void r_format_commit_operands(RBodyContext *, size_t);
 static bool r_format_wrap_operands(RBodyContext *, RHirVector *, RExpressionResult *);
@@ -21783,8 +21786,7 @@ static bool r_semantic_record_store_borrow_parameter(
 /* Whether a store already froze `parameter`; a store widened across loop iterations, whose
    stored type is not known, keeps the kind the store in the body recorded. */
 static bool r_body_parameter_frozen(const RBodyContext *body, RSymbolId parameter, RTypeId type) {
-    for (size_t index = 0U;
-         (type == R_TYPE_ID_INVALID) && (index < body->frozen_parameters.count);
+    for (size_t index = 0U; (type == R_TYPE_ID_INVALID) && (index < body->frozen_parameters.count);
          ++index) {
         if (body->frozen_parameters.items[index] == parameter) {
             return true;
@@ -21797,8 +21799,8 @@ static bool r_body_parameter_frozen(const RBodyContext *body, RSymbolId paramete
    once a view of it is stored into storage another parameter designates, which outlives the
    call. */
 static bool r_body_freeze_parameter(RBodyContext *body, RSymbolId parameter, bool exclusive) {
-    RSymbolVector *frozen = exclusive ? &body->frozen_exclusive_parameters
-                                      : &body->frozen_parameters;
+    RSymbolVector *frozen =
+        exclusive ? &body->frozen_exclusive_parameters : &body->frozen_parameters;
 
     for (size_t index = 0U; index < frozen->count; ++index) {
         if (frozen->items[index] == parameter) {
@@ -21837,9 +21839,9 @@ static bool r_body_check_store_through_parameter(RBodyContext *body,
         return false;
     }
     const RSemanticSymbol *target = r_body_symbol(body, parameter);
-    const RSemanticTypeKind target_kind =
-        target == NULL ? R_SEMANTIC_TYPE_INVALID
-                       : r_semantic_value_kind(body->frontend, target->type);
+    const RSemanticTypeKind target_kind = target == NULL
+                                              ? R_SEMANTIC_TYPE_INVALID
+                                              : r_semantic_value_kind(body->frontend, target->type);
     /* A view parameter stands for the storage it designates; its content symbol stands for
        what that storage holds. A view of the designated storage stored into it would make the
        caller's object refer to itself, which the caller does not track: moving or returning
@@ -21875,8 +21877,7 @@ static bool r_body_check_store_through_parameter(RBodyContext *body,
             if ((target != NULL) &&
                 ((target_kind == R_SEMANTIC_TYPE_BORROW) ||
                  (target_kind == R_SEMANTIC_TYPE_SLICE)) &&
-                (input != NULL) &&
-                (input->kind == R_SEMANTIC_SYMBOL_PARAMETER) &&
+                (input != NULL) && (input->kind == R_SEMANTIC_SYMBOL_PARAMETER) &&
                 (input->parent == body->function_symbol) && (input != target) &&
                 (!storage || (input_kind == R_SEMANTIC_TYPE_BORROW) ||
                  (input_kind == R_SEMANTIC_TYPE_SLICE) || (input_kind == R_SEMANTIC_TYPE_STR)) &&
@@ -21885,9 +21886,9 @@ static bool r_body_check_store_through_parameter(RBodyContext *body,
                 (source != UINT32_C(0))) {
                 stored_source[stored_count] = source;
                 stored_held[stored_count] = held;
-                stored_storage[stored_count] =
-                    storage && (input_kind != R_SEMANTIC_TYPE_STR) ? origins.items[index]
-                                                                   : R_SYMBOL_ID_INVALID;
+                stored_storage[stored_count] = storage && (input_kind != R_SEMANTIC_TYPE_STR)
+                                                   ? origins.items[index]
+                                                   : R_SYMBOL_ID_INVALID;
                 stored_count += UINT32_C(1);
             } else {
                 foreign = true;
@@ -21900,12 +21901,11 @@ static bool r_body_check_store_through_parameter(RBodyContext *body,
         bool target_held = false;
         /* An exclusive view stored there keeps its source's storage exclusive; so does a value
            whose views are not known. */
-        const bool exclusive = (value->type == R_TYPE_ID_INVALID) ||
-                               r_semantic_type_contains_exclusive_view(
-                                   body->frontend, value->type, NULL) ||
-                               (r_generic_type_is_dependent(body->frontend, value->type, 0U) &&
-                                !r_generic_has_property(
-                                    body->frontend, value->type, R_GENERIC_COPY, 0U));
+        const bool exclusive =
+            (value->type == R_TYPE_ID_INVALID) ||
+            r_semantic_type_contains_exclusive_view(body->frontend, value->type, NULL) ||
+            (r_generic_type_is_dependent(body->frontend, value->type, 0U) &&
+             !r_generic_has_property(body->frontend, value->type, R_GENERIC_COPY, 0U));
 
         if ((stored_count != UINT32_C(0)) &&
             !r_body_return_borrow_input(body, parameter, &target_position, &target_held)) {
@@ -22026,9 +22026,9 @@ static bool r_body_store_into_view_targets(RBodyContext *body,
                                                       &merged,
                                                       &merged_set,
                                                       &merged_multiple);
-            if (success && ((merged != target->borrow_origin) ||
-                            (merged_set != target->borrow_origin_set) ||
-                            (merged_multiple != target->borrow_origin_multiple))) {
+            if (success &&
+                ((merged != target->borrow_origin) || (merged_set != target->borrow_origin_set) ||
+                 (merged_multiple != target->borrow_origin_multiple))) {
                 *rejected = true;
                 success =
                     r_body_diagnostic(body,
@@ -22054,9 +22054,9 @@ static bool r_body_store_into_view_targets(RBodyContext *body,
                                                       &target->borrow_origin,
                                                       &target->borrow_origin_set,
                                                       &target->borrow_origin_multiple);
-            if (success && ((target->borrow_origin != origin) ||
-                            (target->borrow_origin_set != origin_set) ||
-                            (target->borrow_origin_multiple != origin_multiple))) {
+            if (success &&
+                ((target->borrow_origin != origin) || (target->borrow_origin_set != origin_set) ||
+                 (target->borrow_origin_multiple != origin_multiple))) {
                 /* The component a store through a view reaches is not known here, so no
                    component keeps its former origins alone (R-BORROW-0025). */
                 target->projected_borrow_state = UINT32_C(0);
@@ -22207,9 +22207,9 @@ static bool r_body_read_designation(RBodyContext *body,
          (node->kind != R_HIR_INDEX_PLACE) && (node->kind != R_HIR_DEREF_PLACE))) {
         const RSemanticSymbol *symbol = r_body_symbol(body, value->symbol);
 
-        if ((symbol == NULL) || ((symbol->kind != R_SEMANTIC_SYMBOL_PARAMETER) &&
-                                 ((symbol->kind != R_SEMANTIC_SYMBOL_LOCAL) ||
-                                  !symbol->view_target_known))) {
+        if ((symbol == NULL) ||
+            ((symbol->kind != R_SEMANTIC_SYMBOL_PARAMETER) &&
+             ((symbol->kind != R_SEMANTIC_SYMBOL_LOCAL) || !symbol->view_target_known))) {
             return true;
         }
         if (!r_body_view_symbol_targets(body, value->symbol, targets, &known)) {
@@ -22365,14 +22365,14 @@ static bool r_body_read_view_value_origins(RBodyContext *body, RExpressionResult
                     (storage->kind != R_SEMANTIC_SYMBOL_MODULE_OBJECT) &&
                     (storage->content_parameter == R_SYMBOL_ID_INVALID));
         } else if ((storage != NULL) &&
-            ((storage->kind == R_SEMANTIC_SYMBOL_LOCAL) ||
-             (storage->kind == R_SEMANTIC_SYMBOL_MODULE_OBJECT)) &&
-            (((kind != R_SEMANTIC_TYPE_BORROW) && (kind != R_SEMANTIC_TYPE_SLICE) &&
-              (kind != R_SEMANTIC_TYPE_STR)) ||
-             (storage->kind == R_SEMANTIC_SYMBOL_LOCAL)) &&
-            (r_semantic_type_contains_borrow(body->frontend, storage->type) ||
-             r_semantic_type_contains_slice(body->frontend, storage->type) ||
-             (kind == R_SEMANTIC_TYPE_STR))) {
+                   ((storage->kind == R_SEMANTIC_SYMBOL_LOCAL) ||
+                    (storage->kind == R_SEMANTIC_SYMBOL_MODULE_OBJECT)) &&
+                   (((kind != R_SEMANTIC_TYPE_BORROW) && (kind != R_SEMANTIC_TYPE_SLICE) &&
+                     (kind != R_SEMANTIC_TYPE_STR)) ||
+                    (storage->kind == R_SEMANTIC_SYMBOL_LOCAL)) &&
+                   (r_semantic_type_contains_borrow(body->frontend, storage->type) ||
+                    r_semantic_type_contains_slice(body->frontend, storage->type) ||
+                    (kind == R_SEMANTIC_TYPE_STR))) {
             bool held_unknown = false;
 
             changed = true;
@@ -24390,8 +24390,8 @@ static bool r_body_lower_core_atomic(RBodyContext *body,
         const RHirNode *order_node = r_body_hir_node(body, arguments[order_index].node);
         const bool allowed = (order_node == NULL) || (order_node->kind != R_HIR_ENUM_CONSTANT) ||
                              (is_load    ? ((order_node->integer_value == UINT64_C(0)) ||
-                                         (order_node->integer_value == UINT64_C(1)) ||
-                                         (order_node->integer_value == UINT64_C(4)))
+                                            (order_node->integer_value == UINT64_C(1)) ||
+                                            (order_node->integer_value == UINT64_C(4)))
                               : is_store ? ((order_node->integer_value == UINT64_C(0)) ||
                                             (order_node->integer_value == UINT64_C(2)) ||
                                             (order_node->integer_value == UINT64_C(4)))
@@ -27554,11 +27554,11 @@ static bool r_body_lower_standard_simple_call(RBodyContext *body,
         for (index = UINT32_C(1); index < expected_count; ++index) {
             const char *name = descriptor->argument_types[index];
 
-            if ((strcmp(name, "u32") == 0)
-                    ? !r_semantic_type_from_token(
-                          body->frontend, R_TOKEN_KW_U32, &expected_types[index])
-                    : !r_semantic_intern_named_standard_type(
-                          body->frontend, name, &expected_types[index])) {
+            if ((strcmp(name, "u32") == 0) ? !r_semantic_type_from_token(body->frontend,
+                                                                         R_TOKEN_KW_U32,
+                                                                         &expected_types[index])
+                                           : !r_semantic_intern_named_standard_type(
+                                                 body->frontend, name, &expected_types[index])) {
                 return false;
             }
         }
@@ -30350,9 +30350,8 @@ static bool r_body_standard_operand_from_context(const RBodyContext *body,
     return *operand != R_TYPE_ID_INVALID;
 }
 
-static bool r_body_missing_standard_operands(RBodyContext *body,
-                                             const char *message,
-                                             RSourceSpan span) {
+static bool
+r_body_missing_standard_operands(RBodyContext *body, const char *message, RSourceSpan span) {
     return r_body_diagnostic(body, "R-DIAG-TYPE-001", "R-TYPE-0036", message, span);
 }
 
@@ -31211,11 +31210,21 @@ static bool r_body_prepare_standard_error_constructor(RBodyContext *body,
             continue;
         }
         switch (index) {
-        case 0U: ready = r_semantic_prepare_io_error_schema(context, &type); break;
-        case 1U: ready = r_semantic_prepare_fs_error_schema(context, &type); break;
-        case 7U: ready = r_semantic_prepare_error_schema(context, &type); break;
-        case 8U: ready = r_semantic_prepare_bits_read_error_schema(context, &type); break;
-        case 9U: ready = r_semantic_prepare_convert_parse_error_schema(context, &type); break;
+        case 0U:
+            ready = r_semantic_prepare_io_error_schema(context, &type);
+            break;
+        case 1U:
+            ready = r_semantic_prepare_fs_error_schema(context, &type);
+            break;
+        case 7U:
+            ready = r_semantic_prepare_error_schema(context, &type);
+            break;
+        case 8U:
+            ready = r_semantic_prepare_bits_read_error_schema(context, &type);
+            break;
+        case 9U:
+            ready = r_semantic_prepare_convert_parse_error_schema(context, &type);
+            break;
         case 10U:
         case 11U:
         case 12U:
@@ -31623,9 +31632,8 @@ static bool r_semantic_prepare_fs_error_code_schema(RFrontendContext *context,
 }
 
 /* The fieldless enums of std.fs, with their variants in the order of their C values. */
-static bool r_semantic_fs_enum_variants(const char *name,
-                                        const char *const **variants,
-                                        uint32_t *count) {
+static bool
+r_semantic_fs_enum_variants(const char *name, const char *const **variants, uint32_t *count) {
     static const char *const seek_variants[] = {"start", "current", "end"};
     static const char *const kind_variants[] = {"regular",
                                                 "directory",
@@ -34594,11 +34602,8 @@ static bool r_body_sync_receive_start(RBodyContext *body,
 
 #include "standard_sync_locks.inc"
 static bool r_clone_capability(const RFrontendContext *, RTypeId, uint32_t);
-static bool r_clone_visit_hooks(const RFrontendContext *,
-                                RTypeId,
-                                uint32_t,
-                                bool (*)(void *, RSymbolId),
-                                void *);
+static bool r_clone_visit_hooks(
+    const RFrontendContext *, RTypeId, uint32_t, bool (*)(void *, RSymbolId), void *);
 #include "standard_async_sync.inc"
 
 /* `core::name` where name is one of the type-operand reflection forms (R-REFL-0001..0003). */
@@ -34672,8 +34677,7 @@ static bool r_body_lower_standard_type_call(RBodyContext *body,
         return r_reflection_lower_type_call(body, call, contextual_type, result);
     }
     if (r_body_standard_async_broadcast_name(body->frontend, qualified)) {
-        return r_body_lower_standard_async_broadcast_type_call(
-            body, call, contextual_type, result);
+        return r_body_lower_standard_async_broadcast_type_call(body, call, contextual_type, result);
     }
     if (r_json_schema_name(body->frontend, qualified)) {
         return r_json_schema_lower(body, call, result);
@@ -34813,13 +34817,13 @@ static bool r_body_lower_standard_thread_spawn(RBodyContext *body,
         return false;
     }
     if (!designator_direct) {
-        return r_body_diagnostic(body,
-                                 "R-DIAG-TYPE-001",
-                                 entry_rule,
-                                 blocking
-                                     ? "blocking entry shall be a direct module-level R function name"
-                                     : "thread entry shall be a direct module-level R function name",
-                                 operation_span);
+        return r_body_diagnostic(
+            body,
+            "R-DIAG-TYPE-001",
+            entry_rule,
+            blocking ? "blocking entry shall be a direct module-level R function name"
+                     : "thread entry shall be a direct module-level R function name",
+            operation_span);
     }
     entry_symbol_id =
         designator_qualified
@@ -34853,13 +34857,13 @@ static bool r_body_lower_standard_thread_spawn(RBodyContext *body,
     if ((entry_symbol->kind != R_SEMANTIC_SYMBOL_FUNCTION) ||
         (entry_symbol->parent != R_SYMBOL_ID_INVALID) || entry_symbol->is_unsafe ||
         entry_symbol->is_async || entry_symbol->is_extern_c) {
-        return r_body_diagnostic(body,
-                                 "R-DIAG-TYPE-001",
-                                 entry_rule,
-                                 blocking
-                                     ? "blocking entry shall be a direct module-level safe R function"
-                                     : "thread entry shall be a direct module-level safe R function",
-                                 designator_name.span);
+        return r_body_diagnostic(
+            body,
+            "R-DIAG-TYPE-001",
+            entry_rule,
+            blocking ? "blocking entry shall be a direct module-level safe R function"
+                     : "thread entry shall be a direct module-level safe R function",
+            designator_name.span);
     }
     entry_snapshot = *entry_symbol;
     if (!entry_snapshot.signature_supported || entry_snapshot.poisoned) {
@@ -34876,14 +34880,15 @@ static bool r_body_lower_standard_thread_spawn(RBodyContext *body,
         return r_body_diagnostic(body,
                                  "R-DIAG-TYPE-001",
                                  entry_rule,
-                                 blocking ? "blocking argument count shall exactly match the entry"
-                                          : "thread spawn argument count shall exactly match the entry",
+                                 blocking
+                                     ? "blocking argument count shall exactly match the entry"
+                                     : "thread spawn argument count shall exactly match the entry",
                                  call_span);
     }
-    if (!r_semantic_intern_named_standard_type(
-            body->frontend,
-            blocking ? "std.async::start_error" : "std.thread::thread_error",
-            &thread_error_type) ||
+    if (!r_semantic_intern_named_standard_type(body->frontend,
+                                               blocking ? "std.async::start_error"
+                                                        : "std.thread::thread_error",
+                                               &thread_error_type) ||
         !r_semantic_single_effect_set(body->frontend, thread_error_type, &start_effects) ||
         !r_body_validate_effect_set(body, start_effects, operation_span) ||
         !(blocking ? r_body_record_async_start_error_state(body, operation_span)
@@ -34930,12 +34935,13 @@ static bool r_body_lower_standard_thread_spawn(RBodyContext *body,
         if (!r_semantic_type_is_send(
                 body->frontend,
                 r_semantic_effect_at(body->frontend, entry_snapshot.throws_type, argument_index))) {
-            success = r_body_diagnostic(body,
-                                        "R-DIAG-MEM-001",
-                                        result_rule,
-                                        blocking ? "blocking entry checked-error types shall be Send"
-                                                 : "thread entry checked-error types shall be Send",
-                                        designator_name.span);
+            success =
+                r_body_diagnostic(body,
+                                  "R-DIAG-MEM-001",
+                                  result_rule,
+                                  blocking ? "blocking entry checked-error types shall be Send"
+                                           : "thread entry checked-error types shall be Send",
+                                  designator_name.span);
             goto cleanup;
         }
     }
@@ -34951,15 +34957,15 @@ static bool r_body_lower_standard_thread_spawn(RBodyContext *body,
              !borrowed &&
              (argument_index < r_semantic_effect_count(body->frontend, entry_snapshot.throws_type));
              ++argument_index) {
-            if (r_semantic_type_crosses_await(
-                    body->frontend,
-                    r_semantic_effect_at(
-                        body->frontend, entry_snapshot.throws_type, argument_index))) {
+            if (r_semantic_type_crosses_await(body->frontend,
+                                              r_semantic_effect_at(body->frontend,
+                                                                   entry_snapshot.throws_type,
+                                                                   argument_index))) {
                 break;
             }
         }
-        if (borrowed ||
-            (argument_index < r_semantic_effect_count(body->frontend, entry_snapshot.throws_type))) {
+        if (borrowed || (argument_index <
+                         r_semantic_effect_count(body->frontend, entry_snapshot.throws_type))) {
             success = r_body_diagnostic(body,
                                         "R-DIAG-ASYNC-001",
                                         "R-SLIB-ASYNC-0017",
@@ -34987,13 +34993,13 @@ static bool r_body_lower_standard_thread_spawn(RBodyContext *body,
     }
     if ((contextual_type != R_TYPE_ID_INVALID) &&
         (r_semantic_value_type(body->frontend, contextual_type) != handle_type)) {
-        success =
-            r_body_diagnostic(body,
-                              "R-DIAG-TYPE-001",
-                              result_rule,
-                              blocking ? "blocking task does not match its destination task type"
-                                       : "thread spawn result does not match its destination handle type",
-                              operation_span);
+        success = r_body_diagnostic(
+            body,
+            "R-DIAG-TYPE-001",
+            result_rule,
+            blocking ? "blocking task does not match its destination task type"
+                     : "thread spawn result does not match its destination handle type",
+            operation_span);
         goto cleanup;
     }
     for (argument_index = UINT32_C(0); argument_index < entry_snapshot.parameter_count;
@@ -35053,8 +35059,9 @@ static bool r_body_lower_standard_thread_spawn(RBodyContext *body,
                 if (!r_body_diagnostic(body,
                                        "R-DIAG-MOVE-003",
                                        entry_rule,
-                                       blocking ? "nested staged blocking Move argument is not permitted"
-                                                : "nested staged thread Move argument is not permitted",
+                                       blocking
+                                           ? "nested staged blocking Move argument is not permitted"
+                                           : "nested staged thread Move argument is not permitted",
                                        argument_view.span)) {
                     goto cleanup;
                 }
@@ -35085,8 +35092,9 @@ static bool r_body_lower_standard_thread_spawn(RBodyContext *body,
             if (!r_body_diagnostic(body,
                                    "R-DIAG-MOVE-003",
                                    entry_rule,
-                                   blocking ? "blocking Move argument shall be the direct form move name"
-                                            : "thread Move argument shall be the direct form move name",
+                                   blocking
+                                       ? "blocking Move argument shall be the direct form move name"
+                                       : "thread Move argument shall be the direct form move name",
                                    argument_view.span)) {
                 goto cleanup;
             }
@@ -35094,12 +35102,13 @@ static bool r_body_lower_standard_thread_spawn(RBodyContext *body,
             goto cleanup;
         }
         if (argument.type != expected_type) {
-            if (!r_body_diagnostic(body,
-                                   "R-DIAG-TYPE-001",
-                                   entry_rule,
-                                   blocking ? "blocking argument type does not exactly match the entry"
-                                            : "thread spawn argument type does not exactly match the entry",
-                                   argument_view.span)) {
+            if (!r_body_diagnostic(
+                    body,
+                    "R-DIAG-TYPE-001",
+                    entry_rule,
+                    blocking ? "blocking argument type does not exactly match the entry"
+                             : "thread spawn argument type does not exactly match the entry",
+                    argument_view.span)) {
                 goto cleanup;
             }
             success = true;
@@ -35107,12 +35116,13 @@ static bool r_body_lower_standard_thread_spawn(RBodyContext *body,
         }
         if (!scoped && r_semantic_type_crosses_await(body->frontend, expected_type) &&
             !r_body_thread_argument_has_program_region(body, &argument)) {
-            if (!r_body_diagnostic(body,
-                                   "R-DIAG-BORROW-001",
-                                   entry_rule,
-                                   blocking ? "blocking argument borrow shall have program region"
-                                            : "unscoped thread argument borrow shall have program region",
-                                   argument_view.span)) {
+            if (!r_body_diagnostic(
+                    body,
+                    "R-DIAG-BORROW-001",
+                    entry_rule,
+                    blocking ? "blocking argument borrow shall have program region"
+                             : "unscoped thread argument borrow shall have program region",
+                    argument_view.span)) {
                 goto cleanup;
             }
             success = true;
@@ -35127,8 +35137,7 @@ static bool r_body_lower_standard_thread_spawn(RBodyContext *body,
            cannot escape that block. */
         const RSymbolId handle_origin =
             scoped ? body->current_thread_scope_group : R_SYMBOL_ID_INVALID;
-        const uint64_t handle_referent =
-            scoped ? R_BORROW_REFERENT_AUTOMATIC_STORAGE : UINT64_C(0);
+        const uint64_t handle_referent = scoped ? R_BORROW_REFERENT_AUTOMATIC_STORAGE : UINT64_C(0);
         RHirNodeId node_id;
         RHirNode *node;
 
@@ -36122,14 +36131,8 @@ static bool r_body_lower_standard_shared_owner_operation(RBodyContext *body,
         }
         origin = &held;
     }
-    return r_body_append_standard_call(body,
-                                       call_span,
-                                       result_type,
-                                       pointee_type,
-                                       operation,
-                                       &children,
-                                       origin,
-                                       result);
+    return r_body_append_standard_call(
+        body, call_span, result_type, pointee_type, operation, &children, origin, result);
 }
 
 static bool r_body_lower_standard_fs_path_call(RBodyContext *body,
@@ -36680,10 +36683,8 @@ static bool r_body_lower_standard_process_async_call(RBodyContext *body,
     }
     if (!r_semantic_intern_named_standard_type(
             body->frontend, "std.process::command", &command_type) ||
-        !r_semantic_intern_named_standard_type(body->frontend,
-                                               is_next ? "std.signal::listener"
-                                                       : "std.process::child",
-                                               &child_type) ||
+        !r_semantic_intern_named_standard_type(
+            body->frontend, is_next ? "std.signal::listener" : "std.process::child", &child_type) ||
         !r_semantic_intern_named_standard_type(
             body->frontend, "std.time::instant", &instant_type) ||
         !r_semantic_intern_derived_type(body->frontend,
@@ -39825,12 +39826,11 @@ static bool r_body_prepare_borrow_output_mapping(RBodyContext *body,
             const RSemanticType *view =
                 r_semantic_type(body->frontend, r_semantic_value_type(body->frontend, type));
 
-            receives = receives ||
-                       ((view != NULL) &&
-                        ((view->kind == R_SEMANTIC_TYPE_BORROW) ||
-                         (view->kind == R_SEMANTIC_TYPE_SLICE)) &&
-                        ((view->flags & R_SEMANTIC_TYPE_FLAG_SHARED) == 0U) &&
-                        r_semantic_parameter_holds_content(body->frontend, type));
+            receives = receives || ((view != NULL) &&
+                                    ((view->kind == R_SEMANTIC_TYPE_BORROW) ||
+                                     (view->kind == R_SEMANTIC_TYPE_SLICE)) &&
+                                    ((view->flags & R_SEMANTIC_TYPE_FLAG_SHARED) == 0U) &&
+                                    r_semantic_parameter_holds_content(body->frontend, type));
             if (r_semantic_type_crosses_await(body->frontend, type) ||
                 r_generic_type_is_dependent(body->frontend, type, 0U)) {
                 bearing += UINT32_C(1);
@@ -40219,18 +40219,18 @@ static bool r_body_result_held_content(RBodyContext *body, RExpressionResult *re
                                                 ? R_SEMANTIC_TYPE_INVALID
                                                 : r_semantic_value_kind(body->frontend, view->type);
 
-        success = ((view != NULL) && (view->kind == R_SEMANTIC_SYMBOL_LOCAL) &&
-                   ((view_kind == R_SEMANTIC_TYPE_BORROW) ||
-                    (view_kind == R_SEMANTIC_TYPE_SLICE)) &&
-                   view->view_target_known &&
-                   ((view->view_target != R_SYMBOL_ID_INVALID) || (view->view_target_set != 0U)))
-                      ? r_semantic_append_borrow_origins(body->frontend,
-                                                         &origins,
-                                                         view->view_target,
-                                                         view->view_target_set,
-                                                         view->view_target_multiple,
-                                                         &unknown)
-                      : r_symbol_vector_push(body->frontend, &origins, designated.items[index]);
+        success =
+            ((view != NULL) && (view->kind == R_SEMANTIC_SYMBOL_LOCAL) &&
+             ((view_kind == R_SEMANTIC_TYPE_BORROW) || (view_kind == R_SEMANTIC_TYPE_SLICE)) &&
+             view->view_target_known &&
+             ((view->view_target != R_SYMBOL_ID_INVALID) || (view->view_target_set != 0U)))
+                ? r_semantic_append_borrow_origins(body->frontend,
+                                                   &origins,
+                                                   view->view_target,
+                                                   view->view_target_set,
+                                                   view->view_target_multiple,
+                                                   &unknown)
+                : r_symbol_vector_push(body->frontend, &origins, designated.items[index]);
     }
     r_context_free(body->frontend, designated.items);
     if (!success) {
@@ -40243,9 +40243,9 @@ static bool r_body_result_held_content(RBodyContext *body, RExpressionResult *re
     }
     for (size_t index = 0U; success && (index < origins.count); ++index) {
         const RSemanticSymbol *symbol = r_body_symbol(body, origins.items[index]);
-        const RSemanticTypeKind kind =
-            symbol == NULL ? R_SEMANTIC_TYPE_INVALID
-                           : r_semantic_value_kind(body->frontend, symbol->type);
+        const RSemanticTypeKind kind = symbol == NULL
+                                           ? R_SEMANTIC_TYPE_INVALID
+                                           : r_semantic_value_kind(body->frontend, symbol->type);
         RSymbolId content = origins.items[index];
         uint32_t content_set = UINT32_C(0);
         bool content_multiple = false;
@@ -40260,7 +40260,7 @@ static bool r_body_result_held_content(RBodyContext *body, RExpressionResult *re
                holds nothing (L16-3). */
             content = R_SYMBOL_ID_INVALID;
         } else if ((symbol != NULL) && (symbol->kind == R_SEMANTIC_SYMBOL_PARAMETER) &&
-            (symbol->parameter_content != R_SYMBOL_ID_INVALID)) {
+                   (symbol->parameter_content != R_SYMBOL_ID_INVALID)) {
             content = symbol->parameter_content;
         } else if ((symbol != NULL) && (symbol->kind == R_SEMANTIC_SYMBOL_LOCAL) &&
                    (symbol->content_parameter == R_SYMBOL_ID_INVALID) &&
@@ -40340,8 +40340,8 @@ static bool r_body_call_input_is_held(const RBodyContext *body,
     }
     kind = r_semantic_value_kind(
         body->frontend,
-        body->frontend->semantic_parameter_types[(size_t)function->first_parameter_type +
-                                                 (size_t)index]);
+        body->frontend
+            ->semantic_parameter_types[(size_t)function->first_parameter_type + (size_t)index]);
     return (kind == R_SEMANTIC_TYPE_BORROW) || (kind == R_SEMANTIC_TYPE_SLICE);
 }
 
@@ -40411,8 +40411,8 @@ static bool r_body_apply_call_stores(RBodyContext *body,
                                                  &value.borrow_origin_multiple)) {
                 return false;
             }
-            value.borrow_referent = r_semantic_merge_borrow_referents(
-                value.borrow_referent, contribution.borrow_referent);
+            value.borrow_referent = r_semantic_merge_borrow_referents(value.borrow_referent,
+                                                                      contribution.borrow_referent);
             /* The kind of the stored views follows the argument that brings them. */
             if ((value.type == R_TYPE_ID_INVALID) ||
                 r_semantic_type_contains_exclusive_view(body->frontend, argument->type, NULL)) {
@@ -40427,9 +40427,8 @@ static bool r_body_apply_call_stores(RBodyContext *body,
         const RHirNodeId target_argument =
             r_out_unstage_argument(body->frontend, arguments->items[mapping.target - 1U], 0U);
         const RTypeId target_type =
-            body->frontend
-                ->semantic_parameter_types[(size_t)function->first_parameter_type +
-                                           (size_t)mapping.target - 1U];
+            body->frontend->semantic_parameter_types[(size_t)function->first_parameter_type +
+                                                     (size_t)mapping.target - 1U];
         const RSemanticType *target_view =
             r_semantic_type(body->frontend, r_semantic_value_type(body->frontend, target_type));
         RSymbolVector targets = {0};
@@ -40442,23 +40441,22 @@ static bool r_body_apply_call_stores(RBodyContext *body,
         }
         /* The storage the argument designates, and what the exclusive views held there
            designate, which the callee may store through (R-BORROW-0018). */
-        success = (r_semantic_type_contains_exclusive_view(
-                       body->frontend, target_view->base, NULL) ||
-                   (r_dyn_contract(body->frontend, target_view->base) != NULL) ||
-                   r_generic_type_is_dependent(body->frontend, target_view->base, 0U))
-                      ? r_body_view_value_held_targets(body,
-                                                       target_argument,
-                                                       target_view->base,
-                                                       R_TYPE_ID_INVALID,
-                                                       false,
-                                                       &targets,
-                                                       &known)
-                      : r_body_view_value_targets(body, target_argument, &targets, &known);
+        success =
+            (r_semantic_type_contains_exclusive_view(body->frontend, target_view->base, NULL) ||
+             (r_dyn_contract(body->frontend, target_view->base) != NULL) ||
+             r_generic_type_is_dependent(body->frontend, target_view->base, 0U))
+                ? r_body_view_value_held_targets(body,
+                                                 target_argument,
+                                                 target_view->base,
+                                                 R_TYPE_ID_INVALID,
+                                                 false,
+                                                 &targets,
+                                                 &known)
+                : r_body_view_value_targets(body, target_argument, &targets, &known);
         if (success && known && (targets.count != 0U)) {
             handled = true;
             success = r_body_store_into_view_targets(body, &targets, &value, span, rejected);
-            for (size_t target = 0U; success && !*rejected && (target < targets.count);
-                 ++target) {
+            for (size_t target = 0U; success && !*rejected && (target < targets.count); ++target) {
                 success = r_body_record_loop_flow(body, targets.items[target], false, &value, span);
             }
         }
@@ -40675,9 +40673,10 @@ static bool r_body_lower_resolved_call(RBodyContext *body,
         first_async_argument_hir_node = body->frontend->hir_node_count;
         tracking_async_arguments = true;
         const RSemanticType *receiver_type =
-            receiver == NULL ? NULL
-                             : r_semantic_type(body->frontend,
-                                               r_semantic_value_type(body->frontend, receiver->type));
+            receiver == NULL
+                ? NULL
+                : r_semantic_type(body->frontend,
+                                  r_semantic_value_type(body->frontend, receiver->type));
         /* M18-4: a shared or exclusive receiver is the borrow the call formed; only a consuming
            receiver is staged. */
         if (receiver != NULL && !r_semantic_type_is_copy(body->frontend, receiver->type) &&
@@ -41385,12 +41384,11 @@ static bool r_body_lower_resolved_call(RBodyContext *body,
                 contribution.borrow_origin_multiple = origin_argument->borrow_origin_multiple;
                 contribution.borrow_referent = origin_argument->borrow_referent;
                 contribution.projected_borrow_state = origin_argument->projected_borrow_state;
-                if (r_body_call_input_is_held(
-                        body,
-                        &function_snapshot,
-                        origin_index,
-                        r_body_call_result_held_low(body, &function_snapshot),
-                        function_snapshot.return_borrow_held_high)) {
+                if (r_body_call_input_is_held(body,
+                                              &function_snapshot,
+                                              origin_index,
+                                              r_body_call_result_held_low(body, &function_snapshot),
+                                              function_snapshot.return_borrow_held_high)) {
                     contribution.projected_borrow_state = UINT32_C(0);
                     if (!r_body_result_held_content(body, &contribution)) {
                         goto cleanup;
@@ -41873,12 +41871,8 @@ static bool r_body_lower_call(RBodyContext *body,
                     body, argument_list, &arguments_view, call_span, result);
             }
             if (core_operation == R_STANDARD_CALL_CORE_CLONE) {
-                return r_body_lower_core_clone(body,
-                                               argument_list,
-                                               &arguments_view,
-                                               call_span,
-                                               contextual_type,
-                                               result);
+                return r_body_lower_core_clone(
+                    body, argument_list, &arguments_view, call_span, contextual_type, result);
             }
             if ((core_operation == R_STANDARD_CALL_CORE_ADOPT) ||
                 (core_operation == R_STANDARD_CALL_CORE_RELEASE)) {
@@ -42059,12 +42053,8 @@ static bool r_body_lower_call(RBodyContext *body,
                                                          result);
             }
             if (standard_array_operation == R_STANDARD_ARRAY_OPERATION_FILLED) {
-                return r_body_lower_standard_array_filled(body,
-                                                          argument_list,
-                                                          &arguments_view,
-                                                          call_span,
-                                                          contextual_type,
-                                                          result);
+                return r_body_lower_standard_array_filled(
+                    body, argument_list, &arguments_view, call_span, contextual_type, result);
             }
             if (standard_array_operation == R_STANDARD_ARRAY_OPERATION_PUSH) {
                 return r_body_lower_standard_array_push(body,
@@ -42853,8 +42843,8 @@ static bool r_body_place_view_designation(RBodyContext *body,
             /* An element of a held shared slice lies where that slice points, which its origin
                names (r_body_held_shared_slice_elements); the view that reaches the slice does
                not designate it. */
-            const RSemanticType *indexed = r_semantic_type(
-                body->frontend, r_semantic_value_type(body->frontend, child->type));
+            const RSemanticType *indexed =
+                r_semantic_type(body->frontend, r_semantic_value_type(body->frontend, child->type));
 
             if ((indexed != NULL) && (indexed->kind == R_SEMANTIC_TYPE_SLICE) &&
                 ((indexed->flags & R_SEMANTIC_TYPE_FLAG_SHARED) != 0U) &&
@@ -44358,8 +44348,7 @@ static bool r_body_lower_postfix_core(RBodyContext *body,
         }
         if (suffix_view.kind == R_SYNTAX_CALL_SUFFIX) {
             RExpressionResult called;
-            if (current.valid &&
-                r_semantic_type_is_callable_callee(body->frontend, current.type)) {
+            if (current.valid && r_semantic_type_is_callable_callee(body->frontend, current.type)) {
                 /* R-TYPE-0054 (L28): `table[i](arguments)` calls the function value or the
                    closure the place holds. */
                 RAstTokenView callee_name = {0};
@@ -47242,8 +47231,7 @@ static bool r_body_lower_binary(RBodyContext *body,
                         r_body_is_comparison_operator(operation.kind) ||
                         r_semantic_type_is_integer_slice(body->frontend, current_value_type))) {
                 right_context = current_value_type;
-            } else if (r_body_is_comparison_operator(operation.kind) &&
-                       (current_pointer != NULL) &&
+            } else if (r_body_is_comparison_operator(operation.kind) && (current_pointer != NULL) &&
                        (current_pointer->kind == R_SEMANTIC_TYPE_FUNCTION)) {
                 /* R-TYPE-0054 (L28): a function item compared with a function value converts to
                    the value's type. */
@@ -47498,8 +47486,8 @@ static bool r_body_lower_binary(RBodyContext *body,
                                          (left_pointer->kind == R_SEMANTIC_TYPE_RAW_FUNCTION)));
             /* R-TYPE-0054 (L28): values of one function type are equal when they designate the
                same function. */
-            const bool valid_function = equality && (current.type == right.type) &&
-                                        (left_kind == R_SEMANTIC_TYPE_FUNCTION);
+            const bool valid_function =
+                equality && (current.type == right.type) && (left_kind == R_SEMANTIC_TYPE_FUNCTION);
             if (valid_pointer &&
                 ((left_pointer->kind == R_SEMANTIC_TYPE_RAW) ||
                  (left_pointer->kind == R_SEMANTIC_TYPE_RAW_FUNCTION)) &&
@@ -48787,11 +48775,12 @@ static bool r_body_lower_expression(RBodyContext *body,
     case R_SYNTAX_CONDITIONAL_EXPRESSION:
         return r_body_lower_conditional(body, expression, contextual_type, result);
     case R_SYNTAX_PATTERN_TEST:
-        return r_body_diagnostic(body,
-                                 "R-DIAG-SYN-001",
-                                 "R-STMT-0002",
-                                 "a pattern test is the whole condition of an if or while statement",
-                                 view.span);
+        return r_body_diagnostic(
+            body,
+            "R-DIAG-SYN-001",
+            "R-STMT-0002",
+            "a pattern test is the whole condition of an if or while statement",
+            view.span);
     case R_SYNTAX_MEMBERSHIP_EXPRESSION:
         return r_body_lower_membership(body, expression, contextual_type, result);
     case R_SYNTAX_DICT_EXPRESSION:
@@ -49374,6 +49363,7 @@ r_body_finish_value(RBodyContext *body, RTypeId contextual_type, RExpressionResu
 }
 
 #include "format.inc"
+
 #include "defaults.inc"
 #include "json.inc"
 
@@ -51137,9 +51127,12 @@ r_body_return_borrow_parameter(const RBodyContext *body, RSymbolId origin, uint3
 
 /* Adds the 1-based `parameter` to a mask of inputs. The input stays in the held mask only while
    every contribution recorded for it is held (R-BORROW-0009). */
-static void r_semantic_add_borrow_input(
-    uint64_t *low, uint64_t *high, uint64_t *held_low, uint64_t *held_high, uint32_t parameter,
-    bool held) {
+static void r_semantic_add_borrow_input(uint64_t *low,
+                                        uint64_t *high,
+                                        uint64_t *held_low,
+                                        uint64_t *held_high,
+                                        uint32_t parameter,
+                                        bool held) {
     const bool upper = parameter > UINT32_C(64);
     const uint64_t bit = UINT64_C(1) << ((parameter - UINT32_C(1)) % UINT32_C(64));
     uint64_t *mask = upper ? high : low;
@@ -51286,8 +51279,7 @@ static bool r_body_record_return_borrow_origin(RBodyContext *body,
         for (origin_index = 0U; origin_index < origins.count; ++origin_index) {
             bool held = false;
 
-            if (!r_body_return_borrow_input(
-                    body, origins.items[origin_index], &parameter, &held)) {
+            if (!r_body_return_borrow_input(body, origins.items[origin_index], &parameter, &held)) {
                 r_context_free(body->frontend, origins.items);
                 body->frontend->resource_status = R_FRONTEND_LIMIT_EXCEEDED;
                 return false;
@@ -51516,8 +51508,7 @@ static bool r_body_record_error_borrow_origin(RBodyContext *body,
         for (origin_index = 0U; origin_index < origins.count; ++origin_index) {
             bool held = false;
 
-            if (!r_body_return_borrow_input(
-                    body, origins.items[origin_index], &parameter, &held)) {
+            if (!r_body_return_borrow_input(body, origins.items[origin_index], &parameter, &held)) {
                 r_context_free(body->frontend, origins.items);
                 body->frontend->resource_status = R_FRONTEND_LIMIT_EXCEEDED;
                 return false;
@@ -54669,8 +54660,8 @@ static bool r_budget_finally(RBodyContext *, RSourceSpan, RHirNodeId *);
 static bool r_recursion_finally(RBodyContext *, RSourceSpan, RHirNodeId *);
 static bool r_tuple_lower_destructuring(RBodyContext *, RAstRef, size_t, RHirNodeId *);
 static bool r_label_lower_statement(RBodyContext *, RAstRef, size_t, RHirNodeId *, bool *);
-static bool
-r_label_lower_jump(RBodyContext *, RTokenKind, const RAstTokenView *, RSourceSpan, RHirNodeId *, bool *);
+static bool r_label_lower_jump(
+    RBodyContext *, RTokenKind, const RAstTokenView *, RSourceSpan, RHirNodeId *, bool *);
 static bool r_recursion_lower_body(RBodyContext *, RAstRef, RSourceSpan, RHirNodeId *, bool *);
 #include "task_scope.inc"
 
@@ -54682,8 +54673,7 @@ static bool r_body_lower_finally(RBodyContext *body, RAstRef finally_clause, RHi
         return r_deadline_finally(body, scope_view.span, node_id);
     if (r_ast_view_kind(body->frontend, finally_clause, R_SYNTAX_BUDGET_STATEMENT, &scope_view))
         return r_budget_finally(body, scope_view.span, node_id);
-    if (r_ast_view_kind(
-            body->frontend, finally_clause, R_SYNTAX_FUNCTION_DECLARATION, &scope_view))
+    if (r_ast_view_kind(body->frontend, finally_clause, R_SYNTAX_FUNCTION_DECLARATION, &scope_view))
         return r_recursion_finally(body, scope_view.span, node_id);
     RAstNodeView view;
     RAstRef block_ref;
@@ -56464,13 +56454,12 @@ static bool r_body_lower_switch_statement(RBodyContext *body,
             }
             switch_type = r_semantic_type(body->frontend, switch_type_id);
         }
-        if ((switch_type == NULL) ||
-            (!r_semantic_kind_is_integer(switch_type->kind) &&
-             (switch_type->kind != R_SEMANTIC_TYPE_CHAR) &&
-             (switch_type->kind != R_SEMANTIC_TYPE_OPTION) &&
-             (switch_type->kind != R_SEMANTIC_TYPE_RESULT) &&
-             (switch_type->kind != R_SEMANTIC_TYPE_ENUM) && !standard_outcome &&
-             (standard_enum == NULL))) {
+        if ((switch_type == NULL) || (!r_semantic_kind_is_integer(switch_type->kind) &&
+                                      (switch_type->kind != R_SEMANTIC_TYPE_CHAR) &&
+                                      (switch_type->kind != R_SEMANTIC_TYPE_OPTION) &&
+                                      (switch_type->kind != R_SEMANTIC_TYPE_RESULT) &&
+                                      (switch_type->kind != R_SEMANTIC_TYPE_ENUM) &&
+                                      !standard_outcome && (standard_enum == NULL))) {
             if (!r_body_diagnostic(body,
                                    "R-DIAG-SWITCH-001",
                                    "R-STMT-0006",
@@ -56645,35 +56634,34 @@ static bool r_body_lower_switch_statement(RBodyContext *body,
             body->select_member_count = select->member_count;
         }
         const bool clause_lowered = r_body_lower_switch_clause(
-                body,
-                clause,
-                switch_type_id,
-                switch_kind,
-                value.borrow_origin,
-                value.borrow_referent,
-                value.borrow_origin_set,
-                value.borrow_origin_multiple,
-                payload_borrow_origin,
-                payload_borrow_referent,
-                payload_borrow_origin_set,
-                payload_borrow_origin_multiple,
-                payload_borrow_origin_set == UINT32_C(0)
-                    ? r_body_value_borrow_path(
-                          body, value.node, payload_borrow_origin, payload_borrow_origin_multiple)
-                    : UINT64_C(0),
-                switch_kind == R_SEMANTIC_TYPE_OPTION ? payload_source : R_HIR_NODE_ID_INVALID,
-                switch_moves,
-                pending_async_start,
-                is_default,
-                &case_node,
-                &case_returns,
-                select != NULL
-                    ? (is_default ? NULL : &select->tags[child_index])
-                    : (switch_is_constant && !is_default ? &constant_clause_tags[child_index]
-                                                         : NULL),
-                &tag,
-                clause_exit_states,
-                clause_exit_state_count);
+            body,
+            clause,
+            switch_type_id,
+            switch_kind,
+            value.borrow_origin,
+            value.borrow_referent,
+            value.borrow_origin_set,
+            value.borrow_origin_multiple,
+            payload_borrow_origin,
+            payload_borrow_referent,
+            payload_borrow_origin_set,
+            payload_borrow_origin_multiple,
+            payload_borrow_origin_set == UINT32_C(0)
+                ? r_body_value_borrow_path(
+                      body, value.node, payload_borrow_origin, payload_borrow_origin_multiple)
+                : UINT64_C(0),
+            switch_kind == R_SEMANTIC_TYPE_OPTION ? payload_source : R_HIR_NODE_ID_INVALID,
+            switch_moves,
+            pending_async_start,
+            is_default,
+            &case_node,
+            &case_returns,
+            select != NULL
+                ? (is_default ? NULL : &select->tags[child_index])
+                : (switch_is_constant && !is_default ? &constant_clause_tags[child_index] : NULL),
+            &tag,
+            clause_exit_states,
+            clause_exit_state_count);
         body->select_members = outer_select_members;
         body->select_member_count = outer_select_member_count;
         if (!clause_lowered) {
@@ -57112,8 +57100,7 @@ static bool r_body_lower_targeted_jump(RBodyContext *body,
     bool success;
 
     if (((kind == R_TOKEN_KW_CONTINUE) && (body->loop_depth == UINT32_C(0))) ||
-        ((kind == R_TOKEN_KW_BREAK) &&
-         (body->active_break_target_kinds.count == 0U))) {
+        ((kind == R_TOKEN_KW_BREAK) && (body->active_break_target_kinds.count == 0U))) {
         return r_body_diagnostic(body,
                                  "R-DIAG-FLOW-001",
                                  "R-STMT-0004",
@@ -57123,19 +57110,17 @@ static bool r_body_lower_targeted_jump(RBodyContext *body,
                                  span);
     }
     if ((kind == R_TOKEN_KW_BREAK) && (target_loop == SIZE_MAX)) {
-        targets_switch = body->active_break_target_kinds
-                             .items[body->active_break_target_kinds.count - 1U] ==
-                         R_BODY_BREAK_TARGET_SWITCH;
+        targets_switch =
+            body->active_break_target_kinds.items[body->active_break_target_kinds.count - 1U] ==
+            R_BODY_BREAK_TARGET_SWITCH;
     }
     loop_index = target_loop != SIZE_MAX ? target_loop : body->active_loop_scope_bases.count - 1U;
     if (targets_switch) {
         const size_t switch_index = body->active_switch_scope_bases.count - 1U;
 
         if ((body->active_switch_scope_bases.count == 0U) ||
-            (body->active_switch_finally_depths.count !=
-             body->active_switch_scope_bases.count) ||
-            (body->active_switch_break_states.count !=
-             body->active_switch_scope_bases.count)) {
+            (body->active_switch_finally_depths.count != body->active_switch_scope_bases.count) ||
+            (body->active_switch_break_states.count != body->active_switch_scope_bases.count)) {
             body->frontend->resource_status = R_FRONTEND_INTERNAL_ERROR;
             return false;
         }
@@ -57166,18 +57151,16 @@ static bool r_body_lower_targeted_jump(RBodyContext *body,
         target_scope_base = body->active_loop_scope_bases.items[loop_index];
         transfer_reachable = r_body_loop_transfer_reaches_loop(body, loop_index);
     }
-    if (!(targets_switch
-              ? r_body_record_switch_break_state(body, span)
-              : r_body_record_loop_object_state_at(body,
-                                                   kind == R_TOKEN_KW_BREAK
-                                                       ? &body->active_loop_break_states
-                                                       : &body->active_loop_continue_states,
-                                                   loop_index,
-                                                   span)) ||
-        (transfer_reachable && !r_body_record_pending_finally_transfer(
-                                   body, target_scope_base, SIZE_MAX, true, span)) ||
-        !r_body_append_scope_exit_drops(
-            body, target_scope_base, true, span, &cleanup)) {
+    if (!(targets_switch ? r_body_record_switch_break_state(body, span)
+                         : r_body_record_loop_object_state_at(
+                               body,
+                               kind == R_TOKEN_KW_BREAK ? &body->active_loop_break_states
+                                                        : &body->active_loop_continue_states,
+                               loop_index,
+                               span)) ||
+        (transfer_reachable &&
+         !r_body_record_pending_finally_transfer(body, target_scope_base, SIZE_MAX, true, span)) ||
+        !r_body_append_scope_exit_drops(body, target_scope_base, true, span, &cleanup)) {
         if (body->frontend->resource_status == R_FRONTEND_OK) {
             body->frontend->resource_status = R_FRONTEND_INTERNAL_ERROR;
         }
@@ -57186,8 +57169,7 @@ static bool r_body_lower_targeted_jump(RBodyContext *body,
     }
     success = r_semantic_type_from_token(body->frontend, R_TOKEN_KW_VOID, &void_type) &&
               r_body_append_node(body,
-                                 kind == R_TOKEN_KW_BREAK ? R_HIR_BREAK
-                                                                     : R_HIR_CONTINUE,
+                                 kind == R_TOKEN_KW_BREAK ? R_HIR_BREAK : R_HIR_CONTINUE,
                                  span,
                                  void_type,
                                  R_SYMBOL_ID_INVALID,
@@ -58594,8 +58576,11 @@ static bool r_hir_build_function(RFrontendContext *context,
             goto cleanup;
         }
         if (!(function_snapshot.recursion_depth != 0U
-                  ? r_recursion_lower_body(
-                        &body_context, function_ref, function_view.span, &body_node, &always_returns)
+                  ? r_recursion_lower_body(&body_context,
+                                           function_ref,
+                                           function_view.span,
+                                           &body_node,
+                                           &always_returns)
                   : r_body_lower_block(
                         &body_context, body_ref, true, &body_node, &always_returns)) ||
             (!body_context.poisoned &&
@@ -58737,7 +58722,8 @@ static bool r_hir_build_module(RFrontendContext *context,
     }
     for (symbol_index = 0U; symbol_index < function_symbol_count; ++symbol_index) {
         const RSemanticSymbol *symbol = &context->semantic_symbols[symbol_index];
-        const bool dispatcher = r_function_value_dispatcher(context, (RSymbolId)(symbol_index + 1U));
+        const bool dispatcher =
+            r_function_value_dispatcher(context, (RSymbolId)(symbol_index + 1U));
         /* R-TYPE-0046 (L32): a dispatcher of core::Format is built at its first call. */
         const bool built_dispatcher = symbol->is_synthetic && (symbol->hir_node != 0U) &&
                                       r_dyn_dispatcher(context, (RSymbolId)(symbol_index + 1U));
@@ -58981,10 +58967,12 @@ static bool r_reflection_spell_type(RFrontendContext *, RTypeId, RReflectionText
 #include "standard_methods.inc"
 /* Traits reuse the generic machinery; closures reuse the trait and method machinery. */
 #include "traits.inc"
+
 #include "derive.inc"
 /* Lambdas, captures and callable constraints. */
 #include "closures.inc"
 #include "function_values.inc"
+
 #include "dyn_interfaces.inc"
 #include "opaque_results.inc"
 /* Range-for and membership build on the loop core, cursors and trait dispatch above. */
@@ -58997,8 +58985,10 @@ static bool r_reflection_spell_type(RFrontendContext *, RTypeId, RReflectionText
 
 /* R-STMT-0019 (L23): deadline blocks reuse the hidden locals of the range-for core. */
 #include "deadline.inc"
+
 #include "budget.inc"
 #include "recursion.inc"
+
 #include "loop_labels.inc"
 
 /* R-AGG-0011 (L21): values of error families. */
@@ -59008,6 +58998,7 @@ static bool r_reflection_spell_type(RFrontendContext *, RTypeId, RReflectionText
 /* R-REFL-0001..0004: static reflection intrinsics. */
 #include "packs.inc"
 #include "reflection.inc"
+
 #include "json_schema_text.inc"
 #include "static_conditions.inc"
 /* R-FUNC-0023, R-EXPR-0032: translation-time evaluation over the checked HIR. */
@@ -59729,7 +59720,8 @@ static bool r_function_value_display(RGenericText *text, RTypeId type_id) {
     const bool carrier = (result != NULL) && (result->kind == R_SEMANTIC_TYPE_EFFECT_CARRIER);
     const RTypeId returned = carrier ? result->base : function.base;
     const RTypeId effects = carrier ? result->second : R_TYPE_ID_INVALID;
-    const char *prefix = (function.flags & R_SEMANTIC_TYPE_FLAG_CALL_ASYNC) != 0U ? "async fn" : "fn";
+    const char *prefix =
+        (function.flags & R_SEMANTIC_TYPE_FLAG_CALL_ASYNC) != 0U ? "async fn" : "fn";
     if (!r_generic_text(text, prefix, strlen(prefix)) ||
         (((function.flags & R_SEMANTIC_TYPE_FLAG_NOALLOC) != 0U) &&
          !r_generic_text(text, " @noalloc", 9U)) ||
@@ -59740,8 +59732,7 @@ static bool r_function_value_display(RGenericText *text, RTypeId type_id) {
     }
     for (RTypeId link = function.second; link != R_TYPE_ID_INVALID;) {
         const RSemanticType *parameter = r_semantic_type(context, link);
-        if ((parameter == NULL) ||
-            ((link != function.second) && !r_generic_text(text, ", ", 2U)) ||
+        if ((parameter == NULL) || ((link != function.second) && !r_generic_text(text, ", ", 2U)) ||
             !r_generic_type_name(text, parameter->base, 1U)) {
             return false;
         }
@@ -59776,8 +59767,8 @@ static void r_stack_append_name(
 
     if (r_function_value_dispatcher(context, symbol_id) &&
         r_generic_text(&text, "call through `", 14U) &&
-        r_function_value_display(
-            &text, context->generic_arguments[symbol->first_generic_argument]) &&
+        r_function_value_display(&text,
+                                 context->generic_arguments[symbol->first_generic_argument]) &&
         r_generic_text(&text, "`", 1U)) {
         /* R-TYPE-0054 (L28): a call through a function value is named by the value's type. */
         bytes = (const char *)text.bytes;
@@ -59960,8 +59951,8 @@ static bool r_stack_report_unnamed_cycle(RStackGraph *graph,
                     path[low] = path[high];
                     path[high] = swap;
                 }
-                success = r_stack_report_cycle(
-                    graph, path, count, 0U, start, graph->edges[edge].span);
+                success =
+                    r_stack_report_cycle(graph, path, count, 0U, start, graph->edges[edge].span);
                 goto cleanup;
             }
             if ((previous[callee] == 0U) && (callee != start)) {
@@ -60165,7 +60156,8 @@ static bool r_semantic_validate_stack_graph(RFrontendContext *context) {
         if (r_semantic_dyn_format_target(context, target.target)) {
             /* R-TYPE-0046 (L32): the format glue of a member with standard formatting calls
                the implementations its components reach. */
-            RStackHookState hooks = {&graph, context->semantic_symbols[target.dispatcher - 1U].name_span};
+            RStackHookState hooks = {&graph,
+                                     context->semantic_symbols[target.dispatcher - 1U].name_span};
             graph.current = target.dispatcher;
             if (!r_format_visit_hooks(
                     context, target.member, 0U, r_stack_clone_hook_visit, &hooks) ||
@@ -60372,10 +60364,9 @@ RFrontendStatus r_analyze_program(RFrontendContext *context) {
         }
     }
     if (!r_out_validate_signatures(context) || !r_generic_finish_associated(context) ||
-        !r_derive_validate(context) ||
-        !r_semantic_validate_impls(context) || !r_semantic_validate_lending(context) ||
-        !r_semantic_validate_chain(context) || !r_dyn_validate_contracts(context) ||
-        !r_generic_validate_definitions(context) ||
+        !r_derive_validate(context) || !r_semantic_validate_impls(context) ||
+        !r_semantic_validate_lending(context) || !r_semantic_validate_chain(context) ||
+        !r_dyn_validate_contracts(context) || !r_generic_validate_definitions(context) ||
         !r_semantic_validate_trait_applications(context) || !r_semantic_validate_imports(context) ||
         !r_semantic_validate_import_shadowing(context) ||
         !r_semantic_validate_borrowed_outputs(context) ||

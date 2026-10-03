@@ -263,7 +263,10 @@ static int test_wait_cancel_acknowledges_native_cleanup(RRuntimeAllocator *alloc
 static int test_terminate_reaps_every_child(RRuntimeAllocator *allocator) {
     /* L29-3: the kernel posts the exit event before the child becomes a zombie; every terminated
        child is still reaped, so no wait outlives its child. */
-    enum { R_TEST_ROUNDS = 48, R_TEST_CHILDREN = 16 };
+    enum {
+        R_TEST_ROUNDS = 48,
+        R_TEST_CHILDREN = 16
+    };
     RStdProcessChild children[R_TEST_CHILDREN];
     RStdProcessVoidResult terminate_result = {0};
     RStdProcessWaitResult wait_result = {0};
@@ -276,15 +279,15 @@ static int test_terminate_reaps_every_child(RRuntimeAllocator *allocator) {
             R_TEST_CHECK(children[index].storage != NULL);
         }
         for (index = 0U; index < (size_t)R_TEST_CHILDREN; ++index) {
-            R_TEST_CHECK(await_terminate(
-                r_std_process_terminate(&children[index], (RStdProcessDeadline){0}),
-                &terminate_result));
+            R_TEST_CHECK(
+                await_terminate(r_std_process_terminate(&children[index], (RStdProcessDeadline){0}),
+                                &terminate_result));
             R_TEST_CHECK(terminate_result.status == R_STD_PROCESS_CALL_SUCCESS);
         }
         for (index = 0U; index < (size_t)R_TEST_CHILDREN; ++index) {
-            R_TEST_CHECK(await_wait(r_std_process_wait(&children[index],
-                                                       deadline_after_milliseconds(UINT32_C(5000))),
-                                    &wait_result));
+            R_TEST_CHECK(await_wait(
+                r_std_process_wait(&children[index], deadline_after_milliseconds(UINT32_C(5000))),
+                &wait_result));
             R_TEST_CHECK(wait_result.kind == R_STD_PROCESS_WAIT_RESULT_EXITED &&
                          wait_result.status.kind == R_STD_PROCESS_TERMINATION_SIGNALLED &&
                          wait_result.status.code == (int32_t)SIGKILL &&

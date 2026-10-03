@@ -411,8 +411,7 @@ static RRuntimeTypeInfo result_type(RLibraryFsControlMode mode) {
         return (RRuntimeTypeInfo){sizeof(RStdFsU64Result), _Alignof(RStdFsU64Result), NULL, NULL};
     }
     if (mode == R_LIBRARY_FS_CONTROL_TRY_LOCK) {
-        return (RRuntimeTypeInfo){
-            sizeof(RStdFsBoolResult), _Alignof(RStdFsBoolResult), NULL, NULL};
+        return (RRuntimeTypeInfo){sizeof(RStdFsBoolResult), _Alignof(RStdFsBoolResult), NULL, NULL};
     }
     return (RRuntimeTypeInfo){sizeof(RStdFsVoidResult), _Alignof(RStdFsVoidResult), NULL, NULL};
 }
@@ -964,8 +963,7 @@ static void control_retry_fired(void *context) {
         if (preparation.prepared != NULL) {
             r_runtime_darwin_fs_prepared_abort(&preparation.prepared);
         }
-        control_finish_lock_wait(control,
-                                 fs_error(R_STD_FS_ERROR_RESOURCE_EXHAUSTED, INT64_C(0)));
+        control_finish_lock_wait(control, fs_error(R_STD_FS_ERROR_RESOURCE_EXHAUSTED, INT64_C(0)));
         return;
     }
     control->request = submission.request;
@@ -1080,12 +1078,12 @@ static void native_completed(RRuntimeDarwinFsRequest *request, void *context) {
                 : fs_error(R_STD_FS_ERROR_RESOURCE_EXHAUSTED, (int64_t)native_result.native_error);
     }
     control->completion_required =
-        position_success ||
-        ((control->mode == R_LIBRARY_FS_CONTROL_FLUSH || control->mode == R_LIBRARY_FS_CONTROL_SYNC ||
-          control->mode == R_LIBRARY_FS_CONTROL_TRY_LOCK ||
-          control->mode == R_LIBRARY_FS_CONTROL_LOCK ||
-          control->mode == R_LIBRARY_FS_CONTROL_UNLOCK) &&
-         native_success && native_result.committed);
+        position_success || ((control->mode == R_LIBRARY_FS_CONTROL_FLUSH ||
+                              control->mode == R_LIBRARY_FS_CONTROL_SYNC ||
+                              control->mode == R_LIBRARY_FS_CONTROL_TRY_LOCK ||
+                              control->mode == R_LIBRARY_FS_CONTROL_LOCK ||
+                              control->mode == R_LIBRARY_FS_CONTROL_UNLOCK) &&
+                             native_success && native_result.committed);
     control->request = NULL;
     control_unlock(control);
     if (position_success) {
@@ -1416,11 +1414,12 @@ static RStdFsTaskStartResult start_control(RLibraryFsControlMode mode,
         native_preparation =
             r_runtime_darwin_fs_service_prepare_file_metadata(descriptor, UINT64_C(0));
     } else if (is_lock_mode(mode)) {
-        native_preparation = r_runtime_darwin_fs_service_prepare_ofd_lock(descriptor,
-                                                                          control->lock.type,
-                                                                          (off_t)control->lock.start,
-                                                                          (off_t)control->lock.length,
-                                                                          UINT64_C(0));
+        native_preparation =
+            r_runtime_darwin_fs_service_prepare_ofd_lock(descriptor,
+                                                         control->lock.type,
+                                                         (off_t)control->lock.start,
+                                                         (off_t)control->lock.length,
+                                                         UINT64_C(0));
     } else if (mode == R_LIBRARY_FS_CONTROL_SYNC && sync_level == R_STD_FS_SYNC_LEVEL_BARRIER) {
         native_preparation =
             r_runtime_darwin_fs_service_prepare_barrier_fsync(descriptor, UINT64_C(0));

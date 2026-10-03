@@ -127,9 +127,8 @@ static void stream_result_error(void *result_pointer, _Bool unix_domain, RStdNet
     }
 }
 
-static void stream_result_value(void *result_pointer,
-                                _Bool unix_domain,
-                                RStdNetTcpStreamStorage *storage) {
+static void
+stream_result_value(void *result_pointer, _Bool unix_domain, RStdNetTcpStreamStorage *storage) {
     if (unix_domain) {
         RStdNetUnixStreamResult *result = result_pointer;
 

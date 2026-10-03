@@ -8,6 +8,7 @@
 #include "standard_fs_async.h"
 #include "standard_net_operations.h"
 #include "standard_scoped_operations.h"
+
 #include "standard_async_sync.h"
 #include "standard_sync.h"
 
@@ -488,12 +489,12 @@ static bool r_c17_emit_async_sync_hir(RC17Emitter *emitter,
                                       uint32_t depth,
                                       RC17Value *result);
 static bool r_c17_preflight_async_sync_hir(RC17Emitter *emitter,
-                                          const RHirNode *node,
-                                          RSymbolId function_symbol,
-                                          size_t depth);
+                                           const RHirNode *node,
+                                           RSymbolId function_symbol,
+                                           size_t depth);
 static bool r_c17_preflight_async_sync_mir(RC17Emitter *emitter,
-                                          const RMirFunction *mir,
-                                          const RMirInstruction *instruction);
+                                           const RMirFunction *mir,
+                                           const RMirInstruction *instruction);
 /* R-SLIB-ERR-0004: the operands of std.error::from_fault, synchronous temporaries when `mir` is
    NULL and asynchronous frame values otherwise. */
 typedef struct RC17FaultOperands {
@@ -1838,7 +1839,9 @@ static bool r_c17_emit_dyn_narrowing_tables(RC17Emitter *emitter) {
                     return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
                 }
             }
-            if (!r_c17_format(emitter, tag == 0U ? "UINT32_C(%" PRIu32 ")" : ", UINT32_C(%" PRIu32 ")", narrowed)) {
+            if (!r_c17_format(emitter,
+                              tag == 0U ? "UINT32_C(%" PRIu32 ")" : ", UINT32_C(%" PRIu32 ")",
+                              narrowed)) {
                 return false;
             }
         }
@@ -1876,14 +1879,12 @@ static bool r_c17_emit_dyn_operand(RC17Emitter *emitter, const RC17DynOperand *o
    where `to` is an interface borrow or an owner of an interface: a member borrow or owner gains
    the member's tag, a borrow of an owner is viewed as the interface borrow of its member, and a
    narrowing renumbers the tag through its table. */
-static bool r_c17_emit_dyn_cast(RC17Emitter *emitter,
-                                RTypeId from,
-                                RTypeId to,
-                                const RC17DynOperand *operand) {
+static bool
+r_c17_emit_dyn_cast(RC17Emitter *emitter, RTypeId from, RTypeId to, const RC17DynOperand *operand) {
     const RFrontendContext *context = emitter->frontend;
     const RTypeId borrowed = r_semantic_dyn_referent(context, to);
-    const RTypeId interface = borrowed != R_TYPE_ID_INVALID ? borrowed
-                                                            : r_semantic_dyn_owned(context, to);
+    const RTypeId interface =
+        borrowed != R_TYPE_ID_INVALID ? borrowed : r_semantic_dyn_owned(context, to);
     const RTypeId source_interface = borrowed != R_TYPE_ID_INVALID
                                          ? r_semantic_dyn_referent(context, from)
                                          : r_semantic_dyn_owned(context, from);
@@ -1951,14 +1952,13 @@ static bool r_c17_preflight_type_dependency(RC17Emitter *emitter, RTypeId type_i
 static bool r_c17_preflight_dyn_cast(RC17Emitter *emitter, RTypeId from, RTypeId to) {
     const RFrontendContext *context = emitter->frontend;
     const RTypeId borrowed = r_semantic_dyn_referent(context, to);
-    const RTypeId interface = borrowed != R_TYPE_ID_INVALID ? borrowed
-                                                            : r_semantic_dyn_owned(context, to);
+    const RTypeId interface =
+        borrowed != R_TYPE_ID_INVALID ? borrowed : r_semantic_dyn_owned(context, to);
     const RSemanticType *from_type = r_c17_type(emitter, r_c17_value_type(emitter, from));
-    const RTypeId viewed_owner =
-        (borrowed != R_TYPE_ID_INVALID) && (from_type != NULL) &&
-                (from_type->kind == R_SEMANTIC_TYPE_BORROW)
-            ? r_semantic_dyn_owned(context, from_type->base)
-            : R_TYPE_ID_INVALID;
+    const RTypeId viewed_owner = (borrowed != R_TYPE_ID_INVALID) && (from_type != NULL) &&
+                                         (from_type->kind == R_SEMANTIC_TYPE_BORROW)
+                                     ? r_semantic_dyn_owned(context, from_type->base)
+                                     : R_TYPE_ID_INVALID;
     const RTypeId source_interface = viewed_owner != R_TYPE_ID_INVALID ? viewed_owner
                                      : borrowed != R_TYPE_ID_INVALID
                                          ? r_semantic_dyn_referent(context, from)
@@ -2016,9 +2016,8 @@ static bool r_c17_collect_finally_metadata(RC17Emitter *emitter,
         ((size_t)node->first_effect_exit > emitter->frontend->hir_effect_exit_count) ||
         ((size_t)node->effect_exit_count >
          (emitter->frontend->hir_effect_exit_count - (size_t)node->first_effect_exit))) {
-        return r_c17_fail(emitter,
-                          depth > depth_limit ? R_FRONTEND_LIMIT_EXCEEDED
-                                              : R_FRONTEND_INTERNAL_ERROR);
+        return r_c17_fail(
+            emitter, depth > depth_limit ? R_FRONTEND_LIMIT_EXCEEDED : R_FRONTEND_INTERNAL_ERROR);
     }
     if (node->kind == R_HIR_FINALLY) {
         if (*finally_capacity == UINT32_MAX) {
@@ -2759,8 +2758,7 @@ static bool r_c17_standard_operation_is_simple(RStandardCallOperation operation)
            (operation == R_STANDARD_CALL_NET_PARSE_IP) ||
            (operation == R_STANDARD_CALL_NET_FORMAT_IP) ||
            r_c17_net_is_address_observation(operation) || r_c17_net_is_option(operation) ||
-           r_c17_process_simple_operation(operation) ||
-           (operation == R_STANDARD_CALL_ERROR_NAME) ||
+           r_c17_process_simple_operation(operation) || (operation == R_STANDARD_CALL_ERROR_NAME) ||
            (operation == R_STANDARD_CALL_ERROR_DIAGNOSTIC) ||
            ((operation >= R_STANDARD_CALL_THREAD_CURRENT) &&
             (operation <= R_STANDARD_CALL_THREAD_PANIC_TEXT)) ||
@@ -4044,11 +4042,10 @@ static const char *r_c17_net_option_native_name(RStandardCallOperation operation
 
 /* The C result type of an option operation. */
 static const char *r_c17_net_option_result_type(RStandardCallOperation operation) {
-    return operation == R_STANDARD_CALL_NET_TCP_GET_OPTIONS   ? "RStdNetTcpOptionsResult"
-           : operation == R_STANDARD_CALL_NET_UDP_GET_OPTIONS ? "RStdNetUdpOptionsResult"
-           : operation == R_STANDARD_CALL_NET_UNIX_PEER_CREDENTIALS
-               ? "RStdNetPeerCredentialsResult"
-               : "RStdNetOptionResult";
+    return operation == R_STANDARD_CALL_NET_TCP_GET_OPTIONS         ? "RStdNetTcpOptionsResult"
+           : operation == R_STANDARD_CALL_NET_UDP_GET_OPTIONS       ? "RStdNetUdpOptionsResult"
+           : operation == R_STANDARD_CALL_NET_UNIX_PEER_CREDENTIALS ? "RStdNetPeerCredentialsResult"
+                                                                    : "RStdNetOptionResult";
 }
 
 static const char *r_c17_checked_tag_name(uint32_t tag) {
@@ -6156,9 +6153,8 @@ static bool r_c17_prepare_ordering(RC17Emitter *emitter) {
             emitter->uses_own = true;
         }
         if (r_c17_dyn_owner_index(emitter, (RTypeId)(index + 1U)) >= 0) {
-            emitter->dyn_owner_kinds |= UINT32_C(1)
-                                        << (uint32_t)r_c17_dyn_owner_index(
-                                               emitter, (RTypeId)(index + 1U));
+            emitter->dyn_owner_kinds |=
+                UINT32_C(1) << (uint32_t)r_c17_dyn_owner_index(emitter, (RTypeId)(index + 1U));
         }
         if (type->kind == R_SEMANTIC_TYPE_ARRAY) {
             emitter->uses_runtime_array = true;
@@ -8201,8 +8197,8 @@ static bool r_c17_preflight_statement(RC17Emitter *emitter,
         variant_count = outcome_abi == R_C17_STANDARD_OUTCOME_ABI_NONE
                             ? UINT32_C(2)
                             : r_c17_standard_outcome_variant_count(outcome_abi);
-        if ((tagged_type == NULL) ||
-            (variant_count < UINT32_C(1)) || (variant_count > UINT32_C(4))) {
+        if ((tagged_type == NULL) || (variant_count < UINT32_C(1)) ||
+            (variant_count > UINT32_C(4))) {
             return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
         }
         if (r_c17_kind_is_integer(tagged_type->kind) ||
@@ -8288,14 +8284,13 @@ static bool r_c17_preflight_statement(RC17Emitter *emitter,
         /* A Copy insertion error, such as push_error(i32), is read rather than moved. */
         if ((outcome_abi != R_C17_STANDARD_OUTCOME_ABI_NONE) &&
             ((node->child_count != (variant_count + UINT32_C(1))) ||
-             (!borrowed &&
-              ((outcome_abi == R_C17_STANDARD_OUTCOME_ABI_ATOMIC_COMPARE_EXCHANGE)
-                   ? (value->kind != R_HIR_LOAD)
-               : (r_c17_standard_outcome_is_container_error(outcome_abi) &&
-                  !r_c17_type_requires_drop(emitter, value->type))
-                   ? (value->kind != R_HIR_LOAD)
-                   : ((value->kind != R_HIR_MOVE) ||
-                      !r_c17_type_requires_drop(emitter, value->type)))))) {
+             (!borrowed && ((outcome_abi == R_C17_STANDARD_OUTCOME_ABI_ATOMIC_COMPARE_EXCHANGE)
+                                ? (value->kind != R_HIR_LOAD)
+                            : (r_c17_standard_outcome_is_container_error(outcome_abi) &&
+                               !r_c17_type_requires_drop(emitter, value->type))
+                                ? (value->kind != R_HIR_LOAD)
+                                : ((value->kind != R_HIR_MOVE) ||
+                                   !r_c17_type_requires_drop(emitter, value->type)))))) {
             return r_c17_fail(emitter, R_FRONTEND_NOT_LOWERABLE);
         }
         for (index = UINT32_C(1); index < node->child_count; ++index) {
@@ -8392,12 +8387,11 @@ static bool r_c17_preflight_statement(RC17Emitter *emitter,
                         emitter, payload_type, emitter->type_glue_types, false, 0U)) {
                     return false;
                 }
-            } else if (!is_default &&
-                       ((case_node->auxiliary_type != payload_type) ||
-                        ((outcome_abi != R_C17_STANDARD_OUTCOME_ABI_NONE) && has_payload &&
-                         !borrowed &&
-                         (!r_c17_standard_outcome_is_container_error(outcome_abi) ||
-                          r_c17_type_requires_drop(emitter, payload_type))))) {
+            } else if (!is_default && ((case_node->auxiliary_type != payload_type) ||
+                                       ((outcome_abi != R_C17_STANDARD_OUTCOME_ABI_NONE) &&
+                                        has_payload && !borrowed &&
+                                        (!r_c17_standard_outcome_is_container_error(outcome_abi) ||
+                                         r_c17_type_requires_drop(emitter, payload_type))))) {
                 return r_c17_fail(emitter,
                                   outcome_abi == R_C17_STANDARD_OUTCOME_ABI_NONE
                                       ? R_FRONTEND_INTERNAL_ERROR
@@ -9454,10 +9448,10 @@ static bool r_c17_preflight_async_process_start(RC17Emitter *emitter,
         (task_type == NULL) || (task_type->kind != R_SEMANTIC_TYPE_TASK) ||
         (task_type->flags != R_SEMANTIC_TYPE_FLAG_NONE) || (task_type->length != UINT64_C(0)) ||
         (is_spawn  ? (!r_c17_type_is_exact_named_standard(
-                         emitter, source_definition->type, "std.process::command") ||
-                     !r_c17_type_is_exact_named_standard(
-                         emitter, task_type->base, "std.process::spawn_result") ||
-                     (task_type->second != R_TYPE_ID_INVALID))
+                          emitter, source_definition->type, "std.process::command") ||
+                      !r_c17_type_is_exact_named_standard(
+                          emitter, task_type->base, "std.process::spawn_result") ||
+                      (task_type->second != R_TYPE_ID_INVALID))
          : is_wait ? (!r_c17_type_is_exact_named_standard(
                           emitter, source_definition->type, "std.process::child") ||
                       !r_c17_type_is_exact_named_standard(
@@ -10282,9 +10276,8 @@ static bool r_c17_preflight_async_simple_call(RC17Emitter *emitter,
                                                  logical_type,
                                                  instruction->type);
         emitter->uses_std_process = true;
-        emitter->uses_std_signal =
-            emitter->uses_std_signal ||
-            r_c17_standard_operation_is_signal(instruction->standard_operation);
+        emitter->uses_std_signal = emitter->uses_std_signal || r_c17_standard_operation_is_signal(
+                                                                   instruction->standard_operation);
     } else if ((instruction->standard_operation == R_STANDARD_CALL_ERROR_NAME) ||
                (instruction->standard_operation == R_STANDARD_CALL_ERROR_DIAGNOSTIC)) {
         valid = (first != NULL) &&
@@ -10685,9 +10678,10 @@ static bool r_c17_preflight_async_array_call(RC17Emitter *emitter,
     const RMirInstruction *first = r_c17_mir_value_definition(
         emitter, mir, r_c17_mir_operand(emitter, instruction, UINT32_C(0)));
     const RMirInstruction *value =
-        (is_push || is_filled) ? r_c17_mir_value_definition(
-                      emitter, mir, r_c17_mir_operand(emitter, instruction, UINT32_C(1)))
-                : NULL;
+        (is_push || is_filled)
+            ? r_c17_mir_value_definition(
+                  emitter, mir, r_c17_mir_operand(emitter, instruction, UINT32_C(1)))
+            : NULL;
     const RSemanticType *result_type =
         r_c17_type(emitter, r_c17_value_type(emitter, instruction->type));
     const RTypeId error_type_id = r_c17_single_effect_type(emitter, instruction->type);
@@ -10753,8 +10747,9 @@ static bool r_c17_preflight_async_array_call(RC17Emitter *emitter,
                !r_c17_type_has_runtime_glue_representation(emitter, success_type->base) ||
                ((r_c17_value_kind(emitter, first->type) != R_SEMANTIC_TYPE_USIZE) &&
                 (r_c17_value_kind(emitter, first->type) != R_SEMANTIC_TYPE_U32)) ||
-               (is_filled && ((value == NULL) || (r_c17_value_type(emitter, value->type) !=
-                                                  r_c17_value_type(emitter, success_type->base))))) {
+               (is_filled &&
+                ((value == NULL) || (r_c17_value_type(emitter, value->type) !=
+                                     r_c17_value_type(emitter, success_type->base))))) {
         return r_c17_fail(emitter, R_FRONTEND_NOT_LOWERABLE);
     }
     if (!r_c17_preflight_type_dependency(emitter, instruction->type, UINT32_C(0))) {
@@ -10956,10 +10951,10 @@ static bool r_c17_preflight_async_thread_spawn(RC17Emitter *emitter,
                 : (instruction->integer_value != UINT64_C(0))) ||
         (carrier == NULL) || (carrier->kind != R_SEMANTIC_TYPE_EFFECT_CARRIER) ||
         (carrier->base != r_c17_value_type(emitter, instruction->auxiliary_type)) ||
-        !r_c17_effect_set_is_single_named(
-            emitter,
-            carrier->second,
-            blocking ? "std.async::start_error" : "std.thread::thread_error") ||
+        !r_c17_effect_set_is_single_named(emitter,
+                                          carrier->second,
+                                          blocking ? "std.async::start_error"
+                                                   : "std.thread::thread_error") ||
         !r_c17_preflight_type_dependency(emitter, instruction->type, UINT32_C(0)) ||
         !r_c17_preflight_thread_entry_type_glue(emitter, instruction->symbol, entry)) {
         return r_c17_fail(emitter, R_FRONTEND_NOT_LOWERABLE);
@@ -11743,7 +11738,8 @@ static bool r_c17_preflight_async_instruction(RC17Emitter *emitter,
         (!r_c17_mark_owner_type_element_glue(emitter, instruction->type) ||
          ((instruction->operand_count != 0U) &&
           !r_c17_mark_owner_type_element_glue(
-              emitter, r_c17_mir_value_type(emitter, mir, r_c17_mir_operand(emitter, instruction, 0U)))))) {
+              emitter,
+              r_c17_mir_value_type(emitter, mir, r_c17_mir_operand(emitter, instruction, 0U)))))) {
         return false;
     }
     switch (instruction->kind) {
@@ -12386,10 +12382,10 @@ static bool r_c17_preflight_async_instruction(RC17Emitter *emitter,
                      ? ((instruction->result != R_MIR_VALUE_ID_INVALID) ||
                         (r_c17_value_kind(emitter, instruction->type) != R_SEMANTIC_TYPE_VOID))
                      : ((instruction->result == R_MIR_VALUE_ID_INVALID) ||
-                        (is_compare ? !r_c17_type_is_atomic_compare_exchange_result(
-                                          emitter, r_c17_type(emitter, instruction->type)) ||
-                                          (r_c17_type(emitter, instruction->type)->base !=
-                                           instruction->auxiliary_type)
+                        (is_compare     ? !r_c17_type_is_atomic_compare_exchange_result(
+                                              emitter, r_c17_type(emitter, instruction->type)) ||
+                                              (r_c17_type(emitter, instruction->type)->base !=
+                                               instruction->auxiliary_type)
                          : is_lock_free ? (r_c17_value_kind(emitter, instruction->type) !=
                                            R_SEMANTIC_TYPE_BOOL)
                                         : (instruction->type != instruction->auxiliary_type))))) {
@@ -12650,8 +12646,7 @@ static bool r_c17_preflight_async_instruction(RC17Emitter *emitter,
         operand_type =
             operand == NULL ? NULL : r_c17_type(emitter, r_c17_value_type(emitter, operand->type));
         if ((operand != NULL) && (instruction->result != R_MIR_VALUE_ID_INVALID) &&
-            ((r_semantic_dyn_referent(emitter->frontend, instruction->type) !=
-              R_TYPE_ID_INVALID) ||
+            ((r_semantic_dyn_referent(emitter->frontend, instruction->type) != R_TYPE_ID_INVALID) ||
              (r_semantic_dyn_owned(emitter->frontend, instruction->type) != R_TYPE_ID_INVALID))) {
             /* R-TYPE-0051, R-TYPE-0055: the conversion of a borrow or an owner to an interface. */
             return r_c17_preflight_dyn_cast(emitter, operand->type, instruction->type);
@@ -13990,7 +13985,8 @@ static bool r_c17_preflight_function(RC17Emitter *emitter, RSymbolId function_sy
         /* M32.6: the schema hooks that the operation calls. */
         for (size_t entry = 0U; entry < emitter->frontend->json_schema_hook_count; ++entry) {
             if (emitter->frontend->json_schema_hooks[entry].function == function_symbol &&
-                !r_c17_preflight_function(emitter, emitter->frontend->json_schema_hooks[entry].hook))
+                !r_c17_preflight_function(emitter,
+                                          emitter->frontend->json_schema_hooks[entry].hook))
                 return false;
         }
     }
@@ -16339,11 +16335,12 @@ static bool r_c17_emit_aggregate_init(RC17Emitter *emitter,
     }
     bool native_only = true;
     for (child_index = 0U; child_index < aggregate->field_count; ++child_index) {
-        native_only = native_only &&
-                      r_c17_field_is_hash_digest_array(
-                          emitter,
-                          &emitter->frontend->semantic_fields[(size_t)aggregate->first_field +
-                                                              (size_t)child_index]);
+        native_only =
+            native_only &&
+            r_c17_field_is_hash_digest_array(
+                emitter,
+                &emitter->frontend
+                     ->semantic_fields[(size_t)aggregate->first_field + (size_t)child_index]);
     }
     if (native_only) {
         if (!r_c17_write(emitter, "0")) {
@@ -16379,7 +16376,8 @@ static bool r_c17_emit_aggregate_init(RC17Emitter *emitter,
     }
     for (child_index = 0U; child_index < aggregate->field_count; ++child_index) {
         const RSemanticField *field =
-            &emitter->frontend->semantic_fields[(size_t)aggregate->first_field + (size_t)child_index];
+            &emitter->frontend
+                 ->semantic_fields[(size_t)aggregate->first_field + (size_t)child_index];
         if (!r_c17_field_is_hash_digest_array(emitter, field)) {
             continue;
         }
@@ -17912,9 +17910,9 @@ r_c17_emit_load(RC17Emitter *emitter, const RHirNode *node, uint32_t depth, RC17
             !r_c17_new_temporary(emitter, node->type, depth, &temporary) ||
             !r_c17_write(emitter, " = {0};\n") || !r_c17_indent(emitter, depth) ||
             !r_c17_write(emitter, "(void)memcpy(") ||
+            !r_c17_emit_temporary_name(emitter, temporary) || !r_c17_write(emitter, ".r_data, ") ||
+            !r_c17_emit_place(emitter, place, &prepared) || !r_c17_write(emitter, ", sizeof(") ||
             !r_c17_emit_temporary_name(emitter, temporary) ||
-            !r_c17_write(emitter, ".r_data, ") || !r_c17_emit_place(emitter, place, &prepared) ||
-            !r_c17_write(emitter, ", sizeof(") || !r_c17_emit_temporary_name(emitter, temporary) ||
             !r_c17_write(emitter, ".r_data));\n")) {
             goto cleanup;
         }
@@ -19387,7 +19385,8 @@ static bool r_c17_emit_type_move_actual_name(RC17Emitter *emitter, RTypeId type_
     }
     if (r_c17_dyn_owner_index(emitter, value_id) >= 0) {
         return r_c17_write(emitter, "r_type_move_") &&
-               r_c17_write(emitter, R_C17_DYN_OWNERS[r_c17_dyn_owner_index(emitter, value_id)].glue);
+               r_c17_write(emitter,
+                           R_C17_DYN_OWNERS[r_c17_dyn_owner_index(emitter, value_id)].glue);
     }
     if (type->kind == R_SEMANTIC_TYPE_OWN) {
         return r_c17_write(emitter, "r_type_move_own");
@@ -19466,7 +19465,8 @@ static bool r_c17_emit_type_drop_actual_name(RC17Emitter *emitter, RTypeId type_
     }
     if (r_c17_dyn_owner_index(emitter, value_id) >= 0) {
         return r_c17_write(emitter, "r_type_drop_") &&
-               r_c17_write(emitter, R_C17_DYN_OWNERS[r_c17_dyn_owner_index(emitter, value_id)].glue);
+               r_c17_write(emitter,
+                           R_C17_DYN_OWNERS[r_c17_dyn_owner_index(emitter, value_id)].glue);
     }
     if (type->kind == R_SEMANTIC_TYPE_OWN) {
         return r_c17_write(emitter, "r_type_drop_own");
@@ -20567,9 +20567,9 @@ static bool r_c17_emit_type_glue_gate_definition(RC17Emitter *emitter, RTypeId t
 
     /* The gates name each other, so a type whose values are never moved or dropped at run
        time, such as the payload of a catch clause no call can reach, leaves no unused one. */
-    if ((!emits_drop &&
-         (!r_c17_write(emitter, "static inline void ") ||
-          !r_c17_emit_type_move_name(emitter, type_id) || !r_c17_write(emitter, "_keep(void);\n"))) ||
+    if ((!emits_drop && (!r_c17_write(emitter, "static inline void ") ||
+                         !r_c17_emit_type_move_name(emitter, type_id) ||
+                         !r_c17_write(emitter, "_keep(void);\n"))) ||
         !r_c17_write(emitter, "static inline void ") ||
         !r_c17_emit_type_move_name(emitter, type_id) || !r_c17_write(emitter, "(") ||
         !r_c17_emit_type_move_parameters(emitter, 2U) || !r_c17_write(emitter, " {\n    ") ||
@@ -21663,10 +21663,7 @@ static bool r_c17_emit_type_glue(RC17Emitter *emitter) {
         {R_SEMANTIC_TYPE_ARC, R_SEMANTIC_TYPE_FLAG_NONE, R_SEMANTIC_TYPE_FLAG_NONE, false},
         {R_SEMANTIC_TYPE_RC, R_SEMANTIC_TYPE_FLAG_NONE, R_SEMANTIC_TYPE_FLAG_NONE, false},
         {R_SEMANTIC_TYPE_WEAK, R_SEMANTIC_TYPE_FLAG_NONE, R_SEMANTIC_TYPE_FLAG_RC_OWNER, false},
-        {R_SEMANTIC_TYPE_WEAK,
-         R_SEMANTIC_TYPE_FLAG_RC_OWNER,
-         R_SEMANTIC_TYPE_FLAG_RC_OWNER,
-         false},
+        {R_SEMANTIC_TYPE_WEAK, R_SEMANTIC_TYPE_FLAG_RC_OWNER, R_SEMANTIC_TYPE_FLAG_RC_OWNER, false},
         /* R-TYPE-0055 (L29): owners of interfaces have their own glue. */
         {R_SEMANTIC_TYPE_OWN, R_SEMANTIC_TYPE_FLAG_NONE, R_SEMANTIC_TYPE_FLAG_NONE, true},
         {R_SEMANTIC_TYPE_ARC, R_SEMANTIC_TYPE_FLAG_NONE, R_SEMANTIC_TYPE_FLAG_NONE, true},
@@ -22022,8 +22019,8 @@ static bool r_c17_emit_swap_statements(RC17Emitter *emitter,
     if (r_c17_type_requires_drop(emitter, value_type)) {
         return r_c17_finish_move_destination_declaration(emitter, value_type) &&
                r_c17_indent(emitter, depth) && r_c17_emit_type_move_name(emitter, value_type) &&
-               r_c17_format(emitter, "(&%s, %s);\n", name, first) &&
-               r_c17_indent(emitter, depth) && r_c17_emit_type_move_name(emitter, value_type) &&
+               r_c17_format(emitter, "(&%s, %s);\n", name, first) && r_c17_indent(emitter, depth) &&
+               r_c17_emit_type_move_name(emitter, value_type) &&
                r_c17_format(emitter, "(%s, %s);\n", first, second) &&
                r_c17_indent(emitter, depth) && r_c17_emit_type_move_name(emitter, value_type) &&
                r_c17_format(emitter, "(%s, &%s);\n", second, name);
@@ -22046,8 +22043,7 @@ static bool r_c17_emit_core_swap(RC17Emitter *emitter,
         return false;
     (void)snprintf(first_name, sizeof(first_name), "r_t%08" PRIu32, first.temporary);
     (void)snprintf(second_name, sizeof(second_name), "r_t%08" PRIu32, second.temporary);
-    if (!r_c17_emit_swap_statements(
-            emitter, node->auxiliary_type, first_name, second_name, depth))
+    if (!r_c17_emit_swap_statements(emitter, node->auxiliary_type, first_name, second_name, depth))
         return false;
     result->type = node->type;
     result->has_value = false;
@@ -23017,13 +23013,16 @@ static bool r_c17_emit_dyn_owner_operation(RC17Emitter *emitter,
                             suffix,
                             is_arc ? ".status == R_STD_ARC_CALL_COUNT_OVERFLOW"
                                    : ".status == R_STD_RC_CALL_COUNT_OVERFLOW") &&
-               r_c17_emit_panic_call(
-                   emitter, "R_RUNTIME_PANIC_REFERENCE_COUNT_OVERFLOW", span, depth + UINT32_C(1)) &&
+               r_c17_emit_panic_call(emitter,
+                                     "R_RUNTIME_PANIC_REFERENCE_COUNT_OVERFLOW",
+                                     span,
+                                     depth + UINT32_C(1)) &&
                r_c17_indent(emitter, depth) && r_c17_write(emitter, "}\n") &&
                r_c17_indent(emitter, depth) &&
                r_c17_format(emitter, "if (r_owner_upgrade_%08" PRIu32 ".has_value) {\n", suffix) &&
                r_c17_indent(emitter, depth + UINT32_C(1)) &&
-               r_c17_emit_dyn_operand(emitter, result) && r_c17_write(emitter, ".r_payload.r_some = (") &&
+               r_c17_emit_dyn_operand(emitter, result) &&
+               r_c17_write(emitter, ".r_payload.r_some = (") &&
                r_c17_write(emitter,
                            R_C17_DYN_OWNERS[r_c17_dyn_owner_index(emitter, option->base)].c_type) &&
                r_c17_format(emitter, "){r_owner_upgrade_%08" PRIu32 ".value, (*", suffix) &&
@@ -24314,8 +24313,7 @@ static bool r_c17_emit_net_option_call(RC17Emitter *emitter,
     if (!r_c17_indent(emitter, depth) ||
         !r_c17_format(emitter, "%s ", r_c17_net_option_result_type(node->standard_operation)) ||
         !r_c17_emit_temporary_name(emitter, native_result) ||
-        !r_c17_format(
-            emitter, " = %s(", r_c17_net_option_native_name(node->standard_operation))) {
+        !r_c17_format(emitter, " = %s(", r_c17_net_option_native_name(node->standard_operation))) {
         return false;
     }
     for (index = UINT32_C(0); index < descriptor->argument_count; ++index) {
@@ -24460,8 +24458,8 @@ static bool r_c17_emit_process_simple_call(RC17Emitter *emitter,
     const RStandardCallOperation operation = node->standard_operation;
     const bool checked = r_c17_process_operation_is_checked(operation);
     const bool listener_result = operation == R_STANDARD_CALL_SIGNAL_LISTEN;
-    const bool command_result = (operation == R_STANDARD_CALL_PROCESS_COMMAND_CREATE) ||
-                                listener_result;
+    const bool command_result =
+        (operation == R_STANDARD_CALL_PROCESS_COMMAND_CREATE) || listener_result;
     uint32_t second_view = UINT32_C(0);
     uint32_t third_view = UINT32_C(0);
     uint32_t native_result = UINT32_C(0);
@@ -24487,11 +24485,11 @@ static bool r_c17_emit_process_simple_call(RC17Emitter *emitter,
     if (checked) {
         const RTypeId error_type = r_c17_single_effect_type(emitter, node->auxiliary_type);
         const char *function_name =
-            operation == R_STANDARD_CALL_SIGNAL_LISTEN          ? "r_std_signal_listen"
-            : operation == R_STANDARD_CALL_SIGNAL_RAISE         ? "r_std_signal_raise"
+            operation == R_STANDARD_CALL_SIGNAL_LISTEN            ? "r_std_signal_listen"
+            : operation == R_STANDARD_CALL_SIGNAL_RAISE           ? "r_std_signal_raise"
             : operation == R_STANDARD_CALL_PROCESS_COMMAND_CREATE ? "r_std_process_command_create"
-            : operation == R_STANDARD_CALL_PROCESS_ARG          ? "r_std_process_arg"
-            : operation == R_STANDARD_CALL_PROCESS_ENVIRONMENT  ? "r_std_process_environment"
+            : operation == R_STANDARD_CALL_PROCESS_ARG            ? "r_std_process_arg"
+            : operation == R_STANDARD_CALL_PROCESS_ENVIRONMENT    ? "r_std_process_environment"
             : operation == R_STANDARD_CALL_PROCESS_REMOVE_ENVIRONMENT
                 ? "r_std_process_remove_environment"
                 : "r_std_process_working_directory";
@@ -24546,7 +24544,8 @@ static bool r_c17_emit_process_simple_call(RC17Emitter *emitter,
             !r_c17_write(emitter, " = ") || !r_c17_emit_temporary_name(emitter, native_result) ||
             !r_c17_write(emitter, ".value;\n") || !r_c17_indent(emitter, depth) ||
             !r_c17_emit_temporary_name(emitter, native_result) ||
-            !r_c17_write(emitter, listener_result ? ".value = (RStdSignalListener){0};\n"
+            !r_c17_write(emitter,
+                         listener_result ? ".value = (RStdSignalListener){0};\n"
                                          : ".value = (RStdProcessCommand){0};\n")) {
             return false;
         }
@@ -28284,6 +28283,7 @@ static bool r_c17_emit_sync_checked_failure(RC17Emitter *emitter,
 
 #include "standard_sync_locks.inc"
 #include "standard_sync_values.inc"
+
 #include "recursion.inc"
 
 static bool r_c17_emit_sync_call(RC17Emitter *emitter,
@@ -30654,8 +30654,7 @@ static bool r_c17_emit_standard_outcome_binding(RC17Emitter *emitter,
                 ? (case_node != NULL && case_node->integer_value == 0U ? "r_returned"
                                                                        : "r_panicked")
             : abi == R_C17_STANDARD_OUTCOME_ABI_ASYNC_BROADCAST
-                ? (case_node != NULL && case_node->integer_value == 0U ? "r_received"
-                                                                       : "r_lagged")
+                ? (case_node != NULL && case_node->integer_value == 0U ? "r_received" : "r_lagged")
             : r_c17_sync_outcome_abi(abi) != NULL                          ? "r_value"
             : case_node != NULL && case_node->integer_value == UINT64_C(0) ? "r_unwrapped"
                                                                            : "r_shared";
@@ -30808,15 +30807,15 @@ static bool r_c17_emit_switch(RC17Emitter *emitter, const RHirNode *node, uint32
     /* L37.5: a borrowed standard outcome is switched on a bitwise copy. Each payload binding
        points to a shadow value its owner fields are moved into from that copy; neither the copy
        nor a shadow is destroyed, and the borrowed outcome keeps its resources. */
-    const bool outcome_view = borrowed && !user_tagged &&
-                              (outcome_abi != R_C17_STANDARD_OUTCOME_ABI_NONE);
+    const bool outcome_view =
+        borrowed && !user_tagged && (outcome_abi != R_C17_STANDARD_OUTCOME_ABI_NONE);
     if (outcome_view) {
         uint32_t copy;
         if (!r_c17_take_temporary(emitter, &copy) || !r_c17_indent(emitter, depth) ||
             !r_c17_emit_declared_type(emitter, node->auxiliary_type) ||
             !r_c17_write(emitter, " ") || !r_c17_emit_temporary_name(emitter, copy) ||
-            !r_c17_write(emitter, " = *") ||
-            !r_c17_emit_temporary_name(emitter, value.temporary) || !r_c17_write(emitter, ";\n")) {
+            !r_c17_write(emitter, " = *") || !r_c17_emit_temporary_name(emitter, value.temporary) ||
+            !r_c17_write(emitter, ";\n")) {
             return false;
         }
         value.temporary = copy;
@@ -30912,7 +30911,8 @@ static bool r_c17_emit_switch(RC17Emitter *emitter, const RHirNode *node, uint32
                     !r_c17_emit_declared_type(emitter, case_node->type) ||
                     !r_c17_write(emitter, " ") ||
                     !r_c17_emit_variable_name(emitter, case_node->symbol) ||
-                    !r_c17_format(emitter, " = &r_view%08" PRIu32 ";\n", emitter->outcome_view_label) ||
+                    !r_c17_format(
+                        emitter, " = &r_view%08" PRIu32 ";\n", emitter->outcome_view_label) ||
                     !r_c17_indent(emitter, depth + UINT32_C(1)) ||
                     !r_c17_write(emitter, "(void)") ||
                     !r_c17_emit_variable_name(emitter, case_node->symbol) ||
@@ -31062,8 +31062,9 @@ static bool r_c17_emit_statement(RC17Emitter *emitter, RHirNodeId node_id, uint3
         if ((emitter->loop_count == 0U) || (node->loop_target > emitter->loop_count)) {
             return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
         }
-        loop = &emitter->loops[emitter->loop_count -
-                               (node->loop_target != 0U ? node->loop_target : 1U)];
+        loop =
+            &emitter
+                 ->loops[emitter->loop_count - (node->loop_target != 0U ? node->loop_target : 1U)];
         if (emitter->finally_count > loop->finally_count) {
             RC17FinallyRoute route;
 
@@ -32867,8 +32868,7 @@ static bool r_c17_emit_dyn_start_members(RC17Emitter *emitter,
     const RFrontendContext *context = emitter->frontend;
     /* R-TYPE-0054 (L28): the number a function value holds selects its target, which does not
        take the value as an argument. */
-    const bool function_value =
-        r_semantic_function_value_dispatcher(context, instruction->symbol);
+    const bool function_value = r_semantic_function_value_dispatcher(context, instruction->symbol);
     const RTypeId interface =
         function_value
             ? R_TYPE_ID_INVALID
@@ -34022,7 +34022,8 @@ static bool r_c17_emit_async_variant_payload(RC17Emitter *emitter,
         return built && r_c17_indent(emitter, depth + 1U) &&
                r_c17_emit_async_storage_reference(
                    emitter, mir, function, false, instruction->result) &&
-               r_c17_format(emitter, "_view = r_view%08" PRIu32 ";\n", emitter->outcome_view_label) &&
+               r_c17_format(
+                   emitter, "_view = r_view%08" PRIu32 ";\n", emitter->outcome_view_label) &&
                r_c17_indent(emitter, depth) && r_c17_write(emitter, "}\n") &&
                r_c17_indent(emitter, depth) &&
                r_c17_emit_async_storage_reference(
@@ -34899,9 +34900,9 @@ static bool r_c17_emit_async_shared_owner_clone(RC17Emitter *emitter,
     if (r_c17_dyn_owner_index(emitter, instruction->type) >= 0) {
         /* R-TYPE-0055 (L29): the clone owns the same member and keeps its tag. */
         return r_c17_write(emitter, "(") &&
-               r_c17_write(emitter,
-                           R_C17_DYN_OWNERS[r_c17_dyn_owner_index(emitter, instruction->type)]
-                               .c_type) &&
+               r_c17_write(
+                   emitter,
+                   R_C17_DYN_OWNERS[r_c17_dyn_owner_index(emitter, instruction->type)].c_type) &&
                r_c17_format(emitter, "){%s(&", helper) &&
                r_c17_emit_async_place(emitter,
                                       mir,
@@ -35076,8 +35077,7 @@ static bool r_c17_emit_async_shared_owner_operation(RC17Emitter *emitter,
         return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
     }
     {
-        const RMirInstruction *operand_definition =
-            r_c17_mir_value_definition(emitter, mir, first);
+        const RMirInstruction *operand_definition = r_c17_mir_value_definition(emitter, mir, first);
         const RSemanticType *operand_type =
             operand_definition == NULL
                 ? NULL
@@ -37289,8 +37289,8 @@ static bool r_c17_emit_async_process_simple_call(RC17Emitter *emitter,
     const RStandardCallOperation operation = instruction->standard_operation;
     const bool checked = r_c17_process_operation_is_checked(operation);
     const bool listener_result = operation == R_STANDARD_CALL_SIGNAL_LISTEN;
-    const bool command_result = (operation == R_STANDARD_CALL_PROCESS_COMMAND_CREATE) ||
-                                listener_result;
+    const bool command_result =
+        (operation == R_STANDARD_CALL_PROCESS_COMMAND_CREATE) || listener_result;
     uint32_t second_view = UINT32_C(0);
     uint32_t third_view = UINT32_C(0);
     uint32_t native_result = UINT32_C(0);
@@ -37314,11 +37314,11 @@ static bool r_c17_emit_async_process_simple_call(RC17Emitter *emitter,
     }
     if (checked) {
         const char *function_name =
-            operation == R_STANDARD_CALL_SIGNAL_LISTEN          ? "r_std_signal_listen"
-            : operation == R_STANDARD_CALL_SIGNAL_RAISE         ? "r_std_signal_raise"
+            operation == R_STANDARD_CALL_SIGNAL_LISTEN            ? "r_std_signal_listen"
+            : operation == R_STANDARD_CALL_SIGNAL_RAISE           ? "r_std_signal_raise"
             : operation == R_STANDARD_CALL_PROCESS_COMMAND_CREATE ? "r_std_process_command_create"
-            : operation == R_STANDARD_CALL_PROCESS_ARG          ? "r_std_process_arg"
-            : operation == R_STANDARD_CALL_PROCESS_ENVIRONMENT  ? "r_std_process_environment"
+            : operation == R_STANDARD_CALL_PROCESS_ARG            ? "r_std_process_arg"
+            : operation == R_STANDARD_CALL_PROCESS_ENVIRONMENT    ? "r_std_process_environment"
             : operation == R_STANDARD_CALL_PROCESS_REMOVE_ENVIRONMENT
                 ? "r_std_process_remove_environment"
                 : "r_std_process_working_directory";
@@ -37372,8 +37372,9 @@ static bool r_c17_emit_async_process_simple_call(RC17Emitter *emitter,
              !r_c17_emit_temporary_name(emitter, native_result) ||
              !r_c17_write(emitter, ".value;\n") || !r_c17_indent(emitter, depth + UINT32_C(1)) ||
              !r_c17_emit_temporary_name(emitter, native_result) ||
-             !r_c17_write(emitter, listener_result ? ".value = (RStdSignalListener){0};\n"
-                                         : ".value = (RStdProcessCommand){0};\n"))) {
+             !r_c17_write(emitter,
+                          listener_result ? ".value = (RStdSignalListener){0};\n"
+                                          : ".value = (RStdProcessCommand){0};\n"))) {
             return false;
         }
         return r_c17_indent(emitter, depth) && r_c17_write(emitter, "} else if (") &&
@@ -37631,8 +37632,7 @@ static bool r_c17_emit_async_net_option_call(RC17Emitter *emitter,
         !r_c17_write(emitter, ".r_tag = UINT32_C(0);\n") ||
         (query &&
          (!r_c17_indent(emitter, depth + UINT32_C(1)) ||
-          !r_c17_emit_async_storage_reference(
-              emitter, mir, function, false, instruction->result) ||
+          !r_c17_emit_async_storage_reference(emitter, mir, function, false, instruction->result) ||
           !r_c17_write(emitter, ".r_payload.r_ok = ") ||
           !r_c17_emit_temporary_name(emitter, native_result) ||
           !r_c17_write(emitter, ".value;\n"))) ||
@@ -37902,8 +37902,7 @@ static bool r_c17_emit_async_secret_call(RC17Emitter *emitter,
                                                  first,
                                                  depth) &&
                r_c17_indent(emitter, depth) &&
-               r_c17_format(
-                   emitter, "r_std_random_fill(r_random_target_%08" PRIu32 ");\n", first);
+               r_c17_format(emitter, "r_std_random_fill(r_random_target_%08" PRIu32 ");\n", first);
     }
     if (operation == R_STANDARD_CALL_SECRET_CONSTANT_TIME_EQUAL) {
         if ((second == R_MIR_VALUE_ID_INVALID) || (instruction->result == R_MIR_VALUE_ID_INVALID) ||
@@ -39728,9 +39727,9 @@ static bool r_c17_emit_async_checked_call(RC17Emitter *emitter,
     RC17CheckedStorage destination_storage;
     const char *source_member;
     const char *destination_member;
-    const char *operation_name =
-        instruction->standard_operation == R_STANDARD_CALL_C_CHECKED ? "r_std_c_checked"
-                                                                     : "r_std_convert_checked";
+    const char *operation_name = instruction->standard_operation == R_STANDARD_CALL_C_CHECKED
+                                     ? "r_std_c_checked"
+                                     : "r_std_convert_checked";
 
     if ((definition == NULL) || (result == R_MIR_VALUE_ID_INVALID) ||
         !r_c17_numeric_type_tag(emitter, definition->type, &source_tag) ||
@@ -39789,8 +39788,7 @@ static bool r_c17_emit_async_checked_call(RC17Emitter *emitter,
             emitter, "RStdConvertCheckedResult r_checked_native_%08" PRIu32 " =\n", result) ||
         !r_c17_indent(emitter, depth + UINT32_C(1)) ||
         !r_c17_format(emitter,
-                      "%s(r_checked_source_%08" PRIu32 ", r_checked_destination_%08" PRIu32
-                      ");\n",
+                      "%s(r_checked_source_%08" PRIu32 ", r_checked_destination_%08" PRIu32 ");\n",
                       operation_name,
                       result,
                       result) ||
@@ -39970,6 +39968,7 @@ static bool r_c17_emit_async_sync_checked_result(RC17Emitter *emitter,
 
 #include "standard_sync_async_channels.inc"
 #include "standard_sync_async_values.inc"
+
 #include "standard_async_sync.inc"
 
 static bool r_c17_emit_async_sync_call(RC17Emitter *emitter,
@@ -40230,8 +40229,8 @@ static bool r_c17_emit_async_array_call(RC17Emitter *emitter,
     }
 
     if ((first == R_MIR_VALUE_ID_INVALID) ||
-        ((is_push || is_filled) && (value == R_MIR_VALUE_ID_INVALID)) ||
-        (carrier_type == NULL) || (carrier_type->kind != R_SEMANTIC_TYPE_EFFECT_CARRIER) ||
+        ((is_push || is_filled) && (value == R_MIR_VALUE_ID_INVALID)) || (carrier_type == NULL) ||
+        (carrier_type->kind != R_SEMANTIC_TYPE_EFFECT_CARRIER) ||
         (error_type == R_TYPE_ID_INVALID) || (element_type == R_TYPE_ID_INVALID)) {
         return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
     }
@@ -43700,8 +43699,7 @@ static bool r_c17_emit_async_instruction(RC17Emitter *emitter,
         }
         operand = r_c17_mir_value_definition(emitter, mir, instruction->operand0);
         if ((operand != NULL) &&
-            ((r_semantic_dyn_referent(emitter->frontend, instruction->type) !=
-              R_TYPE_ID_INVALID) ||
+            ((r_semantic_dyn_referent(emitter->frontend, instruction->type) != R_TYPE_ID_INVALID) ||
              (r_semantic_dyn_owned(emitter->frontend, instruction->type) != R_TYPE_ID_INVALID))) {
             /* R-TYPE-0051, R-TYPE-0055: a borrow or an owner becomes an interface value. */
             RC17DynOperand dyn_operand;
@@ -44743,16 +44741,15 @@ static bool r_c17_emit_function_value_dispatcher(RC17Emitter *emitter, RSymbolId
         if (!r_c17_format(emitter, "    case UINT32_C(%" PRIu32 "):\n        ", target.target) ||
             (returns_value && !r_c17_write(emitter, "return ")) ||
             !r_c17_emit_function_name(emitter, target.target) || !r_c17_write(emitter, "(") ||
-            (has_effect_output && !r_c17_write(emitter,
-                                               function->parameter_count > UINT32_C(1)
-                                                   ? "r_effect_out, "
-                                                   : "r_effect_out"))) {
+            (has_effect_output &&
+             !r_c17_write(emitter,
+                          function->parameter_count > UINT32_C(1) ? "r_effect_out, "
+                                                                  : "r_effect_out"))) {
             return false;
         }
         for (uint32_t parameter = 1U; parameter < function->parameter_count; ++parameter) {
             const RHirNode *argument = r_c17_node(emitter, r_c17_child(emitter, node, parameter));
-            if ((argument == NULL) ||
-                ((parameter != 1U) && !r_c17_write(emitter, ", ")) ||
+            if ((argument == NULL) || ((parameter != 1U) && !r_c17_write(emitter, ", ")) ||
                 !r_c17_emit_variable_name(emitter, argument->symbol)) {
                 return false;
             }
@@ -45523,15 +45520,14 @@ static bool r_c17_emit_core_key_helper(RC17Emitter *emitter, RTypeId key, bool h
                              : type->kind == R_SEMANTIC_TYPE_STR ? "length"
                                                                  : "r_len";
         if (hash) {
-            if (!r_c17_format(
-                    emitter,
-                    "    const uint8_t *bytes = (const uint8_t *)left->%s;\n"
-                    "    uint64_t hash = UINT64_C(14695981039346656037);\n"
-                    "    for (size_t index = 0; index < left->%s; ++index) {\n"
-                    "        hash = (hash ^ bytes[index]) * UINT64_C(1099511628211);\n"
-                    "    }\n    return hash;\n",
-                    data,
-                    length)) {
+            if (!r_c17_format(emitter,
+                              "    const uint8_t *bytes = (const uint8_t *)left->%s;\n"
+                              "    uint64_t hash = UINT64_C(14695981039346656037);\n"
+                              "    for (size_t index = 0; index < left->%s; ++index) {\n"
+                              "        hash = (hash ^ bytes[index]) * UINT64_C(1099511628211);\n"
+                              "    }\n    return hash;\n",
+                              data,
+                              length)) {
                 return false;
             }
         } else if (!r_c17_format(emitter,
@@ -49789,10 +49785,10 @@ static bool r_c17_preflight_thread_spawn_call(RC17Emitter *emitter,
         (scoped ? (node->integer_value == UINT64_C(0)) : (node->integer_value != UINT64_C(0))) ||
         (carrier == NULL) || (carrier->kind != R_SEMANTIC_TYPE_EFFECT_CARRIER) ||
         (carrier->base != r_c17_value_type(emitter, node->type)) ||
-        !r_c17_effect_set_is_single_named(
-            emitter,
-            carrier->second,
-            blocking ? "std.async::start_error" : "std.thread::thread_error") ||
+        !r_c17_effect_set_is_single_named(emitter,
+                                          carrier->second,
+                                          blocking ? "std.async::start_error"
+                                                   : "std.thread::thread_error") ||
         !r_c17_preflight_type_dependency(emitter, node->auxiliary_type, depth + 1U) ||
         !r_c17_preflight_thread_entry_type_glue(emitter, node->symbol, entry)) {
         return r_c17_fail(emitter, R_FRONTEND_NOT_LOWERABLE);
@@ -51341,9 +51337,9 @@ static bool r_c17_preflight_core_atomic_call(RC17Emitter *emitter,
                            "core::memory_order")) ||
         (is_store
              ? (r_c17_value_kind(emitter, node->type) != R_SEMANTIC_TYPE_VOID)
-             : (is_compare ? !r_c17_type_is_atomic_compare_exchange_result(
-                                 emitter, r_c17_type(emitter, node->type)) ||
-                                 (r_c17_type(emitter, node->type)->base != node->auxiliary_type)
+             : (is_compare     ? !r_c17_type_is_atomic_compare_exchange_result(
+                                     emitter, r_c17_type(emitter, node->type)) ||
+                                     (r_c17_type(emitter, node->type)->base != node->auxiliary_type)
                 : is_lock_free ? (r_c17_value_kind(emitter, node->type) != R_SEMANTIC_TYPE_BOOL)
                                : (node->type != node->auxiliary_type)))) {
         return r_c17_fail(emitter, R_FRONTEND_NOT_LOWERABLE);
@@ -51918,8 +51914,8 @@ static bool r_c17_preflight_expression(RC17Emitter *emitter,
         for (field_index = 0U; field_index < aggregate->field_count; ++field_index) {
             if (r_c17_field_is_hash_digest_array(
                     emitter,
-                    &emitter->frontend->semantic_fields[(size_t)aggregate->first_field +
-                                                        (size_t)field_index])) {
+                    &emitter->frontend
+                         ->semantic_fields[(size_t)aggregate->first_field + (size_t)field_index])) {
                 /* M20-1: the digest bytes are copied into the native array. */
                 emitter->uses_memory = true;
             }
@@ -52745,14 +52741,15 @@ static bool r_c17_preflight_expression(RC17Emitter *emitter,
             /* R-TYPE-0046 (L32): a borrowed value and, for APPEND, the builder. */
             const uint32_t count =
                 node->standard_operation == R_STANDARD_CALL_CORE_FORMAT_RENDER ? 1U : 2U;
-            if ((node->child_count != count) ||
-                (r_c17_value_kind(emitter, node->auxiliary_type) !=
-                 R_SEMANTIC_TYPE_EFFECT_CARRIER)) {
+            if ((node->child_count != count) || (r_c17_value_kind(emitter, node->auxiliary_type) !=
+                                                 R_SEMANTIC_TYPE_EFFECT_CARRIER)) {
                 return r_c17_fail(emitter, R_FRONTEND_NOT_LOWERABLE);
             }
             for (uint32_t operand = 0U; operand < count; ++operand) {
-                if (!r_c17_preflight_expression(
-                        emitter, r_c17_child(emitter, node, operand), function_symbol, depth + 1U)) {
+                if (!r_c17_preflight_expression(emitter,
+                                                r_c17_child(emitter, node, operand),
+                                                function_symbol,
+                                                depth + 1U)) {
                     return false;
                 }
             }

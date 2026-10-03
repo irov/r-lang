@@ -81,8 +81,8 @@ static RRuntimeDarwinSignalWait *start_wait(RRuntimeAllocator *allocator,
                                             _Bool has_timeout,
                                             uint64_t timeout_nanoseconds,
                                             TestSignalCompletion *completion) {
-    RRuntimeDarwinSignalWaitPrepareResult prepared = r_runtime_darwin_signal_wait_prepare(
-        allocator, listener, has_timeout, timeout_nanoseconds);
+    RRuntimeDarwinSignalWaitPrepareResult prepared =
+        r_runtime_darwin_signal_wait_prepare(allocator, listener, has_timeout, timeout_nanoseconds);
 
     if (prepared.status != R_RUNTIME_DARWIN_SIGNAL_OK || prepared.wait == NULL) {
         abort();

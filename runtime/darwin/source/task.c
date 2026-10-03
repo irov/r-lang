@@ -677,10 +677,8 @@ void r_runtime_task_deadline_leave(RRuntimeTaskDeadline previous) {
     }
 }
 
-RRuntimeBudget *r_runtime_task_budget_enter(_Bool has_bytes,
-                                            uint64_t bytes,
-                                            _Bool has_tasks,
-                                            uint64_t tasks) {
+RRuntimeBudget *
+r_runtime_task_budget_enter(_Bool has_bytes, uint64_t bytes, _Bool has_tasks, uint64_t tasks) {
     RRuntimeTask *task = r_runtime_executor_current_task;
     RRuntimeBudget *previous;
     RRuntimeBudget *entered;
@@ -765,10 +763,10 @@ static _Bool executor_quiescent_for_exit_locked(void) {
             continue;
         }
         task_lock(task);
-        suspended = (task->kind != R_RUNTIME_TASK_KIND_EXTERNAL) &&
-                    (((task->state == R_RUNTIME_TASK_SUSPENDED) && !task->resume_pending) ||
-                     ((task->state == R_RUNTIME_TASK_RUNNING) &&
-                      (task->joining_thread == exiting_thread)));
+        suspended =
+            (task->kind != R_RUNTIME_TASK_KIND_EXTERNAL) &&
+            (((task->state == R_RUNTIME_TASK_SUSPENDED) && !task->resume_pending) ||
+             ((task->state == R_RUNTIME_TASK_RUNNING) && (task->joining_thread == exiting_thread)));
         task_unlock(task);
         if (!suspended) {
             return 0;

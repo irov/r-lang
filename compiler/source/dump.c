@@ -221,8 +221,7 @@ static bool r_dump_ast_node(const RSource *source,
             (source->ast_children[child_index] != R_AST_NODE_ID_INVALID) &&
             ((size_t)source->ast_children[child_index] <= source->ast_node_count) &&
             r_dump_generated(
-                source,
-                source->ast_nodes[(size_t)source->ast_children[child_index] - 1U].span)) {
+                source, source->ast_nodes[(size_t)source->ast_children[child_index] - 1U].span)) {
             continue;
         }
         if ((child_index >= source->ast_child_count) ||

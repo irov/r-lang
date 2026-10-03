@@ -315,15 +315,14 @@ static bool r_json_tree_builder_key(RStdJsonTreeBuilder *builder,
                                     RStdJsonCursor *cursor) {
     const RStdJsonByteView text = cursor->token.text;
     if (builder->key_bytes.capacity - builder->key_bytes.length < text.length) {
-        cursor->outcome = r_json_array_result(r_runtime_array_reserve(
-            &builder->key_bytes, text.length < 256U ? 256U : text.length));
+        cursor->outcome = r_json_array_result(
+            r_runtime_array_reserve(&builder->key_bytes, text.length < 256U ? 256U : text.length));
         if (cursor->outcome.status != R_STD_JSON_CALL_SUCCESS)
             return false;
     }
     if (text.length != 0U)
-        memcpy((uint8_t *)builder->key_bytes.data + builder->key_bytes.length,
-               text.data,
-               text.length);
+        memcpy(
+            (uint8_t *)builder->key_bytes.data + builder->key_bytes.length, text.data, text.length);
     frame->key_offset = builder->key_bytes.length;
     frame->key_length = text.length;
     frame->has_key = true;
@@ -399,8 +398,7 @@ bool r_json_tree_builder_token(RStdJsonTreeBuilder *builder, RStdJsonCursor *cur
     } else {
         RJsonPendingChild child = {parent->key_offset, parent->key_length, created.value};
         if (builder->children.length == builder->children.capacity) {
-            cursor->outcome =
-                r_json_array_result(r_runtime_array_reserve(&builder->children, 32U));
+            cursor->outcome = r_json_array_result(r_runtime_array_reserve(&builder->children, 32U));
             if (cursor->outcome.status != R_STD_JSON_CALL_SUCCESS) {
                 r_json_value_destroy(&created.value);
                 return false;

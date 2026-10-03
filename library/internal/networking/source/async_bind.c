@@ -440,8 +440,8 @@ static void bind_external_start(RRuntimeTaskExternalExecution *execution,
     _Bool committed;
 
     if (mode_is_unix(payload->mode) ? payload->unix_path_length == 0
-                                     : !r_library_internal_net_address_to_native(
-                                           payload->local, &native, &native_length, &domain)) {
+                                    : !r_library_internal_net_address_to_native(
+                                          payload->local, &native, &native_length, &domain)) {
         initialize_failure_result(
             payload, result_pointer, net_error(R_STD_NET_ERROR_INVALID_ADDRESS, INT64_C(0)));
         finish_external(execution, 0);

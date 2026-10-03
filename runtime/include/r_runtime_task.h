@@ -339,10 +339,8 @@ void r_runtime_task_deadline_leave(RRuntimeTaskDeadline previous);
 /* Core R-STMT-0020: makes the budget of the executing task a new budget with the given limits
  * under its previous one and returns the previous one for leave, which restores it; a budget
  * that cannot be recorded refuses every charge. Outside a task both calls do nothing. */
-RRuntimeBudget *r_runtime_task_budget_enter(_Bool has_bytes,
-                                            uint64_t bytes,
-                                            _Bool has_tasks,
-                                            uint64_t tasks);
+RRuntimeBudget *
+r_runtime_task_budget_enter(_Bool has_bytes, uint64_t bytes, _Bool has_tasks, uint64_t tasks);
 void r_runtime_task_budget_leave(RRuntimeBudget *previous);
 
 /* Narrows the deadline of a standard operation before its start by the deadline of the

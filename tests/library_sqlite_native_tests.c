@@ -9,12 +9,12 @@
 
 static int r_sqlite_failures;
 
-#define R_SQLITE_CHECK(condition)                                                                 \
-    do {                                                                                          \
-        if (!(condition)) {                                                                       \
+#define R_SQLITE_CHECK(condition)                                                                  \
+    do {                                                                                           \
+        if (!(condition)) {                                                                        \
             (void)fprintf(stderr, "%s:%d: check failed: %s\n", __FILE__, __LINE__, #condition);    \
-            ++r_sqlite_failures;                                                                  \
-        }                                                                                         \
+            ++r_sqlite_failures;                                                                   \
+        }                                                                                          \
     } while (0)
 
 static const uint8_t *r_sqlite_text(const char *text) {
@@ -23,8 +23,8 @@ static const uint8_t *r_sqlite_text(const char *text) {
 
 static void *r_sqlite_open_memory(void) {
     void *database = NULL;
-    R_SQLITE_CHECK(
-        r_std_sqlite_native_open(r_sqlite_text(":memory:"), 8U, 2, 1000, &database) == 0);
+    R_SQLITE_CHECK(r_std_sqlite_native_open(r_sqlite_text(":memory:"), 8U, 2, 1000, &database) ==
+                   0);
     return database;
 }
 
@@ -136,11 +136,9 @@ static void r_sqlite_test_failures(void) {
     r_std_sqlite_native_finalize(statement);
     statement = NULL;
     const char *comment = "  -- nothing";
-    R_SQLITE_CHECK(r_std_sqlite_native_prepare(database,
-                                               r_sqlite_text(comment),
-                                               strlen(comment),
-                                               &statement,
-                                               &consumed) == 0);
+    R_SQLITE_CHECK(r_std_sqlite_native_prepare(
+                       database, r_sqlite_text(comment), strlen(comment), &statement, &consumed) ==
+                   0);
     R_SQLITE_CHECK((statement == NULL) && (consumed == strlen(comment)));
     R_SQLITE_CHECK(r_std_sqlite_native_prepare(
                        database, r_sqlite_text("SELECT 1\0"), 9U, &statement, &consumed) ==
@@ -174,8 +172,8 @@ static void r_sqlite_test_failures(void) {
 static void r_sqlite_test_open(void) {
     void *database = NULL;
     const char *missing = "/nonexistent-directory-of-r-tests/data.db";
-    R_SQLITE_CHECK(r_std_sqlite_native_open(
-                       r_sqlite_text(missing), strlen(missing), 1, 0, &database) == 14);
+    R_SQLITE_CHECK(
+        r_std_sqlite_native_open(r_sqlite_text(missing), strlen(missing), 1, 0, &database) == 14);
     R_SQLITE_CHECK(database != NULL);
     R_SQLITE_CHECK(r_sqlite_message_has(
         r_std_sqlite_native_database_message, database, "unable to open database file"));
@@ -196,15 +194,15 @@ static void r_sqlite_test_wal_files(void) {
     const char *name = "r_library_sqlite_native_wal.db";
     const char *setup =
         "PRAGMA journal_mode = WAL; CREATE TABLE IF NOT EXISTS t(x); INSERT INTO t VALUES (1);";
-    R_SQLITE_CHECK(
-        r_std_sqlite_native_open(r_sqlite_text(name), strlen(name), 2, 0, &database) == 0);
+    R_SQLITE_CHECK(r_std_sqlite_native_open(r_sqlite_text(name), strlen(name), 2, 0, &database) ==
+                   0);
     R_SQLITE_CHECK(r_std_sqlite_native_execute(database, r_sqlite_text(setup), strlen(setup)) == 0);
     r_std_sqlite_native_close(database);
     R_SQLITE_CHECK(access("r_library_sqlite_native_wal.db-wal", F_OK) == 0);
     R_SQLITE_CHECK(access("r_library_sqlite_native_wal.db-shm", F_OK) == 0);
     database = NULL;
-    R_SQLITE_CHECK(
-        r_std_sqlite_native_open(r_sqlite_text(name), strlen(name), 1, 0, &database) == 0);
+    R_SQLITE_CHECK(r_std_sqlite_native_open(r_sqlite_text(name), strlen(name), 1, 0, &database) ==
+                   0);
     statement = r_sqlite_prepare(database, "SELECT count(*) FROM t");
     R_SQLITE_CHECK(r_std_sqlite_native_step(statement, &changes, &row_id) == 100);
     R_SQLITE_CHECK(r_std_sqlite_native_column_integer(statement, 0) >= 1);

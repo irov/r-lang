@@ -256,8 +256,8 @@ typedef struct RRuntimeDarwinIoTestPause {
     _Bool released;
 } RRuntimeDarwinIoTestPause;
 
-#define R_RUNTIME_DARWIN_IO_TEST_PAUSE_INITIALIZER                                               \
-    { PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER, 0, 0, 0, 0 }
+#define R_RUNTIME_DARWIN_IO_TEST_PAUSE_INITIALIZER                                                 \
+    {PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER, 0, 0, 0, 0}
 
 void r_runtime_darwin_io_internal_test_pause_arm(RRuntimeDarwinIoTestPause *pause);
 void r_runtime_darwin_io_internal_test_pause_wait(RRuntimeDarwinIoTestPause *pause);

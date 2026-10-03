@@ -225,8 +225,7 @@ void r_runtime_darwin_io_internal_direct_finish_activated(RRuntimeDarwinIoReques
 /* ---- FILE ---- */
 
 static const unsigned char *write_bytes(const RRuntimeDarwinIoRequest *request) {
-    return request->buffer_transfer_required ? request->buffer.data
-                                             : request->prepared_buffer_data;
+    return request->buffer_transfer_required ? request->buffer.data : request->prepared_buffer_data;
 }
 
 static _Bool event_pending(RRuntimeDarwinIoRequest *request) {

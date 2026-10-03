@@ -1066,12 +1066,11 @@ static RStdNetTaskStartResult datagram_start(RStdNetUdpSocketStorage *socket_sto
     RStdNetTaskStartResult result = {0};
     int descriptor = -1;
 
-    task_preparation =
-        r_runtime_task_external_start_prepare(payload_type,
-                                              datagram_result_type(
-                                                  mode, payload.borrowed, payload.unix_domain),
-                                              datagram_external_start,
-                                              datagram_external_cancel);
+    task_preparation = r_runtime_task_external_start_prepare(
+        payload_type,
+        datagram_result_type(mode, payload.borrowed, payload.unix_domain),
+        datagram_external_start,
+        datagram_external_cancel);
     if (task_preparation.status != R_RUNTIME_TASK_START_OK) {
         return task_start_failure(task_preparation.status);
     }
@@ -1182,11 +1181,8 @@ RStdNetTaskStartResult r_library_internal_net_unix_send_from(const RStdNetUnixDa
     staged.unix_domain = 1;
     staged.borrowed_data = borrowed_send_data(source.data);
     staged.borrowed_length = source.length;
-    return datagram_start(socket->storage,
-                          (RStdNetSocketAddress){0},
-                          &staged,
-                          deadline,
-                          R_LIBRARY_NET_DATAGRAM_SEND);
+    return datagram_start(
+        socket->storage, (RStdNetSocketAddress){0}, &staged, deadline, R_LIBRARY_NET_DATAGRAM_SEND);
 }
 
 RStdNetTaskStartResult r_library_internal_net_unix_receive_into(const RStdNetUnixDatagram *socket,

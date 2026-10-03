@@ -39,7 +39,8 @@ int main(void) {
     status = r_std_alloc_native_usage(&bytes, &byte_limit, &tasks, &task_limit, &available);
     failures += check(status == 1, "a budget inside the block");
     failures += check(bytes == UINT64_C(0) && tasks == UINT64_C(1), "the counters of the budget");
-    failures += check(byte_limit == UINT64_MAX && task_limit == UINT64_C(2), "the limits of the budget");
+    failures +=
+        check(byte_limit == UINT64_MAX && task_limit == UINT64_C(2), "the limits of the budget");
     /* The room comes from the enclosing budget, the only one that limits bytes. */
     failures += check(available == UINT64_C(100), "the room of the enclosing budget");
     r_runtime_budget_return_task(inner);

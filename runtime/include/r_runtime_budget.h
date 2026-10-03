@@ -19,11 +19,8 @@ typedef struct RRuntimeBudget RRuntimeBudget;
 
 /* A budget under parent, which it retains; a limit applies only when its flag is set. NULL
  * when the record of the budget cannot be allocated. */
-RRuntimeBudget *r_runtime_budget_create(RRuntimeBudget *parent,
-                                        _Bool has_bytes,
-                                        uint64_t bytes,
-                                        _Bool has_tasks,
-                                        uint64_t tasks);
+RRuntimeBudget *r_runtime_budget_create(
+    RRuntimeBudget *parent, _Bool has_bytes, uint64_t bytes, _Bool has_tasks, uint64_t tasks);
 /* The budget that refuses every charge: the budget of a block whose budget could not be
  * recorded. It is never released. */
 RRuntimeBudget *r_runtime_budget_refusing(void);

@@ -11,8 +11,10 @@
 static void r_test_own_release(RRuntimeOwn *owner);
 static RStdAllocTryNewResult
 r_test_alloc_try_new(RRuntimeAllocator *allocator, RRuntimeTypeInfo type, void *staged_value);
-static RRuntimeAllocationStatus
-r_test_allocator_allocate(RRuntimeAllocator *allocator, size_t size, size_t alignment, void **result);
+static RRuntimeAllocationStatus r_test_allocator_allocate(RRuntimeAllocator *allocator,
+                                                          size_t size,
+                                                          size_t alignment,
+                                                          void **result);
 static RStdDictInsertResult
 r_test_dict_insert(RStdDict *target, void *staged_key, void *staged_value, void *replaced_storage);
 
@@ -72,8 +74,10 @@ r_test_alloc_try_new(RRuntimeAllocator *allocator, RRuntimeTypeInfo type, void *
 /* The generated list helper allocates the node itself (one node for `own i32*`), so the
  * failure is injected at the allocator: the helper must report OUT_OF_MEMORY, leave the list
  * empty and hand the staged owner back to the R catch clause, which checks its value. */
-static RRuntimeAllocationStatus
-r_test_allocator_allocate(RRuntimeAllocator *allocator, size_t size, size_t alignment, void **result) {
+static RRuntimeAllocationStatus r_test_allocator_allocate(RRuntimeAllocator *allocator,
+                                                          size_t size,
+                                                          size_t alignment,
+                                                          void **result) {
     if (!list_failed && (size == sizeof(RRuntimeListNode) + sizeof(RRuntimeOwn))) {
         list_failed = true;
         *result = NULL;

@@ -422,7 +422,7 @@ static RRuntimeDarwinIoStartStatus ensure_tcp_data_io_locked(RStdNetTcpStreamSto
         return R_RUNTIME_DARWIN_IO_START_OK;
     }
     created = r_runtime_darwin_io_handle_create_socket(stream->handle.allocator,
-                                                      stream->handle.descriptor);
+                                                       stream->handle.descriptor);
     if (created.status != R_RUNTIME_DARWIN_IO_START_OK) {
         *native_error = created.native_error;
         return created.status;

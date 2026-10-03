@@ -1670,9 +1670,8 @@ static RStdFsTaskStartResult start_payload(RLibraryFsPayloadMode mode,
         return start_task(&payload);
     }
     /* An offset beyond i64 cannot be positioned, and an append-mode write selects the end. */
-    if (payload.positional &&
-        (payload.offset > (uint64_t)INT64_MAX ||
-         (mode != R_LIBRARY_FS_PAYLOAD_READ && snapshot.append))) {
+    if (payload.positional && (payload.offset > (uint64_t)INT64_MAX ||
+                               (mode != R_LIBRARY_FS_PAYLOAD_READ && snapshot.append))) {
         payload_make_immediate(&payload,
                                R_LIBRARY_FS_PAYLOAD_IMMEDIATE_ERROR,
                                io_error(R_STD_IO_ERROR_INVALID_OPERATION, INT64_C(0)));

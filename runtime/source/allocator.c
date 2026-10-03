@@ -202,8 +202,7 @@ static _Bool r_runtime_budget_record(void *allocation, RRuntimeBudget *budget, s
 }
 
 /* Removes the record of a charged allocation; false when it was charged to no budget. */
-static _Bool
-r_runtime_budget_take(const void *allocation, RRuntimeBudget **budget, size_t *size) {
+static _Bool r_runtime_budget_take(const void *allocation, RRuntimeBudget **budget, size_t *size) {
     const uintptr_t key = (uintptr_t)allocation;
     const uint64_t hash = r_runtime_budget_hash(key);
     RRuntimeBudgetShard *shard;
@@ -249,14 +248,13 @@ static _Bool r_runtime_budget_add(RRuntimeBudget *budget, uint64_t amount, _Bool
 
         do {
             admitted = (used <= limit) && (amount <= limit - used);
-        } while (admitted && !atomic_compare_exchange_weak_explicit(
-                                 counter, &used, used + amount, memory_order_relaxed,
-                                 memory_order_relaxed));
+        } while (admitted &&
+                 !atomic_compare_exchange_weak_explicit(
+                     counter, &used, used + amount, memory_order_relaxed, memory_order_relaxed));
         if (!admitted) {
             for (RRuntimeBudget *undo = budget; undo != cursor; undo = undo->parent) {
-                (void)atomic_fetch_sub_explicit(tasks ? &undo->tasks_used : &undo->bytes_used,
-                                                amount,
-                                                memory_order_relaxed);
+                (void)atomic_fetch_sub_explicit(
+                    tasks ? &undo->tasks_used : &undo->bytes_used, amount, memory_order_relaxed);
             }
             return 0;
         }
@@ -271,11 +269,8 @@ static void r_runtime_budget_subtract(RRuntimeBudget *budget, uint64_t amount, _
     }
 }
 
-RRuntimeBudget *r_runtime_budget_create(RRuntimeBudget *parent,
-                                        _Bool has_bytes,
-                                        uint64_t bytes,
-                                        _Bool has_tasks,
-                                        uint64_t tasks) {
+RRuntimeBudget *r_runtime_budget_create(
+    RRuntimeBudget *parent, _Bool has_bytes, uint64_t bytes, _Bool has_tasks, uint64_t tasks) {
     RRuntimeBudget *budget = malloc(sizeof(RRuntimeBudget));
 
     if (budget == NULL) {

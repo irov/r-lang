@@ -187,7 +187,8 @@ int32_t r_std_crypto_native_hkdf(int32_t hash,
     }
 }
 
-static int32_t r_std_crypto_native_password_limits(size_t length, uint64_t operations, size_t memory) {
+static int32_t
+r_std_crypto_native_password_limits(size_t length, uint64_t operations, size_t memory) {
     if ((length < crypto_pwhash_PASSWD_MIN) || (length > crypto_pwhash_PASSWD_MAX) ||
         (operations < crypto_pwhash_OPSLIMIT_MIN) || (operations > crypto_pwhash_OPSLIMIT_MAX) ||
         (memory < crypto_pwhash_MEMLIMIT_MIN) || (memory > crypto_pwhash_MEMLIMIT_MAX)) {
@@ -257,7 +258,8 @@ int32_t r_std_crypto_native_password_verify(const uint8_t *hash,
     }
     memset(text, 0, sizeof(text));
     memcpy(text, hash, hash_length);
-    return crypto_pwhash_str_verify(text, (const char *)password, (unsigned long long)password_length) == 0
+    return crypto_pwhash_str_verify(
+               text, (const char *)password, (unsigned long long)password_length) == 0
                ? 0
                : -1;
 }
@@ -301,7 +303,8 @@ int32_t r_std_crypto_native_blake2b_start(uint8_t *state,
     return status == 0 ? 0 : -1;
 }
 
-int32_t r_std_crypto_native_blake2b_update(uint8_t *state, const uint8_t *data, size_t data_length) {
+int32_t
+r_std_crypto_native_blake2b_update(uint8_t *state, const uint8_t *data, size_t data_length) {
     crypto_generichash_blake2b_state aligned;
     int status;
 

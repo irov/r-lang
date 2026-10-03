@@ -280,9 +280,8 @@ static bool r_hir_write_type(const RFrontendContext *context,
         }
         RTypeId parameter_id = type->second;
         uint64_t index;
-        if (!r_write_text(writer,
-                          user_data,
-                          function_value ? "(fn parameters=(" : "(raw_fn parameters=(")) {
+        if (!r_write_text(
+                writer, user_data, function_value ? "(fn parameters=(" : "(raw_fn parameters=(")) {
             return false;
         }
         for (index = UINT64_C(0); index < type->length; ++index) {
@@ -696,7 +695,7 @@ static bool r_hir_dump_node(const RFrontendContext *context,
         case R_STANDARD_CALL_CORE_SLICE_FROM_RAW_PARTS:
             /* L38: an anchored slice is the same descriptor; only its region differs. */
             operation_name = node->integer_value == UINT64_C(1) ? "core::slice_from_raw_parts_in"
-                                                                 : "core::slice_from_raw_parts";
+                                                                : "core::slice_from_raw_parts";
             break;
         case R_STANDARD_CALL_CORE_SLICE_FROM_RAW_PARTS_MUT:
             operation_name = node->integer_value == UINT64_C(1)
@@ -1914,10 +1913,9 @@ static bool r_hir_dump_node(const RFrontendContext *context,
         if (!r_write_text(writer, user_data, " operation=") ||
             ((node->standard_operation == R_STANDARD_CALL_MATH_OPERATION) &&
              !r_write_text(writer, user_data, "std.math::")) ||
-            ((async_sync != NULL) &&
-             (!r_write_text(writer, user_data, "std.") ||
-              !r_write_text(writer, user_data, async_sync->module) ||
-              !r_write_text(writer, user_data, "::"))) ||
+            ((async_sync != NULL) && (!r_write_text(writer, user_data, "std.") ||
+                                      !r_write_text(writer, user_data, async_sync->module) ||
+                                      !r_write_text(writer, user_data, "::"))) ||
             !r_write_text(writer, user_data, operation_name) ||
             !r_hir_write_type_attribute(context, node->type, writer, user_data)) {
             return false;

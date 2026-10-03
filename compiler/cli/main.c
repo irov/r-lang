@@ -1022,7 +1022,8 @@ static bool r_cli_merge_library_links(RCliOptions *options) {
                                          options->link_manifest_length,
                                          &program_first,
                                          &program_last))) {
-        (void)fprintf(stderr, "r-front: %s or --link-manifest is not a valid link manifest\n", path);
+        (void)fprintf(
+            stderr, "r-front: %s or --link-manifest is not a valid link manifest\n", path);
         goto cleanup;
     }
     if ((options->link_manifest != NULL) &&
@@ -1038,8 +1039,8 @@ static bool r_cli_merge_library_links(RCliOptions *options) {
         const size_t program_count = program_last - program_first;
         const size_t library_count = library_last - library_first;
         const bool comma = (program_count != 0U) && (library_count != 0U);
-        const size_t length =
-            (sizeof(prefix) - 1U) + program_count + (comma ? 1U : 0U) + library_count + (sizeof(suffix) - 1U);
+        const size_t length = (sizeof(prefix) - 1U) + program_count + (comma ? 1U : 0U) +
+                              library_count + (sizeof(suffix) - 1U);
         uint8_t *combined = r_cli_allocate(length);
         size_t offset = 0U;
         if (combined == NULL) {
@@ -1409,10 +1410,9 @@ int main(int argc, char **argv) {
     if (options.test_mode) {
         /* R-FUNC-0025: the module of --entry, or else the first source file, runs its tests. */
         char *test_module = options.entry != NULL ? r_cli_entry_module(options.entry) : NULL;
-        const RFrontendStatus test_status =
-            ((options.entry != NULL) && (test_module == NULL))
-                ? R_FRONTEND_OUT_OF_MEMORY
-                : r_frontend_set_test_mode(context, test_module);
+        const RFrontendStatus test_status = ((options.entry != NULL) && (test_module == NULL))
+                                                ? R_FRONTEND_OUT_OF_MEMORY
+                                                : r_frontend_set_test_mode(context, test_module);
         r_cli_deallocate(test_module);
         if (test_status != R_FRONTEND_OK) {
             (void)fprintf(stderr, "r-front: cannot apply --test\n");

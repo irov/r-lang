@@ -67,7 +67,9 @@ downloads the SQLite amalgamation and the COSE examples on first configuration; 
 without network needs the archives copied into `build/third_party` (the error message names the
 file and hash). Optional for their checks only: `clang-format 22.1.8` (`format-check`), `re2c
 4.5.1` (`verify_generated_lexer`), `asciidoctor 2.0.26` (`specification-render-check`); the
-exact versions are in `tools/toolchain.lock`.
+exact versions are in `tools/toolchain.lock`. Homebrew's `llvm@22` carries clang-format 22.1.8;
+link only that binary into `PATH` (`ln -s /opt/homebrew/opt/llvm@22/bin/clang-format
+/opt/homebrew/bin/clang-format`), since the rest of that LLVM would shadow the pinned Apple clang.
 
 ## Build and test
 
@@ -136,6 +138,8 @@ as finished. The matrix records their results per stage.
   `compiler/hir/hir.c` and `compiler/mir/mir.c` need the new cases.
 - Describe the design in the relevant section of `compiler/README.md`; it is the compiler's
   reference, not a changelog.
+- clang-format sorts the `#include` lines of one block; fragments (`.inc`) that depend on the
+  ones before them stand in their own blocks, separated by a blank line.
 
 ### Specification (`specification/`)
 

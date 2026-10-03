@@ -62,8 +62,8 @@ static _Bool wait_for_position_cancellation(RLibraryFsHandleStorage *storage,
         if (!delivered) {
             require(pthread_mutex_lock(&storage->mutex) == 0, "lock position cancellation state");
             position = storage->position_head;
-            delivered = position != NULL && position->cancel_delivered &&
-                        position->cancel_reason == reason;
+            delivered =
+                position != NULL && position->cancel_delivered && position->cancel_reason == reason;
             require(pthread_mutex_unlock(&storage->mutex) == 0,
                     "unlock position cancellation state");
         }
@@ -682,9 +682,8 @@ static void test_deadline_during_positioned_barrier(RRuntimeAllocator *allocator
             "deadline write starts and consumes owner");
     r_runtime_darwin_io_testing_wait_for_stream_position_barrier();
     require(nanosleep(&wait_time, NULL) == 0, "wait for payload deadline");
-    require(
-        wait_for_position_cancellation(storage, R_LIBRARY_FS_POSITION_CANCEL_DEADLINE, applied),
-        "deadline cancellation reaches positioned request");
+    require(wait_for_position_cancellation(storage, R_LIBRARY_FS_POSITION_CANCEL_DEADLINE, applied),
+            "deadline cancellation reaches positioned request");
     r_runtime_darwin_io_testing_release_stream_position_barrier();
     write_result = await_write(write_started);
     require(write_result.kind == R_STD_IO_WRITE_RESULT_FAILED &&
@@ -1195,14 +1194,14 @@ static void test_payload_engine_follows_file_type(RRuntimeAllocator *allocator) 
     fifo = open(fifo_path, O_RDWR | O_NONBLOCK | O_CLOEXEC);
     require(fifo >= 0, "open engine test fifo");
 
-    created = r_library_internal_fs_payload_handle_create(allocator, regular,
-                                                          R_RUNTIME_DARWIN_IO_STREAM);
+    created =
+        r_library_internal_fs_payload_handle_create(allocator, regular, R_RUNTIME_DARWIN_IO_STREAM);
     require(created.status == R_RUNTIME_DARWIN_IO_START_OK, "regular payload handle");
     buffer = r_runtime_darwin_io_buffer_allocate(allocator, 7U);
     require(buffer.status == R_RUNTIME_DARWIN_IO_START_OK, "regular read buffer");
     r_runtime_darwin_io_testing_hold_file_transfers();
-    preparation = r_runtime_darwin_io_prepare_read_some(created.handle, (off_t)0, &buffer.buffer,
-                                                        UINT64_C(0));
+    preparation = r_runtime_darwin_io_prepare_read_some(
+        created.handle, (off_t)0, &buffer.buffer, UINT64_C(0));
     require(preparation.status == R_RUNTIME_DARWIN_IO_START_OK &&
                 r_runtime_darwin_io_prepared_set_stream_position(preparation.prepared, (off_t)0),
             "prepare regular read");
@@ -1225,13 +1224,13 @@ static void test_payload_engine_follows_file_type(RRuntimeAllocator *allocator) 
     r_runtime_darwin_io_request_release(closing.request);
     r_runtime_darwin_io_handle_release(created.handle);
 
-    created = r_library_internal_fs_payload_handle_create(allocator, fifo,
-                                                          R_RUNTIME_DARWIN_IO_STREAM);
+    created =
+        r_library_internal_fs_payload_handle_create(allocator, fifo, R_RUNTIME_DARWIN_IO_STREAM);
     require(created.status == R_RUNTIME_DARWIN_IO_START_OK, "fifo payload handle");
     buffer = r_runtime_darwin_io_buffer_allocate(allocator, 4U);
     require(buffer.status == R_RUNTIME_DARWIN_IO_START_OK, "fifo read buffer");
-    preparation = r_runtime_darwin_io_prepare_read_some(created.handle, (off_t)0, &buffer.buffer,
-                                                        UINT64_C(0));
+    preparation = r_runtime_darwin_io_prepare_read_some(
+        created.handle, (off_t)0, &buffer.buffer, UINT64_C(0));
     require(preparation.status == R_RUNTIME_DARWIN_IO_START_OK, "prepare fifo read");
     submission = r_runtime_darwin_io_prepared_activate(&preparation.prepared, &buffer.buffer);
     require(submission.status == R_RUNTIME_DARWIN_IO_START_OK, "activate fifo read");

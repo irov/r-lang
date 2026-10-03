@@ -496,9 +496,8 @@ r_runtime_darwin_signal_wait_prepare(RRuntimeAllocator *allocator,
     wait->next = NULL;
     wait->completion = NULL;
     wait->completion_context = NULL;
-    wait->result = (RRuntimeDarwinSignalWaitResult){R_RUNTIME_DARWIN_SIGNAL_TERMINAL_CANCELLED,
-                                                    UINT64_C(0),
-                                                    UINT64_C(0)};
+    wait->result = (RRuntimeDarwinSignalWaitResult){
+        R_RUNTIME_DARWIN_SIGNAL_TERMINAL_CANCELLED, UINT64_C(0), UINT64_C(0)};
     wait->queued = 0;
     wait->timer_activated = 0;
     wait->terminal_selected = 0;

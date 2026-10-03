@@ -499,8 +499,7 @@ bool r_source_append_bytes(RFrontendContext *context,
 
     if ((length > context->options.limits.max_source_bytes) ||
         (old_length > context->options.limits.max_source_bytes - length) ||
-        (old_length + length > UINT32_MAX) ||
-        (old_length + length > SIZE_MAX - R_SOURCE_PADDING)) {
+        (old_length + length > UINT32_MAX) || (old_length + length > SIZE_MAX - R_SOURCE_PADDING)) {
         context->resource_status = R_FRONTEND_LIMIT_EXCEEDED;
         return false;
     }
@@ -521,8 +520,8 @@ bool r_source_append_bytes(RFrontendContext *context,
     for (offset = old_length; offset < source->length; ++offset) {
         const uint8_t byte = source->bytes[offset];
         if ((byte == (uint8_t)'\n') ||
-            ((byte == (uint8_t)'\r') && ((offset + 1U >= source->length) ||
-                                         (source->bytes[offset + 1U] != (uint8_t)'\n')))) {
+            ((byte == (uint8_t)'\r') &&
+             ((offset + 1U >= source->length) || (source->bytes[offset + 1U] != (uint8_t)'\n')))) {
             if (!r_add_line_start(context, source, (uint32_t)(offset + 1U))) {
                 return false;
             }

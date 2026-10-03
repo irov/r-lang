@@ -156,10 +156,8 @@ RRuntimeDarwinIoHandleCreateResult r_runtime_darwin_io_handle_create(RRuntimeAll
  * Dispatch I/O channels; cleanup of the descriptor waits for every direct activity, as a
  * channel's would.
  */
-RRuntimeDarwinIoHandleCreateResult
-r_runtime_darwin_io_handle_create_file(RRuntimeAllocator *allocator,
-                                       int descriptor,
-                                       RRuntimeDarwinIoType type);
+RRuntimeDarwinIoHandleCreateResult r_runtime_darwin_io_handle_create_file(
+    RRuntimeAllocator *allocator, int descriptor, RRuntimeDarwinIoType type);
 RRuntimeDarwinIoHandleCreateResult
 r_runtime_darwin_io_handle_create_socket(RRuntimeAllocator *allocator, int descriptor);
 

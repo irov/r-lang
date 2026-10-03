@@ -26,11 +26,8 @@ extern "C" {
    read only, bit 1 creates a missing file; busy_timeout is the number of milliseconds that a
    statement waits for a lock held by another connection. *database receives a handle also when
    opening fails, so that the message can be read, unless memory is exhausted (7 and null). */
-int32_t r_std_sqlite_native_open(const uint8_t *path,
-                                 size_t path_length,
-                                 int32_t flags,
-                                 int32_t busy_timeout,
-                                 void **database);
+int32_t r_std_sqlite_native_open(
+    const uint8_t *path, size_t path_length, int32_t flags, int32_t busy_timeout, void **database);
 
 /* Closes the connection of a database handle (null is ignored) and releases the handle. The
    connection itself lives until the last statement made from it is finalized. */
@@ -46,11 +43,8 @@ int32_t r_std_sqlite_native_execute(void *database, const uint8_t *sql, size_t l
 
 /* Prepares the first statement of sql. *statement receives the handle, or null when sql holds
    no statement; *consumed receives the number of bytes of that statement. */
-int32_t r_std_sqlite_native_prepare(void *database,
-                                    const uint8_t *sql,
-                                    size_t length,
-                                    void **statement,
-                                    size_t *consumed);
+int32_t r_std_sqlite_native_prepare(
+    void *database, const uint8_t *sql, size_t length, void **statement, size_t *consumed);
 
 /* 1 when the connection is outside a transaction, 0 inside one. */
 int32_t r_std_sqlite_native_autocommit(void *database);
@@ -66,14 +60,10 @@ int32_t r_std_sqlite_native_parameter_count(void *statement);
 int32_t r_std_sqlite_native_bind_null(void *statement, int32_t index);
 int32_t r_std_sqlite_native_bind_integer(void *statement, int32_t index, int64_t value);
 int32_t r_std_sqlite_native_bind_real(void *statement, int32_t index, double value);
-int32_t r_std_sqlite_native_bind_text(void *statement,
-                                      int32_t index,
-                                      const uint8_t *data,
-                                      size_t length);
-int32_t r_std_sqlite_native_bind_blob(void *statement,
-                                      int32_t index,
-                                      const uint8_t *data,
-                                      size_t length);
+int32_t
+r_std_sqlite_native_bind_text(void *statement, int32_t index, const uint8_t *data, size_t length);
+int32_t
+r_std_sqlite_native_bind_blob(void *statement, int32_t index, const uint8_t *data, size_t length);
 
 /* Steps a statement: 100 with a row, 101 at the end, when *changes and *last_row_id receive
    the rows that it changed and the last inserted row id of the connection, or a failure. */
@@ -89,16 +79,12 @@ int32_t r_std_sqlite_native_column_count(void *statement);
 int32_t r_std_sqlite_native_column_type(void *statement, int32_t column);
 int64_t r_std_sqlite_native_column_integer(void *statement, int32_t column);
 double r_std_sqlite_native_column_real(void *statement, int32_t column);
-size_t r_std_sqlite_native_column_bytes(void *statement,
-                                        int32_t column,
-                                        uint8_t *target,
-                                        size_t capacity);
+size_t
+r_std_sqlite_native_column_bytes(void *statement, int32_t column, uint8_t *target, size_t capacity);
 
 /* The name of a result column, copied as the bytes of a column are. */
-size_t r_std_sqlite_native_column_name(void *statement,
-                                       int32_t column,
-                                       uint8_t *target,
-                                       size_t capacity);
+size_t
+r_std_sqlite_native_column_name(void *statement, int32_t column, uint8_t *target, size_t capacity);
 
 #ifdef __cplusplus
 }

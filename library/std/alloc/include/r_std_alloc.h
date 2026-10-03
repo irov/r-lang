@@ -19,8 +19,8 @@ typedef enum RStdAllocError {
 
 /* The alloc_error of a refusal of the allocator, read right after it on the same thread:
  * budget_exhausted when a budget refused (Core R-STMT-0020), out_of_memory otherwise. */
-#define R_STD_ALLOC_REFUSAL()                                                                     \
-    (r_runtime_allocation_refused_by_budget() ? R_STD_ALLOC_ERROR_BUDGET_EXHAUSTED                \
+#define R_STD_ALLOC_REFUSAL()                                                                      \
+    (r_runtime_allocation_refused_by_budget() ? R_STD_ALLOC_ERROR_BUDGET_EXHAUSTED                 \
                                               : R_STD_ALLOC_ERROR_OUT_OF_MEMORY)
 
 /*

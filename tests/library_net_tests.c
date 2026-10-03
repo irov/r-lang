@@ -260,7 +260,9 @@ static int r_test_net_address_texts(void) {
         {"255.255.255.255", 65535U, 0U, "255.255.255.255:65535"},
         {"::", 0U, 0U, "[::]:0"},
         {"fe80::1", 8080U, 3U, "[fe80::1%3]:8080"},
-        {"ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff", 65535U, 4294967295U,
+        {"ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+         65535U,
+         4294967295U,
          "[ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff%4294967295]:65535"},
     };
     for (size_t index = 0U; index < sizeof(cases) / sizeof(cases[0]); ++index) {

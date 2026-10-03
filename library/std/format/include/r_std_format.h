@@ -97,12 +97,10 @@ RStdFormatAllocResult r_library_internal_format_float32(RStdFormatBuilder *targe
 
 /* R-EXPR-0028 (L32): text and one Unicode scalar padded on the left with spaces to spec.width
  * Unicode scalar values. */
-RStdFormatAllocResult r_library_internal_format_text(RStdFormatBuilder *target,
-                                                     RStdStringView text,
-                                                     RStdFormatSpec spec);
-RStdFormatAllocResult r_library_internal_format_char(RStdFormatBuilder *target,
-                                                     uint32_t value,
-                                                     RStdFormatSpec spec);
+RStdFormatAllocResult
+r_library_internal_format_text(RStdFormatBuilder *target, RStdStringView text, RStdFormatSpec spec);
+RStdFormatAllocResult
+r_library_internal_format_char(RStdFormatBuilder *target, uint32_t value, RStdFormatSpec spec);
 
 static inline void r_std_format_builder_destroy(RStdFormatBuilder *builder) {
     r_std_string_destroy(&builder->output);

@@ -23,9 +23,8 @@ static RStdNetError option_unsupported(void) {
 }
 
 /* Locks a live handle of the expected kind; a closing or closed identity reports closed. */
-static _Bool option_lock(RLibraryNetHandleStorage *storage,
-                         RLibraryNetHandleKind kind,
-                         RStdNetError *error) {
+static _Bool
+option_lock(RLibraryNetHandleStorage *storage, RLibraryNetHandleKind kind, RStdNetError *error) {
     if ((storage == NULL) || (storage->kind != kind)) {
         *error = (RStdNetError){R_STD_NET_ERROR_CLOSED, INT64_C(0)};
         return 0;
@@ -134,8 +133,8 @@ static _Bool option_buffers(int descriptor, size_t *receive, size_t *send, RStdN
 }
 
 /* A buffer size of 1..INT_MAX bytes; zero and larger sizes are unsupported. */
-static _Bool option_set_buffer(int descriptor, int name, size_t current, size_t wanted,
-                               RStdNetError *error) {
+static _Bool
+option_set_buffer(int descriptor, int name, size_t current, size_t wanted, RStdNetError *error) {
     if (wanted == current) {
         return 1;
     }
@@ -180,8 +179,7 @@ static _Bool tcp_options_locked(int descriptor, RStdNetTcpOptions *options, RStd
     if (!option_family(descriptor, &family, error) ||
         !option_get_int(descriptor, IPPROTO_TCP, TCP_NODELAY, &nodelay, error) ||
         !option_get_int(descriptor, SOL_SOCKET, SO_KEEPALIVE, &keepalive, error) ||
-        (keepalive != 0 &&
-         !option_get_int(descriptor, IPPROTO_TCP, TCP_KEEPALIVE, &idle, error)) ||
+        (keepalive != 0 && !option_get_int(descriptor, IPPROTO_TCP, TCP_KEEPALIVE, &idle, error)) ||
         !option_get_hops(descriptor, family, &hops, error) ||
         !option_buffers(descriptor, &options->receive_buffer, &options->send_buffer, error)) {
         return 0;
@@ -250,9 +248,9 @@ RStdNetOptionResult r_library_internal_net_tcp_set_options(RLibraryNetHandleStor
 
     if ((wanted_keepalive &&
          !option_keepalive_seconds(options.keepalive.r_payload.r_some, &seconds)) ||
-        options.hop_limit == 0U || options.hop_limit > 255U ||
-        options.receive_buffer == 0U || options.receive_buffer > (size_t)INT_MAX ||
-        options.send_buffer == 0U || options.send_buffer > (size_t)INT_MAX) {
+        options.hop_limit == 0U || options.hop_limit > 255U || options.receive_buffer == 0U ||
+        options.receive_buffer > (size_t)INT_MAX || options.send_buffer == 0U ||
+        options.send_buffer > (size_t)INT_MAX) {
         result.error = option_unsupported();
         return result;
     }
@@ -263,21 +261,21 @@ RStdNetOptionResult r_library_internal_net_tcp_set_options(RLibraryNetHandleStor
     if (tcp_options_locked(descriptor, &current, &result.error) &&
         option_family(descriptor, &family, &result.error) &&
         (options.nodelay == current.nodelay ||
-         option_set_int(descriptor, IPPROTO_TCP, TCP_NODELAY, options.nodelay ? 1 : 0,
-                        &result.error)) &&
+         option_set_int(
+             descriptor, IPPROTO_TCP, TCP_NODELAY, options.nodelay ? 1 : 0, &result.error)) &&
         (wanted_keepalive == (current.keepalive.r_tag == UINT32_C(1)) ||
-         option_set_int(descriptor, SOL_SOCKET, SO_KEEPALIVE, wanted_keepalive ? 1 : 0,
-                        &result.error)) &&
+         option_set_int(
+             descriptor, SOL_SOCKET, SO_KEEPALIVE, wanted_keepalive ? 1 : 0, &result.error)) &&
         (!wanted_keepalive ||
          (current.keepalive.r_tag == UINT32_C(1) &&
           current.keepalive.r_payload.r_some.seconds == (int64_t)seconds) ||
          option_set_int(descriptor, IPPROTO_TCP, TCP_KEEPALIVE, seconds, &result.error)) &&
         (options.hop_limit == current.hop_limit ||
          option_set_hops(descriptor, family, (int)options.hop_limit, &result.error)) &&
-        option_set_buffer(descriptor, SO_RCVBUF, current.receive_buffer, options.receive_buffer,
-                          &result.error) &&
-        option_set_buffer(descriptor, SO_SNDBUF, current.send_buffer, options.send_buffer,
-                          &result.error)) {
+        option_set_buffer(
+            descriptor, SO_RCVBUF, current.receive_buffer, options.receive_buffer, &result.error) &&
+        option_set_buffer(
+            descriptor, SO_SNDBUF, current.send_buffer, options.send_buffer, &result.error)) {
         result.is_ok = 1;
     }
     option_unlock(storage);
@@ -304,10 +302,9 @@ RStdNetOptionResult r_library_internal_net_udp_set_options(RLibraryNetHandleStor
     _Bool multicast_hops_ok;
     _Bool multicast_loop_ok;
 
-    if (options.hop_limit == 0U || options.hop_limit > 255U ||
-        options.multicast_hop_limit > 255U || options.receive_buffer == 0U ||
-        options.receive_buffer > (size_t)INT_MAX || options.send_buffer == 0U ||
-        options.send_buffer > (size_t)INT_MAX) {
+    if (options.hop_limit == 0U || options.hop_limit > 255U || options.multicast_hop_limit > 255U ||
+        options.receive_buffer == 0U || options.receive_buffer > (size_t)INT_MAX ||
+        options.send_buffer == 0U || options.send_buffer > (size_t)INT_MAX) {
         result.error = option_unsupported();
         return result;
     }
@@ -319,36 +316,40 @@ RStdNetOptionResult r_library_internal_net_udp_set_options(RLibraryNetHandleStor
         !option_family(descriptor, &family, &result.error) ||
         !(options.hop_limit == current.hop_limit ||
           option_set_hops(descriptor, family, (int)options.hop_limit, &result.error)) ||
-        !option_set_buffer(descriptor, SO_RCVBUF, current.receive_buffer, options.receive_buffer,
-                           &result.error) ||
-        !option_set_buffer(descriptor, SO_SNDBUF, current.send_buffer, options.send_buffer,
-                           &result.error) ||
+        !option_set_buffer(
+            descriptor, SO_RCVBUF, current.receive_buffer, options.receive_buffer, &result.error) ||
+        !option_set_buffer(
+            descriptor, SO_SNDBUF, current.send_buffer, options.send_buffer, &result.error) ||
         !(options.broadcast == current.broadcast ||
-          option_set_int(descriptor, SOL_SOCKET, SO_BROADCAST, options.broadcast ? 1 : 0,
-                         &result.error))) {
+          option_set_int(
+              descriptor, SOL_SOCKET, SO_BROADCAST, options.broadcast ? 1 : 0, &result.error))) {
         option_unlock(storage);
         return result;
     }
     if (family == AF_INET) {
         multicast_hops_ok =
             options.multicast_hop_limit == current.multicast_hop_limit ||
-            option_set_byte(descriptor, IP_MULTICAST_TTL, (int)options.multicast_hop_limit,
-                            &result.error);
+            option_set_byte(
+                descriptor, IP_MULTICAST_TTL, (int)options.multicast_hop_limit, &result.error);
         multicast_loop_ok =
             multicast_hops_ok &&
             (options.multicast_loop == current.multicast_loop ||
-             option_set_byte(descriptor, IP_MULTICAST_LOOP, options.multicast_loop ? 1 : 0,
-                             &result.error));
+             option_set_byte(
+                 descriptor, IP_MULTICAST_LOOP, options.multicast_loop ? 1 : 0, &result.error));
     } else {
-        multicast_hops_ok =
-            options.multicast_hop_limit == current.multicast_hop_limit ||
-            option_set_int(descriptor, IPPROTO_IPV6, IPV6_MULTICAST_HOPS,
-                           (int)options.multicast_hop_limit, &result.error);
+        multicast_hops_ok = options.multicast_hop_limit == current.multicast_hop_limit ||
+                            option_set_int(descriptor,
+                                           IPPROTO_IPV6,
+                                           IPV6_MULTICAST_HOPS,
+                                           (int)options.multicast_hop_limit,
+                                           &result.error);
         multicast_loop_ok =
-            multicast_hops_ok &&
-            (options.multicast_loop == current.multicast_loop ||
-             option_set_int(descriptor, IPPROTO_IPV6, IPV6_MULTICAST_LOOP,
-                            options.multicast_loop ? 1 : 0, &result.error));
+            multicast_hops_ok && (options.multicast_loop == current.multicast_loop ||
+                                  option_set_int(descriptor,
+                                                 IPPROTO_IPV6,
+                                                 IPV6_MULTICAST_LOOP,
+                                                 options.multicast_loop ? 1 : 0,
+                                                 &result.error));
     }
     result.is_ok = multicast_loop_ok;
     option_unlock(storage);
@@ -399,10 +400,8 @@ RStdNetOptionResult r_library_internal_net_udp_membership(RLibraryNetHandleStora
 
     (void)memset(&request, 0, sizeof(request));
     if (!multicast ||
-        !r_library_internal_net_address_to_native((RStdNetSocketAddress){group, 0U, 0U},
-                                                  &request.gr_group,
-                                                  &native_length,
-                                                  &domain)) {
+        !r_library_internal_net_address_to_native(
+            (RStdNetSocketAddress){group, 0U, 0U}, &request.gr_group, &native_length, &domain)) {
         result.error = (RStdNetError){R_STD_NET_ERROR_INVALID_ADDRESS, INT64_C(0)};
         return result;
     }

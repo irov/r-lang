@@ -74,8 +74,8 @@ void r_library_internal_net_unix_datagram_drop(RStdNetUnixDatagram *socket) {
 }
 
 /* R-SLIB-NET-0016: the credentials the target recorded for the peer at establishment. */
-RStdNetPeerCredentialsResult r_library_internal_net_unix_peer_credentials(
-    const RStdNetUnixStream *stream) {
+RStdNetPeerCredentialsResult
+r_library_internal_net_unix_peer_credentials(const RStdNetUnixStream *stream) {
     RStdNetPeerCredentialsResult result = {0};
     int descriptor = -1;
     uid_t user_id = 0;

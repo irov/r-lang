@@ -701,7 +701,8 @@ static int test_typed_native_calls(void) {
         submission = r_runtime_darwin_fs_submit_ofd_lock(lane, other, F_RDLCK, (off_t)4, (off_t)8);
         CHECK(check_native_success(submission, R_RUNTIME_DARWIN_FS_OFD_LOCK, &result) == 0);
         r_runtime_darwin_fs_request_release(submission.request);
-        submission = r_runtime_darwin_fs_submit_ofd_lock(lane, other, (short)99, (off_t)0, (off_t)0);
+        submission =
+            r_runtime_darwin_fs_submit_ofd_lock(lane, other, (short)99, (off_t)0, (off_t)0);
         CHECK(submission.status == R_RUNTIME_DARWIN_FS_START_INVALID_ARGUMENT);
         CHECK(close(other) == 0);
     }

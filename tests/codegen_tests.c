@@ -1608,8 +1608,9 @@ static void r_codegen_test_async_state_machine(void) {
                                "                &frame->r_v00000000, "
                                "r_async_frame_initialize_00000001_gate, NULL, 0);") != NULL);
         R_CODEGEN_CHECK(
-            strstr(generated.bytes,
-                   "r_async_start_00000002_gate(r_async_frame_initialize_00000002_gate, NULL, 0);") !=
+            strstr(
+                generated.bytes,
+                "r_async_start_00000002_gate(r_async_frame_initialize_00000002_gate, NULL, 0);") !=
             NULL);
         R_CODEGEN_CHECK(strstr(generated.bytes, "R_STACK_ENTRY(r_async_step_00000001)") != NULL);
         R_CODEGEN_CHECK(strstr(generated.bytes, "r_async_step_gate_00000001") != NULL);
@@ -3672,7 +3673,8 @@ static void r_codegen_test_async_move_arguments(void) {
         R_CODEGEN_CHECK(strstr(generated.bytes,
                                "r_async_launch_00000001_gate("
                                "\n                &frame->r_v00000001, "
-                               "r_async_call_initialize_00000004_00000001_gate, frame, 0);") != NULL);
+                               "r_async_call_initialize_00000004_00000001_gate, frame, 0);") !=
+                        NULL);
         R_CODEGEN_CHECK(strstr(generated.bytes,
                                "r_async_launch_00000004_gate(\n        r_effect_out, "
                                "r_async_wrapper_initialize_00000004_gate, &context, 0);") != NULL);

@@ -85,12 +85,14 @@ static int32_t run(unsigned transport, uint64_t failure, uint64_t *attempts) {
         file = open_file(transport == 2U);
         r_async_wrapper_context_00000007 context = {&file};
         r_runtime_allocator_set_failure(&allocator, failure);
-        started = r_async_start_00000007_gate(r_async_wrapper_initialize_00000007_gate, &context, UINT32_C(0));
+        started = r_async_start_00000007_gate(
+            r_async_wrapper_initialize_00000007_gate, &context, UINT32_C(0));
     } else {
         tcp = connect_tcp();
         r_async_wrapper_context_00000008 context = {&tcp};
         r_runtime_allocator_set_failure(&allocator, failure);
-        started = r_async_start_00000008_gate(r_async_wrapper_initialize_00000008_gate, &context, UINT32_C(0));
+        started = r_async_start_00000008_gate(
+            r_async_wrapper_initialize_00000008_gate, &context, UINT32_C(0));
     }
     int32_t result = 97;
     if (started.status == R_RUNTIME_TASK_START_OK) {

@@ -965,10 +965,9 @@ bool r_link_manifest_links_span(const uint8_t *bytes, size_t length, size_t *fir
     r_link_json_whitespace(&parser);
     *first = parser.cursor;
     *last = parser.links_last;
-    while ((*last > *first) && ((bytes[*last - 1U] == UINT8_C(' ')) ||
-                                (bytes[*last - 1U] == UINT8_C('\n')) ||
-                                (bytes[*last - 1U] == UINT8_C('\r')) ||
-                                (bytes[*last - 1U] == UINT8_C('\t')))) {
+    while ((*last > *first) &&
+           ((bytes[*last - 1U] == UINT8_C(' ')) || (bytes[*last - 1U] == UINT8_C('\n')) ||
+            (bytes[*last - 1U] == UINT8_C('\r')) || (bytes[*last - 1U] == UINT8_C('\t')))) {
         *last -= 1U;
     }
     return true;
