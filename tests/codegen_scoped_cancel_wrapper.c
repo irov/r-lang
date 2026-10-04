@@ -26,14 +26,21 @@ static RRuntimeTaskExecutionAwaitStatus
 r_test_await(RRuntimeTaskExecution *execution, RRuntimeTask **task, void *result);
 static void r_test_cancel(RRuntimeTaskScope *scope);
 static void r_test_release(RRuntimeOwn *owner);
+/* P4.4: the empty `pause` would run as a direct call; the test holds its await instead. */
+static _Bool r_test_direct_begin(size_t stack_bytes) {
+    (void)stack_bytes;
+    return 0;
+}
 #define r_runtime_hosted_allocator r_test_allocator
 #define r_runtime_task_execution_await r_test_await
 #define r_runtime_task_scope_cancel r_test_cancel
 #define r_runtime_own_release r_test_release
+#define r_runtime_task_direct_begin r_test_direct_begin
 #define main r_generated_main
 int main(int argc, char *argv[]);
 #include R_TEST_GENERATED_C
 #undef main
+#undef r_runtime_task_direct_begin
 #undef r_runtime_own_release
 #undef r_runtime_task_scope_cancel
 #undef r_runtime_task_execution_await
@@ -72,6 +79,7 @@ static void r_test_release(RRuntimeOwn *owner) {
 int main(int argc, char *argv[]) {
     (void)argc;
     (void)argv;
+    (void)r_test_direct_begin;
     CHECK(r_runtime_stack_initialize_current_thread());
     r_runtime_allocator_initialize(&allocator);
     CHECK(r_runtime_executor_lifecycle_start(&allocator) == R_RUNTIME_EXECUTOR_START_OK);

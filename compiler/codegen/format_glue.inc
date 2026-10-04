@@ -84,11 +84,11 @@ static bool r_c17_require_format_glue(RC17Emitter *emitter, RTypeId type_id, uin
 static bool r_c17_emit_format_header(RC17Emitter *emitter, RTypeId type_id, bool typed) {
     if (!r_c17_write(emitter, "static RStdFormatAllocResult ") ||
         !r_c17_emit_format_glue_name(emitter, type_id) ||
-        !r_c17_write(emitter, "(const void *value_pointer, RStdFormatBuilder *out) {\n"))
+        !r_c17_write(emitter, "(const void *opaque, RStdFormatBuilder *out) {\n"))
         return false;
     return !typed || (r_c17_write(emitter, "    const ") &&
                       r_c17_emit_value_type(emitter, type_id) &&
-                      r_c17_write(emitter, " *value = value_pointer;\n"));
+                      r_c17_write(emitter, " *value = opaque;\n"));
 }
 
 /* `result = append(text)` and an early return when the append failed. */
@@ -168,7 +168,7 @@ static bool r_c17_emit_format_hook_body(RC17Emitter *emitter, RSymbolId hook_id)
     if (hook->throws_type == R_TYPE_ID_INVALID)
         return r_c17_write(emitter, "    ") && r_c17_emit_function_name(emitter, hook_id) &&
                r_c17_write(emitter, "((") && r_c17_emit_value_type(emitter, parameters[0]) &&
-               r_c17_write(emitter, ")value_pointer, (") &&
+               r_c17_write(emitter, ")opaque, (") &&
                r_c17_emit_value_type(emitter, parameters[1]) &&
                r_c17_write(emitter,
                            ")out);\n"
@@ -184,7 +184,7 @@ static bool r_c17_emit_format_hook_body(RC17Emitter *emitter, RSymbolId hook_id)
                        "    ") &&
            r_c17_emit_function_name(emitter, hook_id) && r_c17_write(emitter, "(&carrier, (") &&
            r_c17_emit_value_type(emitter, parameters[0]) &&
-           r_c17_write(emitter, ")value_pointer, (") &&
+           r_c17_write(emitter, ")opaque, (") &&
            r_c17_emit_value_type(emitter, parameters[1]) &&
            r_c17_write(emitter,
                        ")out);\n"
@@ -330,14 +330,14 @@ static bool r_c17_emit_format_glue_definition(RC17Emitter *emitter, RTypeId type
                        sizeof(element),
                        "(const unsigned char *)value->data + index * value->element.size");
         return r_c17_emit_format_header(emitter, type_id, false) &&
-               r_c17_write(emitter, "    const RRuntimeArray *value = value_pointer;\n") &&
+               r_c17_write(emitter, "    const RRuntimeArray *value = opaque;\n") &&
                r_c17_emit_format_sequence_body(emitter, type->base, "value->length", element);
     case R_SEMANTIC_TYPE_STANDARD:
         if (r_c17_format_standard_named(emitter, type, "std.string::string"))
             return r_c17_emit_format_header(emitter, type_id, false) &&
                    r_c17_write(emitter,
                                "    return r_std_format_append_str(out, "
-                               "r_std_string_as_str(value_pointer));\n"
+                               "r_std_string_as_str(opaque));\n"
                                "}\n"
                                "\n");
         {
@@ -347,7 +347,7 @@ static bool r_c17_emit_format_glue_definition(RC17Emitter *emitter, RTypeId type
                    r_c17_format(emitter,
                                 "    uint8_t text[64];\n"
                                 "    const size_t length =\n"
-                                "        %s(*(const %s *)value_pointer, text);\n"
+                                "        %s(*(const %s *)opaque, text);\n"
                                 "\n"
                                 "    return r_std_format_append_str(out, (RStdStringView){text, "
                                 "length});\n"
@@ -390,7 +390,7 @@ static bool r_c17_emit_format_glue(RC17Emitter *emitter) {
             continue;
         success = r_c17_write(emitter, "static RStdFormatAllocResult ") &&
                   r_c17_emit_format_glue_name(emitter, (RTypeId)index) &&
-                  r_c17_write(emitter, "(const void *value_pointer, RStdFormatBuilder *out);\n");
+                  r_c17_write(emitter, "(const void *opaque, RStdFormatBuilder *out);\n");
     }
     success = success && r_c17_write(emitter, "\n");
     for (size_t index = 1U; success && index <= count; ++index) {

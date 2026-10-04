@@ -4224,6 +4224,9 @@ if(NOT MSVC)
             library_log
             library_async_task_id
             library_task_id_outside
+            async_direct_calls
+            arc_clone_only
+            async_arc_clone_only
             test_mode
             string_keys
             async_math_records
@@ -4270,6 +4273,11 @@ if(NOT MSVC)
             async_index_proofs
             index_proofs_bounds
             async_index_proofs_bounds
+            loop_versions
+            async_loop_versions
+            loop_versions_bounds
+            async_loop_versions_bounds
+            index_proofs_static_bounds
             generic_example
             method_example
             reflection_example
@@ -5125,7 +5133,7 @@ if(NOT MSVC)
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_EXPECTED_PANIC "")
             set(R_CODEGEN_TEST_MODE ON)
-        elseif(R_CODEGEN_CASE MATCHES "^(async_)?(array_(create|filled)|index_proofs)$")
+        elseif(R_CODEGEN_CASE MATCHES "^(async_)?(array_(create|filled)|index_proofs|loop_versions)$")
             set(R_CODEGEN_SOURCE_1
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
             set(R_CODEGEN_SOURCE_2 "")
@@ -5498,7 +5506,7 @@ if(NOT MSVC)
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_EXPECTED_PANIC "")
-        elseif(R_CODEGEN_CASE MATCHES "^(async_owner_shapes|async_owner_matrix|null_type|async_null_type|explicit_generics|async_explicit_generics|consteval|async_consteval|consteval_checked|async_consteval_checked|consteval_floats|async_consteval_floats|consteval_owners|consteval_frozen|async_consteval_frozen|deadline_blocks|budget_blocks|recursion_bounds|async_for|expression_forms|async_channels|group_detach|group_vacancy|group_capacity|effect_relay|swap_clone|async_swap_clone|derive|async_derive|cmp_impls|function_values|static_values|async_static_values|computed_bounds|async_computed_bounds|typed_constants|async_typed_constants|associated_constants|async_associated_constants|dyn_interfaces|async_dyn_interfaces|dyn_owners|async_dyn_owners|async_locks|async_broadcast|async_reserve|async_blocking|async_blocking_start|core_format|async_core_format|field_defaults|async_field_defaults|json_field_defaults|overloads|dict_custom_keys|common_error_fields|sync_initializer_cleanup_growth|fs_metadata_fields|string_outcomes|async_parameter_reassignment|process_outcome_records|async_math_records|numeric_error_codes|regex|regex_o2|async_regex|regex_oom|regex_driver|regex_example|regex_captures|library_text|library_encoding|library_iter_reductions|library_byte_cursor|async_library_text|library_text_oom|encoding_driver|json_schema_driver|library_random|library_uuid|library_hmac|async_library_tokens|hash_driver|hash_digest_values|hash_operations|hash_independent|async_hash_independent|library_time_formats|library_time_interval|standard_record_constructors|time_driver|cbor_driver|crypto_driver|cose_driver|sqlite_driver|dead_new_helpers|library_signal|library_net_connect|library_net_options|library_net_unix|library_args|library_config|library_log|library_async_task_id|library_task_id_outside|test_mode|string_keys)$")
+        elseif(R_CODEGEN_CASE MATCHES "^(async_owner_shapes|async_owner_matrix|null_type|async_null_type|explicit_generics|async_explicit_generics|consteval|async_consteval|consteval_checked|async_consteval_checked|consteval_floats|async_consteval_floats|consteval_owners|consteval_frozen|async_consteval_frozen|deadline_blocks|budget_blocks|recursion_bounds|async_for|expression_forms|async_channels|group_detach|group_vacancy|group_capacity|effect_relay|swap_clone|async_swap_clone|derive|async_derive|cmp_impls|function_values|static_values|async_static_values|computed_bounds|async_computed_bounds|typed_constants|async_typed_constants|associated_constants|async_associated_constants|dyn_interfaces|async_dyn_interfaces|dyn_owners|async_dyn_owners|async_locks|async_broadcast|async_reserve|async_blocking|async_blocking_start|core_format|async_core_format|field_defaults|async_field_defaults|json_field_defaults|overloads|dict_custom_keys|common_error_fields|sync_initializer_cleanup_growth|fs_metadata_fields|string_outcomes|async_parameter_reassignment|process_outcome_records|async_math_records|numeric_error_codes|regex|regex_o2|async_regex|regex_oom|regex_driver|regex_example|regex_captures|library_text|library_encoding|library_iter_reductions|library_byte_cursor|async_library_text|library_text_oom|encoding_driver|json_schema_driver|library_random|library_uuid|library_hmac|async_library_tokens|hash_driver|hash_digest_values|hash_operations|hash_independent|async_hash_independent|library_time_formats|library_time_interval|standard_record_constructors|time_driver|cbor_driver|crypto_driver|cose_driver|sqlite_driver|dead_new_helpers|library_signal|library_net_connect|library_net_options|library_net_unix|library_args|library_config|library_log|library_async_task_id|library_task_id_outside|async_direct_calls|arc_clone_only|async_arc_clone_only|test_mode|string_keys)$")
             set(R_CODEGEN_SOURCE_1
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
             set(R_CODEGEN_SOURCE_2 "")
@@ -6329,7 +6337,9 @@ if(NOT MSVC)
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_bounds.r")
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_EXPECTED_PANIC "bounds")
-        elseif(R_CODEGEN_CASE MATCHES "^(async_)?(array_index|index_proofs)_bounds$")
+        elseif(R_CODEGEN_CASE MATCHES
+               "^(async_)?(array_index|index_proofs|loop_versions)_bounds$" OR
+               R_CODEGEN_CASE STREQUAL "index_proofs_static_bounds")
             set(R_CODEGEN_SOURCE_1
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
             set(R_CODEGEN_SOURCE_2 "")
@@ -6525,6 +6535,7 @@ if(NOT MSVC)
                     -DLIBRARY_MAP=${PROJECT_SOURCE_DIR}/library/r/library.map
                     -DLINK_MANIFEST=${R_CODEGEN_LINK_MANIFEST}
                     -DFORMAT_STYLE=${PROJECT_SOURCE_DIR}/.clang-format
+                    -DTEST_MODE=${R_CODEGEN_TEST_MODE}
                     -DOUTPUT_C=${CMAKE_CURRENT_BINARY_DIR}/codegen_${R_CODEGEN_CASE}_format.c
                     -P ${CMAKE_CURRENT_SOURCE_DIR}/check_codegen_format.cmake
             )
@@ -6980,8 +6991,22 @@ if(NOT MSVC)
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/check_index_proofs.py"
             --front $<TARGET_FILE:r-front>
             "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_index_proofs.r"
-            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_async_index_proofs.r")
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_async_index_proofs.r"
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_index_proofs_static_bounds.r")
     set_tests_properties(r_frontend_index_proofs PROPERTIES LABELS "codegen;bounds")
+    add_test(NAME r_frontend_direct_calls
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/check_direct_calls.py"
+            --front $<TARGET_FILE:r-front>
+            --library-map "${PROJECT_SOURCE_DIR}/library/r/library.map"
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_async_direct_calls.r")
+    set_tests_properties(r_frontend_direct_calls PROPERTIES LABELS "codegen;async")
+    add_test(NAME r_frontend_loop_versions
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/check_loop_versions.py"
+            --front $<TARGET_FILE:r-front>
+            --library-map "${PROJECT_SOURCE_DIR}/library/r/library.map"
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_loop_versions.r"
+            "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_async_loop_versions.r")
+    set_tests_properties(r_frontend_loop_versions PROPERTIES LABELS "codegen;bounds")
     add_test(NAME r_frontend_const_generic_metadata
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/check_const_generics.py"
             --front "$<TARGET_FILE:r-front>")

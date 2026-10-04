@@ -6,7 +6,8 @@ set(R_BENCH_TARGET_MANIFEST
     "${PROJECT_SOURCE_DIR}/targets/arm64-apple-darwin.hosted-native-async.json")
 set(R_BENCH_PAIRS baseline call_overhead index_fixed index_slice checked_arith
     baseline_async async_task_start async_scoped_start async_fs_read_into array_push format_int
-    own_alloc array_get string_append dict_lookup json_parse deflate_roundtrip tcp_echo)
+    own_alloc array_get string_append dict_lookup json_parse deflate_roundtrip tcp_echo
+    struct_update matrix_mul channel_stream dict_string arc_clone)
 set(R_BENCH_ITERATIONS
     "call_overhead=200000000"
     "index_fixed=204800000"
@@ -23,7 +24,12 @@ set(R_BENCH_ITERATIONS
     "dict_lookup=50000000"
     "json_parse=200000"
     "deflate_roundtrip=200"
-    "tcp_echo=20000")
+    "tcp_echo=20000"
+    "struct_update=40960000"
+    "matrix_mul=176947200"
+    "channel_stream=2000000"
+    "dict_string=10000000"
+    "arc_clone=50000000")
 set(R_BENCH_C_OPTIONS
     -O2 -std=c17 -pedantic-errors -Wall -Wextra -Werror -Wconversion -Wsign-conversion
     -Wshadow -Wstrict-prototypes -Wmissing-prototypes)

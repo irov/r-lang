@@ -140,17 +140,15 @@ static bool r_c17_emit_clone_header(RC17Emitter *emitter, RTypeId type_id, bool 
     if (!r_c17_write(emitter, "static r_clone_result ") ||
         !r_c17_emit_clone_glue_name(emitter, type_id) ||
         !r_c17_write(emitter,
-                     "(void *destination_pointer,\n"
-                     "                                    const void *source_pointer,\n"
-                     "                                    RRuntimeSourceSpan span) {\n"))
+                     "(void *to, const void *from, RRuntimeSourceSpan span) {\n"))
         return false;
     if (!typed)
         return true;
     return r_c17_write(emitter, "    ") && r_c17_emit_value_type(emitter, type_id) &&
-           r_c17_write(emitter, " *destination = destination_pointer;\n    const ") &&
+           r_c17_write(emitter, " *destination = to;\n    const ") &&
            r_c17_emit_value_type(emitter, type_id) &&
            r_c17_write(emitter,
-                       " *source = source_pointer;\n"
+                       " *source = from;\n"
                        "    r_clone_result result = {0};\n"
                        "\n"
                        "    (void)span;\n");
@@ -163,8 +161,8 @@ static bool r_c17_emit_clone_sequence_body(RC17Emitter *emitter,
     /* array<T>: one allocation of exactly the source length, then element clones in order. */
     if (!list) {
         if (!r_c17_format(emitter,
-                          "    %s *destination = destination_pointer;\n"
-                          "    const %s *source = source_pointer;\n"
+                          "    %s *destination = to;\n"
+                          "    const %s *source = from;\n"
                           "    r_clone_result result = {0};\n"
                           "    size_t index = 0U;\n"
                           "    unsigned status = (unsigned)r_runtime_array_with_capacity(\n"
@@ -214,8 +212,8 @@ static bool r_c17_emit_clone_sequence_body(RC17Emitter *emitter,
     }
     /* list<T>: nodes are appended in order; a failed append destroys the staged element. */
     if (!r_c17_format(emitter,
-                      "    %s *destination = destination_pointer;\n"
-                      "    const %s *source = source_pointer;\n"
+                      "    %s *destination = to;\n"
+                      "    const %s *source = from;\n"
                       "    r_clone_result result = {0};\n"
                       "    RRuntimeListIterator cursor = r_runtime_list_iter(source);\n"
                       "    const void *element = NULL;\n"
@@ -268,8 +266,8 @@ static bool r_c17_emit_clone_sequence_body(RC17Emitter *emitter,
 
 static bool r_c17_emit_clone_dict_body(RC17Emitter *emitter, RTypeId key, RTypeId value) {
     if (!r_c17_write(emitter,
-                     "    RRuntimeDict *destination = destination_pointer;\n"
-                     "    const RRuntimeDict *source = source_pointer;\n"
+                     "    RRuntimeDict *destination = to;\n"
+                     "    const RRuntimeDict *source = from;\n"
                      "    r_clone_result result = {0};\n"
                      "    RRuntimeDictIterator cursor = r_runtime_dict_iter(source);\n"
                      "    RRuntimeDictEntryRef entry = {0};\n"
@@ -506,8 +504,8 @@ static bool r_c17_emit_clone_glue_definition(RC17Emitter *emitter, RTypeId type_
     case R_SEMANTIC_TYPE_OWN:
         return r_c17_emit_clone_header(emitter, type_id, false) &&
                r_c17_write(emitter,
-                           "    RRuntimeOwn *destination = destination_pointer;\n"
-                           "    const RRuntimeOwn *source = source_pointer;\n"
+                           "    RRuntimeOwn *destination = to;\n"
+                           "    const RRuntimeOwn *source = from;\n"
                            "    r_clone_result result = {0};\n"
                            "    unsigned status = 0U;\n"
                            "    ") &&
@@ -551,8 +549,8 @@ static bool r_c17_emit_clone_glue_definition(RC17Emitter *emitter, RTypeId type_
                r_c17_format(emitter,
                             "    r_clone_result result = {0};\n"
                             "\n"
-                            "    if ((unsigned)%s((const %s *)source_pointer, (%s "
-                            "*)destination_pointer) != 0U) {\n"
+                            "    if ((unsigned)%s((const %s *)from, (%s "
+                            "*)to) != 0U) {\n"
                             "        r_runtime_panic(R_RUNTIME_PANIC_REFERENCE_COUNT_OVERFLOW, "
                             "span);\n"
                             "    }\n"
@@ -569,7 +567,7 @@ static bool r_c17_emit_clone_glue_definition(RC17Emitter *emitter, RTypeId type_
                    r_c17_write(emitter,
                                "    r_clone_result result = {0};\n"
                                "    RStdFsPathAllocResult copy =\n"
-                               "        r_std_fs_path_clone(source_pointer);\n"
+                               "        r_std_fs_path_clone(from);\n"
                                "\n"
                                "    (void)span;\n"
                                "    if (copy.status != R_STD_FS_CALL_SUCCESS) {\n"
@@ -577,15 +575,15 @@ static bool r_c17_emit_clone_glue_definition(RC17Emitter *emitter, RTypeId type_
                                "        result.error = copy.error;\n"
                                "        return result;\n"
                                "    }\n"
-                               "    *(RStdFsPath *)destination_pointer = copy.value;\n"
+                               "    *(RStdFsPath *)to = copy.value;\n"
                                "    return result;\n"
                                "}\n"
                                "\n");
         }
         return r_c17_emit_clone_header(emitter, type_id, false) &&
                r_c17_write(emitter,
-                           "    RStdString *destination = destination_pointer;\n"
-                           "    const RStdString *source = source_pointer;\n"
+                           "    RStdString *destination = to;\n"
+                           "    const RStdString *source = from;\n"
                            "    unsigned status = (unsigned)r_runtime_string_from_valid_utf8(\n"
                            "        destination,\n"
                            "        r_runtime_hosted_allocator(),\n"
@@ -619,10 +617,23 @@ static bool r_c17_emit_clone_glue_definition(RC17Emitter *emitter, RTypeId type_
 }
 
 /* The clone glue the functions requested, spliced in after the function prototypes. */
+static bool r_c17_buffer_contains(const char *bytes, size_t length, const char *text) {
+    const size_t text_length = strlen(text);
+
+    for (size_t index = 0U; index + text_length <= length; ++index) {
+        if (memcmp(bytes + index, text, text_length) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool r_c17_emit_clone_glue(RC17Emitter *emitter) {
     RC17Buffer program = emitter->output;
     RC17Buffer scratch = {0};
     const size_t count = emitter->frontend->semantic_type_count;
+    size_t failure_start = 0U;
+    size_t failure_end = 0U;
     bool success = true;
 
     if (!emitter->uses_clone_glue) {
@@ -634,7 +645,10 @@ static bool r_c17_emit_clone_glue(RC17Emitter *emitter) {
                           "    RStdAllocCallStatus status;\n"
                           "    RStdAllocError error;\n"
                           "} r_clone_result;\n"
-                          "\n"
+                          "\n");
+    failure_start = emitter->output.length;
+    success = success &&
+              r_c17_write(emitter,
                           "static r_clone_result r_clone_failure(unsigned status, "
                           "RRuntimeSourceSpan span) {\n"
                           "    r_clone_result result = {R_STD_ALLOC_CALL_ALLOCATION_ERROR, "
@@ -654,15 +668,14 @@ static bool r_c17_emit_clone_glue(RC17Emitter *emitter) {
                           "    return result;\n"
                           "}\n"
                           "\n");
+    failure_end = emitter->output.length;
     for (size_t index = 1U; success && index <= count; ++index) {
         if (emitter->clone_glue_types[index] == 0U)
             continue;
         success = r_c17_write(emitter, "static r_clone_result ") &&
                   r_c17_emit_clone_glue_name(emitter, (RTypeId)index) &&
                   r_c17_write(emitter,
-                              "(void *destination_pointer,\n"
-                              "                                    const void *source_pointer,\n"
-                              "                                    RRuntimeSourceSpan span);\n");
+                              "(void *to, const void *from, RRuntimeSourceSpan span);\n");
     }
     success = success && r_c17_write(emitter, "\n");
     for (size_t index = 1U; success && index <= count; ++index) {
@@ -674,12 +687,11 @@ static bool r_c17_emit_clone_glue(RC17Emitter *emitter) {
         if ((emitter->clone_glue_types[index] & 2U) == 0U)
             continue;
         success = r_c17_format(emitter,
-                               "static _Bool r_broadcast_clone_%08" PRIu32 "(void *destination,\n"
-                               "                                          const void *source,\n"
-                               "                                          RStdAllocError *error) {\n"
+                               "static _Bool r_broadcast_clone_%08" PRIu32
+                               "(void *to, const void *from, RStdAllocError *error) {\n"
                                "    r_clone_result result =\n"
                                "        r_type_clone_%08" PRIu32
-                               "(destination, source, (RRuntimeSourceSpan){0U, 0U, 0U});\n"
+                               "(to, from, (RRuntimeSourceSpan){0U, 0U, 0U});\n"
                                "\n"
                                "    if (result.status != R_STD_ALLOC_CALL_SUCCESS) {\n"
                                "        *error = result.error;\n"
@@ -692,6 +704,17 @@ static bool r_c17_emit_clone_glue(RC17Emitter *emitter) {
                                (uint32_t)index);
     }
     scratch = emitter->output;
+    /* P4.4-1: glue that cannot fail, such as the clone of an arc, leaves the failure helper
+       unused, and an unused static function is an error. */
+    if (success && (failure_end <= scratch.length) &&
+        !r_c17_buffer_contains(scratch.bytes + failure_end,
+                               scratch.length - failure_end,
+                               "r_clone_failure(")) {
+        (void)memmove(scratch.bytes + failure_start,
+                      scratch.bytes + failure_end,
+                      scratch.length - failure_end);
+        scratch.length -= failure_end - failure_start;
+    }
     emitter->output = program;
     if (success && (scratch.length != 0U)) {
         success = r_c17_buffer_reserve(emitter, scratch.length);

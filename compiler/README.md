@@ -105,6 +105,76 @@ proves constant, masked and narrow-typed indices and conversions anywhere: in th
 parts of async bodies and, over MIR values (each defined once), in async frames. The proofs
 mark HIR nodes with the generation of the walk; only the body being emitted reads them.
 `tests/check_index_proofs.py` compares marked fixture lines with the checks left in generated C.
+A static local carries no facts: a call, such as a recursive one, may change it.
+
+### Loop versioning
+
+`compiler/codegen/loop_versions.inc` handles affine indices that no fact bounds. When the walk of
+`index_proofs.inc` enters an innermost `for (...; k < B; k += 1)` whose unsigned induction
+variable only the step changes, it records each index `base[A + k * S]` (also `k`, `k * S`,
+`S * k`, with the offset on either side) whose base length, `A`, `S` and `B` keep their value
+through the loop: literals, loads of unsigned locals and parameters the loop does not change
+(the stamps of the walk tell), lengths of such slices and `array<T>` values, and their wrapping
+sums, differences and products, which evaluate without a check or a side effect. The emitter then
+writes, before the loop, one test that the largest index `A + (B - 1) * S` is computed without
+wrapping and lies below `len(base)`, and two copies of the loop: one without the checks of those
+indices, run when the test holds, and the loop as written. Unsigned arithmetic wraps in R, so the
+absence of wrapping at the largest value also shows that every iteration computes the exact
+affine value. The body is copied only when the emitter writes it the same way twice (no nested
+loop, return, throw, try, switch or task operation, no local with a drop obligation, calls only
+of synchronous functions without checked errors). Each versioned index is named in a comment
+before its loop; `tests/check_loop_versions.py` compares them with marked fixture lines.
+
+### Direct calls of async bodies
+
+`compiler/codegen/direct_calls.inc` runs `await f(args)` as an ordinary C call of a twin of `f`
+when nothing can tell the difference from a started task (R-AM-0003). The MIR of `f` must have no
+start, await, task scope, cancel, deadline or budget block, so its first step is its whole body;
+`f` is not `@scoped`; neither its parameters nor its result (or outcome carrier, when it has
+checked errors) carry a drop obligation; and the start must be consumed by the await that
+directly follows it in the MIR (the block of the start only selects on its outcome, the success
+path stores the task in the hidden local of the await and jumps to it, and neither await target
+begins with a phi). The twin `r_fN_direct` is emitted by the synchronous emitter from the HIR of
+`f`, so the preflight of such a start preflights that body as an ordinary function. At the call
+site, `r_runtime_task_direct_begin(R_STACK_ENTRY(r_fN_direct))` refuses under a budget, while the
+executor drains or stops, and when the stack cannot hold the measured bound of the twin; the start
+then proceeds as before. Otherwise it takes the next task identifier (R-SLIB-ASYNC-0018), which
+`std.async::task_id` reports inside the twin until `r_runtime_task_direct_end`, and the code after
+the call reads the cancellation request of the awaiting task as the await of a completed task
+does. The call is marked `R_STACK_GUARDED`: `tools/compute_stack_entries.py` gives the twin an
+entry bound of its own instead of nesting it below the step.
+
+The same immediate-await shape lets an awaited `std.sync` receive whose channel holds a value, or
+has lost every sender, complete at once (`r_c17_emit_receive_now`): `r_std_sync_try_recv` moves the
+value as the started receive would, and an empty channel takes the ordinary path. It runs only
+while `r_runtime_task_inline_completion_allowed()` holds, because a budget would charge the frame
+of the receive task. Each path is named in a comment; `tests/check_direct_calls.py` compares
+them with marked fixture lines.
+
+### Layout of generated C
+
+The generated C17 is a fixed point of clang-format 22.1.8 under the repository style; with that
+clang-format found, every codegen test has a `_format` twin that checks it. The emitter writes
+with local wrapping heuristics, and `layout_pass.inc` lays out the finished program once:
+statements inside functions go through the port of clang-format's line breaker in
+`layout.inc`. File-scope declarations are laid out by rules measured against clang-format over
+thousands of generated declarations (P4.4-4):
+
+- an initializer that does not fit in 100 columns is written with one element per line and a
+  comma after every element, a designated list value on the lines after its designator; a list
+  of 19 or more elements without nested lists takes clang-format's column layout (the fewest
+  columns that still give the fewest lines, within the remaining width, at most 10 columns of
+  spread per column); an initializer without braces moves after its `=`;
+- a function declaration keeps its parameters on one line or puts one per line, and takes the
+  cheapest of: the return type on its own line (80; not after a type shorter than six columns),
+  a break after the parenthesis (140) and a break per parameter (41). A declaration whose
+  parameters name no type (no `const`, pointer, parameter name or standard type word such as
+  `size_t`) is read by clang-format as an object initialized by a call: the name moves to the
+  next line indented by four (74), 155 after the parenthesis, 51 per argument. A typedef of a
+  pointer to a function costs 140 after the parenthesis and 41 per parameter;
+- a `case MACRO(value): {` label past the limit breaks inside the parentheses.
+
+Glue functions keep their parameter names short so that their signatures fit on one line.
 
 ### Hosted main error boundary
 

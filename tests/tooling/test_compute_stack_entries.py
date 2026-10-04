@@ -178,6 +178,53 @@ static int top(void) { return 1; }
         self.assertEqual(status, 0, output)
         self.assertIn("#define R_STACK_ENTRY_entry ((size_t)16)", header)
 
+    def test_guarded_call_starts_its_own_entry(self) -> None:
+        # P4.4: a direct async call checks the bound of its body at run time and otherwise
+        # starts a task, so it does not nest below the step that makes it.
+        source = """
+static int leaf(int value) { return value; }
+static int direct(int value) { return leaf(value); }
+static int top(void) {
+    if (check(R_STACK_ENTRY(direct))) {
+        /* R_STACK_GUARDED: direct */
+        return direct(1);
+    }
+    return 0;
+}
+""" + ENTRY
+        frames = {"leaf": 4096, "direct": 64, "top": 32, "entry": 16}
+        status, output, header = run_tool(source, frames)
+        self.assertEqual(status, 0, output)
+        self.assertIn("#define R_STACK_ENTRY_entry ((size_t)48)", header)
+        self.assertIn("#define R_STACK_ENTRY_direct ((size_t)4160)", header)
+
+    def test_guarded_entry_above_the_budget_is_kept(self) -> None:
+        source = """
+static int direct(int value) { return value; }
+static int top(void) {
+    if (check(R_STACK_ENTRY(direct))) {
+        /* R_STACK_GUARDED: direct */
+        return direct(1);
+    }
+    return 0;
+}
+""" + ENTRY
+        status, output, header = run_tool(source, {"direct": 8192, "top": 8, "entry": 8}, 4096)
+        self.assertEqual(status, 0, output)
+        self.assertIn("#define R_STACK_ENTRY_direct ((size_t)8192)", header)
+
+    def test_guarded_call_without_an_entry_fails(self) -> None:
+        source = """
+static int direct(int value) { return value; }
+static int top(void) {
+    /* R_STACK_GUARDED: direct */
+    return direct(1);
+}
+""" + ENTRY
+        status, output, _ = run_tool(source, {"direct": 8, "top": 8, "entry": 8})
+        self.assertNotEqual(status, 0)
+        self.assertIn("R_STACK_GUARDED names a function without an entry: direct", output)
+
 
 if __name__ == "__main__":
     unittest.main()

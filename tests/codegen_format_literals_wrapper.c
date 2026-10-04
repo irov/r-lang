@@ -53,6 +53,16 @@ static _Bool r_test_cancel_requested(const RRuntimeTaskExecution *execution) {
             atomic_load_explicit(&r_test_cancel_armed, memory_order_acquire)) ||
            r_runtime_task_execution_cancel_requested(execution);
 }
+/* P4.4: an awaited call that runs directly is a point of cancellation as the await of a started
+   task is; the code after it reads the cancellation request. */
+static _Bool r_test_direct_begin(size_t stack_bytes) {
+    const _Bool direct = r_runtime_task_direct_begin(stack_bytes);
+    if (direct && atomic_load_explicit(&r_test_cancel_enabled, memory_order_acquire) &&
+        r_test_live_count() != 0U) {
+        atomic_store_explicit(&r_test_cancel_armed, 1, memory_order_release);
+    }
+    return direct;
+}
 static RRuntimeTaskAwaitStatus r_test_root_await(RRuntimeTask **task, void *storage) {
     RRuntimeTaskAwaitStatus status = r_runtime_task_await(task, storage);
     if (atomic_load_explicit(&r_test_cancel_enabled, memory_order_acquire) &&
@@ -127,10 +137,12 @@ static void r_test_array_destroy(RRuntimeArray *source) {
 #define r_runtime_task_execution_await r_test_await
 #define r_runtime_task_execution_cancel_requested r_test_cancel_requested
 #define r_runtime_task_await r_test_root_await
+#define r_runtime_task_direct_begin r_test_direct_begin
 #define main r_generated_main
 int main(int argc, char *argv[]);
 #include R_TEST_GENERATED_C
 #undef main
+#undef r_runtime_task_direct_begin
 #undef r_runtime_task_await
 #undef r_runtime_task_execution_cancel_requested
 #undef r_runtime_task_execution_await
@@ -144,6 +156,7 @@ int main(int argc, char *argv[]) {
     (void)r_test_await;
     (void)r_test_cancel_requested;
     (void)r_test_root_await;
+    (void)r_test_direct_begin;
     r_runtime_allocator_initialize(&r_test_allocator);
     int status = r_generated_main(argc, argv);
     uint64_t attempts = r_runtime_allocator_attempt_count(&r_test_allocator);

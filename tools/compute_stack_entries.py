@@ -7,6 +7,11 @@ the Clang ``.su`` report of the same source. Every entry named by ``R_STACK_ENTR
 receives its own frame plus the longest callee path below it. A bound above the target's entry
 budget fails the build.
 
+A body may call an entry under the mark ``/* R_STACK_GUARDED: <name> */`` when it calls it only
+after checking at run time that the stack holds ``R_STACK_ENTRY(<name>)`` and takes another path
+otherwise (a direct call of an async body, P4.4). Such a call starts a new entry instead of
+nesting below the caller, and a guarded entry above the budget is kept: its check always refuses.
+
 The call graph may contain a cycle only when every function on it carries the mark
 ``/* R_STACK_RECURSION: N */`` of a function with ``@recursion(depth = N)`` (Core R-FUNC-0026):
 at most N activations of such a function exist at once, and the activation that would exceed N
@@ -26,6 +31,7 @@ IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 ENTRY_USE = re.compile(r"\bR_STACK_ENTRY\(([A-Za-z_][A-Za-z0-9_]*)\)")
 INDIRECT_MARK = re.compile(r"/\* R_STACK_INDIRECT:((?: [A-Za-z_][A-Za-z0-9_]*)*) \*/")
 RECURSION_MARK = re.compile(r"/\* R_STACK_RECURSION: ([1-9][0-9]*) \*/")
+GUARDED_MARK = re.compile(r"/\* R_STACK_GUARDED:((?: [A-Za-z_][A-Za-z0-9_]*)+) \*/")
 
 
 def strip_comments_and_strings(text: str) -> str:
@@ -160,6 +166,7 @@ def body_edges(
     name: str, body: str, defined: set[str], wrappers: set[str], recursive: bool
 ) -> set[str]:
     edges: set[str] = set()
+    guarded = {target for mark in GUARDED_MARK.finditer(body) for target in mark.group(1).split()}
     for mark in INDIRECT_MARK.finditer(body):
         for target in mark.group(1).split():
             if target in defined and target != name:
@@ -167,7 +174,7 @@ def body_edges(
     code = strip_comments_and_strings(body)
     for match in IDENTIFIER.finditer(code):
         identifier = match.group(0)
-        if identifier not in defined:
+        if identifier not in defined or identifier in guarded:
             continue
         if code[: match.start()].rstrip().endswith("(void)"):
             # `(void)name;` only keeps a definition referenced; it is never a call.
@@ -271,6 +278,12 @@ def main() -> int:
     for entry in entries:
         if entry not in defined:
             raise SystemExit(f"R_STACK_ENTRY names an undefined function: {entry}")
+    guarded_entries: set[str] = set()
+    for mark in GUARDED_MARK.finditer(source):
+        for target in mark.group(1).split():
+            if target not in entries:
+                raise SystemExit(f"R_STACK_GUARDED names a function without an entry: {target}")
+            guarded_entries.add(target)
 
     depths: dict[str, int] = {}
     for name, body in functions.items():
@@ -365,7 +378,7 @@ def main() -> int:
         if value > worst:
             worst = value
             worst_entry = entry
-        if value > arguments.budget:
+        if value > arguments.budget and entry not in guarded_entries:
             chain = [entry]
             while deepest.get(component[chain[-1]]):
                 chain.append(deepest[component[chain[-1]]])  # type: ignore[arg-type]

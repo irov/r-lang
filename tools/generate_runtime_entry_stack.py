@@ -167,6 +167,9 @@ EXTERNAL_ENTRIES = (
         "runtime-task",
     ),
     ("r_runtime_task_run_deferred", "runtime/darwin/source/task.c", "runtime-task"),
+    ("r_runtime_task_direct_begin", "runtime/darwin/source/task.c", "runtime-task"),
+    ("r_runtime_task_direct_end", "runtime/darwin/source/task.c", "runtime-task"),
+    ("r_runtime_task_inline_completion_allowed", "runtime/darwin/source/task.c", "runtime-task"),
     # Core R-STMT-0019: deadline blocks and the deadline of a starting task.
     ("r_runtime_task_deadline_enter", "runtime/darwin/source/task.c", "runtime-task"),
     ("r_runtime_task_deadline_leave", "runtime/darwin/source/task.c", "runtime-task"),

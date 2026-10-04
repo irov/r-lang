@@ -111,12 +111,16 @@ typedef struct RRuntimeExecutor {
     RRuntimeTask *tasks_tail;
     size_t preparation_count;
     size_t live_task_count;
-    /* R-SLIB-ASYNC-0018: the identifier of the task committed last; zero before the first. */
-    uint64_t last_task_id;
     RRuntimeExecutorState state;
 } RRuntimeExecutor;
 
 static _Bool r_runtime_executor_draining;
+/* R-SLIB-ASYNC-0018: the identifier of the task committed last; zero before the first. A direct
+   call (r_runtime_task_direct_begin) takes its identifier without the executor lock. */
+static _Atomic uint64_t r_runtime_executor_last_task_id;
+/* Whether a direct call may run now: the executor runs and no drain is in progress. Written under
+   the executor lock wherever those change. */
+static atomic_bool r_runtime_executor_direct_open;
 
 static RRuntimeExecutor r_runtime_executor = {
     PTHREAD_MUTEX_INITIALIZER,
@@ -128,13 +132,14 @@ static RRuntimeExecutor r_runtime_executor = {
     NULL,
     0U,
     0U,
-    UINT64_C(0),
     R_RUNTIME_EXECUTOR_STOPPED,
 };
 
 static _Thread_local unsigned int r_runtime_executor_worker_depth;
 /* The innermost task this thread executes; outer inline executions chain via executing_outer. */
 static _Thread_local RRuntimeTask *r_runtime_executor_current_task;
+/* P4.4: the identifier taken by the direct call running on this thread, or zero. */
+static _Thread_local uint64_t r_runtime_direct_task_id;
 /* The external execution whose blocking call the current pool thread runs (blocking_pool.inc). */
 static _Thread_local const RRuntimeTaskExternalExecution *r_runtime_blocking_running;
 static _Thread_local _Bool r_runtime_blocking_worker_thread;
@@ -603,6 +608,7 @@ RRuntimeExecutorStartStatus r_runtime_executor_lifecycle_start(RRuntimeAllocator
     r_runtime_executor.live_task_count = 0U;
     r_runtime_executor.state = R_RUNTIME_EXECUTOR_RUNNING;
     r_runtime_executor_draining = 0;
+    atomic_store_explicit(&r_runtime_executor_direct_open, 1, memory_order_release);
     executor_unlock();
     return R_RUNTIME_EXECUTOR_START_OK;
 }
@@ -614,6 +620,7 @@ void r_runtime_executor_cancel_pending(void) {
     if (r_runtime_executor.state != R_RUNTIME_EXECUTOR_RUNNING)
         abort();
     r_runtime_executor_draining = 1;
+    atomic_store_explicit(&r_runtime_executor_direct_open, 0, memory_order_release);
     for (RRuntimeTask *task = r_runtime_executor.tasks; task != NULL; task = task->next)
         request_cancellation(task);
     executor_unlock();
@@ -724,10 +731,13 @@ void r_runtime_task_deadline_narrow(_Bool *active, int64_t *seconds, uint32_t *n
     }
 }
 
-/* R-SLIB-ASYNC-0018: the task whose code runs on this thread, a call of the blocking pool
-   included, or zero outside every task. The identifier never changes after the commit that
-   published the running task, so reading it needs no lock. */
+/* R-SLIB-ASYNC-0018: the task whose code runs on this thread, a call of the blocking pool and
+   a direct call (P4.4) included, or zero outside every task. The identifier never changes after
+   the commit that published the running task, so reading it needs no lock. */
 uint64_t r_runtime_task_current_id(void) {
+    if (r_runtime_direct_task_id != UINT64_C(0)) {
+        return r_runtime_direct_task_id;
+    }
     if (r_runtime_blocking_running != NULL) {
         return r_runtime_blocking_running->task->id;
     }
@@ -788,6 +798,7 @@ _Bool r_runtime_executor_quiesce_for_exit(void) {
         r_runtime_executor.state = R_RUNTIME_EXECUTOR_STOPPING;
     }
     r_runtime_executor_draining = 1;
+    atomic_store_explicit(&r_runtime_executor_direct_open, 0, memory_order_release);
     for (RRuntimeTask *task = r_runtime_executor.tasks; task != NULL; task = task->next) {
         if (!executor_task_on_current_thread(task)) {
             request_cancellation(task);
@@ -831,6 +842,7 @@ _Bool r_runtime_executor_lifecycle_stop(void) {
     }
 
     r_runtime_executor.state = R_RUNTIME_EXECUTOR_STOPPING;
+    atomic_store_explicit(&r_runtime_executor_direct_open, 0, memory_order_release);
     for (task = r_runtime_executor.tasks; task != NULL; task = task->next) {
         request_cancellation(task);
     }
@@ -1072,11 +1084,12 @@ static RRuntimeTaskStartResult task_start_commit(RRuntimeTask **transaction,
         abort();
     }
     r_runtime_executor.live_task_count += 1U;
-    if (r_runtime_executor.last_task_id == UINT64_MAX) {
+    task->id =
+        atomic_fetch_add_explicit(&r_runtime_executor_last_task_id, 1U, memory_order_relaxed);
+    if (task->id == UINT64_MAX) {
         abort();
     }
-    r_runtime_executor.last_task_id += 1U;
-    task->id = r_runtime_executor.last_task_id;
+    task->id += 1U;
     atomic_store_explicit(&task->committed, 1, memory_order_release);
     if (r_runtime_executor_draining)
         request_cancellation(task);
@@ -1144,6 +1157,34 @@ void r_runtime_task_run_deferred(RRuntimeTask *task, size_t step_stack_bytes) {
     } else {
         task_dispatch(task);
     }
+}
+
+_Bool r_runtime_task_inline_completion_allowed(void) {
+    /* A budget counts tasks and charges frames (Core R-STMT-0020); its starts keep the ordinary
+       path. A drain or a stopping executor would refuse or cancel the start. */
+    return (r_runtime_budget_current() == NULL) &&
+           atomic_load_explicit(&r_runtime_executor_direct_open, memory_order_acquire);
+}
+
+_Bool r_runtime_task_direct_begin(size_t stack_bytes) {
+    uint64_t identifier;
+
+    /* The call runs on this stack, so it needs the measured bound of the direct body
+       (R-FUNC-0004). */
+    if (!r_runtime_task_inline_completion_allowed() || !r_runtime_stack_can_require(stack_bytes)) {
+        return 0;
+    }
+    identifier =
+        atomic_fetch_add_explicit(&r_runtime_executor_last_task_id, 1U, memory_order_relaxed);
+    if (identifier == UINT64_MAX) {
+        abort();
+    }
+    r_runtime_direct_task_id = identifier + 1U;
+    return 1;
+}
+
+void r_runtime_task_direct_end(void) {
+    r_runtime_direct_task_id = UINT64_C(0);
 }
 
 void r_runtime_task_start_abort(RRuntimeTask **transaction) {

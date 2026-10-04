@@ -44,6 +44,7 @@
     "generated_c_emitter": "compiler/codegen/c17.c",
     "generated_c_fragments": [
       "compiler/codegen/clone.inc",
+      "compiler/codegen/direct_calls.inc",
       "compiler/codegen/format.inc",
       "compiler/codegen/format_glue.inc",
       "compiler/codegen/fs_async_emit.inc",
@@ -66,6 +67,7 @@
       "compiler/codegen/json_tree.inc",
       "compiler/codegen/layout.inc",
       "compiler/codegen/layout_pass.inc",
+      "compiler/codegen/loop_versions.inc",
       "compiler/codegen/net_async_emit.inc",
       "compiler/codegen/net_async_preflight.inc",
       "compiler/codegen/recursion.inc",
@@ -1520,6 +1522,20 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_runtime_task_direct_begin",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_task_direct_end",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_runtime_task_execution_await",
       "source": "runtime/darwin/source/task.c",
       "category": "runtime-task",
@@ -1528,6 +1544,13 @@
     },
     {
       "c_symbol": "r_runtime_task_execution_cancel_requested",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_task_inline_completion_allowed",
       "source": "runtime/darwin/source/task.c",
       "category": "runtime-task",
       "linkage": "external",

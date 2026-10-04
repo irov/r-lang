@@ -233,6 +233,15 @@ u32 array_lengths() throws std.alloc::alloc_error {
     return total;
 }
 
+/* P4.4-8: the length of a row of a two-dimensional fixed array is a constant; the proven index
+   of the row leaves its temporary otherwise unused. */
+usize row_width() {
+    u8[2usize][3usize] rows = {};
+    usize at = 0usize;
+    usize width = len(rows[at]); /* proven */
+    return width;
+}
+
 i32 main() {
     u8[6] storage = {1, 2, 3, 4, 5, 6};
     u8[2] target = {0, 0};
@@ -264,5 +273,6 @@ i32 main() {
     if (array_lengths() != 20u32 + 1u32 + 1u32 + 2u32) { return 13; }
     if (branch_deaths(data, 1usize, true) != 1u32 + 3u32 + 2u32 + 2u32 + 2u32 + 3u32) { return 15; }
     if (conversions(100u32) != 100u32 + 50u32 + 100u32 + 6u32 + 6u32) { return 16; }
+    if (row_width() != 3usize) { return 17; }
     return 0;
 }

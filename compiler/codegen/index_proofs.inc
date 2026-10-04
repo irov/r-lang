@@ -187,12 +187,14 @@ static bool r_c17_index_combine(RTokenKind operation,
     return !is_signed;
 }
 
+/* A local or parameter of the body, not a static local: a call may change one of those (P4.4-2). */
 static bool r_c17_index_symbol_is(const RC17Emitter *emitter, RSymbolId symbol) {
     const RSemanticSymbol *entry = r_c17_symbol(emitter, symbol);
 
     return (entry != NULL) &&
            ((entry->kind == R_SEMANTIC_SYMBOL_LOCAL) ||
             (entry->kind == R_SEMANTIC_SYMBOL_PARAMETER)) &&
+           !entry->is_static &&
            (emitter->index_proof_generation != UINT32_C(0)) && (emitter->index_unstable != NULL) &&
            (emitter->index_unstable[symbol] != emitter->index_proof_generation);
 }
@@ -1129,6 +1131,11 @@ static bool r_c17_index_walk_if(RC17Emitter *emitter, const RHirNode *node, uint
     return true;
 }
 
+static bool r_c17_version_loop(RC17Emitter *emitter,
+                               RHirNodeId node_id,
+                               const RHirNode *node,
+                               uint32_t loop_guard);
+
 static bool r_c17_index_walk_loop(RC17Emitter *emitter,
                                   RHirNodeId node_id,
                                   const RHirNode *node,
@@ -1139,7 +1146,10 @@ static bool r_c17_index_walk_loop(RC17Emitter *emitter,
     bool walked;
 
     /* Every iteration after the first starts after the changes of the whole loop. */
-    (void)r_c17_index_forget(emitter, node_id);
+    guard = r_c17_index_forget(emitter, node_id);
+    if ((node->kind == R_HIR_FOR) && !r_c17_version_loop(emitter, node_id, node, guard)) {
+        return false;
+    }
     guard = r_c17_index_forget(emitter, condition);
     walked = r_c17_index_walk_expression(emitter, condition, guard, depth + 1U) &&
              r_c17_index_assume(emitter, condition, true, guard, UINT32_C(0)) &&
@@ -1322,6 +1332,9 @@ static bool r_c17_index_proofs_analyze(RC17Emitter *emitter, RHirNodeId body) {
     emitter->index_proof_abandoned = false;
     emitter->index_fact_count = 0U;
     emitter->index_kill_count = 0U;
+    emitter->loop_version_count = 0U;
+    emitter->versioned_index_count = 0U;
+    emitter->loop_version_active = 0U;
     r_c17_index_prescan(emitter, body, R_HIR_INVALID, 0U, UINT32_C(0));
     if (!emitter->index_proof_abandoned) {
         (void)r_c17_index_walk_statement(emitter, body, UINT32_C(0));
@@ -1333,6 +1346,8 @@ static bool r_c17_index_proofs_analyze(RC17Emitter *emitter, RHirNodeId body) {
     if (emitter->index_proof_abandoned) {
         /* A fresh generation disowns the marks this walk made. */
         ++emitter->index_proof_generation;
+        emitter->loop_version_count = 0U;
+        emitter->versioned_index_count = 0U;
         return true;
     }
     emitter->index_proof_active = emitter->index_proof_generation;
@@ -1351,6 +1366,8 @@ static bool r_c17_index_node_proven(const RC17Emitter *emitter, const RHirNode *
             emitter->index_proof_active);
 }
 
+static bool r_c17_index_versioned(const RC17Emitter *emitter, const RHirNode *place);
+
 /* Whether the bounds check of an index place may be left out: the walk of the body being
    emitted proved it, or its value range alone lies below a fixed-array bound. Facts exist only
    during a walk, so outside one a range uses literals and types alone, which hold anywhere. */
@@ -1359,7 +1376,7 @@ static bool r_c17_index_check_is_redundant(const RC17Emitter *emitter,
                                            const RSemanticType *base_type) {
     RC17IndexRange range;
 
-    return r_c17_index_node_proven(emitter, place) ||
+    return r_c17_index_node_proven(emitter, place) || r_c17_index_versioned(emitter, place) ||
            ((emitter->index_fact_count == 0U) && (base_type->kind == R_SEMANTIC_TYPE_FIXED_ARRAY) &&
             r_c17_index_range(emitter, r_c17_child(emitter, place, 1U), UINT32_C(0), &range) &&
             (range.high < base_type->length));

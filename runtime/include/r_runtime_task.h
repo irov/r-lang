@@ -377,6 +377,27 @@ RRuntimeTaskState r_runtime_task_state(RRuntimeTask *task);
 _Bool r_runtime_task_execution_cancel_requested(const RRuntimeTaskExecution *execution);
 
 /*
+ * P4.4: begins an awaited call of an async function whose body cannot suspend as an ordinary call
+ * on the awaiting task, an optimization under Core R-AM-0003. It succeeds while the executor runs,
+ * no drain is in progress, the calling task has no budget and this thread's stack holds
+ * stack_bytes (the measured bound of the direct body), and then takes the next task identifier
+ * (R-SLIB-ASYNC-0018), so every later task keeps the identifier an ordinary start would have given
+ * it; r_runtime_task_current_id reports it until r_runtime_task_direct_end. False leaves nothing
+ * changed; the caller then starts the call as a task.
+ */
+_Bool r_runtime_task_direct_begin(size_t stack_bytes);
+void r_runtime_task_direct_end(void);
+
+/*
+ * P4.4: whether an awaited standard operation that can complete at once may complete on the
+ * awaiting task without starting its task: true while the executor runs, no drain is in progress
+ * and the calling task has no budget, the conditions under which its start would succeed
+ * uncounted. The operation then takes no task identifier, which R-SLIB-ASYNC-0018 allows: the
+ * identifiers stay unique and in start order.
+ */
+_Bool r_runtime_task_inline_completion_allowed(void);
+
+/*
  * External producer protocol. start_ready publishes fully initialized native state. Completion and
  * cancellation race through one terminal selection. The producer shall acknowledge only after the
  * native backend can no longer access payload/result storage. A completion acknowledgement treats

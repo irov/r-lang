@@ -255,6 +255,23 @@ typedef struct RC17IndexFact {
     bool live;
 } RC17IndexFact;
 
+/* Loop versioning (loop_versions.inc): an innermost for loop over `k < bound` whose affine
+   indices are checked once before it, and one such index `offset + k * stride`. */
+typedef struct RC17LoopVersion {
+    RHirNodeId loop;
+    RHirNodeId bound;
+    RSymbolId induction;
+    size_t first_index;
+    size_t index_count;
+} RC17LoopVersion;
+
+typedef struct RC17VersionedIndex {
+    RHirNodeId place;
+    RHirNodeId offset; /* R_HIR_NODE_ID_INVALID for zero. */
+    RHirNodeId stride; /* R_HIR_NODE_ID_INVALID for one. */
+    RSymbolId base;
+} RC17VersionedIndex;
+
 typedef struct RC17Emitter {
     const RFrontendContext *frontend;
     const RFrontendArtifactOptions *artifact_options;
@@ -285,11 +302,23 @@ typedef struct RC17Emitter {
     uint32_t index_proof_serial;
     uint32_t index_proof_active; /* Generation of the body being emitted, or 0. */
     bool index_proof_abandoned;
+    RC17LoopVersion *loop_versions;
+    size_t loop_version_count;
+    size_t loop_version_capacity;
+    RC17VersionedIndex *versioned_indices;
+    size_t versioned_index_count;
+    size_t versioned_index_capacity;
+    size_t loop_version_active; /* 1 + the loop whose checked-once copy is being emitted. */
     unsigned char *async_wrapper_functions;
     unsigned char *sync_initializer_functions;
     unsigned char *thread_entry_functions;
     unsigned char *function_states;
     unsigned char *emitted_functions;
+    /* P4.4 (direct_calls.inc): per async function, 0 unknown, 1 its awaited calls may run as
+       direct calls, 2 they may not; and whether the direct twin of the function is emitted. */
+    unsigned char *direct_states;
+    unsigned char *direct_twins;
+    bool direct_twin_signature;
     unsigned char *used_program_strings;
     unsigned char *aggregate_states;
     unsigned char *type_states;
@@ -5943,6 +5972,8 @@ static bool r_c17_prepare_ordering(RC17Emitter *emitter) {
         r_c17_allocate(emitter, (symbol_count + 1U) * sizeof(*emitter->function_states));
     emitter->emitted_functions =
         r_c17_allocate(emitter, (symbol_count + 1U) * sizeof(*emitter->emitted_functions));
+    emitter->direct_states = r_c17_allocate(emitter, symbol_count + 1U);
+    emitter->direct_twins = r_c17_allocate(emitter, symbol_count + 1U);
     emitter->sorted_functions =
         symbol_count == 0U
             ? NULL
@@ -5986,6 +6017,7 @@ static bool r_c17_prepare_ordering(RC17Emitter *emitter) {
     emitter->drop_cursor_types = r_c17_allocate(emitter, type_count + 1U);
     if ((emitter->function_nodes == NULL) || (emitter->function_ordinals == NULL) ||
         (emitter->function_states == NULL) || (emitter->emitted_functions == NULL) ||
+        (emitter->direct_states == NULL) || (emitter->direct_twins == NULL) ||
         ((symbol_count != 0U) && (emitter->sorted_functions == NULL)) ||
         ((source_count != 0U) && (emitter->sorted_sources == NULL)) ||
         ((type_count != 0U) && (emitter->sorted_derived_types == NULL)) ||
@@ -6010,6 +6042,8 @@ static bool r_c17_prepare_ordering(RC17Emitter *emitter) {
         emitter->function_states, 0, (symbol_count + 1U) * sizeof(*emitter->function_states));
     (void)memset(
         emitter->emitted_functions, 0, (symbol_count + 1U) * sizeof(*emitter->emitted_functions));
+    (void)memset(emitter->direct_states, 0, symbol_count + 1U);
+    (void)memset(emitter->direct_twins, 0, symbol_count + 1U);
     (void)memset(
         emitter->source_ordinals, 0, (source_count + 1U) * sizeof(*emitter->source_ordinals));
     (void)memset(emitter->type_ordinals, 0, (type_count + 1U) * sizeof(*emitter->type_ordinals));
@@ -6497,6 +6531,9 @@ static const char *r_c17_arithmetic_operator(RTokenKind operation) {
 }
 
 static bool r_c17_preflight_function(RC17Emitter *emitter, RSymbolId function_symbol);
+static bool r_c17_preflight_direct_call(RC17Emitter *emitter,
+                                        const RMirFunction *mir,
+                                        const RMirInstruction *start);
 
 static const RMirFunction *r_c17_mir_function(const RC17Emitter *emitter,
                                               RSymbolId function_symbol) {
@@ -11919,7 +11956,8 @@ static bool r_c17_preflight_async_instruction(RC17Emitter *emitter,
                 return false;
             }
         }
-        return !emitter->follow_calls || r_c17_preflight_function(emitter, instruction->symbol);
+        return r_c17_preflight_direct_call(emitter, mir, instruction) &&
+               (!emitter->follow_calls || r_c17_preflight_function(emitter, instruction->symbol));
     case R_MIR_INSTRUCTION_STANDARD_CALL:
         if (instruction->standard_operation == R_STANDARD_CALL_STRING_APPEND_STR) {
             emitter->uses_memory = true; /* inline append copies with memcpy */
@@ -14125,6 +14163,7 @@ static bool r_c17_preflight(RC17Emitter *emitter) {
     (void)memset(emitter->emitted_functions,
                  0,
                  (context->semantic_symbol_count + 1U) * sizeof(*emitter->emitted_functions));
+    (void)memset(emitter->direct_twins, 0, context->semantic_symbol_count + 1U);
     emitter->helpers = UINT64_C(0);
     emitter->uses_empty_program_string = false;
     /* M32-3: the first pass visits functions that are never emitted; a floating literal or a
@@ -17593,12 +17632,11 @@ r_c17_emit_place(RC17Emitter *emitter, const RHirNode *place, const RC17Prepared
             return false;
         }
         if (pointer_type->kind == R_SEMANTIC_TYPE_OWN) {
-            if (!r_c17_write(emitter,
-                             place->aggregate_member != UINT32_C(0) ? "r_runtime_own_get(&"
-                                                                    : "r_runtime_own_get_mut(&")) {
-                return false;
-            }
-        } else if (pointer_type->kind == R_SEMANTIC_TYPE_ARC) {
+            /* P4.4: r_runtime_own_get and r_runtime_own_get_mut return the allocation field. */
+            return r_c17_write(emitter, "(") && r_c17_emit_place(emitter, pointer, prepared) &&
+                   r_c17_write(emitter, ").allocation)");
+        }
+        if (pointer_type->kind == R_SEMANTIC_TYPE_ARC) {
             if (!r_c17_write(emitter, "r_runtime_arc_get(&")) {
                 return false;
             }
@@ -17738,6 +17776,7 @@ r_c17_emit_index_conversion_failure(RC17Emitter *emitter, RTypeId type, uint32_t
 }
 
 #include "index_proofs.inc"
+#include "loop_versions.inc"
 
 static bool r_c17_emit_index_bound_condition(RC17Emitter *emitter,
                                              const RSemanticType *base_type,
@@ -17916,7 +17955,11 @@ r_c17_emit_load(RC17Emitter *emitter, const RHirNode *node, uint32_t depth, RC17
             !r_c17_write(emitter, ".r_data));\n")) {
             goto cleanup;
         }
-        success = r_c17_finish_temporary(emitter, node->type, temporary, result);
+        /* The copy ended the statement; the temporary only becomes the value (P4.4-4). */
+        result->type = r_c17_value_type(emitter, node->type);
+        result->temporary = temporary;
+        result->has_value = true;
+        success = true;
         goto cleanup;
     }
     if ((place == NULL) || !r_c17_prepare_place(emitter, place, depth, &prepared) ||
@@ -18982,8 +19025,21 @@ r_c17_emit_length(RC17Emitter *emitter, const RHirNode *node, uint32_t depth, RC
     if ((base == NULL) || (base_type == NULL) ||
         (((base->kind != R_HIR_PLACE) || (base->child_count != UINT32_C(0)) ||
           (base_type->kind != R_SEMANTIC_TYPE_FIXED_ARRAY)) &&
-         !r_c17_prepare_place(emitter, base, depth, &prepared)) ||
-        !r_c17_new_temporary(emitter, node->type, depth, &temporary) ||
+         !r_c17_prepare_place(emitter, base, depth, &prepared))) {
+        goto cleanup;
+    }
+    /* The length of a fixed array is a constant: an index whose check was proven redundant
+       (index_proofs.inc) leaves its temporary otherwise unused (P4.4-8). */
+    for (size_t index = 0U;
+         (base_type->kind == R_SEMANTIC_TYPE_FIXED_ARRAY) && (index < prepared.index_count);
+         ++index) {
+        if (!r_c17_indent(emitter, depth) || !r_c17_write(emitter, "(void)") ||
+            !r_c17_emit_temporary_name(emitter, prepared.indices[index].temporary) ||
+            !r_c17_write(emitter, ";\n")) {
+            goto cleanup;
+        }
+    }
+    if (!r_c17_new_temporary(emitter, node->type, depth, &temporary) ||
         !r_c17_write(emitter, " = ")) {
         goto cleanup;
     }
@@ -30486,7 +30542,7 @@ static bool r_c17_emit_while(RC17Emitter *emitter, const RHirNode *node, uint32_
             r_c17_emit_loop_break_label(emitter, break_label) && r_c17_write(emitter, ":;\n"));
 }
 
-static bool r_c17_emit_for(RC17Emitter *emitter, const RHirNode *node, uint32_t depth) {
+static bool r_c17_emit_for_copy(RC17Emitter *emitter, const RHirNode *node, uint32_t depth) {
     RC17Value condition;
     const RHirNode *body = r_c17_node(emitter, r_c17_child(emitter, node, UINT32_C(1)));
     const size_t loop_base = emitter->loop_count;
@@ -30539,6 +30595,168 @@ static bool r_c17_emit_for(RC17Emitter *emitter, const RHirNode *node, uint32_t 
     return !break_label_used ||
            (r_c17_indent(emitter, depth == UINT32_C(0) ? UINT32_C(0) : depth - UINT32_C(1)) &&
             r_c17_emit_loop_break_label(emitter, break_label) && r_c17_write(emitter, ":;\n"));
+}
+
+/* An invariant value of a versioned loop (loop_versions.inc), as one C expression. */
+static bool r_c17_emit_version_value(RC17Emitter *emitter, RHirNodeId node_id, uint32_t depth) {
+    const RHirNode *node = r_c17_node(emitter, node_id);
+    const RHirNode *place;
+
+    if ((node == NULL) || (depth >= R_C17_INDEX_RANGE_DEPTH_LIMIT)) {
+        return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+    }
+    switch (node->kind) {
+    case R_HIR_LITERAL:
+        return r_c17_format(emitter, "(size_t)UINT64_C(%" PRIu64 ")", node->integer_value);
+    case R_HIR_LOAD:
+    case R_HIR_LENGTH:
+        place = r_c17_node(emitter, r_c17_child(emitter, node, 0U));
+        if ((place == NULL) || (place->kind != R_HIR_PLACE) ||
+            !r_c17_emit_symbol_place(emitter, place->symbol)) {
+            return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+        }
+        if (node->kind == R_HIR_LOAD) {
+            return true;
+        }
+        return r_c17_write(
+            emitter,
+            r_c17_value_kind(emitter, place->type) == R_SEMANTIC_TYPE_SLICE ? ".r_len" : ".length");
+    case R_HIR_BINARY:
+        return r_c17_write(emitter, "(size_t)(") &&
+               r_c17_emit_version_value(emitter, r_c17_child(emitter, node, 0U), depth + 1U) &&
+               r_c17_write(emitter,
+                           node->operation == R_TOKEN_PLUS    ? " + "
+                           : node->operation == R_TOKEN_MINUS ? " - "
+                                                              : " * ") &&
+               r_c17_emit_version_value(emitter, r_c17_child(emitter, node, 1U), depth + 1U) &&
+               r_c17_write(emitter, ")");
+    default:
+        return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+    }
+}
+
+/* Whether one versioned index stays below the length of its base in every iteration: its
+   largest value offset + last * stride is computed without wrapping and lies below it. */
+static bool r_c17_emit_version_condition(RC17Emitter *emitter,
+                                         const RC17VersionedIndex *index,
+                                         uint32_t label) {
+    const RSemanticSymbol *base = r_c17_symbol(emitter, index->base);
+
+    if (base == NULL) {
+        return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+    }
+    if ((index->stride != R_HIR_NODE_ID_INVALID) &&
+        (!r_c17_write(emitter, " && ((") ||
+         !r_c17_emit_version_value(emitter, index->stride, UINT32_C(0)) ||
+         !r_c17_format(emitter, ") == 0U || r_last_%08" PRIu32 " <= SIZE_MAX / (", label) ||
+         !r_c17_emit_version_value(emitter, index->stride, UINT32_C(0)) ||
+         !r_c17_write(emitter, "))"))) {
+        return false;
+    }
+    if ((index->offset != R_HIR_NODE_ID_INVALID) &&
+        (!r_c17_write(emitter, " && (") ||
+         !r_c17_emit_version_value(emitter, index->offset, UINT32_C(0)) ||
+         !r_c17_format(emitter, ") <= SIZE_MAX - r_last_%08" PRIu32, label))) {
+        return false;
+    }
+    if ((index->offset != R_HIR_NODE_ID_INVALID) && (index->stride != R_HIR_NODE_ID_INVALID) &&
+        (!r_c17_write(emitter, " * (") ||
+         !r_c17_emit_version_value(emitter, index->stride, UINT32_C(0)) ||
+         !r_c17_write(emitter, ")"))) {
+        return false;
+    }
+    if (!r_c17_write(emitter, " && ")) {
+        return false;
+    }
+    if ((index->offset != R_HIR_NODE_ID_INVALID) &&
+        (!r_c17_write(emitter, "(") ||
+         !r_c17_emit_version_value(emitter, index->offset, UINT32_C(0)) ||
+         !r_c17_write(emitter, ") + "))) {
+        return false;
+    }
+    if (!r_c17_format(emitter, "r_last_%08" PRIu32, label)) {
+        return false;
+    }
+    if ((index->stride != R_HIR_NODE_ID_INVALID) &&
+        (!r_c17_write(emitter, " * (") ||
+         !r_c17_emit_version_value(emitter, index->stride, UINT32_C(0)) ||
+         !r_c17_write(emitter, ")"))) {
+        return false;
+    }
+    return r_c17_write(emitter, " < ") && r_c17_emit_symbol_place(emitter, index->base) &&
+           r_c17_write(emitter,
+                       r_c17_value_kind(emitter, base->type) == R_SEMANTIC_TYPE_SLICE ? ".r_len"
+                                                                                      : ".length");
+}
+
+/* A for loop versioned by loop_versions.inc: its affine indices are checked once, and the copy
+   without their checks runs when they hold. */
+static bool r_c17_emit_for(RC17Emitter *emitter, const RHirNode *node, uint32_t depth) {
+    const RC17LoopVersion *version = r_c17_version_for_loop(emitter, node);
+    size_t version_index;
+    size_t index;
+    uint32_t label;
+    bool success;
+
+    if ((version == NULL) || (emitter->loop_version_active != 0U)) {
+        return r_c17_emit_for_copy(emitter, node, depth);
+    }
+    if (emitter->next_control_label == UINT32_MAX) {
+        return r_c17_fail(emitter, R_FRONTEND_LIMIT_EXCEEDED);
+    }
+    version_index = (size_t)(version - emitter->loop_versions);
+    label = ++emitter->next_control_label;
+    /* The source bytes of each index name it for readers and for check_loop_versions.py. */
+    for (index = 0U; index < version->index_count; ++index) {
+        const RHirNode *place =
+            r_c17_node(emitter, emitter->versioned_indices[version->first_index + index].place);
+
+        if ((place == NULL) || (place->span.end < place->span.start) ||
+            ((size_t)place->span.source > emitter->frontend->source_count) ||
+            (emitter->source_ordinals[place->span.source] == 0U)) {
+            return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+        }
+        if (!r_c17_indent(emitter, depth) ||
+            !r_c17_format(emitter,
+                          "/* Checked once below: source %" PRIu32 ", bytes %" PRIu32 "..%" PRIu32
+                          " (P4.4). */\n",
+                          emitter->source_ordinals[place->span.source],
+                          place->span.start,
+                          place->span.end)) {
+            return false;
+        }
+    }
+    if (!r_c17_indent(emitter, depth) ||
+        !r_c17_format(emitter, "_Bool r_affine_%08" PRIu32 " = 1;\n", label) ||
+        !r_c17_indent(emitter, depth) || !r_c17_write(emitter, "if (") ||
+        !r_c17_emit_symbol_place(emitter, version->induction) || !r_c17_write(emitter, " < ") ||
+        !r_c17_emit_version_value(emitter, version->bound, UINT32_C(0)) ||
+        !r_c17_write(emitter, ") {\n") || !r_c17_indent(emitter, depth + 1U) ||
+        !r_c17_format(emitter, "const size_t r_last_%08" PRIu32 " = ", label) ||
+        !r_c17_emit_version_value(emitter, version->bound, UINT32_C(0)) ||
+        !r_c17_write(emitter, " - (size_t)1;\n")) {
+        return false;
+    }
+    for (index = 0U; index < version->index_count; ++index) {
+        if (!r_c17_indent(emitter, depth + 1U) ||
+            !r_c17_format(emitter, "r_affine_%08" PRIu32 " = r_affine_%08" PRIu32, label, label) ||
+            !r_c17_emit_version_condition(
+                emitter, &emitter->versioned_indices[version->first_index + index], label) ||
+            !r_c17_write(emitter, ";\n")) {
+            return false;
+        }
+    }
+    if (!r_c17_indent(emitter, depth) || !r_c17_write(emitter, "}\n") ||
+        !r_c17_indent(emitter, depth) ||
+        !r_c17_format(emitter, "if (r_affine_%08" PRIu32 ") {\n", label)) {
+        return false;
+    }
+    emitter->loop_version_active = version_index + 1U;
+    success = r_c17_emit_for_copy(emitter, node, depth + 1U);
+    emitter->loop_version_active = 0U;
+    return success && r_c17_indent(emitter, depth) && r_c17_write(emitter, "} else {\n") &&
+           r_c17_emit_for_copy(emitter, node, depth + 1U) && r_c17_indent(emitter, depth) &&
+           r_c17_write(emitter, "}\n");
 }
 
 static bool r_c17_emit_standard_outcome_binding(RC17Emitter *emitter,
@@ -31130,8 +31348,16 @@ static bool r_c17_emit_function_result(RC17Emitter *emitter,
     if (r_c17_value_kind(emitter, function->return_type) == R_SEMANTIC_TYPE_NEVER) {
         return r_c17_write(emitter, "_Noreturn void");
     }
-    return r_c17_emit_value_type(
-        emitter, function->is_async ? function->async_start_type : function->return_type);
+    return r_c17_emit_value_type(emitter,
+                                 (function->is_async && !emitter->direct_twin_signature)
+                                     ? function->async_start_type
+                                     : function->return_type);
+}
+
+/* P4.4: the direct twin of an async function is a static ordinary function (direct_calls.inc). */
+static bool r_c17_emit_signature_name(RC17Emitter *emitter, RSymbolId function_id) {
+    return r_c17_emit_function_name(emitter, function_id) &&
+           (!emitter->direct_twin_signature || r_c17_write(emitter, "_direct"));
 }
 
 static bool
@@ -31144,21 +31370,24 @@ r_c17_emit_function_signature(RC17Emitter *emitter, RSymbolId function_id, bool 
     size_t parameter_indentation;
     size_t return_spelling_length;
     const size_t suffix_length = include_names ? 2U : 1U;
+    const bool twin = emitter->direct_twin_signature;
+    const bool is_static = (function != NULL) && (function->is_protected || twin);
+    const bool async_signature = (function != NULL) && function->is_async && !twin;
     const RTypeId output_type =
         function == NULL
             ? R_TYPE_ID_INVALID
-            : (function->is_async ? function->async_start_type : function->effect_carrier_type);
+            : (async_signature ? function->async_start_type : function->effect_carrier_type);
     const bool has_effect_output = output_type != R_TYPE_ID_INVALID;
 
     if ((function == NULL) || (node == NULL)) {
         return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
     }
     signature_start = emitter->output.length;
-    if (function->is_protected && !r_c17_write(emitter, "static ")) {
+    if (is_static && !r_c17_write(emitter, "static ")) {
         return false;
     }
     if (!r_c17_emit_function_result(emitter, function, has_effect_output) ||
-        !r_c17_write(emitter, " ") || !r_c17_emit_function_name(emitter, function_id) ||
+        !r_c17_write(emitter, " ") || !r_c17_emit_signature_name(emitter, function_id) ||
         !r_c17_write(emitter, "(")) {
         return false;
     }
@@ -31175,10 +31404,10 @@ r_c17_emit_function_signature(RC17Emitter *emitter, RSymbolId function_id, bool 
         if ((parameter == NULL) ||
             (((parameter_index != 0U) || has_effect_output) && !r_c17_write(emitter, ", ")) ||
             !r_c17_emit_declared_type(emitter, parameter->type) ||
-            (function->is_async && r_c17_type_requires_drop(emitter, parameter->type) &&
+            (async_signature && r_c17_type_requires_drop(emitter, parameter->type) &&
              !r_c17_write(emitter, " *")) ||
             (include_names &&
-             (((!function->is_async || !r_c17_type_requires_drop(emitter, parameter->type)) &&
+             (((!async_signature || !r_c17_type_requires_drop(emitter, parameter->type)) &&
                !r_c17_write(emitter, " ")) ||
               !r_c17_emit_variable_name(emitter, parameter->symbol)))) {
             return false;
@@ -31192,12 +31421,12 @@ r_c17_emit_function_signature(RC17Emitter *emitter, RSymbolId function_id, bool 
     }
 
     emitter->output.length = signature_start;
-    if ((function->is_protected && !r_c17_write(emitter, "static ")) ||
+    if ((is_static && !r_c17_write(emitter, "static ")) ||
         !r_c17_emit_function_result(emitter, function, has_effect_output)) {
         return false;
     }
     return_spelling_length = emitter->output.length - signature_start;
-    if (!r_c17_write(emitter, "\n") || !r_c17_emit_function_name(emitter, function_id) ||
+    if (!r_c17_write(emitter, "\n") || !r_c17_emit_signature_name(emitter, function_id) ||
         !r_c17_write(emitter, "(")) {
         return false;
     }
@@ -31211,10 +31440,10 @@ r_c17_emit_function_signature(RC17Emitter *emitter, RSymbolId function_id, bool 
         if ((parameter == NULL) ||
             (((parameter_index != 0U) || has_effect_output) && !r_c17_write(emitter, ", ")) ||
             !r_c17_emit_declared_type(emitter, parameter->type) ||
-            (function->is_async && r_c17_type_requires_drop(emitter, parameter->type) &&
+            (async_signature && r_c17_type_requires_drop(emitter, parameter->type) &&
              !r_c17_write(emitter, " *")) ||
             (include_names &&
-             (((!function->is_async || !r_c17_type_requires_drop(emitter, parameter->type)) &&
+             (((!async_signature || !r_c17_type_requires_drop(emitter, parameter->type)) &&
                !r_c17_write(emitter, " ")) ||
               !r_c17_emit_variable_name(emitter, parameter->symbol)))) {
             return false;
@@ -31223,7 +31452,7 @@ r_c17_emit_function_signature(RC17Emitter *emitter, RSymbolId function_id, bool 
     if (!r_c17_write(emitter, ")")) {
         return false;
     }
-    if ((!include_names || (has_effect_output && function->is_protected) ||
+    if ((!include_names || (has_effect_output && is_static) ||
          (!has_effect_output && function->parameter_count >= 3U && return_spelling_length >= 6U)) &&
         ((r_c17_current_column(emitter) + suffix_length) <= 100U)) {
         return true;
@@ -31231,9 +31460,9 @@ r_c17_emit_function_signature(RC17Emitter *emitter, RSymbolId function_id, bool 
 
     if (!include_names) {
         emitter->output.length = signature_start;
-        if ((function->is_protected && !r_c17_write(emitter, "static ")) ||
+        if ((is_static && !r_c17_write(emitter, "static ")) ||
             !r_c17_emit_function_result(emitter, function, has_effect_output) ||
-            !r_c17_write(emitter, " ") || !r_c17_emit_function_name(emitter, function_id) ||
+            !r_c17_write(emitter, " ") || !r_c17_emit_signature_name(emitter, function_id) ||
             !r_c17_write(emitter, "(\n") || !r_c17_spaces(emitter, 4U)) {
             return false;
         }
@@ -31247,7 +31476,7 @@ r_c17_emit_function_signature(RC17Emitter *emitter, RSymbolId function_id, bool 
             if ((parameter == NULL) ||
                 (((parameter_index != 0U) || has_effect_output) && !r_c17_write(emitter, ", ")) ||
                 !r_c17_emit_declared_type(emitter, parameter->type) ||
-                (function->is_async && r_c17_type_requires_drop(emitter, parameter->type) &&
+                (async_signature && r_c17_type_requires_drop(emitter, parameter->type) &&
                  !r_c17_write(emitter, " *"))) {
                 return false;
             }
@@ -31261,9 +31490,9 @@ r_c17_emit_function_signature(RC17Emitter *emitter, RSymbolId function_id, bool 
     }
 
     emitter->output.length = signature_start;
-    if ((function->is_protected && !r_c17_write(emitter, "static ")) ||
+    if ((is_static && !r_c17_write(emitter, "static ")) ||
         !r_c17_emit_function_result(emitter, function, has_effect_output) ||
-        !r_c17_write(emitter, " ") || !r_c17_emit_function_name(emitter, function_id) ||
+        !r_c17_write(emitter, " ") || !r_c17_emit_signature_name(emitter, function_id) ||
         !r_c17_write(emitter, "(")) {
         return false;
     }
@@ -31279,10 +31508,10 @@ r_c17_emit_function_signature(RC17Emitter *emitter, RSymbolId function_id, bool 
             (((parameter_index != 0U) || has_effect_output) &&
              (!r_c17_write(emitter, ",\n") || !r_c17_spaces(emitter, parameter_indentation))) ||
             !r_c17_emit_declared_type(emitter, parameter->type) ||
-            (function->is_async && r_c17_type_requires_drop(emitter, parameter->type) &&
+            (async_signature && r_c17_type_requires_drop(emitter, parameter->type) &&
              !r_c17_write(emitter, " *")) ||
             (include_names &&
-             (((!function->is_async || !r_c17_type_requires_drop(emitter, parameter->type)) &&
+             (((!async_signature || !r_c17_type_requires_drop(emitter, parameter->type)) &&
                !r_c17_write(emitter, " ")) ||
               !r_c17_emit_variable_name(emitter, parameter->symbol)))) {
             return false;
@@ -32148,13 +32377,17 @@ static bool r_c17_emit_async_place(RC17Emitter *emitter,
             return false;
         }
         if (pointer_type->kind == R_SEMANTIC_TYPE_OWN) {
-            if (!r_c17_write(emitter,
-                             definition->aggregate_member != UINT32_C(0)
-                                 ? "r_runtime_own_get(&"
-                                 : "r_runtime_own_get_mut(&")) {
-                return false;
-            }
-        } else if (pointer_type->kind == R_SEMANTIC_TYPE_ARC) {
+            /* P4.4: r_runtime_own_get and r_runtime_own_get_mut return the allocation field. */
+            return r_c17_write(emitter, "(") &&
+                   r_c17_emit_async_place(emitter,
+                                          mir,
+                                          function,
+                                          place_ordinal,
+                                          place_is_parameter,
+                                          definition->operand0) &&
+                   r_c17_write(emitter, ").allocation)");
+        }
+        if (pointer_type->kind == R_SEMANTIC_TYPE_ARC) {
             if (!r_c17_write(emitter, "r_runtime_arc_get(&")) {
                 return false;
             }
@@ -34368,6 +34601,8 @@ static bool r_c17_emit_async_variant_payload(RC17Emitter *emitter,
            r_c17_write(emitter, " = 0;\n");
 }
 
+#include "direct_calls.inc"
+
 static bool r_c17_emit_async_start_instruction(RC17Emitter *emitter,
                                                const RMirFunction *mir,
                                                const RMirInstruction *instruction,
@@ -34386,7 +34621,8 @@ static bool r_c17_emit_async_start_instruction(RC17Emitter *emitter,
         return r_c17_emit_dyn_start_members(
             emitter, mir->symbol, mir, instruction, depth, r_c17_emit_async_start_instruction);
     }
-    if ((mir == NULL) || !r_c17_indent(emitter, depth)) {
+    if ((mir == NULL) || !r_c17_emit_direct_call(emitter, mir, instruction, depth) ||
+        !r_c17_indent(emitter, depth)) {
         return false;
     }
     call_start = emitter->output.length;
@@ -42968,7 +43204,8 @@ static bool r_c17_emit_async_instruction(RC17Emitter *emitter,
             return r_c17_emit_async_budget(emitter, mir, function, instruction, depth);
         }
         if (instruction->standard_operation == R_STANDARD_CALL_SYNC_RECEIVE) {
-            return r_c17_emit_async_sync_receive(emitter, mir, function, instruction, depth);
+            return r_c17_emit_receive_now(emitter, mir, function, instruction, depth) &&
+                   r_c17_emit_async_sync_receive(emitter, mir, function, instruction, depth);
         }
         if (r_async_sync_operation(instruction->standard_operation)) {
             return r_c17_emit_async_sync_mir(emitter, mir, function, instruction, depth);
@@ -44766,10 +45003,12 @@ static bool r_c17_emit_function_value_dispatcher(RC17Emitter *emitter, RSymbolId
            r_c17_emit_span(emitter, node->span) && r_c17_write(emitter, ");\n}\n\n");
 }
 
-static bool r_c17_emit_function(RC17Emitter *emitter, RSymbolId function_id) {
-    const RSemanticSymbol *function = r_c17_symbol(emitter, function_id);
-    const RHirNode *node =
-        function == NULL ? NULL : r_c17_node(emitter, emitter->function_nodes[function_id]);
+/* An ordinary function from its HIR body; also the direct twin of an async function (P4.4), whose
+   signature r_c17_emit_function_signature writes while direct_twin_signature is set. */
+static bool r_c17_emit_sync_function(RC17Emitter *emitter,
+                                     RSymbolId function_id,
+                                     const RSemanticSymbol *function,
+                                     const RHirNode *node) {
     const RHirNode *body;
     uint32_t parameter_index;
     size_t finally_index;
@@ -44777,23 +45016,6 @@ static bool r_c17_emit_function(RC17Emitter *emitter, RSymbolId function_id) {
     uint32_t finally_capacity = UINT32_C(0);
     bool success = false;
 
-    if ((function == NULL) || (node == NULL)) {
-        return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
-    }
-    if (r_semantic_dyn_dispatcher(emitter->frontend, function_id)) {
-        return r_c17_emit_dyn_dispatcher(emitter, function_id);
-    }
-    if (r_semantic_function_value_dispatcher(emitter->frontend, function_id)) {
-        return r_c17_emit_function_value_dispatcher(emitter, function_id);
-    }
-    if (function->json_operation != 0U)
-        return r_c17_emit_json_function(emitter, function_id);
-    if (function->format_recipe != 0U) {
-        return r_c17_emit_format_function(emitter, function_id);
-    }
-    if (function->is_async) {
-        return r_c17_emit_async_function(emitter, function_id, function, node);
-    }
     body = r_c17_node(emitter, r_c17_child(emitter, node, function->parameter_count));
     emitter->next_temporary = 0U;
     emitter->next_effect_label = UINT32_C(0);
@@ -44883,6 +45105,32 @@ cleanup:
     emitter->loop_count = 0U;
     emitter->switch_count = 0U;
     return success;
+}
+
+static bool r_c17_emit_function(RC17Emitter *emitter, RSymbolId function_id) {
+    const RSemanticSymbol *function = r_c17_symbol(emitter, function_id);
+    const RHirNode *node =
+        function == NULL ? NULL : r_c17_node(emitter, emitter->function_nodes[function_id]);
+
+    if ((function == NULL) || (node == NULL)) {
+        return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+    }
+    if (r_semantic_dyn_dispatcher(emitter->frontend, function_id)) {
+        return r_c17_emit_dyn_dispatcher(emitter, function_id);
+    }
+    if (r_semantic_function_value_dispatcher(emitter->frontend, function_id)) {
+        return r_c17_emit_function_value_dispatcher(emitter, function_id);
+    }
+    if (function->json_operation != 0U)
+        return r_c17_emit_json_function(emitter, function_id);
+    if (function->format_recipe != 0U) {
+        return r_c17_emit_format_function(emitter, function_id);
+    }
+    if (function->is_async) {
+        return r_c17_emit_async_function(emitter, function_id, function, node) &&
+               r_c17_emit_direct_twin(emitter, function_id, function, node);
+    }
+    return r_c17_emit_sync_function(emitter, function_id, function, node);
 }
 
 static const char *r_c17_integer_c_type(RSemanticTypeKind kind) {
@@ -45110,56 +45358,46 @@ static bool r_c17_emit_shift_helpers(RC17Emitter *emitter) {
     return true;
 }
 
+static const char *r_c17_core_integer_unsigned_type(RSemanticTypeKind kind);
+
+/* P4.4: the sum or difference is formed in the unsigned type, where it wraps, and overflow is
+   the sign test of the operands against the result. The pinned compiler turns the test into
+   the overflow flag of one add or subtract; the comparisons with the bounds it replaced cost
+   two compares and two branches. Converting the wrapped value back is the pinned target's
+   two's-complement conversion. */
 static bool r_c17_emit_signed_add_sub_helper(RC17Emitter *emitter,
                                              RSemanticTypeKind kind,
                                              RTokenKind operation) {
     const RC17HelperSet helper = r_c17_helper_for_operation(kind, operation);
     const char *name = r_c17_helper_name(kind, operation);
     const char *type = r_c17_integer_c_type(kind);
-    const char *minimum = r_c17_integer_minimum(kind);
-    const char *maximum = r_c17_integer_maximum(kind);
+    const char *unsigned_type = r_c17_core_integer_unsigned_type(kind);
+    const bool add = (operation == R_TOKEN_PLUS) || (operation == R_TOKEN_PLUS_EQUAL);
 
     if ((emitter->helpers & helper) == UINT64_C(0)) {
         return true;
     }
-    if ((name == NULL) || (type == NULL) || (minimum == NULL) || (maximum == NULL)) {
+    if ((name == NULL) || (type == NULL) || (unsigned_type == NULL)) {
         return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
-    }
-    if ((operation == R_TOKEN_PLUS) || (operation == R_TOKEN_PLUS_EQUAL)) {
-        return r_c17_format(emitter,
-                            "static %s %s(%s left, %s right, RRuntimeSourceSpan span) {\n"
-                            "    if (((right > (%s)0) && (left > %s - right)) ||\n"
-                            "        ((right < (%s)0) && (left < %s - right))) {\n"
-                            "        r_runtime_panic(R_RUNTIME_PANIC_INTEGER_OVERFLOW, span);\n"
-                            "    }\n"
-                            "    return (%s)(left + right);\n"
-                            "}\n\n",
-                            type,
-                            name,
-                            type,
-                            type,
-                            type,
-                            maximum,
-                            type,
-                            minimum,
-                            type);
     }
     return r_c17_format(emitter,
                         "static %s %s(%s left, %s right, RRuntimeSourceSpan span) {\n"
-                        "    if (((right > (%s)0) && (left < %s + right)) ||\n"
-                        "        ((right < (%s)0) && (left > %s + right))) {\n"
+                        "    %s result = (%s)((%s)left %s (%s)right);\n"
+                        "    if ((%s & (left ^ result)) < (%s)0) {\n"
                         "        r_runtime_panic(R_RUNTIME_PANIC_INTEGER_OVERFLOW, span);\n"
                         "    }\n"
-                        "    return (%s)(left - right);\n"
+                        "    return result;\n"
                         "}\n\n",
                         type,
                         name,
                         type,
                         type,
                         type,
-                        minimum,
                         type,
-                        maximum,
+                        unsigned_type,
+                        add ? "+" : "-",
+                        unsigned_type,
+                        add ? "(right ^ result)" : "(left ^ right)",
                         type);
 }
 
@@ -45176,14 +45414,37 @@ static bool r_c17_emit_signed_multiply_helper(RC17Emitter *emitter, RSemanticTyp
     if ((name == NULL) || (type == NULL) || (minimum == NULL) || (maximum == NULL)) {
         return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
     }
+    if ((kind != R_SEMANTIC_TYPE_I64) && (kind != R_SEMANTIC_TYPE_ISIZE)) {
+        /* P4.4: the exact product of two 32-bit operands fits int64_t. */
+        return r_c17_format(emitter,
+                            "static %s %s(%s left, %s right, RRuntimeSourceSpan span) {\n"
+                            "    int64_t product = (int64_t)left * (int64_t)right;\n"
+                            "    if ((product < (int64_t)%s) || (product > (int64_t)%s)) {\n"
+                            "        r_runtime_panic(R_RUNTIME_PANIC_INTEGER_OVERFLOW, span);\n"
+                            "    }\n"
+                            "    return (%s)product;\n"
+                            "}\n\n",
+                            type,
+                            name,
+                            type,
+                            type,
+                            minimum,
+                            maximum,
+                            type);
+    }
+    /* P4.4: operands within the 32-bit range cannot overflow a 64-bit product, so the divisions
+       run only for the others. */
     return r_c17_format(
         emitter,
         "static %s %s(%s left, %s right, RRuntimeSourceSpan span) {\n"
-        "    if (((left > (%s)0) && (((right > (%s)0) && (left > %s / right)) ||\n"
-        "                                 ((right < (%s)0) && (right < %s / left)))) ||\n"
-        "        ((left < (%s)0) && (((right > (%s)0) && (left < %s / right)) ||\n"
-        "                                 ((right < (%s)0) && (left < %s / right))))) {\n"
-        "        r_runtime_panic(R_RUNTIME_PANIC_INTEGER_OVERFLOW, span);\n"
+        "    if ((((uint64_t)left + UINT64_C(0x80000000)) > UINT64_C(0xffffffff)) ||\n"
+        "        (((uint64_t)right + UINT64_C(0x80000000)) > UINT64_C(0xffffffff))) {\n"
+        "        if (((left > (%s)0) && (((right > (%s)0) && (left > %s / right)) ||\n"
+        "                                ((right < (%s)0) && (right < %s / left)))) ||\n"
+        "            ((left < (%s)0) && (((right > (%s)0) && (left < %s / right)) ||\n"
+        "                                ((right < (%s)0) && (left < %s / right))))) {\n"
+        "            r_runtime_panic(R_RUNTIME_PANIC_INTEGER_OVERFLOW, span);\n"
+        "        }\n"
         "    }\n"
         "    return (%s)(left * right);\n"
         "}\n\n",
@@ -46967,6 +47228,11 @@ static bool r_c17_emit_frozen_data(RC17Emitter *emitter, RHirNodeId id, uint32_t
             !r_c17_emit_value_type(emitter, type->base) || !r_c17_write(emitter, " key;\n    ") ||
             !r_c17_emit_value_type(emitter, type->second) || !r_c17_write(emitter, " value;\n} ") ||
             !r_c17_emit_frozen_name(emitter, "entry_", id) ||
+            /* The alignment of slots and entries together, for .slot_alignment below. */
+            !r_c17_write(emitter, ";\n\ntypedef union {\n    ") ||
+            !r_c17_emit_frozen_name(emitter, "entry_", id) ||
+            !r_c17_write(emitter, " entry;\n    RRuntimeDictIndexSlot slot;\n} ") ||
+            !r_c17_emit_frozen_name(emitter, "align_", id) ||
             !r_c17_write(emitter, ";\n\nstatic ") ||
             !r_c17_emit_frozen_name(emitter, "entry_", id) || !r_c17_write(emitter, " ") ||
             !r_c17_emit_frozen_name(emitter, "", id) ||
@@ -47107,10 +47373,8 @@ static bool r_c17_emit_frozen_owner(RC17Emitter *emitter, const RHirNode *node, 
                r_c17_write(emitter,
                            ", value), .slot_size = sizeof(RRuntimeDictIndexSlot), "
                            ".slot_alignment = _Alignof(") &&
-               r_c17_emit_frozen_name(emitter, "entry_", id) &&
-               r_c17_write(emitter, ") > _Alignof(RRuntimeDictIndexSlot) ? _Alignof(") &&
-               r_c17_emit_frozen_name(emitter, "entry_", id) &&
-               r_c17_write(emitter, ") : _Alignof(RRuntimeDictIndexSlot), .entry_size = sizeof(") &&
+               r_c17_emit_frozen_name(emitter, "align_", id) &&
+               r_c17_write(emitter, "), .entry_size = sizeof(") &&
                r_c17_emit_frozen_name(emitter, "entry_", id) &&
                r_c17_write(emitter, "), .entry_alignment = _Alignof(") &&
                r_c17_emit_frozen_name(emitter, "entry_", id) &&
@@ -49444,7 +49708,12 @@ static bool r_c17_emit_program(RC17Emitter *emitter) {
             return false;
         }
         if ((emitter->emitted_functions[function_id] != 0U) &&
-            (!function->is_async || r_c17_async_wrapper_required(emitter, function_id, function))) {
+            !r_c17_emit_direct_twin_prototype(emitter, function_id)) {
+            return false;
+        }
+        if ((emitter->emitted_functions[function_id] != 0U) &&
+            (!function->is_async || r_c17_async_wrapper_required(emitter, function_id, function) ||
+             (emitter->direct_twins[function_id] != 0U))) {
             emitted_function_declaration = true;
         }
     }
@@ -49500,11 +49769,15 @@ static void r_c17_dispose(RC17Emitter *emitter) {
     r_c17_free(emitter, emitter->index_stamp);
     r_c17_free(emitter, emitter->index_facts);
     r_c17_free(emitter, emitter->index_kill_log);
+    r_c17_free(emitter, emitter->loop_versions);
+    r_c17_free(emitter, emitter->versioned_indices);
     r_c17_free(emitter, emitter->async_wrapper_functions);
     r_c17_free(emitter, emitter->sync_initializer_functions);
     r_c17_free(emitter, emitter->thread_entry_functions);
     r_c17_free(emitter, emitter->function_states);
     r_c17_free(emitter, emitter->emitted_functions);
+    r_c17_free(emitter, emitter->direct_states);
+    r_c17_free(emitter, emitter->direct_twins);
     r_c17_free(emitter, emitter->used_program_strings);
     r_c17_free(emitter, emitter->aggregate_states);
     r_c17_free(emitter, emitter->type_states);

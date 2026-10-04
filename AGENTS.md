@@ -140,6 +140,16 @@ as finished. The matrix records their results per stage.
   reference, not a changelog.
 - clang-format sorts the `#include` lines of one block; fragments (`.inc`) that depend on the
   ones before them stand in their own blocks, separated by a blank line.
+- The generated C must be a fixed point of clang-format 22.1.8: with it installed, every codegen
+  test has a `_format` twin. Statements are laid out by `layout.inc`, file-scope initializers and
+  declarations by the measured rules of `layout_pass.inc` (described in `compiler/README.md`);
+  a comment line stays glued to the line after it in that pass, so put emitted comments before
+  a condition, not before a statement that may need breaking.
+- Optimizations that remove checks or tasks (`index_proofs.inc`, `loop_versions.inc`,
+  `direct_calls.inc`) are proven by marked fixtures (`/* proven */`, `/* versioned */`,
+  `/* direct */` and their opposites) checked by `tests/check_*.py` against the generated C,
+  plus a run of the same fixture; a test wrapper that hooks `r_runtime_task_execution_await`
+  sees no await of a body that runs as a direct call and must disable direct calls.
 
 ### Specification (`specification/`)
 

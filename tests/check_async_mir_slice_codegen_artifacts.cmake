@@ -73,7 +73,7 @@ foreach(slice_result IN ITEMS 00000009 00000010 00000013 00000070)
     r_require_absent(c17_output "frame->r_v${slice_result}" "slice does not escape into async frame")
 endforeach()
 r_require_contains(c17_output
-    "r_runtime_own_get_mut(&frame->r_l00000000)"
+    "(frame->r_l00000000).allocation)"
     "backing owner remains in async frame")
 r_require_absent(c17_output "r_stack_r_l00000000" "backing owner is not transient")
 r_require_match_count(c17_output
