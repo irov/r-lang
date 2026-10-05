@@ -10,8 +10,17 @@ protected async bytes read_pem(std.string::string name) throws std.error::fault 
     return await path.read_file(max_pem);
 }
 
-/* A client that trusts the authorities of the PEM file ca and offers two protocols. */
+/* A client that trusts the authorities of the PEM file ca, or with `system` those of the system
+   (SSL_CERT_FILE or the bundle of the system), and offers two protocols. */
 async std.tls::config client(std.string::string ca) throws std.error::fault, std.tls::tls_error {
+    switch (ca.as_str()) {
+    case "system":
+        std.tls::config trusted = await std.tls::system_client_config();
+        trusted.add_protocol("h2");
+        trusted.add_protocol("echo/1");
+        return move trusted;
+    default: break;
+    }
     bytes authority = await read_pem(move ca);
     std.tls::config settings = std.tls::client_config();
     settings.add_authority(authority.as_slice());

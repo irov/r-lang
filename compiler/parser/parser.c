@@ -1232,6 +1232,7 @@ static bool r_standard_keyword_expression_is_allowed(const RParser *parser) {
     static const char *const async_operations[] = {
         "cancel",
         "detach",
+        "join",
         "mutex_new",
         "clone_mutex",
         "lock",

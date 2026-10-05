@@ -83,8 +83,8 @@ class RuntimeEntryStackTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.inventory["schema"], "r-runtime-entry-stack-inventory-0.1")
         self.assertFalse(self.inventory["conformance_claim"])
-        self.assertEqual(len(self.inventory["external_entries"]), 874)
-        self.assertEqual(len(self.inventory["header_static_inline_helpers"]), 135)
+        self.assertEqual(len(self.inventory["external_entries"]), 884)
+        self.assertEqual(len(self.inventory["header_static_inline_helpers"]), 136)
         self.assertEqual(
             self.inventory["coverage"]["scope"], "direct-project-entry-frame-only"
         )
@@ -131,6 +131,7 @@ class RuntimeEntryStackTests(unittest.TestCase):
             "compiler/source/standard_scoped_operations.h",
             "compiler/source/standard_math_operations.generated.inc",
             "compiler/source/standard_sync.h",
+            "runtime/include/r_runtime_0_1.h",
             "library/std/async/include/r_std_async.h",
             "library/std/c/include/r_std_c.h",
             "library/std/format/include/r_std_format.h",

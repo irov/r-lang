@@ -7,6 +7,7 @@
     {
       "node": "aggregate_initializer",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -109,6 +110,7 @@
     {
       "node": "attribute",
       "applications": [
+        "arena",
         "assistant",
         "c_bridge",
         "calculator",
@@ -143,6 +145,7 @@
     {
       "node": "await_operation",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -207,6 +210,7 @@
     {
       "node": "await_statement",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -271,6 +275,7 @@
     {
       "node": "binary_expression",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -344,6 +349,7 @@
     {
       "node": "block",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -433,6 +439,7 @@
     {
       "node": "call_suffix",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -527,6 +534,7 @@
     {
       "node": "case_clause",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "bytepipe",
@@ -588,6 +596,7 @@
     {
       "node": "case_pattern",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "bytepipe",
@@ -649,6 +658,7 @@
     {
       "node": "catch_clause",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -717,6 +727,7 @@
     {
       "node": "collection_expression",
       "applications": [
+        "arena",
         "ingest",
         "notary",
         "orders",
@@ -767,6 +778,7 @@
     {
       "node": "default_clause",
       "applications": [
+        "arena",
         "assistant",
         "calculator",
         "json_tool",
@@ -777,6 +789,7 @@
         "service",
         "settings",
         "textkit",
+        "tls",
         "unzip",
         "warehouse",
         "workspace",
@@ -817,6 +830,7 @@
     {
       "node": "drop_statement",
       "applications": [
+        "arena",
         "assistant",
         "c_bridge",
         "http",
@@ -867,6 +881,7 @@
     {
       "node": "enum_declaration",
       "applications": [
+        "arena",
         "bytepipe",
         "c_bridge",
         "calculator",
@@ -917,6 +932,7 @@
     {
       "node": "enum_variant",
       "applications": [
+        "arena",
         "bytepipe",
         "c_bridge",
         "calculator",
@@ -977,6 +993,7 @@
     {
       "node": "error_struct_declaration",
       "applications": [
+        "arena",
         "bytepipe",
         "calculator",
         "deflate",
@@ -1005,6 +1022,7 @@
     {
       "node": "expression_statement",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -1084,6 +1102,7 @@
     {
       "node": "field_declaration",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -1160,6 +1179,7 @@
     {
       "node": "for_in_statement",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "dispatch",
@@ -1188,6 +1208,7 @@
     {
       "node": "for_statement",
       "applications": [
+        "arena",
         "assistant",
         "c_bridge",
         "clock",
@@ -1237,6 +1258,7 @@
     {
       "node": "format_literal",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -1301,6 +1323,7 @@
     {
       "node": "format_sequence",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -1365,6 +1388,7 @@
     {
       "node": "format_slot",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -1438,6 +1462,7 @@
     {
       "node": "function_declaration",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -1511,6 +1536,7 @@
     {
       "node": "generic_argument_list",
       "applications": [
+        "arena",
         "json_tool",
         "tournament"
       ],
@@ -1522,6 +1548,7 @@
     {
       "node": "generic_header",
       "applications": [
+        "arena",
         "ingest",
         "jobs",
         "json_tool",
@@ -1544,6 +1571,7 @@
     {
       "node": "generic_parameter",
       "applications": [
+        "arena",
         "ingest",
         "jobs",
         "json_tool",
@@ -1566,6 +1594,7 @@
     {
       "node": "if_statement",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -1654,6 +1683,7 @@
     {
       "node": "import_declaration",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -1722,6 +1752,7 @@
     {
       "node": "index_suffix",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -1790,6 +1821,7 @@
     {
       "node": "initializer",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -1863,6 +1895,7 @@
     {
       "node": "jump_statement",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -1998,6 +2031,7 @@
     {
       "node": "member_suffix",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -2075,6 +2109,7 @@
     {
       "node": "method_call_suffix",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -2144,6 +2179,7 @@
     {
       "node": "module_declaration",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -2230,6 +2266,7 @@
     {
       "node": "new_expression",
       "applications": [
+        "arena",
         "assistant",
         "bytepipe",
         "c_bridge",
@@ -2257,6 +2294,7 @@
     {
       "node": "object_declaration",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -2354,6 +2392,7 @@
     {
       "node": "parameter",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -2434,6 +2473,7 @@
     {
       "node": "qualified_name",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -2542,6 +2582,7 @@
     {
       "node": "slice_suffix",
       "applications": [
+        "arena",
         "binary",
         "bytepipe",
         "calculator",
@@ -2592,6 +2633,7 @@
     {
       "node": "standard_type_call",
       "applications": [
+        "arena",
         "assistant",
         "bytepipe",
         "c_bridge",
@@ -2705,6 +2747,7 @@
     {
       "node": "string_sequence",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -2774,6 +2817,7 @@
     {
       "node": "struct_declaration",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -2836,6 +2880,7 @@
     {
       "node": "switch_statement",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "bytepipe",
@@ -2897,6 +2942,7 @@
     {
       "node": "task_scope_statement",
       "applications": [
+        "arena",
         "assistant",
         "bytepipe",
         "clock",
@@ -2932,6 +2978,7 @@
     {
       "node": "throw_condition",
       "applications": [
+        "arena",
         "binary",
         "buffer_compare",
         "bytepipe",
@@ -2990,6 +3037,7 @@
     {
       "node": "throw_statement",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -3049,6 +3097,7 @@
     {
       "node": "throws_clause",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -3144,6 +3193,7 @@
     {
       "node": "try_statement",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -3219,6 +3269,7 @@
     {
       "node": "unary_expression",
       "applications": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -3305,6 +3356,7 @@
     {
       "node": "while_statement",
       "applications": [
+        "arena",
         "assistant",
         "bytepipe",
         "calculator",

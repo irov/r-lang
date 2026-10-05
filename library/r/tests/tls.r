@@ -3,7 +3,7 @@ import std.test;
 import std.net;
 import std.tls;
 
-// The tests of std.tls (Library R-SLIB-TLS-0001..0006): a client and a server session over a
+// The tests of std.tls (Library R-SLIB-TLS-0001..0007): a client and a server session over a
 // loopback TCP connection negotiate TLS 1.3 and ALPN and exchange application data up to
 // close_notify; certificate verification rejects a wrong name, an unknown authority and an
 // expired certificate; a configuration rejects invalid material, freezes with its first session

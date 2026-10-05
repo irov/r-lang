@@ -1,3 +1,4 @@
 example.notary.main = src/main.r
 example.notary.keys = src/keys.r
 example.notary.tools = src/tools.r
+example.notary.pki = src/pki.r

@@ -41,6 +41,14 @@ void r_std_async_cancel(RRuntimeTask **operation);
  */
 void r_std_async_detach(RRuntimeTask **operation);
 
+struct RStdThreadPanicReport;
+
+/*
+ * std.async::join (R-SLIB-ASYNC-0020): the await of a join found the task panicked and made its
+ * panic pending on this thread; takes it into report, which owns its text afterwards.
+ */
+void r_std_async_join(struct RStdThreadPanicReport *report);
+
 /* std.async::task_id (R-SLIB-ASYNC-0018): the identifier of the running task, or zero outside every
  * task. Allocation-free and lock-free. */
 uint64_t r_std_async_task_id(void);

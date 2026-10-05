@@ -15,7 +15,7 @@ Normative draft of the R standard library
 |Field |Value
 |Document|R Standard Library Specification
 |Language version|0.1
-|Document revision|0.1.0-draft.62
+|Document revision|0.1.0-draft.67
 |Status|Normative draft; not a stable R 1.0 standard
 |Document language|English; normative original
 |Required language standard|R Core Language Specification 0.1
@@ -1435,9 +1435,10 @@ failures and failure priority are those stated in R-SLIB-BITS-0003.
 === 7.5 Secret byte buffers
 
 [[R-SLIB-SECRET-0001]]
-*R-SLIB-SECRET-0001* — `+std.secret::buffer+` is a Move-only, Send, non-Sync owner of one
+*R-SLIB-SECRET-0001* — `+std.secret::buffer+` is a Move-only, Send and Sync owner of one
 contiguous byte allocation whose contents are erased before the storage is released. It has
-no clone or copy operation. The exact operations are:
+no clone or copy operation and no interior mutability: shared access only reads it, so a key
+that holds one may live in state that tasks and threads share. The exact operations are:
 
 * `+std.secret::with_length(usize length) ->
   std.secret::buffer throws std.alloc::alloc_error+`;
@@ -2048,7 +2049,8 @@ requested monotonic instant.
 [[R-SLIB-TIME-0006]]
 *R-SLIB-TIME-0006* — `+import std.time;+` also loads the R part of the module
 (R-SLIB-RSRC-0001) in the `+hosted+` profile and above: the text forms of time of RFC 3339 and
-of HTTP (RFC 9110) and the interval of R-SLIB-TIME-0009.
+of HTTP (RFC 9110), the interval of R-SLIB-TIME-0009, the time zones of R-SLIB-TIME-0010..0013
+and the local times by pattern of R-SLIB-TIME-0014.
 `+std.time::format_rfc3339(std.time::system_time value, u32 digits) -> std.string::string throws std.time::time_error, std.alloc::alloc_error+`
 writes the UTC date and time `+YYYY-MM-DDTHH:MM:SS+` of value (RFC 3339 section 5.6), then,
 when digits is not zero, a full stop and the first digits digits of the nine-digit
@@ -2104,6 +2106,109 @@ spends between them, and a delay gives one late tick instead of a burst. A deadl
 2^63 nanoseconds after the start reports `+overflow+`. A cancelled tick completes with
 `+cancelled+` as `+std.time::sleep_until+` does (R-SLIB-TIME-0005) and leaves the interval
 unchanged.
+
+[[R-SLIB-TIME-0010]]
+*R-SLIB-TIME-0010* — The R part of the module also provides time zones.
+`+std.time::zone_error_code+` is a Copy fieldless enum with exactly `+invalid_name+`,
+`+unknown_zone+`, `+malformed+`, `+nonexistent_time+` and `+ambiguous_time+`, formatted by its
+variant names, and `+std.time::zone_error+` is an error of the module with the field
+`+std.time::zone_error_code code+`. `+std.time::zone+` is the Move, Send and Sync zone of a
+name: its transitions with their local time types (an offset east of UTC in seconds, whether it
+is daylight saving time, an abbreviation) and the rule of a POSIX TZ string for the times after
+its last transition. Zones are made by:
+
+* `+std.time::utc_zone() -> std.time::zone throws std.alloc::alloc_error+`;
+* `+std.time::fixed_zone(i32 offset, str name) -> std.time::zone throws std.time::zone_error, std.alloc::alloc_error+`;
+* `+std.time::posix_zone(str rule) -> std.time::zone throws std.time::zone_error, std.alloc::alloc_error+`;
+* `+std.time::parse_tzif(str name, const u8[] data) -> std.time::zone throws std.time::zone_error, std.alloc::alloc_error+`;
+* `+async std.time::load_zone(std.string::string name) -> std.time::zone throws std.time::zone_error, std.error::fault+`;
+* `+async std.time::local_zone() -> std.time::zone throws std.time::zone_error, std.error::fault+`.
+
+`+utc_zone+` is UTC with the abbreviation `+UTC+`; `+fixed_zone+` has one offset of at most 25
+hours either way and name as its name and abbreviation, any other offset being `+malformed+`.
+`+posix_zone+` reads a POSIX TZ string with the extensions of RFC 8536 section 3.3.1:
+abbreviations of at least three letters or quoted in angle brackets, offsets written west of UTC
+as `+[+-]hh[:mm[:ss]]+`, and rule dates `+Jn+`, `+n+` and `+Mm.w.d+` with an optional `+/time+` of
+-167 to 167 hours (2 a.m. by default); daylight time one hour ahead of standard time when no
+offset follows its abbreviation, and the rule of the United States when no dates follow; any
+other text is `+malformed+`. `+parse_tzif+` reads a TZif file of RFC 8536, versions 1 to 4, in its
+64-bit form with the rule of its footer when the version is 2 or later; leap-second records are
+ignored, and a file that is not such a TZif is `+malformed+`. In `+hosted-native-async+`,
+`+load_zone+` reads the file of an IANA name, such as `+Asia/Shanghai+`, in the directory that the
+environment variable `+TZDIR+` names, or else `+/usr/share/zoneinfo+`: a name that is empty,
+absolute, holds a component of only dots or a byte other than ASCII letters, digits, `+_+`, `++++`,
+`+-+`, `+.+` and `+/+` is `+invalid_name+`, a name without a file is `+unknown_zone+`, and other
+failures of the file system are reported. `+local_zone+` returns the zone of the environment
+variable `+TZ+` when it is set: UTC when it is empty, else, after an optional colon, the zone
+file of that name when there is one and the POSIX TZ string otherwise; without `+TZ+` it reads
+the TZif file `+/etc/localtime+` under the name `+localtime+`.
+
+[[R-SLIB-TIME-0011]]
+*R-SLIB-TIME-0011* — `+std.time::local_time+` is a Copy struct with public fields
+`+i32 year+`, `+u8 month+`, `+u8 day+`, `+u8 hour+`, `+u8 minute+`, `+u8 second+`,
+`+u32 nanosecond+`, `+u8 weekday+` (1 for Monday to 7 for Sunday, ISO 8601), `+u16 year_day+` (1
+for January 1), `+i32 offset+` and `+bool dst+`:
+
+* `+std.time::zone::name(const std.time::zone* this) -> str+`;
+* `+std.time::zone::offset(const std.time::zone* this, std.time::system_time at) -> i32+`;
+* `+std.time::zone::abbreviation(const std.time::zone* this, std.time::system_time at) -> str+`;
+* `+std.time::zone::to_local(const std.time::zone* this, std.time::system_time at) -> std.time::local_time throws std.time::time_error+`.
+
+The local time type of an instant is that of the last transition at or before it, the first
+type for instants before the first transition, and that of the footer rule after the last
+transition when the zone has one; a rule decides daylight time by the start and end of the year
+of the instant in standard time, so that a southern zone is in daylight time across the new
+year. `+to_local+` returns the proleptic Gregorian date and time of the instant shifted by the
+offset, with the offset and flag of the type; a nanoseconds field of 10^9 or more is
+`+invalid_value+` and a year outside i32 `+overflow+`.
+
+[[R-SLIB-TIME-0012]]
+*R-SLIB-TIME-0012* — `+std.time::ambiguity+` is a Copy fieldless enum with exactly `+earlier+`,
+`+later+` and `+reject+`:
+
+* `+std.time::zone::from_local(const std.time::zone* this, std.time::local_time wall, std.time::ambiguity choice) -> std.time::system_time throws std.time::zone_error, std.time::time_error+`.
+
+`+from_local+` reads the date and time fields of wall, which shall be a valid date and time of
+the proleptic Gregorian calendar (`+invalid_value+` otherwise), and ignores the others. A local
+time that the zone shows once resolves to that instant; one shown twice, in an overlap, resolves
+to the earlier or the later instant; one never shown, in a gap, is read with the offset in
+effect before the gap (`+earlier+`) or after it (`+later+`), as fold 0 and fold 1 of PEP 495 do.
+With `+reject+`, an overlap is `+ambiguous_time+` and a gap `+nonexistent_time+`.
+
+[[R-SLIB-TIME-0013]]
+*R-SLIB-TIME-0013* — Calendar steps in a zone are:
+
+* `+std.time::zone::start_of_day(const std.time::zone* this, std.time::system_time at) -> std.time::system_time throws std.time::zone_error, std.time::time_error+`;
+* `+std.time::zone::add_days(const std.time::zone* this, std.time::system_time at, i64 days) -> std.time::system_time throws std.time::zone_error, std.time::time_error+`;
+* `+std.time::zone::add_months(const std.time::zone* this, std.time::system_time at, i64 months) -> std.time::system_time throws std.time::zone_error, std.time::time_error+`.
+
+`+start_of_day+` returns the instant of local midnight of the day of at, resolved with
+`+earlier+`, which is the first instant of the day also when midnight falls in a gap.
+`+add_days+` returns the same local time days days later, or earlier for a negative count;
+`+add_months+` the same local time months months later, a day past the end of the target month
+becoming its last day. Both resolve the new local time with `+earlier+`, so a day of a change
+lasts 23 or 25 hours, and report a year outside i32 as `+overflow+`.
+
+[[R-SLIB-TIME-0014]]
+*R-SLIB-TIME-0014* — Local times by pattern:
+
+* `+std.time::format_local(std.time::local_time value, str pattern) -> std.string::string throws std.time::time_error, std.alloc::alloc_error+`;
+* `+std.time::parse_local(str text, str pattern) -> std.time::local_time throws std.convert::parse_error, std.time::time_error+`.
+
+A pattern is a sequence of fields and literal bytes. A run of one ASCII letter is one field:
+`+yyyy+` the year in four digits, `+MM+` the month, `+dd+` the day, `+HH+` the hour of 00 to 23,
+`+mm+` the minute, `+ss+` the second, and `+S+` repeated one to nine times that many leading
+digits of the fraction of the second; any other run of letters is `+invalid_value+`. Every
+byte that is not an ASCII letter stands for itself. `+format_local+` writes the fields of value
+with exactly their number of digits, the fraction truncated; a value whose date and time fields
+are not valid (R-SLIB-TIME-0012), or whose year is outside 0 to 9999 when the pattern writes it,
+is `+invalid_value+`. `+parse_local+` reads text against the pattern: each field takes exactly
+its number of digits, each literal its byte, and the text ends where the pattern ends; a text
+that ends early is `+invalid_digit+` of `+std.convert::parse_error+` at its length and any
+other mismatch `+invalid_digit+` at the byte. The month, day, hour, minute and second are then
+checked in that order, `+below_minimum+` or `+above_maximum+` at the first digit of the field.
+The fields the pattern does not name are those of 1970-01-01 00:00:00; the result has offset 0,
+`+dst+` false and the weekday and day of the year of its date.
 
 [[environment]]
 == 13. Process environment
@@ -2547,6 +2652,22 @@ call is made for that transfer, and acknowledgement and publication wait for the
 with the handle, buffer and frame live until then. The outcome follows R-SLIB-IO-0007 with
 the exact progress of the returned calls. The descriptor of a closed or dropped file is
 released only after no admitted transfer uses it.
+
+[[R-SLIB-ASYNC-0020]]
+*R-SLIB-ASYNC-0020* — `+std.async::join(task<T> operation) -> std.thread::join_result<T>+`
+observes the panic of a task without continuing it. It is compiler-recognized and admitted
+only as the complete operand of await, `+await std.async::join(move operation)+`, where
+`+operation+` names one task without checked errors and is consumed as by the await of
+R-SLIB-ASYNC-0005; a task with checked errors, any other operand or any other position
+requires `+R-DIAG-ASYNC-001+`. The await suspends, publishes and is cancelled exactly as that
+await. A task that completes normally yields `+returned(T)+`, or `+completed+` when T is
+`+void+`. A task whose panic reached its root under unwind strategy (Core R-ERR-0009) yields
+`+panicked(std.thread::panic_report)+`: the panic ends at the join, the awaiting task
+continues normally and the report is not delivered to the panic hook. The report carries the
+category of the panic and, for an explicit panic (Core R-ERR-0004), its message, cut to at
+most 256 bytes at a scalar boundary, as text; other categories have empty text. A report
+whose text cannot be allocated keeps its category and an empty text. Under abort strategy
+the panic has already terminated the process.
 
 [[io]]
 == 15. Native asynchronous byte streams
@@ -4226,7 +4347,10 @@ consume their respective component once; dropping the detached owner releases re
 called as `+std.json::schema::<T>()+` with an explicit type argument and no value arguments,
 returns a JSON Schema (draft 2020-12) of the JSON form that the automatic conversion of
 R-SLIB-JSON-0001 writes and reads for T. The schema is derived from the same type model as
-`+marshal+` and `+unmarshal+` when the program is translated; the call builds it as a value.
+`+marshal+` and `+unmarshal+` when the program is translated; the call builds it as a value. In a
+generic body T may depend on a type parameter that has the `+json_encode+` or `+json_decode+`
+constraint; the schema is then derived for each instantiation, and an instantiation whose type
+has no derived schema requires `+R-DIAG-JSON-001+`.
 `+bool+` is `+{"type":"boolean"}+`; an integer type is `+{"type":"integer"}+` with the
 `+minimum+` and `+maximum+` of its range; a floating type and `+std.json::number+` are
 `+{"type":"number"}+`; `+char+` is a string of length 1; strings are `+{"type":"string"}+`;
@@ -4266,6 +4390,13 @@ option, a type parameter, a dictionary with keys other than owned strings and a 
 JSON form require `+R-DIAG-JSON-001+`. A schema that the hook returns is not checked against
 the converters.
 
+[[R-SLIB-JSON-0003]]
+*R-SLIB-JSON-0003* — The R part of the module, loaded by `+import std.json;+`, provides
+`+std.json::escape_html(str text) -> std.string::string throws std.alloc::alloc_error+`, the
+text with `+<+`, `+>+` and `+&+` written as `+\u003c+`, `+\u003e+` and `+\u0026+` and U+2028
+and U+2029 as `+\u2028+` and `+\u2029+`, the rest unchanged. Applied to JSON text it changes no
+value, since outside strings JSON text holds none of these characters.
+
 [[r-source-modules]]
 == 21. Standard modules written in R
 
@@ -4293,11 +4424,11 @@ module written in R from a profile below the profile its library map entry names
 `+std.cmp+`, `+std.slice+` and `+std.text+` (`+freestanding+`), `+std.iter+`, `+std.set+`,
 `+std.deque+`, `+std.heap+`, `+std.sorted+`, `+std.deflate+`, `+std.xml+`, `+std.arena+`
 and the R part of `+std.alloc+` (`+allocation+`), `+std.regex+`, `+std.encoding+`, `+std.uuid+`, `+std.args+`, `+std.url+`, `+std.mime+`,
-`+std.cbor+`, `+std.crypto+`, `+std.cose+` and the R
+`+std.cbor+`, `+std.crypto+`, `+std.cose+`, `+std.jwt+` and the R
 parts of `+std.bytes+`, `+std.string+`, `+std.hash+`, `+std.random+`, `+std.test+` and
 `+std.time+` (`+hosted+`), and `+std.service+`, `+std.stream+`, `+std.bufio+`, `+std.console+`,
 `+std.log+`, `+std.config+`, `+std.tls+`, `+std.http+`, `+std.dns+`, `+std.websocket+`,
-`+std.jsonrpc+`, `+std.mcp+`, `+std.sqlite+`, `+std.metrics+`, `+std.trace+`, `+std.pool+`, `+std.postgres+` and the R parts of `+std.net+` and `+std.fs+` (`+hosted-native-async+`). The rejection of an import below that profile
+`+std.jsonrpc+`, `+std.mcp+`, `+std.sqlite+`, `+std.metrics+`, `+std.trace+`, `+std.pool+`, `+std.postgres+`, `+std.oauth2+` and the R parts of `+std.net+` and `+std.fs+` (`+hosted-native-async+`). The rejection of an import below that profile
 precedes every check of the module's items. In its least profile and in each higher one
 every module translates: an item that needs a higher profile is declared under a module
 `+@if+` on `+core::profile+` (Core R-META-0001). Every item below keeps the Core ownership, borrow and effect
@@ -5210,9 +5341,10 @@ number, flag and secret fields in the order they were added:
 * `+std.log::fields::count(const std.log::fields* this) -> usize+`.
 
 A field is written with its name, in which every byte other than an ASCII letter, digit, `+_+`,
-`+.+` or `+-+` becomes `+_+`, at most the first 64 bytes are kept, an empty name becomes `+_+`,
-and `+time+`, `+level+`, `+task+` and `+message+`, which every record carries, get a leading
-`+_+`, so that no name breaks a record. A secret field keeps no value.
+`+.+` or `+-+` becomes `+_+`, at most the first 64 bytes are kept and an empty name becomes
+`+_+`, and a name equal to the name of a member that every record of the logger carries
+(R-SLIB-LOG-0004) gets a leading `+_+` where it is written, so that no name breaks a record. A
+secret field keeps no value.
 
 [[R-SLIB-LOG-0002]]
 *R-SLIB-LOG-0002* — `+std.log::logger+` is a Move, Send+Sync handle that formats records on
@@ -5226,21 +5358,23 @@ the calling task and hands each line to the bounded queue of its writer without 
 * `+std.log::logger::trace+`, `+debug+`, `+info+`, `+warn+` and `+error+`, each
   `+(const std.log::logger* this, str message) -> void throws std.error::fault+`.
 
-A record of a level below the threshold of the logger is not formatted. Otherwise the line
-holds the time of `+std.time::system_now+` in RFC 3339 with three fractional digits, the level,
-the identifier of R-SLIB-ASYNC-0018 of the calling task, the message and the fields in order.
+A record of a level below the threshold of the logger is not formatted. Otherwise, with the
+layout `+std.log::layout::standard()+` of R-SLIB-LOG-0004, the line holds the time of
+`+std.time::system_now+` in RFC 3339 with three fractional digits, the level, the identifier
+of R-SLIB-ASYNC-0018 of the calling task, the message, the bound fields of the logger and the
+fields in order.
 With `+format::text+` it is `+time=... level=... task=... message=...+` followed by a space and
 `+name=value+` for each field; a text value that is empty or holds a space, `+"+`, `+=+`, a
 backslash or a control character is written in quotes with `+\"+`, `+\\+`, `+\n+`, `+\t+`,
-`+\r+` and `+\u00XX+` escapes with lowercase hexadecimal digits, and numbers and flags as they
+`+\r+`, `+\b+`, `+\f+` and `+\u00XX+` escapes with lowercase hexadecimal digits, and numbers and flags as they
 are. With `+format::json+` it is one JSON object with the members `+time+`, `+level+`,
 `+task+`, `+message+` and the fields, the task and number and flag fields unquoted. Each line
-ends with a line feed. A secret field, and a field whose written name equals ignoring ASCII
-case `+password+`, `+secret+`, `+token+`, `+authorization+` or a name given to `+mask+`, is
-written as `+***+`. When the queue is full or its writer has ended, the record is dropped and
+ends with a line feed. A secret field, and a field whose name or written name equals ignoring
+ASCII case `+password+`, `+secret+`, `+token+`, `+authorization+` or a name given to `+mask+`,
+is written as `+***+`. When the queue is full or its writer has ended, the record is dropped and
 counted: `+dropped+` returns the records dropped by every logger of the queue. `+share+`
-returns another logger of the same queue with the threshold, format and masked names of the
-original, for another task, and `+mask+` rewrites its name as a field name.
+returns another logger of the same queue with the threshold, format, masked names, layout and
+bound fields of the original, for another task, and `+mask+` rewrites its name as a field name.
 
 [[R-SLIB-LOG-0003]]
 *R-SLIB-LOG-0003* — `+std.log::writer+` is the single Move, Send+Sync consumer of one queue:
@@ -5259,6 +5393,53 @@ queue order, until every logger of the queue has been dropped; a last line
 number of queued lines they wrote. Both take the writer, so the loggers of a program come from
 it before it starts writing, and each task that logs owns a logger made by `+writer::logger+`
 or `+share+`.
+
+[[R-SLIB-LOG-0004]]
+*R-SLIB-LOG-0004* — The Copy, Send+Sync fieldless enum `+std.log::order+` has exactly
+`+time_first+` and `+level_first+`. `+std.log::layout+` is a Move struct with the public fields
+`+std.string::string time_name+`, `+std.string::string level_name+`,
+`+std.string::string message_name+`, `+o<std.string::string> task_name+`, `+u32 time_digits+`,
+`+bool trim_time+`, `+bool omit_empty_message+` and `+std.log::order sequence+`:
+
+* `+std.log::layout::standard() -> std.log::layout throws std.alloc::alloc_error+`;
+* `+std.log::logger::set_layout(std.log::logger* this, std.log::layout value) -> void throws std.alloc::alloc_error+`;
+* `+std.log::logger::with(const std.log::logger* this, const std.log::fields* extra) -> std.log::logger throws std.alloc::alloc_error+`.
+
+`+standard+` is the layout of R-SLIB-LOG-0002, with which every logger of `+writer::logger+`
+starts: `+time+` with three fractional digits, `+level+`, `+task+` and `+message+`, time
+first, every message written. `+set_layout+` makes the logger write its records with the layout. The members carry
+its names, rewritten as field names (R-SLIB-LOG-0001); the task is left out when
+`+task_name+` is none; the time, always in UTC, has `+time_digits+` fractional digits, nine
+when more are asked, truncated, and with `+trim_time+` its trailing zeros are left out, with
+the dot when every digit is zero; with `+omit_empty_message+` a record whose message is empty
+has no message member. With `+time_first+` the time, level, task and message come
+before the bound fields and the fields of the record; with `+level_first+` the level comes
+first, then the bound fields, the fields of the record, the time, the task and the message.
+`+with+` returns another logger of the same queue, as `+share+` does, whose records carry the
+bound fields of this logger and then the fields of extra before the fields of each record;
+this logger is unchanged.
+
+[[R-SLIB-LOG-0005]]
+*R-SLIB-LOG-0005* — `+std.log::panic_record+` is a Move struct with the public fields
+`+std.string::string category+`, `+std.string::string text+` and `+std.string::string place+`,
+and `+std.log::panic_reports+` a Move, Send+Sync listener of the reports of panics that nothing
+observes (Core R-ERR-0009), reached through the native provider `+std.log.native+`:
+
+* `+std.log::panic_reports::listen(usize capacity) -> std.log::panic_reports throws std.alloc::alloc_error+`;
+* `+std.log::panic_reports::take(const std.log::panic_reports* this) -> o<std.log::panic_record> throws std.alloc::alloc_error+`;
+* `+@scoped async std.log::panic_reports::next(const std.log::panic_reports* this) -> std.log::panic_record throws std.error::fault+`;
+* `+std.log::panic_reports::dropped(const std.log::panic_reports* this) -> u64+`.
+
+From `+listen+` until the listener is dropped, a report delivered to the runtime panic hook
+(Core R-ERR-0009), which would write it as a line on standard error, is queued instead, up to capacity reports and at least one; a report that finds the
+queue full is written as its line and counted by `+dropped+`, and dropping the listener writes
+the reports it still queues as their lines. Only the listener made last
+receives reports; an earlier one takes none and counts none, and dropping it changes nothing.
+`+take+` returns the oldest queued report: the category of the panic, its text, cut at the last
+whole scalar, and its place as the line writes it, `+module M bytes [S,E)+`. `+next+` returns it
+too, and while none is queued it looks again after a pause that starts at one millisecond and
+doubles up to 128 milliseconds; a cancelled `+next+` leaves the queue unchanged. A program
+writes the records to its log, as no R code runs where the runtime delivers a report.
 
 === 21.13 Command-line arguments: `+std.args+`
 
@@ -5331,8 +5512,8 @@ otherwise `+invalid_key+`; a second declaration of a key reports `+duplicate_key
 the index of the declaration. `+set+` replaces the value and source of a declared key, and an
 undeclared key reports `+unknown_key+` with index zero. `+std.config::config_error+` is an
 error of the module with the fields `+std.config::error_code code+` and `+usize index+`; the
-enum has exactly `+invalid_key+`, `+duplicate_key+`, `+unknown_key+`, `+invalid_value+` and
-`+invalid_file+`.
+enum has exactly `+invalid_key+`, `+duplicate_key+`, `+unknown_key+`, `+invalid_value+`,
+`+invalid_file+` and `+missing_value+`, formatted by its variant names.
 
 [[R-SLIB-CONFIG-0002]]
 *R-SLIB-CONFIG-0002* — Each layer replaces the value and source of the declared keys it
@@ -5370,6 +5551,27 @@ later layer wins.
 index of the declaration. `+describe+` returns one line `+key=value (source)+` per key in
 declaration order; the value of a key that contains `+password+`, `+secret+` or `+token+` is
 written as `+***+`.
+
+[[R-SLIB-CONFIG-0004]]
+*R-SLIB-CONFIG-0004* — A struct of settings is read in one call by:
+
+* `+std.config::from_environment<T: json_decode>(str prefix) -> T throws std.config::field_error, std.alloc::alloc_error+`;
+* `+std.config::config::decode<T: json_decode>(const std.config::config* this) -> T throws std.config::field_error, std.alloc::alloc_error+`.
+
+`+std.config::field_error+` is an error of the module with the fields
+`+std.config::error_code code+` and `+std.string::string name+`, the environment variable or
+key of the setting. Both read the properties of the JSON Schema of T (R-SLIB-JSON-0002), the
+fields under their JSON names: `+from_environment+` the environment variable of each, the
+prefix followed by the name in upper case with every byte other than an ASCII letter or digit
+written as `+_+`, and `+decode+` the current value of the declared key of that name. A text
+converts by the schema of its field: as it is for a string, as a decimal integer within the
+`+minimum+` and `+maximum+` for an integer, as a JSON number for a number, as `+true+`, `+1+`,
+`+yes+`, `+on+`, `+false+`, `+0+`, `+no+` or `+off+` in any case for a boolean, as a variant name
+for an enum without payloads, as items separated by commas for an array of such scalars, and as
+JSON text otherwise; a text that does not convert is `+invalid_value+` with the name. An absent
+setting of an `+o<T>+` field is none; an absent setting of a required field is `+missing_value+`
+with the name, and of an optional field leaves its default. The value is then read with
+`+std.json::unmarshal+`, whose rules decide the defaults.
 
 === 21.15 Tests: `+std.test+`
 
@@ -5451,8 +5653,8 @@ the owners of this module are Send+Sync.
 *R-SLIB-TLS-0002* — `+std.tls::error_code+` is a Copy fieldless enum with exactly
 `+invalid_certificate+`, `+invalid_key+`, `+untrusted_certificate+`, `+name_mismatch+`,
 `+expired_certificate+`, `+handshake_failed+`, `+peer_alert+`, `+protocol_error+`,
-`+invalid_argument+`, `+frozen+` and `+closed+`, formatted by its variant names
-(`+@derive(format)+`). `+std.tls::tls_error+` is an error of the module with the fields
+`+invalid_argument+`, `+frozen+`, `+closed+` and `+missing_authorities+`, formatted by its
+variant names (`+@derive(format)+`). `+std.tls::tls_error+` is an error of the module with the fields
 `+std.tls::error_code code+` and `+i64 native_code+`, the error of Mbed TLS or zero.
 `+std.tls::version+` is the Copy fieldless enum with `+tls12+` and `+tls13+`, formatted by its
 variant names. A failure of memory in the provider is `+std.alloc::alloc_error::out_of_memory+`.
@@ -5518,6 +5720,21 @@ another writes; the session orders their records.
 `+std.alloc::alloc_error::out_of_memory+` and every other failure of the engine as
 `+std.io::io_error+` with `+other+` and the error of Mbed TLS as its native code. A failed session keeps its failure: every later operation reports it again. A session
 releases its engine state when it is dropped, whether or not it was shut down.
+
+[[R-SLIB-TLS-0007]]
+*R-SLIB-TLS-0007* — `+async std.tls::system_client_config() -> std.tls::config throws
+std.tls::tls_error, std.error::fault+` returns a client configuration of R-SLIB-TLS-0003 that
+trusts the certificate authorities of the system. When the environment variable
+`+SSL_CERT_FILE+` is set and not empty, the authorities are the certificates of the PEM file it
+names, and a failure to read that file is reported. Otherwise they are those of the first file
+of the system that can be read among `+/etc/ssl/cert.pem+`, the bundle of macOS, and
+`+/etc/ssl/certs/ca-certificates.crt+`, `+/etc/pki/tls/certs/ca-bundle.crt+`,
+`+/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem+`, `+/etc/ssl/ca-bundle.pem+` and
+`+/etc/pki/tls/cacert.pem+`, the bundles of common Linux distributions. Each certificate of the
+bundle is trusted on its own and a certificate that does not parse is skipped. A bundle
+without any certificate that parses, and a system without such a file, are
+`+missing_authorities+`. The configuration may still be changed before its first session, so
+a program may add authorities of its own.
 
 === 21.17 URLs: `+std.url+`
 
@@ -5905,6 +6122,110 @@ with `+@generic<S: send & sync & unborrowed>+` serves HTTP/1.1 as serve of R-SLI
 every connection of std.service::serve_all (R-SLIB-SERVICE-0007): TCP, Unix-domain sockets and
 HTTPS over the TLS listeners, under the idle timeout, the signals and the health of that service.
 A connection whose read waits past the idle timeout ends like one that its client closed.
+
+[[R-SLIB-HTTP-0015]]
+*R-SLIB-HTTP-0015* — For shared state `+S: send & sync & unborrowed+` and a request context
+`+C: send & sync & unborrowed+`, `+std.http::app<S, C>+` is the Move set of routes and middleware
+of a server whose requests carry a context, and `+std.http::flow<C>+` is one request on its way
+through it, a Move value with the fields `+std.http::request request+`, `+C context+`,
+`+std.http::notes notes+`, `+std.string::string route+`, `+std.http::response response+` and
+`+bool answered+`.
+`+std.http::notes+` is a Move, Send+Sync handle of named texts of one request:
+
+* `+std.http::app<S, C>::create(fn(const S*, const std.http::request*) -> C context) -> std.http::app<S, C>+`;
+* `+std.http::app<S, C>::route(std.http::app<S, C>* this, std.http::method value, str pattern, async fn(arc S, std.http::flow<C>) -> std.http::flow<C> throws(std.error::fault) handler) -> void throws std.http::http_error, std.alloc::alloc_error+`;
+* `+std.http::app<S, C>::before(std.http::app<S, C>* this, str prefix, async fn(arc S, std.http::flow<C>) -> std.http::flow<C> throws(std.error::fault) hook) -> void throws std.http::http_error, std.alloc::alloc_error+`;
+* `+std.http::app<S, C>::after(std.http::app<S, C>* this, str prefix, async fn(arc S, std.http::flow<C>) -> std.http::flow<C> throws(std.error::fault) hook) -> void throws std.http::http_error, std.alloc::alloc_error+`;
+* `+std.http::app<S, C>::around(std.http::app<S, C>* this, str prefix, async fn(arc S, std.http::flow<C>) -> std.http::flow<C> throws(std.error::fault) before, async fn(arc S, std.http::flow<C>) -> std.http::flow<C> throws(std.error::fault) after) -> void throws std.http::http_error, std.alloc::alloc_error+`;
+* `+std.http::flow<C>::with(std.http::flow<C> this, std.http::response value) -> std.http::flow<C>+`;
+* `+std.http::notes::set(const std.http::notes* this, str name, str value) -> void throws std.alloc::alloc_error+`;
+* `+std.http::notes::get(const std.http::notes* this, str name) -> o<std.string::string> throws std.alloc::alloc_error+`;
+* `+std.http::notes::count(const std.http::notes* this) -> usize+`;
+* `+std.http::notes::name_at(const std.http::notes* this, usize index) -> o<std.string::string> throws std.alloc::alloc_error+`;
+* `+std.http::notes::value_at(const std.http::notes* this, usize index) -> o<std.string::string> throws std.alloc::alloc_error+`;
+* `+std.http::app<S, C>::on_panic(std.http::app<S, C>* this, fn(const S*, std.http::method, str, const std.http::notes*, const std.thread::panic_report*) -> void hook) -> void+`;
+* `+@scoped async std.http::app<S, C>::dispatch(const std.http::app<S, C>* this, arc S state, std.http::request incoming) -> std.http::response throws std.error::fault+`;
+* `+async std.http::serve_app(array<std.service::listener> listeners, std.service::options settings, std.sync::receiver<std.service::stop> stop, std.service::health status, arc S state, std.http::app<S, C> routes, std.http::limits bounds) -> std.service::report throws std.async::start_error, std.net::net_error, std.process::process_error, std.alloc::alloc_error+`.
+
+A pattern or prefix starts with `+/+`, otherwise the call throws `+invalid_url+`. Each request
+gets the context that `+context+` makes from the state and the request, in a flow with empty
+notes whose response has status 200, no field and no body, and is not answered. `+set+` gives a
+name a text, replacing the one it had; `+get+` returns a copy of the text of a name;
+`+count+`, `+name_at+` and `+value_at+` give the names and texts in the order the names were
+first set, none past the last. A middleware applies to a request
+whose path equals its prefix or continues it after a `+/+`; the prefix `+/+` applies to every
+request. The before hooks of the middleware that apply run in the order of the calls, each with
+the flow that the previous one returned; a hook may change the request and the context, and it
+answers the request by returning a flow made by `+with+`, which sets the response and
+`+answered+`: the remaining before hooks and the route are then skipped. Otherwise the route of
+R-SLIB-HTTP-0018 receives the flow, with the path parameters it captured and its pattern in
+`+route+`, which is empty when no route receives the flow. Then the after hooks of
+every middleware that applied and whose before hook, if it has one, ran see the flow in the
+reverse order of the calls. The response of the last flow answers the request. A hook or handler
+that throws is answered with 500 without a body, and no further hook runs. `+dispatch+` answers a
+request as the server would, without a connection: it answers a preflight request by
+R-SLIB-HTTP-0017 and otherwise runs the hooks and the route as a task of its own that it awaits
+with `+std.async::join+` (R-SLIB-ASYNC-0020). A panic of that task is answered with 500 and the
+text of `+reason+`; its report goes to the hook of the last `+on_panic+`, with the state, the method,
+the target and the notes of the request, which outlive the flow, or without a hook to the standard error as one line `+R panic: category
+in METHOD target+`, followed by `+: text+` when the report has text; the unwind drops the context
+and every value of the flow, and the connection and the server go on. The fields of
+R-SLIB-HTTP-0017 are then added. `+serve_app+` serves the connections of every listener as
+`+serve_all+` of R-SLIB-HTTP-0014 does, answering each request with `+dispatch+` and adding
+`+Date+`; an application has neither streaming nor upgrade routes.
+
+[[R-SLIB-HTTP-0016]]
+*R-SLIB-HTTP-0016* — Cookies (RFC 6265): `+std.http::cookie+` is a Move value with the fields
+`+std.string::string name+`, `+std.string::string value+`, `+o<std.string::string> path+`,
+`+o<std.string::string> domain+`, `+o<i64> max_age+`, `+bool secure+`, `+bool http_only+` and
+`+o<std.string::string> same_site+`, whose defaults are none and false:
+
+* `+std.http::request::cookie(const std.http::request* this, str name) -> o<str>+`;
+* `+std.http::response::set_cookie(std.http::response* this, const std.http::cookie* value) -> void throws std.http::http_error, std.alloc::alloc_error+`.
+
+`+cookie+` returns the value of the first `+name=value+` pair with the name in the `+Cookie+`
+fields of the request, whose pairs are separated by `+;+` and whose names and values are trimmed
+of spaces, without the double quotes around the value; none when no pair has the name.
+`+set_cookie+` adds a `+Set-Cookie+` field `+name=value+` followed by `+; Path=+`, `+; Domain=+`,
+`+; Max-Age=+`, `+; Secure+`, `+; HttpOnly+` and `+; SameSite=+` for the attributes that are
+present; a name that is not a token, or a field value with a control character, throws
+`+invalid_header+`.
+
+[[R-SLIB-HTTP-0017]]
+*R-SLIB-HTTP-0017* — Cross-origin resource sharing of an application: `+std.http::cors_policy+` is
+a Move value with the fields `+array<std.string::string> origins+`, `+o<std.string::string>
+methods+`, `+o<std.string::string> headers+`, `+bool credentials+` and `+u32 max_age+`, whose
+defaults are an empty list, none, none, false and 600:
+
+* `+std.http::app<S, C>::cors(std.http::app<S, C>* this, std.http::cors_policy policy) -> void+`.
+
+An origin is allowed when the list is empty or holds it exactly. With a policy, an `+OPTIONS+`
+request with `+Origin+` and `+Access-Control-Request-Method+` is a preflight request, answered
+before every hook: with 403 for an origin that is not allowed, otherwise with 204,
+`+Access-Control-Allow-Methods+` (the methods of the policy, or else the requested method),
+`+Access-Control-Allow-Headers+` (the headers of the policy, or else the requested
+`+Access-Control-Request-Headers+` when there are any) and `+Access-Control-Max-Age+`. Every
+response to a request whose `+Origin+` is allowed, the answer of a preflight request included,
+carries `+Access-Control-Allow-Origin+`: `+*+` when the list is empty and credentials are not
+allowed, otherwise the origin together with `+Vary: Origin+`; with credentials also
+`+Access-Control-Allow-Credentials: true+`. A later call replaces the policy.
+
+[[R-SLIB-HTTP-0018]]
+*R-SLIB-HTTP-0018* — The routes of an application:
+
+* `+std.http::app<S, C>::redirect_trailing_slash(std.http::app<S, C>* this, bool enabled) -> void+`;
+* `+std.http::app<S, C>::method_not_allowed(std.http::app<S, C>* this, bool enabled) -> void+`.
+
+A route matches a request as in R-SLIB-HTTP-0006, where `+HEAD+` also matches `+GET+` routes.
+Among the routes whose pattern and method match, the most specific answers, whatever the order of
+the calls: comparing the patterns segment by segment, at the first segment where they differ a
+literal segment is more specific than `+{name}+`, which is more specific than `+*+`; of equally
+specific routes the first added answers. When no route matches: with redirects enabled, a path
+that a route of the method matches with its final `+/+` removed, or with one added, is answered
+with 301 for `+GET+` and `+HEAD+` or 308 for other methods and a `+Location+` naming that path with
+the query of the request; otherwise, when routes of other methods match the path, with 405 and
+`+Allow+` listing their methods once each, unless 405 is disabled; otherwise with 404. A created
+application does not redirect and answers 405.
 
 === 21.20 Name resolution: `+std.dns+`
 
@@ -6811,14 +7132,16 @@ exactly, with `+.0+` for an integral value, `+NaN+`, `+Infinity+` and `+-Infinit
 [[R-SLIB-CRYPTO-0001]]
 *R-SLIB-CRYPTO-0001* — `+std.crypto+` is a standard module written in R in the `+hosted+`
 profile over the native provider `+std.crypto.native+` (R-SLIB-RSRC-0003), which calls
-libsodium. The provider reads and writes the buffers it is given only and keeps no state; a
-secret key of this module lives in a `+std.secret::buffer+` (R-SLIB-SECRET-0001).
+libsodium and the PSA Crypto interface of Mbed TLS 3.6. The provider reads and writes the
+buffers it is given only and keeps no key of a caller between calls; a secret key of this
+module lives in a `+std.secret::buffer+` (R-SLIB-SECRET-0001).
 `+std.crypto::error_code+` is a Copy fieldless enum with exactly `+invalid_length+`,
-`+authentication_failed+`, `+weak_key+`, `+limits+`, `+resource_exhausted+` and
-`+unavailable+`, formatted by its variant names, and `+std.crypto::crypto_error+` is an error
-of the module with the field `+std.crypto::error_code code+`. Every operation reports
-`+unavailable+` when libsodium cannot start, and a key, nonce or length outside the sizes
-stated below as `+invalid_length+`.
+`+authentication_failed+`, `+weak_key+`, `+limits+`, `+resource_exhausted+`,
+`+unavailable+`, `+invalid_key+`, `+invalid_padding+` and `+unsupported+`, formatted by its
+variant names, and `+std.crypto::crypto_error+` is an error of the module with the field
+`+std.crypto::error_code code+`. Every operation reports `+unavailable+` when the library it
+uses cannot start, a key, nonce or length outside the sizes stated below as
+`+invalid_length+`, and memory that the provider cannot obtain as `+resource_exhausted+`.
 
 [[R-SLIB-CRYPTO-0002]]
 *R-SLIB-CRYPTO-0002* — `+std.crypto::random(usize length) -> bytes throws
@@ -6901,6 +7224,110 @@ the same function over data given in pieces:
 * `+std.crypto::blake2b_state::finish(std.crypto::blake2b_state* this) -> bytes throws std.alloc::alloc_error+`.
 
 `+finish+` returns the digest of the pieces given since `+create+` and erases the state.
+
+[[R-SLIB-CRYPTO-0009]]
+*R-SLIB-CRYPTO-0009* — `+std.crypto::curve+` is a Copy fieldless enum with exactly `+p256+`,
+the curve secp256r1 with SHA-256, and `+p384+`, the curve secp384r1 with SHA-384 (RFC 5480).
+Its methods `+scalar_length+`, `+point_length+` and `+signature_length+` take the enum by
+value and return 32, 65 and 64 bytes for `+p256+` and 48, 97 and 96 bytes for `+p384+`.
+`+std.crypto::ecdsa_public_key+` is the Move ECDSA public key of a curve, whose point is the
+uncompressed SEC1 encoding 0x04 || X || Y, and `+std.crypto::ecdsa_key+` is the Move ECDSA
+key pair, whose protected private scalar lives in a secret buffer:
+
+* `+std.crypto::ecdsa_public_key::from_point(std.crypto::curve which, const u8[] point) -> std.crypto::ecdsa_public_key throws std.alloc::alloc_error, std.crypto::crypto_error+`;
+* `+std.crypto::ecdsa_public_key::curve(const std.crypto::ecdsa_public_key* this) -> std.crypto::curve+`;
+* `+std.crypto::ecdsa_public_key::point(const std.crypto::ecdsa_public_key* this) -> const u8[]+`;
+* `+std.crypto::ecdsa_public_key::verify(const std.crypto::ecdsa_public_key* this, const u8[] message, const u8[] signature) -> bool throws std.crypto::crypto_error+`;
+* `+std.crypto::ecdsa_key::generate(std.crypto::curve which) -> std.crypto::ecdsa_key throws std.alloc::alloc_error, std.crypto::crypto_error+`;
+* `+std.crypto::ecdsa_key::from_scalar(std.crypto::curve which, const u8[] scalar) -> std.crypto::ecdsa_key throws std.alloc::alloc_error, std.crypto::crypto_error+`;
+* `+std.crypto::ecdsa_key::curve(const std.crypto::ecdsa_key* this) -> std.crypto::curve+`;
+* `+std.crypto::ecdsa_key::public_key(const std.crypto::ecdsa_key* this) -> std.crypto::ecdsa_public_key throws std.alloc::alloc_error+`;
+* `+std.crypto::ecdsa_key::sign(const std.crypto::ecdsa_key* this, const u8[] message) -> bytes throws std.alloc::alloc_error, std.crypto::crypto_error+`.
+
+`+from_point+` accepts an uncompressed point on the curve only and reports any other point
+as `+invalid_key+`. `+from_scalar+` takes the big-endian private scalar of the scalar length,
+or shorter with its leading zero bytes left out, and reports zero and a scalar not below the
+order of the curve as `+invalid_key+`. `+sign+` hashes message with the hash of the curve and
+returns the deterministic signature of RFC 6979 as r and s of the scalar length each in
+big-endian order, the form of JWS and COSE. `+verify+` is true exactly when signature is an
+ECDSA signature of message by the key, deterministic or not; a signature of another length
+is not.
+
+[[R-SLIB-CRYPTO-0010]]
+*R-SLIB-CRYPTO-0010* — `+std.crypto::rsa_scheme+` is a Copy fieldless enum with exactly
+`+pkcs1_sha256+`, `+pkcs1_sha384+`, `+pkcs1_sha512+`, `+pss_sha256+`, `+pss_sha384+` and
+`+pss_sha512+`: the RSA signatures of RFC 8017, RSASSA-PKCS1-v1_5 and RSASSA-PSS with MGF1 of
+the same hash and a salt of the hash length, over SHA-256, SHA-384 and SHA-512.
+`+std.crypto::rsa_public_key+` is the Move RSA public key and `+std.crypto::rsa_key+` the
+Move RSA private key, whose protected PKCS#1 RSAPrivateKey lives in a secret buffer; the
+modulus of either has 2048 to 4096 bits:
+
+* `+std.crypto::rsa_public_key::from_components(const u8[] modulus, const u8[] exponent) -> std.crypto::rsa_public_key throws std.alloc::alloc_error, std.crypto::crypto_error+`;
+* `+std.crypto::rsa_public_key::modulus(const std.crypto::rsa_public_key* this) -> const u8[]+`;
+* `+std.crypto::rsa_public_key::exponent(const std.crypto::rsa_public_key* this) -> const u8[]+`;
+* `+std.crypto::rsa_public_key::bits(const std.crypto::rsa_public_key* this) -> usize+`;
+* `+std.crypto::rsa_public_key::verify(const std.crypto::rsa_public_key* this, std.crypto::rsa_scheme scheme, const u8[] message, const u8[] signature) -> bool throws std.crypto::crypto_error+`;
+* `+std.crypto::rsa_key::generate(usize bits) -> std.crypto::rsa_key throws std.alloc::alloc_error, std.crypto::crypto_error+`;
+* `+std.crypto::rsa_key::bits(const std.crypto::rsa_key* this) -> usize+`;
+* `+std.crypto::rsa_key::public_key(const std.crypto::rsa_key* this) -> std.crypto::rsa_public_key throws std.alloc::alloc_error+`;
+* `+std.crypto::rsa_key::sign(const std.crypto::rsa_key* this, std.crypto::rsa_scheme scheme, const u8[] message) -> bytes throws std.alloc::alloc_error, std.crypto::crypto_error+`.
+
+`+from_components+` takes the modulus and the public exponent as big-endian unsigned numbers,
+ignores their leading zero bytes and reports a key the provider refuses or a modulus outside
+2048 to 4096 bits as `+invalid_key+`; `+modulus+` and `+exponent+` return them without leading
+zero bytes. `+generate+` makes a key with the exponent 65537 and a modulus of bits bits, which
+shall be 2048 to 4096 and a multiple of 8. `+sign+` returns a signature of the modulus size;
+PKCS#1 v1.5 signatures are deterministic, PSS signatures use a random salt. `+verify+` is true
+exactly when signature is a signature of message under scheme; a signature of another length
+than the modulus is not.
+
+[[R-SLIB-CRYPTO-0011]]
+*R-SLIB-CRYPTO-0011* — AES in CBC mode with the padding of PKCS#7 (RFC 5652 section 6.3) is:
+
+* `+std.crypto::cbc_encrypt(const u8[] key, const u8[] iv, const u8[] plaintext) -> bytes throws std.alloc::alloc_error, std.crypto::crypto_error+`;
+* `+std.crypto::cbc_decrypt(const u8[] key, const u8[] iv, const u8[] ciphertext) -> bytes throws std.alloc::alloc_error, std.crypto::crypto_error+`.
+
+The key has 16, 24 or 32 bytes and selects AES-128, AES-192 or AES-256; the IV has 16 bytes.
+`+cbc_encrypt+` pads the plaintext with 1 to 16 bytes to whole blocks and returns the
+ciphertext. `+cbc_decrypt+` reports a ciphertext whose length is not a positive multiple of
+16 as `+invalid_length+` and a padding that does not check as `+invalid_padding+`, and
+otherwise returns the plaintext without the padding. CBC does not authenticate: it serves
+protocols that require it, and a protocol that may choose uses an AEAD of R-SLIB-CRYPTO-0003.
+
+[[R-SLIB-CRYPTO-0012]]
+*R-SLIB-CRYPTO-0012* — `+std.crypto::private_key+` is the Move enum of a private key with
+exactly the variants `+ecdsa(std.crypto::ecdsa_key)+`, `+rsa(std.crypto::rsa_key)+`,
+`+ed25519(std.crypto::signing_key)+` and `+x25519(std.crypto::exchange_key)+`, and
+`+std.crypto::public_key+` the Move enum of a public key with exactly the variants
+`+ecdsa(std.crypto::ecdsa_public_key)+`, `+rsa(std.crypto::rsa_public_key)+`,
+`+ed25519(u8[32])+` and `+x25519(u8[32])+`:
+
+* `+std.crypto::private_key::from_der(const u8[] der) -> std.crypto::private_key throws std.alloc::alloc_error, std.crypto::crypto_error+`;
+* `+std.crypto::private_key::from_pem(const u8[] text) -> std.crypto::private_key throws std.alloc::alloc_error, std.crypto::crypto_error+`;
+* `+std.crypto::private_key::to_der(const std.crypto::private_key* this) -> std.secret::buffer throws std.alloc::alloc_error+`;
+* `+std.crypto::private_key::to_pem(const std.crypto::private_key* this) -> std.secret::buffer throws std.alloc::alloc_error+`;
+* `+std.crypto::private_key::public_key(const std.crypto::private_key* this) -> std.crypto::public_key throws std.alloc::alloc_error+`;
+* `+std.crypto::public_key::from_der(const u8[] der) -> std.crypto::public_key throws std.alloc::alloc_error, std.crypto::crypto_error+`;
+* `+std.crypto::public_key::from_pem(const u8[] text) -> std.crypto::public_key throws std.alloc::alloc_error, std.crypto::crypto_error+`;
+* `+std.crypto::public_key::to_der(const std.crypto::public_key* this) -> bytes throws std.alloc::alloc_error+`;
+* `+std.crypto::public_key::to_pem(const std.crypto::public_key* this) -> std.string::string throws std.alloc::alloc_error+`.
+
+`+private_key::from_der+` reads the DER of a PKCS#8 PrivateKeyInfo without encryption (RFC
+5958) of an id-ecPublicKey key on a curve of R-SLIB-CRYPTO-0009, an rsaEncryption key, an
+Ed25519 or an X25519 key (RFC 8410), a SEC1 ECPrivateKey (RFC 5915) that names its curve, or
+a two-prime PKCS#1 RSAPrivateKey, told apart by their structure. `+public_key::from_der+`
+reads the DER of a SubjectPublicKeyInfo (RFC 5280, RFC 5480, RFC 8410) of the same kinds with
+an uncompressed EC point, or of a PKCS#1 RSAPublicKey. `+from_pem+` reads the first block of
+a PEM text (RFC 7468) labelled `+PRIVATE KEY+`, `+EC PRIVATE KEY+` or `+RSA PRIVATE KEY+`,
+respectively `+PUBLIC KEY+` or `+RSA PUBLIC KEY+`, and skips blocks with other labels. An
+encrypted private key, another algorithm or curve and a compressed point are
+`+unsupported+`; any other input that is not such a key, including a text without such a
+block, is `+invalid_key+`, and keys outside R-SLIB-CRYPTO-0009 and R-SLIB-CRYPTO-0010 are
+refused as there. `+to_der+` returns the DER of the PKCS#8 PrivateKeyInfo of version 0,
+whose ECPrivateKey holds the public point and not the curve, respectively of the
+SubjectPublicKeyInfo; `+to_pem+` returns that DER as a PEM block labelled `+PRIVATE KEY+`,
+respectively `+PUBLIC KEY+`, with 64 base64 characters per line and a line feed after each
+line. A private key and its PEM text are returned in secret buffers.
 
 === 21.26 CBOR Object Signing and Encryption: `+std.cose+`
 
@@ -7355,16 +7782,19 @@ the transport and ends the session, after which every operation of the connectio
 [[R-SLIB-PG-0002]]
 *R-SLIB-PG-0002* — `+std.postgres::error_code+` is a Copy fieldless enum with exactly
 `+server+`, `+connection+`, `+protocol+`, `+authentication+`, `+unsupported+`, `+closed+`,
-`+invalid_value+`, `+column_range+` and `+null_value+`, and `+std.postgres::pg_error+` is an
-error with the public fields `+std.postgres::error_code code+`, `+std.string::string sqlstate+`,
+`+invalid_value+`, `+column_range+`, `+null_value+`, `+missing_column+` and
+`+migration_mismatch+`, and `+std.postgres::pg_error+` is an error with the public fields `+std.postgres::error_code code+`, `+std.string::string sqlstate+`,
 `+std.string::string message+`, `+std.string::string detail+` and `+std.string::string hint+`.
 An ErrorResponse of the server is `+server+` with the SQLSTATE, message, detail and hint that it
 carries, which are empty when absent; `+connection+` is a server that cannot be reached or
 refuses TLS, `+protocol+` a message of the server that does not follow the protocol, which ends
 the session, `+authentication+` a SCRAM exchange that does not verify, `+unsupported+` an
 authentication method or mechanism that this client lacks, `+closed+` an operation of a
-connection whose session ended, and `+invalid_value+`, `+column_range+` and `+null_value+` the
-refusals of R-SLIB-PG-0003 and R-SLIB-PG-0004.
+connection whose session ended, `+invalid_value+`, `+column_range+` and `+null_value+` the
+refusals of R-SLIB-PG-0003, R-SLIB-PG-0004 and R-SLIB-PG-0013 to R-SLIB-PG-0015,
+`+missing_column+` a column that R-SLIB-PG-0015 looks for and does not find, and
+`+migration_mismatch+` the refusal of R-SLIB-PG-0016; both name the column or the version in
+detail.
 
 [[R-SLIB-PG-0003]]
 *R-SLIB-PG-0003* — `+std.postgres::value+` is a Move tagged enum with exactly
@@ -7423,8 +7853,8 @@ handle of a session.
 from_environment reads the variables of libpq: PGHOST, a directory of the socket when it starts
 with `+/+`, PGPORT, PGUSER, PGPASSWORD, PGDATABASE and PGAPPNAME; a variable that is not set
 keeps its default, and a PGPORT that is no port is `+invalid_value+`. connect opens the
-transport, sends the startup message with the user, the database, the application name and the
-client encoding UTF8, and answers the authentication the server asks for: none, the cleartext
+transport, sends the startup message with the user, the database, the application name, the
+client encoding UTF8 and the DateStyle `+ISO, MDY+`, and answers the authentication the server asks for: none, the cleartext
 password, md5, or SASL with SCRAM-SHA-256 (RFC 5802, RFC 7677) without channel binding, whose
 server signature it verifies; the password is used as its UTF-8 bytes, without the SASLprep
 normalization of RFC 4013. A server that refuses the user is a `+server+` error, such as
@@ -7525,6 +7955,299 @@ no failure.
 connects size connections with the settings, one after another, and returns them as a pool of
 R-SLIB-POOL-0001, whose leases lend them to tasks.
 
+[[R-SLIB-PG-0013]]
+*R-SLIB-PG-0013* — Typed reads of a column:
+
+* `+std.postgres::row::time(const std.postgres::row* this, usize index) -> std.time::system_time throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::row::date(const std.postgres::row* this, usize index) -> std.time::utc_datetime throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::row::uuid(const std.postgres::row* this, usize index) -> std.uuid::uuid throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::row::json(const std.postgres::row* this, usize index) -> std.json::value throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::row::text_array(const std.postgres::row* this, usize index) -> array<o<std.string::string>> throws std.postgres::pg_error, std.alloc::alloc_error+`.
+
+Each reads the text of the column as text of R-SLIB-PG-0004 does, with its refusals. time reads
+the ISO form of a timestamptz, `+YYYY-MM-DD HH:MM:SS+` with up to nine fractional digits and the
+offset `+±HH+`, `+±HH:MM+` or `+±HH:MM:SS+` that the server writes in the time zone of the
+session, and returns its instant; a timestamp without an offset is read as UTC. date reads the
+ISO form `+YYYY-MM-DD+` of a date as midnight of that day. uuid reads the text form of a uuid,
+json the text of a json or jsonb column as a document of R-SLIB-JSON-0001, and text_array a
+one-dimensional array in the text form of the server: an element in double quotes loses its
+quotes and the backslashes that escape its characters, an unquoted NULL in any case is none,
+the bytes of every other element are kept as UTF-8 text, and a leading `+[lower:upper]=+` is
+skipped. A text that is not of its form, such as `+infinity+`, a date BC or after the year 9999, a
+DateStyle other than ISO or an element that is not UTF-8, is `+invalid_value+`, and an array of
+more than one dimension `+unsupported+`.
+
+[[R-SLIB-PG-0014]]
+*R-SLIB-PG-0014* — Typed parameters:
+
+* `+std.postgres::value::of_time(std.time::system_time at) -> std.postgres::value throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::value::of_uuid(const std.uuid::uuid* id) -> std.postgres::value throws std.alloc::alloc_error+`;
+* `+std.postgres::value::of_json(const std.json::value* document) -> std.postgres::value throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::value::of_array(const array<std.postgres::value>* items) -> std.postgres::value throws std.postgres::pg_error, std.alloc::alloc_error+`.
+
+Each returns text that the server converts to the type of its place, as for every parameter of
+R-SLIB-PG-0003. of_time writes the instant in RFC 3339 in UTC with six fractional digits, the
+precision of the server, and refuses an instant outside the years 0 to 9999 with
+`+invalid_value+`; of_uuid writes the hyphenated lower-case form, and of_json the document as
+`+std.json::stringify+` does, a document it cannot write being `+invalid_value+`. of_array
+writes a one-dimensional array literal: the items in order between braces, separated by commas,
+`+null_value+` as NULL and every other item as its parameter text in double quotes, with double
+quotes and backslashes escaped by a backslash.
+
+[[R-SLIB-PG-0015]]
+*R-SLIB-PG-0015* — Rows as structs and structs as parameters:
+
+* `+std.postgres::rows::column_index(const std.postgres::rows* this, str name) -> usize throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::rows::decode<T: json_decode>(const std.postgres::rows* this, usize at) -> T throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::rows::decode_all<T: json_decode>(const std.postgres::rows* this) -> array<T> throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::insert_statement<T: json_encode>(str table) -> std.string::string throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::update_statement<T: json_encode>(str table, str key) -> std.string::string throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::parameters_of<T: json_encode>(const T* item) -> array<std.postgres::value> throws std.postgres::pg_error, std.alloc::alloc_error+`.
+
+column_index returns the index of the first column of the name, and `+missing_column+` with the
+name when there is none. decode reads the row at `+at+`, an index past the last row being
+`+column_range+`, and decode_all every row in order, through the JSON Schema of T
+(R-SLIB-JSON-0002): each property takes the first column of its JSON name. A missing column of a
+required field that is not `+o<T>+` is `+missing_column+`, and a NULL in it `+null_value+`,
+both with the name; otherwise a missing column, or a NULL of a field that is not `+o<T>+`, leaves
+the field out, and a NULL of an `+o<T>+` field is none. A value converts by its column and the
+schema of its field: a truth value is a boolean; an integer is a number, or its decimal text for
+a string field; a real is a number, a real that is not finite being `+invalid_value+`; binary is
+Base64 for a string field and otherwise an array of byte numbers; a timestamp or timestamptz is
+its instant as read by time of R-SLIB-PG-0013, written in RFC 3339 with six fractional digits
+for a string field, as whole seconds since the epoch for an integer field and as seconds with
+their fraction for a number field; a json or jsonb column is its document unless the field is a
+string; an array of bool, bytea, int2, int4, int8, float4, float8, numeric, text, varchar, date,
+timestamp, timestamptz, uuid, json or jsonb for an array field is its elements as text_array
+reads them, each converted as text, and NULL as null; every other text is a JSON number for an
+integer or number field, a boolean for a boolean field when it is `+t+`, `+true+`, `+f+` or
+`+false+`, and a string otherwise. The document is then read with `+std.json::unmarshal+`, whose
+rules decide the defaults; a document that does not read as T is `+invalid_value+`, and a T
+without a schema `+unsupported+`.
+
+insert_statement returns `+INSERT INTO table ("f1", ..., "fn") VALUES ($1, ..., $n)+` and
+update_statement `+UPDATE table SET "f" = $i, ... WHERE "key" = $k+` for the JSON names of the
+properties of the schema of T in their order, each name a quoted identifier with its double
+quotes doubled, the parameter of the i-th property numbered i and the key left out of the SET
+list; table is written as it is given, and a key that names no property is `+missing_column+`
+with the key. parameters_of writes item with `+std.json::marshal+` and returns one parameter per
+property in that order: an absent value or null is `+null_value+`, a boolean is a truth value,
+a string or a number is its text, an array of an array field is the literal of of_array of its
+elements converted the same way, and every other value is its JSON text.
+
+[[R-SLIB-PG-0016]]
+*R-SLIB-PG-0016* — `+std.postgres::migration+` is a Move struct with the public fields
+`+u64 version+`, `+std.string::string name+` and `+std.string::string sql+`.
+
+* `+std.postgres::migrate(const std.postgres::connection* conn, array<std.postgres::migration> steps) -> task<u64 throws std.postgres::pg_error, std.error::fault> throws std.async::start_error+`.
+
+migrate applies the steps that the database has not applied and returns their number. It takes
+the session-level advisory lock 125806466509938 of the server, so that migrations of several
+processes run one after another, creates the table `+r_schema_migrations+` with the columns
+version (bigint, the primary key), name, checksum (text) and applied_at (timestamptz) when it is
+absent, and reads the applied versions. Versions that do not ascend strictly in steps, an
+applied version that steps lack, an applied version whose sql has another checksum, the
+lower-case hexadecimal SHA-256 of its bytes, and a step not applied whose version is below the
+highest applied one are `+migration_mismatch+` with `+version N+` in detail, before any step
+runs. Each pending step then runs in ascending order in a transaction of its own: BEGIN, its sql
+as a script of R-SLIB-PG-0006, the row of its version, name and checksum, and COMMIT; an error
+of the server rolls the step back and is thrown, the steps before it staying applied. The lock
+is released after the last step and after every `+pg_error+`; a fault ends the session and with
+it the lock. The sql of a step therefore cannot end the transaction itself or run a statement
+that a transaction block refuses.
+
+=== 21.33 JSON Web Tokens: `+std.jwt+`
+
+[[R-SLIB-JWT-0001]]
+*R-SLIB-JWT-0001* — `+std.jwt+` is a standard module written in R in the `+hosted+` profile
+that makes and verifies JSON Web Signatures in the compact serialization (RFC 7515) whose
+payload is a JSON Web Token (RFC 7519), over `+std.crypto+`, `+std.hash+` and `+std.json+`, and
+reads and writes JSON Web Keys (RFC 7517, RFC 7518). `+std.jwt::error_code+` is a Copy
+fieldless enum with exactly `+malformed+`, `+unsupported_algorithm+`, `+key_mismatch+`,
+`+no_key+`, `+invalid_signature+`, `+expired+`, `+not_yet_valid+`, `+invalid_issuer+`,
+`+invalid_audience+`, `+missing_claim+`, `+invalid_claim+` and `+invalid_key+`, formatted by its
+variant names, and `+std.jwt::jwt_error+` is an error of the module with the field
+`+std.jwt::error_code code+`. Signers, verifiers and key sets are Send and Sync.
+
+[[R-SLIB-JWT-0002]]
+*R-SLIB-JWT-0002* — `+std.jwt::algorithm+` is a Copy fieldless enum with exactly `+hs256+`,
+`+hs384+`, `+hs512+`, `+rs256+`, `+rs384+`, `+rs512+`, `+ps256+`, `+ps384+`, `+ps512+`,
+`+es256+`, `+es384+` and `+eddsa+`: HMAC with SHA-2, RSASSA-PKCS1-v1_5 and RSASSA-PSS of
+R-SLIB-CRYPTO-0010, ECDSA on P-256 and P-384 of R-SLIB-CRYPTO-0009 (RFC 7518 section 3) and
+Ed25519 (RFC 8037). Its methods are
+`+std.jwt::algorithm::name(std.jwt::algorithm this) -> str+`, the `+alg+` name such as
+`+ES256+` or `+EdDSA+`, and
+`+std.jwt::algorithm::parse(str name) -> std.jwt::algorithm throws std.jwt::jwt_error+`, which
+reports `+none+` and every other name as `+unsupported_algorithm+`.
+
+[[R-SLIB-JWT-0003]]
+*R-SLIB-JWT-0003* — `+std.jwt::signer+` is the Move key that signs tokens with one algorithm
+and names a key identifier in them:
+
+* `+std.jwt::signer::hmac(std.jwt::algorithm alg, const u8[] secret) -> std.jwt::signer throws std.jwt::jwt_error, std.alloc::alloc_error+`;
+* `+std.jwt::signer::with_private_key(std.jwt::algorithm alg, std.crypto::private_key key) -> std.jwt::signer throws std.jwt::jwt_error+`;
+* `+std.jwt::signer::set_key_id(std.jwt::signer* this, str kid) -> void throws std.alloc::alloc_error+`.
+
+`+hmac+` takes an HS algorithm and a secret of at least the hash length (RFC 7518 section
+3.2); `+with_private_key+` takes an RSA key for RS and PS algorithms, an ECDSA key of the
+curve of ES256 or ES384, or an Ed25519 key for EdDSA. Any other algorithm, key or shorter
+secret is `+key_mismatch+`. An empty key identifier names none.
+
+[[R-SLIB-JWT-0004]]
+*R-SLIB-JWT-0004* — `+std.jwt::verifier+` is the Move key that verifies tokens, limited to
+one algorithm or, read from a JWK without `+alg+`, to the algorithms its key fits, and
+`+std.jwt::key_set+` is the Move set of verifiers that a verification chooses from:
+
+* `+std.jwt::verifier::hmac(std.jwt::algorithm alg, const u8[] secret) -> std.jwt::verifier throws std.jwt::jwt_error, std.alloc::alloc_error+`;
+* `+std.jwt::verifier::with_public_key(std.jwt::algorithm alg, std.crypto::public_key key) -> std.jwt::verifier throws std.jwt::jwt_error+`;
+* `+std.jwt::verifier::set_key_id(std.jwt::verifier* this, str kid) -> void throws std.alloc::alloc_error+`;
+* `+std.jwt::key_set::create() -> std.jwt::key_set+`;
+* `+std.jwt::key_set::add(std.jwt::key_set* this, std.jwt::verifier key) -> void throws std.alloc::alloc_error+`;
+* `+std.jwt::key_set::size(const std.jwt::key_set* this) -> usize+`.
+
+The keys a verifier accepts are those of R-SLIB-JWT-0003, public instead of private.
+
+[[R-SLIB-JWT-0005]]
+*R-SLIB-JWT-0005* — Tokens are made and their header is read by:
+
+* `+std.jwt::sign(const std.jwt::signer* key, const std.json::value* claims) -> std.string::string throws std.jwt::jwt_error, std.alloc::alloc_error+`;
+* `+std.jwt::sign_claims<T: json_encode>(const std.jwt::signer* key, const T* claims) -> std.string::string throws std.jwt::jwt_error, std.alloc::alloc_error+`;
+* `+std.jwt::header(str token) -> std.json::value throws std.jwt::jwt_error, std.alloc::alloc_error+`.
+
+`+sign+` writes the claims, which shall be a JSON object, and `+sign_claims+` writes what
+`+std.json::marshal+` writes for the claims, which shall be an object; anything else is
+`+malformed+`. The protected header is `+{"alg":A,"typ":"JWT"}+`, with `+"kid"+` last when the
+signer names one; header and payload are base64url without padding, and the signature is the
+HMAC, the RSA signature, r and s of R-SLIB-CRYPTO-0009 or the Ed25519 signature of their
+joined text. `+header+` returns the header of a token, which shall be a JSON object, without
+verifying the token; a text that is not three base64url parts joined by two dots is
+`+malformed+`.
+
+[[R-SLIB-JWT-0006]]
+*R-SLIB-JWT-0006* — `+std.jwt::validation+` is the Move struct of the checks of the registered
+claims with the fields `+std.string::string issuer+`, `+array<std.string::string> audiences+`,
+`+u64 leeway+` (seconds, 60 by default) and `+bool require_expiration+` (true by default):
+
+* `+std.jwt::validation::create() -> std.jwt::validation+`;
+* `+std.jwt::validation::set_issuer(std.jwt::validation* this, str issuer) -> void throws std.alloc::alloc_error+`;
+* `+std.jwt::validation::add_audience(std.jwt::validation* this, str audience) -> void throws std.alloc::alloc_error+`;
+* `+std.jwt::verify(const std.jwt::key_set* keys, str token, const std.jwt::validation* rules, std.time::system_time now) -> std.json::value throws std.jwt::jwt_error, std.alloc::alloc_error+`;
+* `+std.jwt::verify_claims<T: json_decode>(const std.jwt::key_set* keys, str token, const std.jwt::validation* rules, std.time::system_time now) -> T throws std.jwt::jwt_error, std.json::error, std.alloc::alloc_error+`.
+
+Verification reads the header: an `+alg+` of R-SLIB-JWT-0002 is required, and a `+crit+`
+member is `+unsupported_algorithm+`. The candidates are the keys of the set whose algorithm
+admits `+alg+`, whose key fits it and, when the header names a `+kid+`, whose key identifier is
+that one; no candidate is `+no_key+`, and candidates of which none verifies the signature are
+`+invalid_signature+`. The payload shall be a JSON object. With `+now+` in whole seconds and the
+leeway: an `+exp+` with now ≥ exp + leeway is `+expired+`; an absent `+exp+` is
+`+missing_claim+` when the expiration is required; an `+nbf+` with now + leeway < nbf is
+`+not_yet_valid+`; a NumericDate that is not a number is `+invalid_claim+`; with an issuer set,
+an `+iss+` that is not that string is `+invalid_issuer+`; with audiences, an `+aud+` string or
+array of strings that names none of them is `+invalid_audience+`. `+verify+` returns the
+claims; `+verify_claims+` reads them as a T with `+std.json::unmarshal+`.
+
+[[R-SLIB-JWT-0007]]
+*R-SLIB-JWT-0007* — JSON Web Keys are read and written by:
+
+* `+std.jwt::key_set::from_jwks(const u8[] text) -> std.jwt::key_set throws std.jwt::jwt_error, std.alloc::alloc_error+`;
+* `+std.jwt::jwk(const std.crypto::public_key* key, std.jwt::algorithm alg, str kid) -> std.json::value throws std.jwt::jwt_error, std.alloc::alloc_error+`.
+
+`+from_jwks+` reads a JWK Set `+{"keys": [...]}+` or one JWK: `+RSA+` keys with `+n+` and `+e+`,
+`+EC+` keys of the curves `+P-256+` and `+P-384+` with `+x+` and `+y+`, `+OKP+` keys of the curve
+`+Ed25519+` with `+x+`, and `+oct+` keys with `+k+`, in base64url, with their `+kid+` and `+alg+`.
+A key of another type or curve, a key whose `+use+` is not `+sig+` and a key with an `+alg+`
+outside R-SLIB-JWT-0002 are skipped; a key of a known type without a valid key is
+`+invalid_key+`. `+jwk+` returns the public JWK of a key that fits the algorithm with `+kty+`,
+`+crv+` for EC and OKP keys, the key members, `+alg+`, `+use+` `+sig+` and `+kid+` when it is not
+empty; a key that does not fit is `+key_mismatch+`.
+
+=== 21.34 OAuth 2.0 clients: `+std.oauth2+`
+
+[[R-SLIB-OAUTH2-0001]]
+*R-SLIB-OAUTH2-0001* — `+std.oauth2+` is a standard module written in R in the
+`+hosted-native-async+` profile for programs that call APIs protected by OAuth 2.0 (RFC 6749):
+requests to a token endpoint over `+std.http+`, the JWT bearer grant of RFC 7523 for service
+accounts over `+std.jwt+`, and a cache of the access token that tasks share.
+`+std.oauth2::error_code+` is a Copy fieldless enum with exactly `+invalid_request+`,
+`+invalid_response+`, `+endpoint_error+` and `+invalid_key_file+`, formatted by its variant
+names, and `+std.oauth2::oauth2_error+` is an error of the module with the fields
+`+std.oauth2::error_code code+`, `+u16 status+`, the status of the endpoint's answer or zero,
+and `+std.string::string error+` and `+std.string::string description+`, the `+error+` and
+`+error_description+` of an error answer (RFC 6749 section 5.2) or empty.
+
+[[R-SLIB-OAUTH2-0002]]
+*R-SLIB-OAUTH2-0002* — `+std.oauth2::token+` is the Move struct of an access token with the
+fields `+std.string::string access_token+`, `+std.string::string token_type+`,
+`+o<std.time::system_time> expires_at+`, `+std.string::string refresh_token+` and
+`+std.string::string scope+`, the last two empty when the endpoint gave none.
+
+[[R-SLIB-OAUTH2-0003]]
+*R-SLIB-OAUTH2-0003* — `+std.oauth2::code_grant+` is the Move struct of an authorization code
+with the fields `+std.string::string code+`, `+std.string::string redirect_uri+` and
+`+std.string::string verifier+` (RFC 7636), empty strings for none. `+std.oauth2::grant+` is the
+Move enum with exactly `+client_credentials+`, `+refresh_token(std.string::string)+`,
+`+authorization_code(std.oauth2::code_grant)+` and `+jwt_bearer(std.string::string)+`, the
+assertion. `+std.oauth2::token_request+` is the Move struct of a request with the fields
+`+std.string::string endpoint+`, `+std.string::string client_id+`,
+`+std.secret::buffer client_secret+`, `+std.string::string scope+` and
+`+std.oauth2::grant kind+`:
+
+* `+std.oauth2::token_request::create(str endpoint, std.oauth2::grant kind) -> std.oauth2::token_request throws std.alloc::alloc_error+`;
+* `+std.oauth2::token_request::set_client(std.oauth2::token_request* this, str client_id, const u8[] secret) -> void throws std.alloc::alloc_error+`;
+* `+std.oauth2::token_request::set_scope(std.oauth2::token_request* this, str scope) -> void throws std.alloc::alloc_error+`.
+
+A client identifier with a secret authenticates with HTTP Basic over the form-encoded
+identifier and secret (RFC 6749 section 2.3.1); an identifier without a secret is sent as
+`+client_id+` in the body, as a public client does; an empty identifier sends neither. An empty
+scope is left out.
+
+[[R-SLIB-OAUTH2-0004]]
+*R-SLIB-OAUTH2-0004* —
+`+@scoped async std.oauth2::request_token(std.http::client* http, const std.oauth2::token_request* request, std.time::system_time now) -> std.oauth2::token throws std.oauth2::oauth2_error, std.http::http_error, std.tls::tls_error, std.error::fault+`
+sends the request with POST and an `+application/x-www-form-urlencoded+` body that holds
+`+grant_type+` and the members of its grant (RFC 6749 sections 4.1.3, 4.4.2 and 6, RFC 7523
+section 2.1) and reads the answer. A 200 answer that is a JSON object with string
+`+access_token+` and `+token_type+` gives the token, whose `+expires_at+` is `+now+` plus
+`+expires_in+` when that is a whole number; another 200 answer is `+invalid_response+`. Any other
+status is `+endpoint_error+` with the `+error+` and `+error_description+` of a JSON error answer,
+and `+invalid_response+` with the status for anything else. A secret that is not UTF-8 is
+`+invalid_request+`.
+
+[[R-SLIB-OAUTH2-0005]]
+*R-SLIB-OAUTH2-0005* — `+std.oauth2::service_account+` is the Move service account of a key
+file, with the fields `+std.string::string client_email+` and `+std.string::string token_uri+`
+and a protected RS256 signer of R-SLIB-JWT-0003 that names the key identifier of the file:
+
+* `+std.oauth2::service_account::from_json(const u8[] text) -> std.oauth2::service_account throws std.oauth2::oauth2_error, std.alloc::alloc_error+`;
+* `+std.oauth2::service_account::assertion(const std.oauth2::service_account* this, str scope, str subject, std.time::system_time now) -> std.string::string throws std.oauth2::oauth2_error, std.alloc::alloc_error+`;
+* `+std.oauth2::service_account::request_for(const std.oauth2::service_account* this, str scope, str subject, std.time::system_time now) -> std.oauth2::token_request throws std.oauth2::oauth2_error, std.alloc::alloc_error+`.
+
+`+from_json+` reads the JSON key file of Google Cloud: `+type+` `+service_account+` when
+present, `+client_email+`, `+private_key+` with an RSA key in PEM (R-SLIB-CRYPTO-0012),
+`+private_key_id+`, and `+token_uri+`, which defaults to `+https://oauth2.googleapis.com/token+`;
+any other file is `+invalid_key_file+`. `+assertion+` signs a JWT with the claims `+iss+` the
+account, `+scope+` when not empty, `+aud+` the token endpoint, `+sub+` when not empty,
+`+iat+` `+now+` and `+exp+` one hour later (RFC 7523 section 3). `+request_for+` returns the
+request of the grant `+jwt_bearer+` with such an assertion to the token endpoint.
+
+[[R-SLIB-OAUTH2-0006]]
+*R-SLIB-OAUTH2-0006* — `+std.oauth2::token_source+` is the Move, Send and Sync handle of an
+access token that the tasks of a program share; it owns an HTTP client and the source of its
+tokens:
+
+* `+std.oauth2::token_source::from_request(std.http::client http, std.oauth2::token_request request) -> std.oauth2::token_source throws std.alloc::alloc_error+`;
+* `+std.oauth2::token_source::from_service_account(std.http::client http, std.oauth2::service_account account, str scope, str subject) -> std.oauth2::token_source throws std.alloc::alloc_error+`;
+* `+std.oauth2::token_source::access_token(const std.oauth2::token_source* this) -> task<std.string::string throws std.oauth2::oauth2_error, std.http::http_error, std.tls::tls_error, std.error::fault> throws std.async::start_error, std.alloc::alloc_error+`;
+* `+std.oauth2::token_source::renew(const std.oauth2::token_source* this) -> task<std.string::string throws std.oauth2::oauth2_error, std.http::http_error, std.tls::tls_error, std.error::fault> throws std.async::start_error, std.alloc::alloc_error+`.
+
+`+access_token+` returns the cached token while its expiry is more than 60 seconds away or it
+has none, and otherwise gets a new one; `+renew+` always gets a new one, as after an API
+refused the cached token. Requests of one source take turns, so tasks that need a token
+together send one request. A source of a request sends it again, with the refresh token that
+the endpoint returned last in place of its grant, so a code is exchanged once and a rotated
+refresh token is followed; a source of a service account signs a new assertion for its scope
+and subject each time.
+
 == Annex A — Normative public API inventory
 
 [[R-SLIB-API-A001]]
@@ -7613,7 +8336,7 @@ without allocation
 |Bounded C17 unsigned shifts and masks; the 64-bit case never shifts by 64
 
 |`+std.secret+`: R-SLIB-SECRET-0001..0004
-|Move `+buffer+` owner, Send and non-Sync; views are call-bounded and carry the buffer origin
+|Move `+buffer+` owner, Send and Sync; views are call-bounded and carry the buffer origin
 |`+with_length+` may allocate transactionally; adoption, views, erasure and comparison do not allocate
 |No panic; drop erases the whole allocation through volatile stores before release
 |C allocation/movement, volatile byte stores and a branch-free accumulated comparison
@@ -7662,6 +8385,15 @@ with the index of a byte
 |No panic; clock calls are thread-safe
 |C17 `<time.h>` and bounded native monotonic clock query; the R part is translated with the
 program (R-SLIB-RSRC-0001)
+
+|`+std.time+` zones and patterns: R-SLIB-TIME-0010..0014
+|Move `+zone+` that owns its transitions, types and rule; Copy `+local_time+`; names and
+abbreviations are views of the zone
+|Zone errors are `+std.time::zone_error+`, field and range errors `+std.time::time_error+`; a zone
+file that cannot be read is a fault of `+std.fs+`
+|Zones are Send+Sync; only Core arithmetic and bounds panics
+|R source translated with the program; `+load_zone+` and `+local_zone+` read TZif files through
+`+std.fs+` (R-SLIB-RSRC-0001)
 
 |Language type constructor `+task<T throws E...>+`, all `+std.async+` public types, synchronous
 controls `+cancel+`/`+detach+` and `+task_id+`:
@@ -7849,6 +8581,13 @@ panics
 |Task Send iff R and every E are Send; arguments follow Core R-MEM-0013
 |Blocking call pool of Core R-TERM-0015; calls taken in submission order
 
+|`+std.async::join+`: R-SLIB-ASYNC-0020
+|Consumes the observation right of the task; owned `+std.thread::join_result<T>+` result
+|Cancellation and deadline of the awaiting task as for await; the report text is the only
+allocation
+|Result Send iff T is Send; the panic of the task ends at the join
+|Task outcome of Core R-FUNC-0012; the report is taken from the panic state of the thread
+
 |`+std.service+`: R-SLIB-SERVICE-0001..0003
 |Owns listener, stop receiver and shared state reference; Copy report
 |Stop request, connection deadline and task cancellation; handler tasks end before return
@@ -7872,7 +8611,7 @@ bounds panics
 |Only Core arithmetic and bounds panics
 |R source translated with the program (R-SLIB-RSRC-0001); no C symbol
 
-|`+std.http+`: R-SLIB-HTTP-0001..0012
+|`+std.http+`: R-SLIB-HTTP-0001..0018
 |Move messages, header sections, routers and clients; a router is shared by its server through
 `+arc+`; call-bounded views of streams and bodies
 |Protocol failures are `+std.http::http_error+`; a server answers them and never throws them;
@@ -7916,11 +8655,12 @@ concurrently; only Core arithmetic and bounds panics
 |R source translated with the program over `+std.jsonrpc+`, `+std.http+`, `+std.process+` and
 `+std.tls+` (R-SLIB-RSRC-0001)
 
-|`+std.tls+`: R-SLIB-TLS-0001..0006
+|`+std.tls+`: R-SLIB-TLS-0001..0007
 |Move configuration and session; a session owns its transport and a configuration lives
 until its last session; call-bounded certificate views and a borrowed secret key
 |Configuration errors and handshake rejections are `+std.tls::tls_error+`, failures of memory
-`+std.alloc::alloc_error+` and other session failures after the handshake `+std.io::io_error+`
+`+std.alloc::alloc_error+` and other session failures after the handshake `+std.io::io_error+`;
+a system bundle that cannot be read is a fault of `+std.fs+`
 |Configurations and sessions are Send+Sync; one reader and one writer at a time; only Core
 arithmetic and bounds panics
 |R source translated with the program over the native provider `+std.tls.native+` and
@@ -7935,7 +8675,7 @@ contract of the unsafe `+map_file+` keeps the range in the file and unchanged by
 |R source translated with the program over the native provider `+std.fs.native+`
 (R-SLIB-RSRC-0003)
 
-|`+std.postgres+`: R-SLIB-PG-0001..0012
+|`+std.postgres+`: R-SLIB-PG-0001..0016
 |Move options, connections, statements, rows and notifications; a connection is shared through
 `+arc+` by its handles, every operation keeps it through a new reference; row views borrow the row
 |Server errors are `+std.postgres::pg_error+` with SQLSTATE, message, detail and hint; failures of
@@ -7944,7 +8684,24 @@ the transport are faults and end the session
 |R source translated with the program over `+std.net+`, `+std.tls+` and `+std.pool+`
 (R-SLIB-RSRC-0001)
 
-|`+std.log+`, `+std.config+`: R-SLIB-LOG-0001..0003, R-SLIB-CONFIG-0001..0003
+|`+std.jwt+`: R-SLIB-JWT-0001..0007
+|Move signers, verifiers, key sets and validations; a token is a string; keys are moved into
+signers and verifiers
+|Rejected tokens and keys are `+std.jwt::jwt_error+`; typed claims report `+std.json::error+`
+|Signers, verifiers and key sets are Send+Sync; only Core arithmetic and bounds panics
+|R source translated with the program over `+std.crypto+`, `+std.hash+`, `+std.encoding+` and
+`+std.json+` (R-SLIB-RSRC-0001)
+
+|`+std.oauth2+`: R-SLIB-OAUTH2-0001..0006
+|Move tokens, grants, requests and service accounts; a token source owns its HTTP client and
+shares its token through `+arc+`; `+request_token+` borrows the client for its call
+|Refusals of the endpoint and unreadable answers or key files are `+std.oauth2::oauth2_error+`;
+transport failures are `+std.http+`, `+std.tls+` errors and faults
+|Token sources are Send+Sync and their requests take turns; only Core arithmetic and bounds panics
+|R source translated with the program over `+std.http+`, `+std.jwt+` and `+std.crypto+`
+(R-SLIB-RSRC-0001)
+
+|`+std.log+`, `+std.config+`: R-SLIB-LOG-0001..0005, R-SLIB-CONFIG-0001..0004
 |Loggers own a sender of one bounded queue; the writer owns its receiver; the
 configuration owns its values and borrows them to `+get+`
 |Logging never waits: a full queue drops and counts the record; the writer ends when every

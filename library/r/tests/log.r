@@ -526,3 +526,195 @@ async void writes_to_stderr_until_the_loggers_end() throws std.test::failure, st
     u64 none = await std.log::writer::to_stderr(move alone);
     std.test::equal(none, 0u64);
 }
+
+/* Checks a record of a level-first layout: `head`, a time in RFC 3339 without trailing zeros in
+   its fraction, then `rest`. */
+protected void expect_trimmed(str line, str head, str rest) throws std.test::failure, std.error::fault {
+    const u8[] bytes = line;
+    const u8[] tail = rest;
+    if (std.text::starts_with(line, head) == false || std.text::ends_with(line, rest) == false ||
+        len(bytes) < len(head) + len(tail) + 20usize) {
+        std.string::string message = f"unexpected record {line}";
+        std.test::fail(message.as_str());
+        return;
+    }
+    str stamp = core::validate_utf8(bytes[len(head)..len(bytes) - len(tail)]);
+    std.time::system_time parsed = std.time::parse_rfc3339(stamp);
+    parsed as void;
+    const u8[] written = stamp;
+    std.test::equal(written[len(written) - 1usize], 90u8);
+    if (len(written) > 20usize) {
+        std.test::equal(written[19usize], 46u8);
+        std.test::check(written[len(written) - 2usize] != 48u8, "no trailing zero in the fraction");
+    }
+}
+
+// R-SLIB-LOG-0004: a layout names the members every record carries and orders them; bound fields
+// come before those of the record, a child leaves its parent unchanged, and a field named like a
+// member gets a leading `_`.
+@test
+async void writes_records_in_a_chosen_layout() throws std.test::failure, std.error::fault {
+    std.fs::path path = std.fs::path_from_utf8("rtest_log_layout.log");
+    task_scope(1) clearing { await truncate(&path); }
+    std.log::writer sink = std.log::writer::create(8usize);
+    std.log::logger base = sink.logger(std.log::level::info, std.log::format::json);
+    std.log::layout shape = std.log::layout::standard();
+    shape.time_name = std.string::from_str("timestamp");
+    shape.task_name = o::none;
+    shape.time_digits = 9u32;
+    shape.trim_time = true;
+    shape.sequence = std.log::order::level_first;
+    base.set_layout(move shape);
+    std.log::fields statics = std.log::fields::create();
+    statics.text("service", "arena");
+    statics.text("env", "eu1");
+    std.log::logger root = base.with(&statics);
+    std.log::fields request = std.log::fields::create();
+    request.text("request_id", "r-1");
+    std.log::logger child = root.with(&request);
+    std.log::fields record = std.log::fields::create();
+    record.number("http.status_code", 200i64);
+    record.text("timestamp", "x");
+    record.text("controls", "\x08\x0c\x7f");
+    child.log(std.log::level::info, "done", &record);
+    root.warn("root");
+    std.log::logger text = child.share();
+    std.log::layout plain = std.log::layout::standard();
+    plain.sequence = std.log::order::level_first;
+    plain.task_name = o::none;
+    plain.time_digits = 0u32;
+    text.set_layout(move plain);
+    drop child;
+    drop root;
+    drop base;
+    drop text;
+    Count written = {.value = 0u64};
+    task_scope(1) writing { written.value = await std.log::writer::to_file(move sink, &path); }
+    std.string::string content = await read_text(std.fs::path_clone(&path));
+    std.test::equal(written.value, 2u64);
+    str lines = content.as_str();
+    expect_trimmed(line_at(lines, 0usize),
+                   "{\"level\":\"info\",\"service\":\"arena\",\"env\":\"eu1\",\"request_id\":\"r-1\","
+                   "\"http.status_code\":200,\"_timestamp\":\"x\",\"controls\":\"\\b\\f\\u007f\",\"timestamp\":\"",
+                   "\",\"message\":\"done\"}");
+    expect_trimmed(line_at(lines, 1usize), "{\"level\":\"warn\",\"service\":\"arena\",\"env\":\"eu1\",\"timestamp\":\"",
+                   "\",\"message\":\"root\"}");
+    task_scope(1) removing { await remove_file(&path); }
+}
+
+protected std.log::fields one_text(str name, str value) throws std.alloc::alloc_error {
+    std.log::fields made = std.log::fields::create();
+    made.text(name, value);
+    return move made;
+}
+
+// R-SLIB-LOG-0004: the records of a level-first layout as an independent implementation of the
+// same format writes them; the expected lines, but for the time, were taken from it.
+@test
+async void writes_a_level_first_format() throws std.test::failure, std.error::fault {
+    std.fs::path path = std.fs::path_from_utf8("rtest_log_format.log");
+    task_scope(1) clearing { await truncate(&path); }
+    std.log::writer sink = std.log::writer::create(8usize);
+    std.log::logger plain = sink.logger(std.log::level::trace, std.log::format::json);
+    std.log::layout shape = std.log::layout::standard();
+    shape.time_name = std.string::from_str("timestamp");
+    shape.task_name = o::none;
+    shape.time_digits = 9u32;
+    shape.trim_time = true;
+    shape.omit_empty_message = true;
+    shape.sequence = std.log::order::level_first;
+    plain.set_layout(move shape);
+    std.log::fields statics = std.log::fields::create();
+    statics.text("service", "arena");
+    statics.text("component", "http");
+    std.log::logger base = plain.with(&statics);
+    std.log::fields request_fields = one_text("request_id", "req-2");
+    std.log::logger request = base.with(&request_fields);
+    std.log::fields user_fields = one_text("usr.id", "42");
+    std.log::logger user = request.with(&user_fields);
+    std.log::fields first = std.log::fields::create();
+    first.text("http.method", "GET");
+    first.text("http.route", "/api/users/{id}");
+    first.number("http.status_code", 200i64);
+    user.log(std.log::level::info, "http request completed", &first);
+    std.log::fields second = std.log::fields::create();
+    second.text("panic", "explicit: the crash command");
+    second.text("severity", "critical");
+    request.log(std.log::level::error, "panic recovered", &second);
+    std.log::fields third = std.log::fields::create();
+    third.text("text", "tab\there \"quoted\" back\\slash \x01\x08\x0c\x7f ёж <a>&");
+    third.number("count", -3i64);
+    third.flag("ok", true);
+    third.flag("off", false);
+    base.log(std.log::level::info, "special \"text\"\n", &third);
+    base.debug("");
+    drop user;
+    drop request;
+    drop base;
+    drop plain;
+    Count written = {.value = 0u64};
+    task_scope(1) writing { written.value = await std.log::writer::to_file(move sink, &path); }
+    std.string::string content = await read_text(std.fs::path_clone(&path));
+    std.test::equal(written.value, 4u64);
+    str lines = content.as_str();
+    expect_trimmed(line_at(lines, 0usize),
+                   "{\"level\":\"info\",\"service\":\"arena\",\"component\":\"http\",\"request_id\":\"req-2\","
+                   "\"usr.id\":\"42\",\"http.method\":\"GET\",\"http.route\":\"/api/users/{id}\","
+                   "\"http.status_code\":200,\"timestamp\":\"",
+                   "\",\"message\":\"http request completed\"}");
+    expect_trimmed(line_at(lines, 1usize),
+                   "{\"level\":\"error\",\"service\":\"arena\",\"component\":\"http\",\"request_id\":\"req-2\","
+                   "\"panic\":\"explicit: the crash command\",\"severity\":\"critical\",\"timestamp\":\"",
+                   "\",\"message\":\"panic recovered\"}");
+    expect_trimmed(line_at(lines, 2usize),
+                   "{\"level\":\"info\",\"service\":\"arena\",\"component\":\"http\","
+                   "\"text\":\"tab\\there \\\"quoted\\\" back\\\\slash \\u0001\\b\\f\\u007f ёж <a>&\","
+                   "\"count\":-3,\"ok\":true,\"off\":false,\"timestamp\":\"",
+                   "\",\"message\":\"special \\\"text\\\"\\n\"}");
+    expect_trimmed(line_at(lines, 3usize), "{\"level\":\"debug\",\"service\":\"arena\",\"component\":\"http\",\"timestamp\":\"",
+                   "\"}");
+    task_scope(1) removing { await remove_file(&path); }
+}
+
+protected async void doomed(u32 code) {
+    if (code == 7u32) { panic("detached work failed"); }
+}
+
+// R-SLIB-LOG-0005: the report of a panic that nothing observes reaches the listener made last, as
+// a record with its category, its text and its place; an earlier listener takes nothing.
+@test
+async void receives_unobserved_panics() throws std.test::failure, std.error::fault {
+    std.log::panic_reports reports = std.log::panic_reports::listen(4usize);
+    o<std.log::panic_record> nothing = reports.take();
+    switch (move nothing) {
+    case variant o::some(move record):
+        drop record;
+        std.test::fail("an empty queue");
+    case variant o::none: break;
+    }
+    task<void> work = doomed(7u32);
+    (move work).detach();
+    task_scope(1) waiting {
+        std.log::panic_record record = await reports.next();
+        std.test::equal_text(record.category.as_str(), "explicit");
+        std.test::equal_text(record.text.as_str(), "detached work failed");
+        std.test::check(std.text::starts_with(record.place.as_str(), "module "), "the place of the panic");
+    }
+    std.test::equal(reports.dropped(), 0u64);
+    std.log::panic_reports newer = std.log::panic_reports::listen(2usize);
+    task<void> second = doomed(7u32);
+    (move second).detach();
+    task_scope(1) taking {
+        std.log::panic_record record = await newer.next();
+        std.test::equal_text(record.text.as_str(), "detached work failed");
+    }
+    o<std.log::panic_record> older = reports.take();
+    switch (move older) {
+    case variant o::some(move record):
+        drop record;
+        std.test::fail("an earlier listener takes nothing");
+    case variant o::none: break;
+    }
+    drop reports;
+    drop newer;
+}

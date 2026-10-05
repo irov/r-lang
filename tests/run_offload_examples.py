@@ -6,7 +6,7 @@ import subprocess
 parser = argparse.ArgumentParser()
 parser.add_argument('--executable', required=True)
 args = parser.parse_args()
-usage = 'offload nap|cancel MILLISECONDS\n'
+usage = 'offload nap|cancel MILLISECONDS | fault INDEX\n'
 cases = [([], usage, 0),
          (['nap'], usage, 64),
          (['sleep', '10'], usage, 64),
@@ -15,6 +15,10 @@ cases = [([], usage, 0),
           'two rounds on four pool threads: yes\na call runs as a task of its own: yes\n', 0),
          (['cancel', '120'],
           'the timer won: yes\nthe group waited for the call to return: yes\n', 0),
+         (['fault', '1'],
+          'call 1 returned after 20 ms\nthe other call returned after 10 ms\n', 0),
+         (['fault', '5'],
+          'call 5 panicked: bounds\nthe other call returned after 10 ms\n', 0),
          (['nap', 'x'], 'offload failed: invalid_digit\n', 70)]
 for values, output, status in cases:
     result = subprocess.run([args.executable, *values], text=True, capture_output=True, timeout=60)

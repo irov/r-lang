@@ -412,8 +412,12 @@ static bool r_c17_emit_direct_call(RC17Emitter *emitter,
             return false;
         }
     }
+    /* L39: a twin that panicked returns with its panic pending; the step continues in the
+       panic block of the await. */
+    emitter->async_panic_target = await->panic_target;
     return r_c17_write(emitter, ");\n") && r_c17_indent(emitter, depth + UINT32_C(1)) &&
            r_c17_write(emitter, "r_runtime_task_direct_end();\n") &&
+           r_c17_emit_panic_test(emitter, depth + UINT32_C(1)) &&
            r_c17_emit_await_completion(emitter, await, depth + UINT32_C(1)) &&
            r_c17_indent(emitter, depth) && r_c17_write(emitter, "}\n");
 }

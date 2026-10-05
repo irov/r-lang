@@ -839,8 +839,12 @@ if(DEFINED PROGRAM_INPUT_FILE AND NOT PROGRAM_INPUT_FILE STREQUAL "")
         ERROR_VARIABLE R_RUN_ERROR
     )
 else()
+    # Without an input file the program reads an empty standard input, not the one ctest was
+    # started with: a driver that reads lines until the end of input would otherwise wait on a
+    # terminal or an open pipe of the caller.
     execute_process(
         COMMAND ${R_CODEGEN_RUN_COMMAND}
+        INPUT_FILE /dev/null
         RESULT_VARIABLE R_RUN_RESULT
         OUTPUT_VARIABLE R_RUN_OUTPUT
         ERROR_VARIABLE R_RUN_ERROR
@@ -902,19 +906,21 @@ if(DEFINED EXPECTED_PANIC AND NOT EXPECTED_PANIC STREQUAL "")
             "panic stderr does not contain '${EXPECTED_PANIC}': "
             "${R_RUN_ERROR}")
     endif()
-    if(DEFINED SOURCE_1 AND SOURCE_1 MATCHES "codegen_abort_skips_finally\\.r$")
+    if(DEFINED EXPECTED_SECOND_PANIC AND NOT EXPECTED_SECOND_PANIC STREQUAL "")
+        # L39 (R-ERR-0008): a panic that begins while one unwinds is a second panic; the program
+        # aborts with the report of the first panic followed by the report of the second.
         if(NOT R_RUN_RESULT MATCHES "[Aa]borted")
             message(FATAL_ERROR
-                "abort-strategy finally fixture did not terminate through SIGABRT: "
-                "${R_RUN_RESULT}")
+                "second-panic fixture did not terminate through SIGABRT: ${R_RUN_RESULT}")
         endif()
-        string(FIND
-            "${R_RUN_ERROR}"
-            "division_by_zero"
-            R_UNSTARTED_FINALLY_PANIC_OFFSET)
-        if(NOT R_UNSTARTED_FINALLY_PANIC_OFFSET EQUAL -1)
+        string(LENGTH "${EXPECTED_PANIC}" R_FIRST_PANIC_LENGTH)
+        math(EXPR R_AFTER_FIRST_PANIC "${R_PANIC_OFFSET} + ${R_FIRST_PANIC_LENGTH}")
+        string(SUBSTRING "${R_RUN_ERROR}" ${R_AFTER_FIRST_PANIC} -1 R_AFTER_FIRST_ERROR)
+        string(FIND "${R_AFTER_FIRST_ERROR}" "${EXPECTED_SECOND_PANIC}" R_SECOND_PANIC_OFFSET)
+        if(R_SECOND_PANIC_OFFSET EQUAL -1)
             message(FATAL_ERROR
-                "abort strategy executed a not-yet-started finally: ${R_RUN_ERROR}")
+                "second panic '${EXPECTED_SECOND_PANIC}' was not reported after the first: "
+                "${R_RUN_ERROR}")
         endif()
     endif()
 elseif(NOT "${R_RUN_RESULT}" STREQUAL "0")

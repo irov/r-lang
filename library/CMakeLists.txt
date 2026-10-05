@@ -51,6 +51,7 @@ add_subdirectory(native/tls)
 add_subdirectory(native/crypto)
 add_subdirectory(native/sqlite)
 add_subdirectory(native/alloc)
+add_subdirectory(native/log)
 add_subdirectory(native/fs)
 
 add_library(r_stdlib_0_1 INTERFACE)

@@ -5,6 +5,7 @@
 #include "r_runtime_core.h"
 #include "r_runtime_target_abi.h"
 
+#include <stdatomic.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -48,6 +49,71 @@ int r_runtime_hosted_finish(int32_t result);
  * C exit on the calling thread.
  */
 int r_runtime_hosted_exit(int32_t result);
+
+/*
+ * Panic unwind (Core R-ERR-0005..0009). Generated code does not abort on a panic: it records the
+ * panic in the state of its thread, runs the cleanup of each frame and returns to its caller,
+ * which tests the state after the call. A panic is pending while it propagates and in cleanup
+ * while drops and finally blocks run; a panic that begins during cleanup is a second panic and
+ * aborts (R-ERR-0008). Panics inside runtime and library C abort as before (R-ERR-0006).
+ * r_runtime_unwinding_threads counts the threads with a pending panic, so the test after a call
+ * is one relaxed load until some thread panics.
+ */
+enum {
+    R_RUNTIME_PANIC_TEXT_CAPACITY = 256
+};
+
+typedef struct RRuntimePanicReportData {
+    RRuntimePanicCategory category;
+    RRuntimeSourceSpan span;
+    uint32_t text_length;
+    char text[R_RUNTIME_PANIC_TEXT_CAPACITY];
+} RRuntimePanicReportData;
+
+extern _Atomic uint32_t r_runtime_unwinding_threads;
+
+_Bool r_runtime_unwinding_current_thread(void);
+
+static inline _Bool r_runtime_unwinding(void) {
+    return atomic_load_explicit(&r_runtime_unwinding_threads, memory_order_relaxed) != 0U &&
+           r_runtime_unwinding_current_thread();
+}
+
+/* Whether a panic of this thread is pending or in cleanup: a lock guard dropped meanwhile poisons
+   its lock (R-LIB-0014). */
+_Bool r_runtime_panicking(void);
+
+/* Begins a panic on this thread; it returns, and the caller leaves through its cleanup. The name
+   has the length of r_runtime_panic, so generated calls keep the layout of the abort strategy. */
+void r_runtime_raise(RRuntimePanicCategory category, RRuntimeSourceSpan span);
+/* The same with the diagnostic text of an explicit panic, truncated to the report capacity. */
+void r_runtime_raise_text(RRuntimePanicCategory category,
+                          RRuntimeSourceSpan span,
+                          const uint8_t *text,
+                          size_t length);
+/* Brackets the drops and finally blocks that a frame runs for a pending panic. */
+void r_runtime_unwind_cleanup_enter(void);
+void r_runtime_unwind_cleanup_leave(void);
+/* Takes the pending panic of this thread at a task or thread boundary; false when none. */
+_Bool r_runtime_panic_take(RRuntimePanicReportData *report);
+/* Makes report the pending panic of this thread again, as await re-raises an observed panic. */
+void r_runtime_panic_resume(const RRuntimePanicReportData *report);
+/* Writes the diagnostic of report and aborts: a panic that reached the initial thread's root. */
+_Noreturn void r_runtime_panic_terminate(const RRuntimePanicReportData *report);
+/* The same for the pending panic of this thread, after the synchronous main returned with it. */
+_Noreturn void r_runtime_unwind_terminate(void);
+/* R-ERR-0008: a panic that begins while first unwinds; both diagnostics, then abort. */
+_Noreturn void r_runtime_panic_second(const RRuntimePanicReportData *first,
+                                      RRuntimePanicCategory category,
+                                      RRuntimeSourceSpan span);
+/* Delivers an unobserved report to the panic hook (R-ERR-0009, R-MEM-0017). */
+void r_runtime_panic_deliver(const RRuntimePanicReportData *report);
+
+/* M44 (Library R-SLIB-LOG-0005): the sink that takes an unobserved report before the line of
+   r_runtime_panic_deliver; it returns whether it took the report. It runs on the thread that
+   delivers the report and neither blocks nor runs R code. NULL removes it. */
+typedef _Bool (*RRuntimePanicSink)(const RRuntimePanicReportData *report);
+void r_runtime_panic_set_sink(RRuntimePanicSink sink);
 
 /* Allocation-free emergency diagnostic sink; strings are borrowed for this call only. */
 void r_runtime_emergency_write(const char *bytes, size_t length);

@@ -136,7 +136,7 @@ def main():
         result = run('interface', ACCEPTED, 'accepted')
         assert result.returncode == 0, result.stderr
         text = result.stdout
-        assert 'version=31' in text, text[:200]
+        assert 'version=32' in text, text[:200]
         entry = ('associated_constraints=((associated="I"::"Item" constraints=(copy (name="Ranked" '
                  'module="projections.accepted" arguments=()))))')
         assert text.count(entry) == 2, (entry, text)

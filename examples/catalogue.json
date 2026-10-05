@@ -956,6 +956,21 @@
         "r_example_orders_commands"
       ],
       "kind": "application"
+    },
+    {
+      "id": "arena",
+      "title": "Back end of a mobile game: ES256 session tokens, HS256 administrator tokens, a JWK Set, OAuth 2.0 access tokens and an HTTP application with middleware",
+      "entry": "example.arena.main",
+      "map": "examples/arena/modules.map",
+      "sources": [
+        "examples/arena/src/*.r"
+      ],
+      "behaviour": "tests/run_arena_examples.py",
+      "tests": [
+        "r_frontend_codegen_example_arena",
+        "r_example_arena_commands"
+      ],
+      "kind": "application"
     }
   ]
 }

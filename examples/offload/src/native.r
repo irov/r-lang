@@ -16,3 +16,10 @@ u32 nap(u32 milliseconds) {
     }
     return milliseconds;
 }
+
+/* A plan of naps by index. An index past its end panics with bounds on the pool thread that runs
+   the call (Core R-ERR-0009): the task of the call ends with that panic. */
+u32 nap_at(u32 index) {
+    u32[3] plan = {10u32, 20u32, 30u32};
+    return nap(plan[index as usize]);
+}

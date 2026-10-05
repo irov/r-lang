@@ -74,3 +74,65 @@ void hashes_passwords_and_data() throws std.test::failure, std.alloc::alloc_erro
     bytes stretched = std.crypto::argon2id("pw", "0123456789abcdef", limits, 16usize);
     std.test::equal(len(stretched), 16usize);
 }
+
+// R-SLIB-CRYPTO-0009, R-SLIB-CRYPTO-0012: the RFC 6979 key of appendix A.2.5 signs "sample"
+// deterministically, and a key survives PKCS#8 PEM and SPKI DER.
+@test
+void signs_with_ecdsa_and_keeps_the_key_in_pem() throws std.test::failure, std.alloc::alloc_error,
+    std.crypto::crypto_error, std.convert::parse_error {
+    bytes scalar = std.encoding::decode_hex("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721");
+    std.crypto::ecdsa_key key = std.crypto::ecdsa_key::from_scalar(std.crypto::curve::p256, scalar.as_slice());
+    bytes signature = key.sign("sample");
+    std.string::string signature_hex = hex(signature.as_slice());
+    std.test::equal_text(signature_hex.as_str(),
+                         "efd48b2aacb6a8fd1140dd9cd45e81d69d2c877b56aaf991c34d0ea84eaf3716"
+                         "f7cb1c942d657c41d436c7a1b6e29f65f3e900dbb9aff4064dc4ab2f843acda8");
+    std.crypto::private_key wrapped = std.crypto::private_key::ecdsa(move key);
+    std.secret::buffer pem = wrapped.to_pem();
+    std.crypto::private_key again = std.crypto::private_key::from_pem(std.secret::as_slice(&pem));
+    std.crypto::public_key public_part = again.public_key();
+    bytes der = public_part.to_der();
+    std.crypto::public_key read = std.crypto::public_key::from_der(der.as_slice());
+    switch (read) {
+    case variant std.crypto::public_key::ecdsa(point):
+        std.test::check(point->verify("sample", signature.as_slice()), "verifies after PEM and DER");
+        std.test::check(point->verify("other", signature.as_slice()) == false, "other message");
+    default: std.test::fail("an ECDSA key");
+    }
+}
+
+// R-SLIB-CRYPTO-0010: a new RSA key signs under PKCS#1 v1.5 and PSS, and its public key verifies.
+@test
+void signs_with_rsa() throws std.test::failure, std.alloc::alloc_error, std.crypto::crypto_error {
+    std.crypto::rsa_key key = std.crypto::rsa_key::generate(2048usize);
+    std.test::equal(key.bits(), 2048usize);
+    std.crypto::rsa_public_key public_part = key.public_key();
+    bytes plain = key.sign(std.crypto::rsa_scheme::pkcs1_sha256, "token");
+    bytes probabilistic = key.sign(std.crypto::rsa_scheme::pss_sha256, "token");
+    std.test::equal(len(plain), 256usize);
+    std.test::check(public_part.verify(std.crypto::rsa_scheme::pkcs1_sha256, "token", plain.as_slice()), "PKCS#1");
+    std.test::check(public_part.verify(std.crypto::rsa_scheme::pss_sha256, "token", probabilistic.as_slice()), "PSS");
+    std.test::check(public_part.verify(std.crypto::rsa_scheme::pss_sha256, "token", plain.as_slice()) == false,
+                    "scheme mismatch");
+    std.crypto::rsa_public_key rebuilt = std.crypto::rsa_public_key::from_components(public_part.modulus(),
+                                                                                     public_part.exponent());
+    std.test::check(rebuilt.verify(std.crypto::rsa_scheme::pkcs1_sha256, "token", plain.as_slice()), "components");
+}
+
+// R-SLIB-CRYPTO-0011: AES-CBC pads to whole blocks and refuses a padding that does not check.
+@test
+void encrypts_with_cbc() throws std.test::failure, std.alloc::alloc_error, std.crypto::crypto_error {
+    bytes key = std.crypto::random(16usize);
+    bytes iv = std.crypto::random(16usize);
+    bytes sealed = std.crypto::cbc_encrypt(key.as_slice(), iv.as_slice(), "sixteen bytes!!!");
+    std.test::equal(len(sealed), 32usize);
+    bytes opened = std.crypto::cbc_decrypt(key.as_slice(), iv.as_slice(), sealed.as_slice());
+    std.test::check(std.bytes::equal(opened.as_slice(), "sixteen bytes!!!"), "round trip");
+    try {
+        bytes truncated = std.crypto::cbc_decrypt(key.as_slice(), iv.as_slice(), "short");
+        drop truncated;
+        std.test::fail("a short ciphertext opened");
+    } catch (std.crypto::crypto_error failure) {
+        std.test::check(failure.code == std.crypto::error_code::invalid_length, "invalid length");
+    }
+}

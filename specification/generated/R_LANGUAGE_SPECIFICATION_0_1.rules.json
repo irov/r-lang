@@ -5,11 +5,11 @@
   "coverage_note": "This catalog records normative source rules only. It makes no claim that a rule is implemented, tested or otherwise covered.",
   "generated_from": {
     "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-    "revision": "0.1.0-draft.96",
-    "sha256": "fe0262b5176325d5f917e7d76374ea4cda62ee66120134cb5e1ec0d74caf8a3f"
+    "revision": "0.1.0-draft.97",
+    "sha256": "e4aecdef878a59549966dadcf8969c365cf525ec0e0aa612d4a3ff8481deca0e"
   },
   "rule_count": 496,
-  "rules_sha256": "4c89200ccee6bbf018cdc65541c9fd9bc29b574e99bbae6b2bfef9ce864fb367",
+  "rules_sha256": "dd1f95491df0516a111c5f233f088eb991409b74d56781aa512434f0e02d6f50",
   "rules": [
     {
       "id": "R-GEN-0001",
@@ -1839,7 +1839,7 @@
         "declaration_column": 1,
         "end_line": 605
       },
-      "text_sha256": "4ef4a671c804f00ccf997996672e699481d7d70013e7de7a8370df1df3035941"
+      "text_sha256": "8ae819f52e0f04b265035ab2432f584efdc109831e080cef8014ddc11ab718ac"
     },
     {
       "id": "R-GRAM-0008",
@@ -3429,7 +3429,7 @@
         "declaration_column": 1,
         "end_line": 1257
       },
-      "text_sha256": "ec89c2c972eb14c4baffa83981e1279447f6736f7a553ed92641e6ae1d234c0a"
+      "text_sha256": "adb02b64a8e886f017eb75cbfb2417cc32ec7508640515b20bcbf94ab13cbdff"
     },
     {
       "id": "R-TYPE-0044",
@@ -3487,7 +3487,7 @@
         "declaration_column": 1,
         "end_line": 1343
       },
-      "text_sha256": "d6df64a91ac495e3591cb2f0cd088c878015c9e5dc26c15065a777b69a265afc"
+      "text_sha256": "9d7c58d61b7927da2273e3a94f8d449339c5f1201c9454bfb232a64e40a490f2"
     },
     {
       "id": "R-TYPE-0046",
@@ -3545,7 +3545,7 @@
         "declaration_column": 1,
         "end_line": 1448
       },
-      "text_sha256": "ca8d7b0423948468ba362ada2b6d3bdea99233f4aa02b45742da4ce5b60f6f4d"
+      "text_sha256": "3612da315f996f9b34c90ecef87651fb66e11839a24cfa49b7e0a9c0bd326358"
     },
     {
       "id": "R-TYPE-0048",
@@ -3603,7 +3603,7 @@
         "declaration_column": 1,
         "end_line": 1513
       },
-      "text_sha256": "a5a1ab714081e529013931ef795ff23ca0da3072378db0bbadc4fd2301fd2103"
+      "text_sha256": "5611422f6c72091f54587612a8daf143162a890c7b5034364af22bc9f07c1f0d"
     },
     {
       "id": "R-TYPE-0050",
@@ -3632,7 +3632,7 @@
         "declaration_column": 1,
         "end_line": 1548
       },
-      "text_sha256": "ba5f60ae7f0637db04b2d3364e8995e1729b17e63441c2024b9477ffd36ff63b"
+      "text_sha256": "ffde0731bf9c605a1af013b1c296a20b8f7872d19a316540adecc582edf4b884"
     },
     {
       "id": "R-TYPE-0051",
@@ -3661,7 +3661,7 @@
         "declaration_column": 1,
         "end_line": 1603
       },
-      "text_sha256": "605e7f860d963898cefc5f5a4efb793ca427e972b75a9a16b4d6bd0832503065"
+      "text_sha256": "548e7b68d965df6e42b5c42b830714e1b1b1e35636865c93788db3d8dc41a250"
     },
     {
       "id": "R-TYPE-0052",
@@ -3690,7 +3690,7 @@
         "declaration_column": 1,
         "end_line": 1622
       },
-      "text_sha256": "e83adec3e98b5e7a3c899da25235b41d874fe23d8075cff5c1cf17f6c53cc1c4"
+      "text_sha256": "b5717fd98ca5c5eea109761d194b74f8e9c168dd273aa8e74c3a762ff58e3b12"
     },
     {
       "id": "R-TYPE-0053",
@@ -3719,7 +3719,7 @@
         "declaration_column": 1,
         "end_line": 1673
       },
-      "text_sha256": "adac8eff27cb32b1efafd9f250e864525a75dc02190283de96ec69d7d89ca386"
+      "text_sha256": "d0e3ff43625c97d59f2e384738940a7d8f7b86d44a1bfa5c834830c45247b384"
     },
     {
       "id": "R-TYPE-0054",
@@ -3748,7 +3748,7 @@
         "declaration_column": 1,
         "end_line": 1728
       },
-      "text_sha256": "f2fa44af55f181a1a8cd3f6b790067da48a18d49c48a921e67bf7bbba99fbe57"
+      "text_sha256": "7b4e7725ff6e674f460721339124afa90f948bc39f55d5efcb908cc5f515fe82"
     },
     {
       "id": "R-TYPE-0055",
@@ -3777,7 +3777,7 @@
         "declaration_column": 1,
         "end_line": 1781
       },
-      "text_sha256": "89703c38eb38936cd699320f40217725794fe226c1e1d8b6c7871b1e264b9f1b"
+      "text_sha256": "12d6782eb0dad6ff6340d430372cd0191e52dceaa7d9a636183569a36af66659"
     },
     {
       "id": "R-OBJ-0001",
@@ -4210,7 +4210,7 @@
         "declaration_column": 1,
         "end_line": 1976
       },
-      "text_sha256": "f1b2406dd64da40a1b9a3155c1756f1d6f1e9437606186c5a23748fe6896e80d"
+      "text_sha256": "26e27ccd3c15f5f351455c00a3ee55bd905528f4c2c6b071d0e254db2b748bd3"
     },
     {
       "id": "R-INIT-0006",
@@ -4951,7 +4951,7 @@
         "declaration_column": 1,
         "end_line": 2299
       },
-      "text_sha256": "b930efe39989131b6aac5c18c73b60ae961901c94fb8277e2f046d32db06a6d2"
+      "text_sha256": "fc387243da0f6c4c19ae3d4269ba6506090280fc93e8def30074058cb5ec42d2"
     },
     {
       "id": "R-BORROW-0001",
@@ -5212,7 +5212,7 @@
         "declaration_column": 1,
         "end_line": 2423
       },
-      "text_sha256": "ab5d57d18eb35c19e3fe8f94918e1dacafab332e38785586dad2365f639e94cc"
+      "text_sha256": "9df24fdca8e137cd16450c5d653608734a2003a657dadc054f639e75b3240975"
     },
     {
       "id": "R-BORROW-0010",
@@ -7383,7 +7383,7 @@
         "declaration_column": 1,
         "end_line": 3668
       },
-      "text_sha256": "c52de5edd94cfe85d0214354cbd62902fa1277131363d230231648865d2c7e4f"
+      "text_sha256": "19a7c0820645b634d939c190ec715b53bd76c41b719fcd6d8ca67c26fa77a0ee"
     },
     {
       "id": "R-FUNC-0005",
@@ -7695,7 +7695,7 @@
         "declaration_column": 1,
         "end_line": 3996
       },
-      "text_sha256": "cbf881672c9a2b3c6227dad47999dd57043ee22c22e03eb72dadc071deed3cc8"
+      "text_sha256": "d704bb0afd5debddc6cfb6541b817ba91e792dd80b76b4831da7c198dbd34077"
     },
     {
       "id": "R-FUNC-0018",
@@ -7743,7 +7743,7 @@
         "declaration_column": 1,
         "end_line": 4078
       },
-      "text_sha256": "d848f4a67cca133862a58c7c07649aef26835714ac4817847bff5e99d87711ca"
+      "text_sha256": "c9ffc94d76f2ce5fa2dc513dbea96f6e8bebec1b4385ba710f0d173468dac861"
     },
     {
       "id": "R-FUNC-0020",
@@ -7767,7 +7767,7 @@
         "declaration_column": 1,
         "end_line": 4115
       },
-      "text_sha256": "6484c50d1a1c09c7c6a3f8d6ba1f039e3a91331b4d5855851061f2d1b560b159"
+      "text_sha256": "481308b1c2dc89f114e6b6f7dfbdb3596ec1145518358452f51b9c78a0d3ab50"
     },
     {
       "id": "R-FUNC-0021",
@@ -7791,7 +7791,7 @@
         "declaration_column": 1,
         "end_line": 4138
       },
-      "text_sha256": "3167115675cecc604697c6a883a7ceb5fa247b31fb9205f774ebf9d1ac9865c9"
+      "text_sha256": "6aa65c2e05dc4d67209800e22350c9b154acceb7ae85c073933ee8a4a0c9aa30"
     },
     {
       "id": "R-FUNC-0022",
@@ -7815,7 +7815,7 @@
         "declaration_column": 1,
         "end_line": 4179
       },
-      "text_sha256": "2253c82b56d670bdd9beab363229b58e6c5c2dfa7efcb06517543fc1bfbb26a5"
+      "text_sha256": "9df6015275c0e6f70628ef17c87897b611960ddc916a1eac8b84c2f3fcf97efa"
     },
     {
       "id": "R-FUNC-0023",
@@ -7839,7 +7839,7 @@
         "declaration_column": 1,
         "end_line": 4228
       },
-      "text_sha256": "46682320ff8a7f62c16ae89ae267ded69986a0579adf77bc7880363e433ad91c"
+      "text_sha256": "298669d11f681dcc3de9acec42e7a0112b22aff25e5787bef77fcc0bf121df74"
     },
     {
       "id": "R-FUNC-0024",
@@ -7863,7 +7863,7 @@
         "declaration_column": 1,
         "end_line": 4252
       },
-      "text_sha256": "513c528c196cffa18aa8212a7177f82b5bb008e9e9247207478ebf9be9f8a9fd"
+      "text_sha256": "9601d3ad6dbc625fdac39d42a01e0bef05c4560093dbc7796dc12f9431759c2b"
     },
     {
       "id": "R-FUNC-0025",
@@ -8230,7 +8230,7 @@
         "declaration_column": 1,
         "end_line": 4459
       },
-      "text_sha256": "47ed47ebd3fc34dbcb7d14fd39911bbaa1f9ed680be6ff6129f7745011c8f6dd"
+      "text_sha256": "2d8e9c3c36d6bf4c029f3f9de404f3016066942027c0bea803d0e201c982d925"
     },
     {
       "id": "R-AGG-0012",
@@ -8259,7 +8259,7 @@
         "declaration_column": 1,
         "end_line": 4498
       },
-      "text_sha256": "7d39a18bba2b9696dfe91d1beabf677b957fdb56ab1b77fe0e74a2c61a2ccf53"
+      "text_sha256": "40be5de582874c5394d0d4826e72db313d56851efb8f0ad5bad6634daf0a6c04"
     },
     {
       "id": "R-ARRAY-0001",

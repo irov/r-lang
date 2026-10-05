@@ -143,9 +143,11 @@ r_require_match_count(c17_output "uint32_t r_payload_tag" 2
 r_require_match_count(c17_output
     "frame->r_finally_stack\\[frame->r_finally_depth\\] = UINT32_C\\([123]\\)" 5
     "generated lexical finally pushes")
-r_require_match_count(c17_output "frame->r_pending_depth \\+= UINT32_C\\(1\\)" 6
+# L39 (Core R-ERR-0005): each function also runs its two nested finalies for a panic, which adds
+# two pending pushes and two pops per function.
+r_require_match_count(c17_output "frame->r_pending_depth \\+= UINT32_C\\(1\\)" 10
     "generated pending-completion pushes")
-r_require_match_count(c17_output "frame->r_pending_depth -= UINT32_C\\(1\\)" 8
+r_require_match_count(c17_output "frame->r_pending_depth -= UINT32_C\\(1\\)" 12
     "generated pending-completion pops including frame-drop fallback")
 r_require_match_count(c17_output "r_runtime_task_execution_cancel_requested\\(execution\\)" 2
     "cancellation polls must remain at awaits, outside all finally bodies")

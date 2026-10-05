@@ -16,7 +16,7 @@ SCHEMA = "r-runtime-entry-stack-inventory-0.1"
 INVENTORY_REVISION = 21
 TARGET_MANIFEST = "targets/arm64-apple-darwin.hosted-native-async.json"
 TARGET_NAME = "arm64-apple-darwin-hosted-native-async"
-TARGET_MANIFEST_REVISION = 9
+TARGET_MANIFEST_REVISION = 10
 COMPILER = "Apple clang"
 COMPILER_VERSION = "21.0.0"
 COMPILER_BUILD = "clang-2100.3.34.2"
@@ -63,6 +63,21 @@ EXTERNAL_ENTRIES = (
     ("r_runtime_c_entry_end", "runtime/source/thread_attachment.c", "runtime-c-boundary"),
     # Stack and panic boundaries.
     ("r_runtime_panic", "runtime/source/panic_abort.c", "runtime-panic"),
+    # L39 (Core R-ERR-0005): the unwind state of a thread.
+    ("r_runtime_raise", "runtime/source/panic_abort.c", "runtime-panic"),
+    ("r_runtime_raise_text", "runtime/source/panic_abort.c", "runtime-panic"),
+    (
+        "r_runtime_unwinding_current_thread",
+        "runtime/source/panic_abort.c",
+        "type-glue-downstream",
+    ),
+    # Lock guards of std.sync poison their lock when dropped during a panic (R-LIB-0014).
+    ("r_runtime_panicking", "runtime/source/panic_abort.c", "type-glue-downstream"),
+    ("r_runtime_unwind_cleanup_enter", "runtime/source/panic_abort.c", "runtime-panic"),
+    ("r_runtime_unwind_cleanup_leave", "runtime/source/panic_abort.c", "runtime-panic"),
+    ("r_runtime_unwind_terminate", "runtime/source/panic_abort.c", "runtime-panic"),
+    ("r_runtime_task_panic_park", "runtime/darwin/source/task.c", "runtime-task"),
+    ("r_runtime_task_panic_unpark", "runtime/darwin/source/task.c", "runtime-task"),
     (
         "r_runtime_stack_initialize_current_thread",
         "runtime/darwin/source/stack.c",
@@ -212,6 +227,7 @@ EXTERNAL_ENTRIES = (
     ("r_std_list_next", "library/std/list/source/next.c", "stdlib-operation"),
     ("r_std_async_cancel", "library/std/async/source/cancel.c", "stdlib-operation"),
     ("r_std_async_detach", "library/std/async/source/detach.c", "stdlib-operation"),
+    ("r_std_async_join", "library/std/async/source/join.c", "stdlib-operation"),
     ("r_std_async_task_id", "library/std/async/source/task_id.c", "stdlib-operation"),
     ("r_std_c_checked", "library/std/c/source/checked.c", "stdlib-operation"),
     (
@@ -1304,6 +1320,8 @@ EXTERNAL_ENTRIES += (
 )
 
 HEADER_HELPERS = (
+    # L39 (Core R-ERR-0005): the panic test of generated code.
+    ("r_runtime_unwinding", "runtime/include/r_runtime_0_1.h", "runtime-panic-header-helper"),
     (
         "r_std_signal_listener_destroy",
         "library/std/signal/include/r_std_signal.h",
@@ -1816,8 +1834,9 @@ GENERATED_PROJECT_SYMBOL_PATTERN = re.compile(
     r"\br_(?:library_internal|runtime|std|json)_[a-z0-9_]*[a-z0-9]\b"
 )
 HEADER_HELPER_START_PATTERN = re.compile(
-    r"\bstatic\s+inline\s+void\s+"
-    r"(?P<symbol>r_std_(?:async|c|format|fs|io|net|process|secret|signal|sync|string|thread|json)_[a-z0-9_]+)\s*"
+    r"\bstatic\s+inline\s+(?:void|_Bool)\s+"
+    r"(?P<symbol>r_std_(?:async|c|format|fs|io|net|process|secret|signal|sync|string|thread|json)_[a-z0-9_]+"
+    r"|r_runtime_unwinding)\s*"
     r"\([^{};]*\)\s*\{",
     re.DOTALL,
 )
@@ -1868,6 +1887,7 @@ GENERATED_NON_CALL_IDENTIFIERS = frozenset(
 )
 MOVE_REGISTRY_NON_CALL_IDENTIFIERS = frozenset({"r_std_async", "r_std_c", "r_std_format", "r_std_fs", "r_std_io", "r_std_json", "r_std_json_reader", "r_std_net", "r_std_process", "r_std_secret", "r_std_signal", "r_std_string", "r_std_sync", "r_std_thread"})
 HEADER_SOURCE_PATHS = (
+    "runtime/include/r_runtime_0_1.h",
     "library/std/async/include/r_std_async.h",
     "library/std/c/include/r_std_c.h",
     "library/std/format/include/r_std_format.h",

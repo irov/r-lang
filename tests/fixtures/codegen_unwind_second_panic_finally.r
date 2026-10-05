@@ -1,4 +1,4 @@
-module test.codegen.abort_skips_finally;
+module test.codegen.unwind_second_panic_finally;
 
 i32 main() {
     i32 maximum = 2147483647;

@@ -25,3 +25,10 @@ std.secret::buffer sealing_key(str passphrase) throws std.alloc::alloc_error, st
     bytes key = std.crypto::hkdf_sha256("example.notary", std.secret::as_slice(&seed), "seal", 32usize);
     return std.secret::from_bytes(move key);
 }
+
+/* Another key of the passphrase: HKDF of the stretched seed under its own label. */
+std.secret::buffer derived(str passphrase, str label, usize length) throws std.alloc::alloc_error, std.crypto::crypto_error {
+    std.secret::buffer seed = stretched(passphrase);
+    bytes key = std.crypto::hkdf_sha256("example.notary", std.secret::as_slice(&seed), label, length);
+    return std.secret::from_bytes(move key);
+}

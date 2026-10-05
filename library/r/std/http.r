@@ -10,6 +10,7 @@ import std.service;
 import std.metrics;
 import std.time;
 import std.deflate;
+import std.console;
 
 /* R-SLIB-HTTP-0001: why a message could not be read, written or exchanged. */
 @derive(format)
@@ -239,11 +240,85 @@ o<str> request::param(const request* this, str name) {
     return o::none;
 }
 
+/* R-SLIB-HTTP-0016 (M42): the value of the cookie with the name in the Cookie fields of the
+   request: the first of the `name=value` pairs separated by `;` (RFC 6265 section 5.4) with that
+   name, without the double quotes around the value. */
+o<str> request::cookie(const request* this, str name) {
+    for (usize index = 0usize; index < len(this->headers.entries); index += 1usize) {
+        if (std.text::equal_ignore_ascii_case(this->headers.entries[index].name.as_str(), "Cookie") == false) {
+            continue;
+        }
+        for (str pair in std.text::split(this->headers.entries[index].value.as_str(), ";")) {
+            str item = std.text::trim(pair);
+            const u8[] bytes = item;
+            switch (std.bytes::find(bytes, 61u8)) {
+            case variant o::some(at):
+                if (std.bytes::equal(std.text::trim(piece(item, 0usize, *at)), name) == true) {
+                    str value = std.text::trim(piece(item, *at + 1usize, len(bytes)));
+                    const u8[] text = value;
+                    if (len(text) >= 2usize && text[0usize] == 34u8 && text[len(text) - 1usize] == 34u8) {
+                        return o::some(piece(value, 1usize, len(text) - 1usize));
+                    }
+                    return o::some(value);
+                }
+            case variant o::none: break;
+            }
+        }
+    }
+    return o::none;
+}
+
 /* R-SLIB-HTTP-0003: a response: its status code, header section and whole body. */
 struct response { u16 status; headers headers; bytes body; };
 
 response response::create(u16 status) {
     return response {.status = status, .headers = headers::create(), .body = {}};
+}
+
+/* R-SLIB-HTTP-0016 (M42): a cookie that a response sets, with the attributes of RFC 6265
+   section 4.1.2. */
+struct cookie {
+    std.string::string name;
+    std.string::string value;
+    o<std.string::string> path = o::none;
+    o<std.string::string> domain = o::none;
+    o<i64> max_age = o::none;
+    bool secure = false;
+    bool http_only = false;
+    o<std.string::string> same_site = o::none;
+};
+
+protected void append_attribute(std.string::string* line, str name, const (o<std.string::string>)* value)
+    throws std.alloc::alloc_error {
+    switch (*value) {
+    case variant o::some(text):
+        line->append("; ");
+        line->append(name);
+        line->append("=");
+        line->append(text->as_str());
+    case variant o::none: break;
+    }
+}
+
+/* R-SLIB-HTTP-0016 (M42): adds a Set-Cookie field for the cookie; its name shall be a token. */
+void response::set_cookie(response* this, const cookie* value) throws http_error, std.alloc::alloc_error {
+    throw (std.mime::is_token(value->name.as_str()) == false) failure(error_code::invalid_header);
+    std.string::string line = std.string::from_str(value->name.as_str());
+    line.append("=");
+    line.append(value->value.as_str());
+    append_attribute(&line, "Path", &value->path);
+    append_attribute(&line, "Domain", &value->domain);
+    switch (value->max_age) {
+    case variant o::some(seconds):
+        i64 count = *seconds;
+        std.string::string age = f"; Max-Age={count}";
+        line.append(age.as_str());
+    case variant o::none: break;
+    }
+    if (value->secure == true) { line.append("; Secure"); }
+    if (value->http_only == true) { line.append("; HttpOnly"); }
+    append_attribute(&line, "SameSite", &value->same_site);
+    this->headers.add("Set-Cookie", line.as_str());
 }
 
 /* One part of a streamed response: its head, then its chunks. */
@@ -1719,6 +1794,745 @@ async std.service::report serve_all(array<std.service::listener> listeners, std.
     async fn void adapter(arc shared<S> state, std.service::connection connection)
         throws std.error::fault {
         await serve_stream(move state, move connection);
+    }
+    return await std.service::serve_all(move listeners, settings, move stop, move status, move context, adapter);
+}
+
+/* ---- Applications: middleware, request contexts and isolated handlers (M42) ---- */
+
+/* One named text of the notes of a request. */
+protected struct note {
+    std.string::string name;
+    std.string::string value;
+};
+
+/* R-SLIB-HTTP-0015: named texts of one request, such as its identifier or the account that made
+   it, that its middleware and handlers write and that outlive a panic of its flow: the panic hook
+   of the application reads them. */
+struct notes {
+    protected arc std.sync::mutex<array<note>> entries;
+};
+
+protected notes notes_create() throws std.alloc::alloc_error {
+    array<note> none = std.array::create::<note>();
+    arc std.sync::mutex<array<note>> entries = new arc std.sync::mutex<array<note>>(std.sync::mutex_new(move none));
+    return notes {.entries = move entries};
+}
+
+protected notes notes_share(const notes* this) {
+    return notes {.entries = std.arc::clone(&this->entries)};
+}
+
+protected void put_note(array<note>* entries, str name, str value) throws std.alloc::alloc_error {
+    for (usize index = 0usize; index < len(*entries); index += 1usize) {
+        if (std.bytes::equal((*entries)[index].name.as_bytes(), name) == true) {
+            std.string::string old = core::replace(&(*entries)[index].value, std.string::from_str(value));
+            drop old;
+            return;
+        }
+    }
+    append(entries, note {.name = std.string::from_str(name), .value = std.string::from_str(value)});
+}
+
+/* R-SLIB-HTTP-0015: sets the text of a name, replacing the text it had. */
+void notes::set(const notes* this, str name, str value) throws std.alloc::alloc_error {
+    std.sync::lock_result<array<note>> locked = std.sync::lock(&*this->entries);
+    switch (move locked) {
+    case variant std.sync::lock_result::locked(move guard): put_note(std.sync::mutex_guard_mut(&guard), name, value);
+    case variant std.sync::lock_result::poisoned(move guard): put_note(std.sync::mutex_guard_mut(&guard), name, value);
+    case variant std.sync::lock_result::would_deadlock: break;
+    }
+}
+
+protected usize count_notes(const array<note>* entries) { return len(*entries); }
+
+/* R-SLIB-HTTP-0015: the number of names. */
+usize notes::count(const notes* this) {
+    std.sync::lock_result<array<note>> locked = std.sync::lock(&*this->entries);
+    switch (move locked) {
+    case variant std.sync::lock_result::locked(move guard): return count_notes(std.sync::mutex_guard_ref(&guard));
+    case variant std.sync::lock_result::poisoned(move guard): return count_notes(std.sync::mutex_guard_ref(&guard));
+    case variant std.sync::lock_result::would_deadlock: break;
+    }
+    return 0usize;
+}
+
+/* A copy of the name (part 0) or text (part 1) at an index, or none past the end. */
+protected o<std.string::string> note_part(const array<note>* entries, usize index, u32 part)
+    throws std.alloc::alloc_error {
+    if (index >= len(*entries)) { return o::none; }
+    if (part == 0u32) { return o::some(std.string::from_str((*entries)[index].name.as_str())); }
+    return o::some(std.string::from_str((*entries)[index].value.as_str()));
+}
+
+protected o<std.string::string> notes_part(const notes* this, usize index, u32 part) throws std.alloc::alloc_error {
+    std.sync::lock_result<array<note>> locked = std.sync::lock(&*this->entries);
+    switch (move locked) {
+    case variant std.sync::lock_result::locked(move guard): return note_part(std.sync::mutex_guard_ref(&guard), index, part);
+    case variant std.sync::lock_result::poisoned(move guard): return note_part(std.sync::mutex_guard_ref(&guard), index, part);
+    case variant std.sync::lock_result::would_deadlock: break;
+    }
+    return o::none;
+}
+
+/* R-SLIB-HTTP-0015: the name and the text at an index in the order the names were first set, or
+   none past the last. */
+o<std.string::string> notes::name_at(const notes* this, usize index) throws std.alloc::alloc_error {
+    return notes_part(this, index, 0u32);
+}
+
+o<std.string::string> notes::value_at(const notes* this, usize index) throws std.alloc::alloc_error {
+    return notes_part(this, index, 1u32);
+}
+
+/* R-SLIB-HTTP-0015: the text of a name, or none. */
+o<std.string::string> notes::get(const notes* this, str name) throws std.alloc::alloc_error {
+    usize total = this->count();
+    for (usize index = 0usize; index < total; index += 1usize) {
+        o<std.string::string> found = notes_part(this, index, 0u32);
+        switch (move found) {
+        case variant o::some(move named):
+            if (std.bytes::equal(named.as_bytes(), name) == true) { return notes_part(this, index, 1u32); }
+            drop named;
+        case variant o::none: break;
+        }
+    }
+    return o::none;
+}
+
+/* R-SLIB-HTTP-0015: one request on its way through an application: the request, the context
+   that the application made for it, its notes, the pattern of the route that received it, the
+   response and whether a stage has answered. */
+@generic<C: send & sync & unborrowed>
+struct flow {
+    request request;
+    C context;
+    notes notes;
+    std.string::string route;
+    response response;
+    bool answered;
+};
+
+/* R-SLIB-HTTP-0015: the flow with the response, answered. */
+@generic<C: send & sync & unborrowed>
+flow<C> flow<C>::with(flow<C> this, response value) {
+    response old = core::replace(&this.response, move value);
+    drop old;
+    this.answered = true;
+    return move this;
+}
+
+/* R-SLIB-HTTP-0015: a middleware of an application: the requests whose path lies under its
+   prefix pass its before hook on the way to the route and its after hook on the way back. */
+@generic<S: send & sync & unborrowed, C: send & sync & unborrowed>
+protected struct stage {
+    std.string::string prefix;
+    o<async fn(arc S, flow<C>) -> flow<C> throws(std.error::fault)> before;
+    o<async fn(arc S, flow<C>) -> flow<C> throws(std.error::fault)> after;
+};
+
+/* R-SLIB-HTTP-0015: a route of an application. */
+@generic<S: send & sync & unborrowed, C: send & sync & unborrowed>
+protected struct endpoint {
+    method method;
+    std.string::string pattern;
+    async fn(arc S, flow<C>) -> flow<C> throws(std.error::fault) handler;
+};
+
+/* R-SLIB-HTTP-0017: cross-origin resource sharing of an application: the origins it allows
+   (every origin when the list is empty), the methods and fields a preflight request may ask for
+   (when none, the ones it asks for), whether credentials are allowed and how long a client may
+   keep the answer of a preflight request. */
+struct cors_policy {
+    array<std.string::string> origins = [];
+    o<std.string::string> methods = o::none;
+    o<std.string::string> headers = o::none;
+    bool credentials = false;
+    u32 max_age = 600u32;
+};
+
+/* R-SLIB-HTTP-0015: an application with shared state S and a context C for each request. */
+@generic<S: send & sync & unborrowed, C: send & sync & unborrowed>
+struct app {
+    protected fn(const S*, const request*) -> C context;
+    protected array<endpoint<S, C>> endpoints;
+    protected array<stage<S, C>> stages;
+    protected o<cors_policy> cross_origin;
+    protected bool redirect_slash;
+    protected bool method_status;
+    protected o<fn(const S*, method, str, const notes*, const std.thread::panic_report*) -> void> panic_hook;
+};
+
+/* R-SLIB-HTTP-0015: an application whose requests get the context that context makes from the
+   state and the request. */
+@generic<S: send & sync & unborrowed, C: send & sync & unborrowed>
+app<S, C> app<S, C>::create(fn(const S*, const request*) -> C context) {
+    return app<S, C> {.context = context, .endpoints = std.array::create::<endpoint<S, C>>(),
+                      .stages = std.array::create::<stage<S, C>>(), .cross_origin = o::none,
+                      .redirect_slash = false, .method_status = true, .panic_hook = o::none};
+}
+
+protected void check_pattern(str pattern) throws http_error {
+    const u8[] bytes = pattern;
+    throw (len(bytes) == 0usize || bytes[0usize] != 47u8) failure(error_code::invalid_url);
+}
+
+/* R-SLIB-HTTP-0015: adds a route; among the routes whose pattern and method match a request
+   the most specific answers it, whatever the order of the calls. */
+@generic<S: send & sync & unborrowed, C: send & sync & unborrowed>
+void app<S, C>::route(app<S, C>* this, method value, str pattern,
+                      async fn(arc S, flow<C>) -> flow<C> throws(std.error::fault) handler)
+    throws http_error, std.alloc::alloc_error {
+    check_pattern(pattern);
+    append(&this->endpoints, endpoint<S, C> {.method = value, .pattern = std.string::from_str(pattern),
+                                             .handler = handler});
+}
+
+/* R-SLIB-HTTP-0015: adds a middleware with a before hook only. */
+@generic<S: send & sync & unborrowed, C: send & sync & unborrowed>
+void app<S, C>::before(app<S, C>* this, str prefix,
+                       async fn(arc S, flow<C>) -> flow<C> throws(std.error::fault) hook)
+    throws http_error, std.alloc::alloc_error {
+    check_pattern(prefix);
+    append(&this->stages, stage<S, C> {.prefix = std.string::from_str(prefix), .before = o::some(hook),
+                                       .after = o::none});
+}
+
+/* R-SLIB-HTTP-0015: adds a middleware with an after hook only. */
+@generic<S: send & sync & unborrowed, C: send & sync & unborrowed>
+void app<S, C>::after(app<S, C>* this, str prefix,
+                      async fn(arc S, flow<C>) -> flow<C> throws(std.error::fault) hook)
+    throws http_error, std.alloc::alloc_error {
+    check_pattern(prefix);
+    append(&this->stages, stage<S, C> {.prefix = std.string::from_str(prefix), .before = o::none,
+                                       .after = o::some(hook)});
+}
+
+/* R-SLIB-HTTP-0015: adds a middleware with both hooks. */
+@generic<S: send & sync & unborrowed, C: send & sync & unborrowed>
+void app<S, C>::around(app<S, C>* this, str prefix,
+                       async fn(arc S, flow<C>) -> flow<C> throws(std.error::fault) before,
+                       async fn(arc S, flow<C>) -> flow<C> throws(std.error::fault) after)
+    throws http_error, std.alloc::alloc_error {
+    check_pattern(prefix);
+    append(&this->stages, stage<S, C> {.prefix = std.string::from_str(prefix), .before = o::some(before),
+                                       .after = o::some(after)});
+}
+
+/* R-SLIB-HTTP-0017: answers the preflight requests of the policy and marks the responses to the
+   requests of its origins. */
+@generic<S: send & sync & unborrowed, C: send & sync & unborrowed>
+void app<S, C>::cors(app<S, C>* this, cors_policy policy) {
+    o<cors_policy> old = core::replace(&this->cross_origin, o::some(move policy));
+    drop old;
+}
+
+/* R-SLIB-HTTP-0018: a request whose path matches no route, but would with or without its final
+   '/', is redirected there: 301 for GET and HEAD, 308 for the other methods. */
+@generic<S: send & sync & unborrowed, C: send & sync & unborrowed>
+void app<S, C>::redirect_trailing_slash(app<S, C>* this, bool enabled) {
+    this->redirect_slash = enabled;
+}
+
+/* R-SLIB-HTTP-0018: whether a path that only routes of other methods match is answered with 405
+   and Allow (the default) or with 404. */
+@generic<S: send & sync & unborrowed, C: send & sync & unborrowed>
+void app<S, C>::method_not_allowed(app<S, C>* this, bool enabled) {
+    this->method_status = enabled;
+}
+
+/* R-SLIB-HTTP-0015: the hook that receives the report of a panic of the middleware or handler of
+   a request, with the state, the method, the target and the notes of the request, instead of the
+   standard error line. */
+@generic<S: send & sync & unborrowed, C: send & sync & unborrowed>
+void app<S, C>::on_panic(app<S, C>* this, fn(const S*, method, str, const notes*, const std.thread::panic_report*) -> void hook) {
+    o<fn(const S*, method, str, const notes*, const std.thread::panic_report*) -> void> old = core::replace(&this->panic_hook, o::some(hook));
+    old as void;
+}
+
+/* The kind of one segment of a pattern: 2 literal, 1 a parameter, 0 the final `*`. */
+protected u32 segment_kind(const u8[] segment) {
+    if (len(segment) == 1usize && segment[0usize] == 42u8) { return 0u32; }
+    if (len(segment) >= 2usize && segment[0usize] == 123u8 && segment[len(segment) - 1usize] == 125u8) {
+        return 1u32;
+    }
+    return 2u32;
+}
+
+/* Whether pattern left is more specific than right: at the first segment where they differ in
+   kind, a literal beats a parameter and a parameter beats `*`. */
+protected bool more_specific(str left, str right) {
+    const u8[] a = left;
+    const u8[] b = right;
+    usize i = 0usize;
+    usize j = 0usize;
+    while (i < len(a) && j < len(b)) {
+        usize end_a = segment_end(a, i + 1usize);
+        usize end_b = segment_end(b, j + 1usize);
+        u32 kind_a = segment_kind(a[i + 1usize..end_a]);
+        u32 kind_b = segment_kind(b[j + 1usize..end_b]);
+        if (kind_a != kind_b) { return kind_a > kind_b; }
+        i = end_a;
+        j = end_b;
+    }
+    return false;
+}
+
+/* The index of the most specific route whose pattern and method match the request, with its
+   captured parameters in captured; allowed collects the methods of the routes whose pattern
+   alone matches. */
+@generic<S: send & sync & unborrowed, C: send & sync & unborrowed>
+protected o<usize> find_endpoint(const app<S, C>* routes, const request* incoming,
+                                 array<param>* captured, std.string::string* allowed)
+    throws std.alloc::alloc_error {
+    method sent = incoming->method;
+    o<usize> best = o::none;
+    for (usize index = 0usize; index < len(routes->endpoints); index += 1usize) {
+        array<param> found = std.array::create::<param>();
+        if (match_path(routes->endpoints[index].pattern.as_str(), incoming->path(), &found) == false) {
+            continue;
+        }
+        method wanted = routes->endpoints[index].method;
+        if (wanted == sent || (sent == method::head && wanted == method::get)) {
+            bool better = true;
+            switch (best) {
+            case variant o::some(previous):
+                better = more_specific(routes->endpoints[index].pattern.as_str(),
+                                       routes->endpoints[*previous].pattern.as_str());
+            case variant o::none: break;
+            }
+            if (better == true) {
+                array<param> old = core::replace(captured, move found);
+                drop old;
+                best = o::some(index);
+            } else {
+                drop found;
+            }
+            continue;
+        }
+        if (std.text::contains(std.string::as_str(allowed), method_name(wanted)) == false) {
+            if (std.string::len(allowed) != 0usize) { std.string::append_str(allowed, ", "); }
+            std.string::append_str(allowed, method_name(wanted));
+        }
+    }
+    return best;
+}
+
+/* The path of the request with its final '/' removed or added, when a route of its method matches
+   that path. */
+@generic<S: send & sync & unborrowed, C: send & sync & unborrowed>
+protected o<std.string::string> slash_target(const app<S, C>* routes, const request* incoming)
+    throws std.alloc::alloc_error {
+    str path = incoming->path();
+    const u8[] bytes = path;
+    std.string::string other = std.string::create();
+    if (len(bytes) > 1usize && bytes[len(bytes) - 1usize] == 47u8) {
+        std.string::append_str(&other, piece(path, 0usize, len(bytes) - 1usize));
+    } else {
+        std.string::append_str(&other, path);
+        std.string::append_str(&other, "/");
+    }
+    request probe = request::create(incoming->method, other.as_str());
+    array<param> found = std.array::create::<param>();
+    std.string::string allowed = std.string::create();
+    o<usize> chosen = find_endpoint(routes, &probe, &found, &allowed);
+    drop found;
+    drop allowed;
+    drop probe;
+    switch (chosen) {
+    case variant o::some(index):
+        index as void;
+        switch (incoming->query()) {
+        case variant o::some(text):
+            std.string::append_str(&other, "?");
+            std.string::append_str(&other, *text);
+        case variant o::none: break;
+        }
+        return o::some(move other);
+    case variant o::none: break;
+    }
+    drop other;
+    return o::none;
+}
+
+/* Whether the path lies under the prefix: equal to it or below it at a '/'. */
+protected bool under_prefix(str prefix, str path) {
+    const u8[] p = prefix;
+    const u8[] q = path;
+    if (len(p) == 1usize) { return true; }
+    if (len(q) < len(p) || std.bytes::equal(q[0usize..len(p)], p) == false) { return false; }
+    return len(q) == len(p) || q[len(p)] == 47u8 || p[len(p) - 1usize] == 47u8;
+}
+
+/* The route of a request that no stage answered: the index of the most specific route, whose
+   parameters it then holds, or none and in miss the redirect of the trailing slash, 405 with
+   Allow or 404. */
+@generic<S: send & sync & unborrowed, C: send & sync & unborrowed>
+protected o<usize> choose_endpoint(const app<S, C>* routes, request* incoming, response* miss)
+    throws std.alloc::alloc_error {
+    array<param> captured = std.array::create::<param>();
+    std.string::string allowed = std.string::create();
+    o<usize> chosen = find_endpoint(routes, incoming, &captured, &allowed);
+    switch (chosen) {
+    case variant o::some(index):
+        array<param> old = core::replace(&incoming->params, move captured);
+        drop old;
+        drop allowed;
+        return o::some(*index);
+    case variant o::none: break;
+    }
+    drop captured;
+    if (routes->redirect_slash == true) {
+        o<std.string::string> moved = slash_target(routes, incoming);
+        switch (move moved) {
+        case variant o::some(move location):
+            u16 status = 308u16;
+            if (incoming->method == method::get || incoming->method == method::head) {
+                status = 301u16;
+            }
+            response redirect = response::text(status, reason(status));
+            try {
+                redirect.headers.add("Location", location.as_str());
+            } catch (http_error rejected) {
+                // A path of a request is a valid field value.
+                rejected as void;
+            }
+            response old = core::replace(miss, move redirect);
+            drop old;
+            drop allowed;
+            return o::none;
+        case variant o::none: break;
+        }
+    }
+    if (std.string::len(&allowed) != 0usize && routes->method_status == true) {
+        response refused = response::text(405u16, reason(405u16));
+        try {
+            refused.headers.add("Allow", allowed.as_str());
+        } catch (http_error rejected) {
+            // Method names are valid field values.
+            rejected as void;
+        }
+        response old = core::replace(miss, move refused);
+        drop old;
+        drop allowed;
+        return o::none;
+    }
+    drop allowed;
+    response old = core::replace(miss, response::text(404u16, reason(404u16)));
+    drop old;
+    return o::none;
+}
+
+/* The response of the application to a request: its before hooks in order, then the route, then
+   the after hooks of the middleware it passed in reverse order. A hook or handler that throws is
+   answered with 500. */
+@generic<S: send & sync & unborrowed, C: send & sync & unborrowed>
+@scoped
+protected async response run_flow(const app<S, C>* routes, arc S state, request incoming, notes noted) {
+    try {
+        auto make = routes->context;
+        C context = make(&*state, &incoming);
+        flow<C> current = flow<C> {.request = move incoming, .context = move context, .notes = move noted,
+                                   .route = std.string::create(), .response = response::create(200u16),
+                                   .answered = false};
+        array<bool> entered = std.array::create::<bool>();
+        for (usize index = 0usize; index < len(routes->stages); index += 1usize) {
+            bool matches = under_prefix(routes->stages[index].prefix.as_str(), current.request.path());
+            append(&entered, matches);
+            if (matches == false) { continue; }
+            switch (routes->stages[index].before) {
+            case variant o::some(hook):
+                auto chosen = *hook;
+                flow<C> next = await chosen(std.arc::clone(&state), move current);
+                current = move next;
+            case variant o::none: break;
+            }
+            if (current.answered == true) { break; }
+        }
+        if (current.answered == false) {
+            response miss = response::create(404u16);
+            o<usize> chosen = choose_endpoint(routes, &current.request, &miss);
+            switch (chosen) {
+            case variant o::some(index):
+                drop miss;
+                current.route.append(routes->endpoints[*index].pattern.as_str());
+                auto handler = routes->endpoints[*index].handler;
+                flow<C> handled = await handler(std.arc::clone(&state), move current);
+                current = move handled;
+            case variant o::none:
+                flow<C> missed = (move current).with(move miss);
+                current = move missed;
+            }
+        }
+        usize back = len(entered);
+        while (back > 0usize) {
+            back -= 1usize;
+            if (entered[back] == false) { continue; }
+            switch (routes->stages[back].after) {
+            case variant o::some(hook):
+                auto chosen = *hook;
+                flow<C> next = await chosen(std.arc::clone(&state), move current);
+                current = move next;
+            case variant o::none: break;
+            }
+        }
+        return match (move current) { case { .response = move result }: move result; };
+    } catch (std.error::fault rejected) {
+        rejected as void;
+    }
+    return response::create(500u16);
+}
+
+/* Whether the origin is one the policy allows. */
+protected bool origin_allowed(const cors_policy* policy, str origin) {
+    if (len(policy->origins) == 0usize) { return true; }
+    for (usize index = 0usize; index < len(policy->origins); index += 1usize) {
+        if (std.bytes::equal(policy->origins[index].as_bytes(), origin) == true) { return true; }
+    }
+    return false;
+}
+
+/* R-SLIB-HTTP-0017: the fields of a response to a request from an allowed origin. */
+protected void mark_origin(const cors_policy* policy, str origin, response* result)
+    throws std.alloc::alloc_error {
+    try {
+        if (len(policy->origins) == 0usize && policy->credentials == false) {
+            result->headers.set("Access-Control-Allow-Origin", "*");
+        } else {
+            result->headers.set("Access-Control-Allow-Origin", origin);
+            result->headers.add("Vary", "Origin");
+        }
+        if (policy->credentials == true) {
+            result->headers.set("Access-Control-Allow-Credentials", "true");
+        }
+    } catch (http_error rejected) {
+        // The origin comes from a valid field value.
+        rejected as void;
+    }
+}
+
+/* R-SLIB-HTTP-0017: the answer to a preflight request: OPTIONS with Origin and
+   Access-Control-Request-Method, 204 with the allowed methods and fields for an allowed origin
+   and 403 for another one. */
+protected o<response> preflight(const (o<cors_policy>)* configured, const request* incoming)
+    throws std.alloc::alloc_error {
+    if (incoming->method != method::options) { return o::none; }
+    switch (*configured) {
+    case variant o::some(policy):
+        o<str> origin = incoming->headers.get("Origin");
+        switch (origin) {
+        case variant o::some(from):
+            o<str> asked = incoming->headers.get("Access-Control-Request-Method");
+            switch (asked) {
+            case variant o::some(wanted):
+                if (origin_allowed(&*policy, *from) == false) {
+                    return o::some(response::text(403u16, reason(403u16)));
+                }
+                response answer = response::create(204u16);
+                mark_origin(&*policy, *from, &answer);
+                try {
+                    switch (policy->methods) {
+                    case variant o::some(listed): answer.headers.set("Access-Control-Allow-Methods", listed->as_str());
+                    case variant o::none: answer.headers.set("Access-Control-Allow-Methods", *wanted);
+                    }
+                    switch (policy->headers) {
+                    case variant o::some(listed): answer.headers.set("Access-Control-Allow-Headers", listed->as_str());
+                    case variant o::none:
+                        switch (incoming->headers.get("Access-Control-Request-Headers")) {
+                        case variant o::some(fields): answer.headers.set("Access-Control-Allow-Headers", *fields);
+                        case variant o::none: break;
+                        }
+                    }
+                    u32 age = policy->max_age;
+                    std.string::string seconds = f"{age}";
+                    answer.headers.set("Access-Control-Max-Age", seconds.as_str());
+                } catch (http_error rejected) {
+                    // The values come from the policy and from valid field values.
+                    rejected as void;
+                }
+                return o::some(move answer);
+            case variant o::none: return o::none;
+            }
+        case variant o::none: return o::none;
+        }
+    case variant o::none: return o::none;
+    }
+    return o::none;
+}
+
+/* R-SLIB-HTTP-0015: the response of the application to a request: the preflight answer of its
+   CORS policy, or the flow of the request, run as a task of its own whose panic is answered with
+   500 and reported to the panic hook of the application or as a line on standard error; then the
+   CORS fields for an allowed origin. */
+@generic<S: send & sync & unborrowed, C: send & sync & unborrowed>
+@scoped
+async response app<S, C>::dispatch(const app<S, C>* this, arc S state, request incoming)
+    throws std.error::fault {
+    std.string::string origin = std.string::create();
+    bool has_origin = false;
+    switch (incoming.headers.get("Origin")) {
+    case variant o::some(from):
+        std.string::append_str(&origin, *from);
+        has_origin = true;
+    case variant o::none: break;
+    }
+    o<response> early = preflight(&this->cross_origin, &incoming);
+    switch (move early) {
+    case variant o::some(move answer):
+        drop incoming;
+        drop state;
+        drop origin;
+        return move answer;
+    case variant o::none: break;
+    }
+    method sent = incoming.method;
+    std.string::string target = std.string::from_str(incoming.target.as_str());
+    arc S kept = std.arc::clone(&state);
+    notes noted = notes_create();
+    notes shared_notes = notes_share(&noted);
+    o<response> produced = o::none;
+    o<std.thread::panic_report> crash = o::none;
+    task_scope(1) chain {
+        auto flowing = run_flow(this, move state, move incoming, move shared_notes);
+        std.thread::join_result<response> joined = await std.async::join(move flowing);
+        switch (move joined) {
+        case variant std.thread::join_result::returned(move value):
+            o<response> old = core::replace(&produced, o::some(move value));
+            drop old;
+        case variant std.thread::join_result::panicked(move report):
+            o<std.thread::panic_report> old = core::replace(&crash, o::some(move report));
+            drop old;
+        }
+    }
+    response result = response::create(500u16);
+    switch (move produced) {
+    case variant o::some(move value):
+        response old = core::replace(&result, move value);
+        drop old;
+    case variant o::none: break;
+    }
+    switch (move crash) {
+    case variant o::some(move report):
+        response old = core::replace(&result, response::text(500u16, reason(500u16)));
+        drop old;
+        switch (this->panic_hook) {
+        case variant o::some(hook):
+            auto chosen = *hook;
+            chosen(&*kept, sent, target.as_str(), &noted, &report);
+        case variant o::none:
+            constexpr str category = std.thread::panic_category(&report);
+            str text = std.thread::panic_text(&report);
+            str verb = method_name(sent);
+            str where = target.as_str();
+            std.string::string line = f"R panic: {category} in {verb} {where}";
+            if (len(text) != 0usize) {
+                std.string::append_str(&line, ": ");
+                std.string::append_str(&line, text);
+            }
+            await std.console::eprintln(move line);
+        }
+        drop report;
+    case variant o::none: break;
+    }
+    drop target;
+    drop kept;
+    drop noted;
+    if (has_origin == true) {
+        switch (this->cross_origin) {
+        case variant o::some(policy):
+            if (origin_allowed(&*policy, origin.as_str()) == true) {
+                mark_origin(&*policy, origin.as_str(), &result);
+            }
+        case variant o::none: break;
+        }
+    }
+    drop origin;
+    return move result;
+}
+
+/* What a server of an application keeps for all its connections. */
+@generic<S: send & sync & unborrowed, C: send & sync & unborrowed>
+protected struct app_shared {
+    arc S state;
+    app<S, C> routes;
+    limits bounds;
+};
+
+/* Serves one request of a connection with an application and returns whether the connection
+   stays open. */
+@generic<S: send & sync & unborrowed, C: send & sync & unborrowed, T: std.stream::Stream & unborrowed>
+@scoped
+protected async bool app_exchange(std.bufio::reader<T>* input, arc app_shared<S, C> context)
+    throws std.error::fault {
+    limits bounds = context->bounds;
+    o<request> received = o::none;
+    try {
+        std.time::instant now = std.time::monotonic_now();
+        std.time::instant limit = now.add(bounds.request_timeout);
+        deadline (limit) {
+            task_scope(1) io {
+                o<request> read = await read_request(input, &bounds);
+                switch (move read) {
+                case variant o::some(move value): received = o::some(move value);
+                case variant o::none: break;
+                }
+            }
+        }
+    } catch (http_error rejected) {
+        response refusal = error_response(rejected.code);
+        task_scope(1) io {
+            await write_response(&input->source, &refusal, false, true);
+            await linger(input);
+        }
+        return false;
+    } catch (std.error::fault rejected) {
+        // The client ended the connection or did not send a request in time.
+        rejected as void;
+        return false;
+    }
+    switch (move received) {
+    case variant o::none: return false;
+    case variant o::some(move incoming):
+        bool wanted = keeps_alive(&incoming);
+        bool head = incoming.method == method::head;
+        task_scope(1) io {
+            response result = await context->routes.dispatch(std.arc::clone(&context->state), move incoming);
+            add_date(&result.headers);
+            return await write_plain(input, move result, head, wanted);
+        }
+    }
+    return false;
+}
+
+/* Serves the requests of one connection with an application until it closes. */
+@generic<S: send & sync & unborrowed, C: send & sync & unborrowed, T: std.stream::Stream & unborrowed>
+protected async void serve_app_stream(arc app_shared<S, C> context, T transport) throws std.error::fault {
+    std.bufio::reader<T> input =
+        std.bufio::reader<T>::create(move transport, context->bounds.max_head);
+    bool open = true;
+    while (open == true) {
+        task_scope(1) io {
+            bool more = await app_exchange(&input, std.arc::clone(&context));
+            if (more == false) { open = false; }
+        }
+    }
+    drop input;
+    drop context;
+}
+
+/* R-SLIB-HTTP-0015: serves an application on every listener of std.service::serve_all, as
+   serve_all does a router: TCP, Unix-domain sockets and TLS, with the idle timeout, the signals
+   and the health of that service. */
+@generic<S: send & sync & unborrowed, C: send & sync & unborrowed>
+async std.service::report serve_app(array<std.service::listener> listeners, std.service::options settings,
+                                    std.sync::receiver<std.service::stop> stop, std.service::health status,
+                                    arc S state, app<S, C> routes, limits bounds)
+    throws std.async::start_error, std.net::net_error, std.process::process_error, std.alloc::alloc_error {
+    arc app_shared<S, C> context = new arc app_shared<S, C> {.state = move state, .routes = move routes,
+                                                             .bounds = bounds};
+    async fn void adapter(arc app_shared<S, C> state, std.service::connection connection)
+        throws std.error::fault {
+        await serve_app_stream(move state, move connection);
     }
     return await std.service::serve_all(move listeners, settings, move stop, move status, move context, adapter);
 }

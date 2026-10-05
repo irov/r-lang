@@ -30,6 +30,11 @@ struct RStdThreadDescriptor {
     _Bool scoped;
     _Bool payload_initialized;
     _Bool result_initialized;
+    /* R-ERR-0009: the report of a panic that reached the root, until join takes it or the
+       last observer delivers it to the panic hook. */
+    _Bool panicked;
+    _Bool panic_delivered;
+    RRuntimePanicReportData panic;
 };
 
 static RStdThreadDescriptor r_library_thread_main_descriptor = {
@@ -257,6 +262,8 @@ static RStdThreadDescriptor *current_descriptor(void) {
 
 static void *thread_entry(void *context) {
     RStdThreadDescriptor *descriptor = context;
+    _Bool panicked;
+    _Bool deliver;
 
     if (!r_runtime_stack_initialize_current_thread()) {
         r_runtime_panic(R_RUNTIME_PANIC_STACK_EXHAUSTION,
@@ -275,20 +282,45 @@ static void *thread_entry(void *context) {
     r_runtime_stack_require(R_RUNTIME_GENERATED_FRAME_MAX_BYTES,
                             (RRuntimeSourceSpan){UINT32_C(0), UINT32_C(0), UINT32_C(0)});
     descriptor->entry(descriptor->payload, descriptor->result);
+    /* R-ERR-0009: a panic that reached the root ends the thread after its thread-local and
+       payload drops, which run as unwind cleanup; one that begins in those drops after a normal
+       return drops the staged result and becomes the outcome instead. */
+    panicked = r_runtime_unwinding();
+    if (panicked) {
+        r_runtime_unwind_cleanup_enter();
+    }
     r_runtime_thread_local_cleanup_current();
     if (descriptor->payload_initialized) {
         descriptor->payload_initialized = 0;
         drop_value(descriptor->payload_type, descriptor->payload);
     }
+    if (panicked) {
+        r_runtime_unwind_cleanup_leave();
+    } else if (r_runtime_unwinding()) {
+        panicked = 1;
+        r_runtime_unwind_cleanup_enter();
+        drop_value(descriptor->completion_type.storage_type, descriptor->result);
+        r_runtime_unwind_cleanup_leave();
+    }
+    if (panicked) {
+        (void)r_runtime_panic_take(&descriptor->panic);
+    }
 
     descriptor_lock(descriptor);
-    descriptor->result_initialized = descriptor->completion_type.storage_type.size != 0U;
+    descriptor->result_initialized =
+        !panicked && (descriptor->completion_type.storage_type.size != 0U);
+    descriptor->panicked = panicked;
+    deliver = panicked && !descriptor->observer_attached;
+    descriptor->panic_delivered = deliver;
     descriptor->exited = 1;
     if (pthread_cond_broadcast(&descriptor->condition) != 0) {
         descriptor_unlock(descriptor);
         r_library_internal_thread_contract_violation();
     }
     descriptor_unlock(descriptor);
+    if (deliver) {
+        r_runtime_panic_deliver(&descriptor->panic);
+    }
     r_library_thread_current_descriptor = NULL;
     descriptor_release_reference(descriptor);
     r_runtime_thread_local_cleanup_current();
@@ -523,7 +555,10 @@ RStdThreadJoinResult r_library_internal_thread_join(RStdThreadJoinHandle *handle
     descriptor->observer_attached = 0;
     handle->descriptor = NULL;
     result.completion_type = descriptor->completion_type;
-    if (descriptor->completion_type.storage_type.size == 0U) {
+    if (descriptor->panicked) {
+        result.kind = R_STD_THREAD_JOIN_PANICKED;
+        r_library_internal_thread_panic_report_from(&result.panic, &descriptor->panic);
+    } else if (descriptor->completion_type.storage_type.size == 0U) {
         result.kind = R_STD_THREAD_JOIN_COMPLETED;
     } else {
         result.kind = R_STD_THREAD_JOIN_RETURNED;
@@ -540,6 +575,7 @@ RStdThreadJoinResult r_library_internal_thread_join(RStdThreadJoinHandle *handle
 
 void r_library_internal_thread_detach(RStdThreadJoinHandle *handle) {
     RStdThreadDescriptor *descriptor;
+    _Bool deliver;
 
     descriptor = handle->descriptor;
     descriptor_lock(descriptor);
@@ -549,7 +585,12 @@ void r_library_internal_thread_detach(RStdThreadJoinHandle *handle) {
     }
     descriptor->observer_attached = 0;
     handle->descriptor = NULL;
+    deliver = descriptor->panicked && !descriptor->panic_delivered;
+    descriptor->panic_delivered = descriptor->panic_delivered || deliver;
     descriptor_unlock(descriptor);
+    if (deliver) {
+        r_runtime_panic_deliver(&descriptor->panic);
+    }
     descriptor_release_reference(descriptor);
 }
 
@@ -564,6 +605,46 @@ void r_library_internal_thread_identity_destroy(RStdThread *thread) {
     descriptor_release_reference(descriptor);
 }
 
+/*
+ * R-MEM-0016 (L39): the panic of a scoped thread that its scope joins without observing it. While
+ * the parent unwinds, the report goes to the panic hook. Otherwise the first one, in the reverse
+ * spawn order of the scope's drops, begins a scoped_thread_panic in the parent, whose text names
+ * the category and text of the child; each later one finds that panic pending and goes to the
+ * hook. The drop returns, and the generated code leaves through its panic exit.
+ */
+static void scoped_thread_panic(const RRuntimePanicReportData *child) {
+    const char *category;
+    uint8_t text[R_RUNTIME_PANIC_TEXT_CAPACITY];
+    size_t length = 0U;
+    uint32_t index;
+
+    if (r_runtime_panicking()) {
+        r_runtime_panic_deliver(child);
+        return;
+    }
+    category = r_runtime_panic_category_name(child->category);
+    while ((category[length] != '\0') && (length < sizeof(text))) {
+        text[length] = (uint8_t)category[length];
+        length += 1U;
+    }
+    if ((child->text_length != 0U) && (length + 2U <= sizeof(text))) {
+        text[length] = (uint8_t)':';
+        text[length + 1U] = (uint8_t)' ';
+        length += 2U;
+        for (index = 0U; (index < child->text_length) && (length < sizeof(text)); ++index) {
+            text[length] = (uint8_t)child->text[index];
+            length += 1U;
+        }
+        /* A cut text stays valid UTF-8: it ends before the scalar that did not fit. */
+        while ((index < child->text_length) && (index != 0U) &&
+               (((uint8_t)child->text[index] & 0xC0U) == 0x80U)) {
+            index -= 1U;
+            length -= 1U;
+        }
+    }
+    r_runtime_raise_text(R_RUNTIME_PANIC_SCOPED_THREAD_PANIC, child->span, text, length);
+}
+
 void r_library_internal_thread_handle_destroy(RStdThreadJoinHandle *handle) {
     RStdThreadDescriptor *descriptor;
     _Bool scoped;
@@ -576,8 +657,15 @@ void r_library_internal_thread_handle_destroy(RStdThreadJoinHandle *handle) {
     scoped = descriptor->scoped;
     descriptor_unlock(descriptor);
     if (scoped) {
-        RStdThreadJoinResult result = r_library_internal_thread_join(handle);
+        RStdThreadJoinResult result;
+
+        descriptor_add_reference(descriptor);
+        result = r_library_internal_thread_join(handle);
+        if (result.kind == R_STD_THREAD_JOIN_PANICKED) {
+            scoped_thread_panic(&descriptor->panic);
+        }
         r_library_internal_thread_join_result_destroy(&result);
+        descriptor_release_reference(descriptor);
     } else {
         r_library_internal_thread_detach(handle);
     }
@@ -595,6 +683,31 @@ void r_library_internal_thread_join_result_destroy(RStdThreadJoinResult *result)
         r_library_internal_thread_panic_report_destroy(&result->panic);
     }
     (void)memset(result, 0, sizeof(*result));
+}
+
+void r_library_internal_thread_panic_report_from(RStdThreadPanicReport *report,
+                                                 const RRuntimePanicReportData *data) {
+    RRuntimeAllocator *allocator = r_runtime_hosted_allocator();
+
+    /* The text is diagnostic only (R-LIB-0013): without memory for it the report keeps its
+       category and an empty text. */
+    report->category = data->category;
+    report->text = (RRuntimeString){0};
+    if ((allocator == NULL) ||
+        (r_runtime_string_from_valid_utf8(
+             &report->text, allocator, (const uint8_t *)data->text, data->text_length) !=
+         R_RUNTIME_STRING_OK)) {
+        report->text = (RRuntimeString){0};
+    }
+}
+
+void r_library_internal_thread_panic_report_take(RStdThreadPanicReport *report) {
+    RRuntimePanicReportData data;
+
+    if (!r_runtime_panic_take(&data)) {
+        r_library_internal_thread_contract_violation();
+    }
+    r_library_internal_thread_panic_report_from(report, &data);
 }
 
 void r_library_internal_thread_panic_report_destroy(RStdThreadPanicReport *report) {

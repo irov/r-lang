@@ -1185,6 +1185,21 @@ DARWIN_STACK_CONTRACT = {
 FREESTANDING_PROFILE = "freestanding"
 HOSTED_MANIFEST_PATH = Path("targets/arm64-apple-darwin.hosted-native-async.json")
 
+# L39 (Core R-ERR-0005, R-IDB-005): the hosted target unwinds by explicit propagation.
+HOSTED_PANIC_CONTRACT = {
+    "strategy": "unwind",
+    "propagation": (
+        "a per-thread panic state tested after calls and panic sites; no native exception "
+        "unwinding and no setjmp/longjmp"
+    ),
+    "runtime_panics": "a panic inside runtime or library C code aborts (R-ERR-0006)",
+    "unobserved_reports": (
+        "delivered once to the panic hook, which writes the report line to the diagnostic sink"
+    ),
+    "diagnostic_sink": "file descriptor 2 through allocation-free write",
+    "stack_exhaustion": "allocation-free panic followed by abort",
+}
+
 FREESTANDING_PANIC_CONTRACT = {
     "strategy": "environment-handler",
     "handler": "r_runtime_environment_panic",
@@ -2539,7 +2554,7 @@ def validate_freestanding_manifest(
             "freestanding minimum OS version must match the hosted target",
         )
     errors.require(manifest.get("schema") == "r-target-manifest-0.1", "wrong manifest schema")
-    errors.require(manifest.get("manifest_revision") == 9, "target manifest revision must be 9")
+    errors.require(manifest.get("manifest_revision") == 10, "target manifest revision must be 10")
     errors.require(
         manifest.get("status") == "draft-implementation-contract",
         "freestanding target must remain a draft implementation contract",
@@ -2617,7 +2632,7 @@ def validate_freestanding_manifest(
         return 1
     print(
         "target manifest valid: arm64-apple-darwin freestanding, "
-        "496 Core rules, 440 Library rules, environment panic handler, "
+        "496 Core rules, 476 Library rules, environment panic handler, "
         "environment stack bounds, no allocator"
     )
     return 0
@@ -2656,7 +2671,7 @@ def main() -> int:
             library_specification,
             library_inventory_path,
             LIBRARY_REQUIRED_RULES,
-            440,
+            476,
             errors,
         )
         identity = manifest.get("identity")
@@ -2680,8 +2695,8 @@ def main() -> int:
             )
         errors.require(manifest.get("schema") == "r-target-manifest-0.1", "wrong manifest schema")
         errors.require(
-            manifest.get("manifest_revision") == 9,
-            "target manifest revision must be 9",
+            manifest.get("manifest_revision") == 10,
+            "target manifest revision must be 10",
         )
         errors.require(
             manifest.get("status") == "draft-implementation-contract",
@@ -2740,8 +2755,12 @@ def main() -> int:
             )
             panic = core.get("panic")
             errors.require(
-                isinstance(panic, dict) and panic.get("strategy") == "abort",
-                "first target panic strategy must be abort",
+                isinstance(panic, dict) and panic.get("strategy") == "unwind",
+                "first target panic strategy must be unwind",
+            )
+            errors.require(
+                panic == HOSTED_PANIC_CONTRACT,
+                "hosted panic contract is not closed",
             )
             errors.require(
                 core.get("stack") == DARWIN_STACK_CONTRACT,
@@ -2779,7 +2798,7 @@ def main() -> int:
             return 1
         print(
             "target manifest valid: arm64-apple-darwin hosted-native-async, "
-            "496 Core rules, 440 Library rules, 4 filesystem-lane threads, "
+            "496 Core rules, 476 Library rules, 4 filesystem-lane threads, "
             "4 blocking-pool threads, 262144-byte generated-frame ceiling"
         )
         return 0

@@ -164,6 +164,37 @@ static void budget_outer_body(RRuntimeTaskExecution *execution, void *payload, v
     report->failures = failures;
 }
 
+/* The worker that ran the budgeted child waits here after the end of the child is published,
+   before the executor releases the child, until the test has looked at the budget (M42-3). */
+static pthread_mutex_t budget_end_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t budget_end_condition = PTHREAD_COND_INITIALIZER;
+static _Bool budget_end_reached;
+static _Bool budget_end_released;
+
+static void budget_end_pause(void) {
+    if (pthread_mutex_lock(&budget_end_mutex) != 0) {
+        abort();
+    }
+    budget_end_reached = 1;
+    (void)pthread_cond_broadcast(&budget_end_condition);
+    while (!budget_end_released) {
+        if (pthread_cond_wait(&budget_end_condition, &budget_end_mutex) != 0) {
+            abort();
+        }
+    }
+    (void)pthread_mutex_unlock(&budget_end_mutex);
+}
+
+static void budget_end_release(void) {
+    r_runtime_darwin_task_testing_after_end(NULL);
+    if (pthread_mutex_lock(&budget_end_mutex) != 0) {
+        abort();
+    }
+    budget_end_released = 1;
+    (void)pthread_cond_broadcast(&budget_end_condition);
+    (void)pthread_mutex_unlock(&budget_end_mutex);
+}
+
 static _Bool test_task_budget(RRuntimeAllocator *allocator) {
     const RRuntimeTypeInfo payload_type = {sizeof(RTaskBudgetTestPayload),
                                            _Alignof(RTaskBudgetTestPayload),
@@ -187,6 +218,9 @@ static _Bool test_task_budget(RRuntimeAllocator *allocator) {
     R_TASK_TEST_REQUIRE(r_runtime_executor_lifecycle_start(allocator) ==
                             R_RUNTIME_EXECUTOR_START_OK,
                         "budget executor start failed");
+    budget_end_reached = 0;
+    budget_end_released = 0;
+    r_runtime_darwin_task_testing_after_end(budget_end_pause);
     prepared = r_runtime_task_start_prepare(payload_type, result_type, budget_outer_body);
     R_TASK_TEST_REQUIRE(prepared.status == R_RUNTIME_TASK_START_OK, "budget prepare failed");
     started = r_runtime_task_start_commit(&prepared.transaction, &payload);
@@ -199,10 +233,15 @@ static _Bool test_task_budget(RRuntimeAllocator *allocator) {
                         "budget child await failed");
     R_TASK_TEST_REQUIRE(budget_of_block != NULL && budget_of_child == budget_of_block,
                         "a child did not receive the budget of its starting task");
-    R_TASK_TEST_REQUIRE(r_runtime_budget_tasks_used(budget_of_block) == 0U &&
-                            r_runtime_budget_bytes_used(budget_of_block) == 0U,
-                        "a destroyed child kept its task or bytes charged");
-    r_runtime_budget_release(budget_of_block);
+    /* A task counts until its await completes, also while the worker that ran it still holds it
+       (M42-3); its bytes stay charged until its storage is released, by the awaiter or by that
+       worker, which the executor stop waits for. */
+    R_TASK_TEST_REQUIRE(r_runtime_budget_tasks_used(budget_of_block) == 0U,
+                        "an awaited child still counted under its budget");
+    budget_end_release();
     R_TASK_TEST_REQUIRE(r_runtime_executor_lifecycle_stop(), "budget executor did not stop");
+    R_TASK_TEST_REQUIRE(r_runtime_budget_bytes_used(budget_of_block) == 0U,
+                        "a released child kept its bytes charged");
+    r_runtime_budget_release(budget_of_block);
     return 1;
 }

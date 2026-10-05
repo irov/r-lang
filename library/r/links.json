@@ -137,7 +137,8 @@
       "abi_record_roots": [],
       "library_version": "0.1",
       "dependencies": [
-        "sodium"
+        "sodium",
+        "mbedtls"
       ],
       "feature_test_definitions": [],
       "symbols": [
@@ -223,6 +224,66 @@
         },
         {
           "c_identifier": "r_std_crypto_native_random",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_pk_ready",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_ecdsa_generate",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_ecdsa_public",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_ecdsa_check",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_ecdsa_sign",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_ecdsa_verify",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_rsa_generate",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_rsa_check_private",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_rsa_check_public",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_rsa_sign",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_rsa_verify",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_crypto_native_cbc",
           "kind": "function",
           "binding": "strong"
         }
@@ -408,6 +469,44 @@
       "symbols": [
         {
           "c_identifier": "r_std_alloc_native_usage",
+          "kind": "function",
+          "binding": "strong"
+        }
+      ]
+    },
+    {
+      "logical_name": "std.log.native",
+      "available": true,
+      "kind": "static",
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "library/native/log",
+      "link_artifact_identity": "r_std_log_native",
+      "header_roots": [
+        "library/native/log/include"
+      ],
+      "abi_record_roots": [],
+      "library_version": "0.1",
+      "dependencies": [],
+      "feature_test_definitions": [],
+      "symbols": [
+        {
+          "c_identifier": "r_std_log_native_listen",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_log_native_take",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_log_native_dropped",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_log_native_stop",
           "kind": "function",
           "binding": "strong"
         }

@@ -35,7 +35,10 @@ typedef struct RRuntimeTaskScope {
 typedef enum RRuntimeTaskStepStatus {
     R_RUNTIME_TASK_STEP_COMPLETED = 0,
     R_RUNTIME_TASK_STEP_SUSPENDED,
-    R_RUNTIME_TASK_STEP_CANCELLED
+    R_RUNTIME_TASK_STEP_CANCELLED,
+    /* Core R-ERR-0005 (L39): the step ran its finalies for a panic that is pending on this
+       thread and initialized no result; the runtime drops the frame and keeps the report. */
+    R_RUNTIME_TASK_STEP_PANICKED
 } RRuntimeTaskStepStatus;
 
 /*
@@ -109,14 +112,17 @@ typedef enum RRuntimeTaskAwaitStatus {
     R_RUNTIME_TASK_AWAIT_OK = 0,
     R_RUNTIME_TASK_AWAIT_INVALID,
     R_RUNTIME_TASK_AWAIT_CANCELLED,
-    R_RUNTIME_TASK_AWAIT_WOULD_BLOCK
+    R_RUNTIME_TASK_AWAIT_WOULD_BLOCK,
+    /* Core R-FUNC-0012: the task panicked; its panic is now pending on the awaiting thread. */
+    R_RUNTIME_TASK_AWAIT_PANICKED
 } RRuntimeTaskAwaitStatus;
 
 typedef enum RRuntimeTaskExecutionAwaitStatus {
     R_RUNTIME_TASK_EXECUTION_AWAIT_OK = 0,
     R_RUNTIME_TASK_EXECUTION_AWAIT_INVALID,
     R_RUNTIME_TASK_EXECUTION_AWAIT_CANCELLED,
-    R_RUNTIME_TASK_EXECUTION_AWAIT_SUSPENDED
+    R_RUNTIME_TASK_EXECUTION_AWAIT_SUSPENDED,
+    R_RUNTIME_TASK_EXECUTION_AWAIT_PANICKED
 } RRuntimeTaskExecutionAwaitStatus;
 
 typedef struct RRuntimeTaskPrepareResult {
@@ -262,6 +268,14 @@ RRuntimeTaskAwaitStatus r_runtime_task_await(RRuntimeTask **task, void *result_s
  * suspended until that task publishes terminal acknowledgement, then resumes exactly once for
  * generated finally cleanup. A linked awaited task retains the parent until terminal publication.
  */
+/*
+ * Core R-ERR-0005 (L39): an async step parks the pending panic of its thread in its task before
+ * it runs its finalies, which may suspend, and unparks it before it returns
+ * R_RUNTIME_TASK_STEP_PANICKED. Parking a second panic aborts (R-ERR-0008).
+ */
+void r_runtime_task_panic_park(RRuntimeTaskExecution *execution);
+void r_runtime_task_panic_unpark(RRuntimeTaskExecution *execution);
+
 RRuntimeTaskExecutionAwaitStatus r_runtime_task_execution_await(RRuntimeTaskExecution *execution,
                                                                 RRuntimeTask **task,
                                                                 void *result_storage);
@@ -428,6 +442,10 @@ _Bool r_runtime_task_external_try_select_completion_at(RRuntimeTaskExternalExecu
  */
 _Bool r_runtime_task_external_select_terminal_completion(RRuntimeTaskExternalExecution *execution);
 void r_runtime_task_external_acknowledge(RRuntimeTaskExternalExecution *execution);
+/* L39: acknowledges a task whose native work returned with the panic of report (R-ERR-0009). */
+struct RRuntimePanicReportData;
+void r_runtime_task_external_acknowledge_panic(RRuntimeTaskExternalExecution *execution,
+                                               const struct RRuntimePanicReportData *report);
 _Bool r_runtime_task_external_cancel_requested(const RRuntimeTaskExternalExecution *execution);
 
 /* Returns the original cancellation candidate sequence, or zero iff none was ever selected. */
@@ -475,6 +493,12 @@ _Bool r_runtime_blocking_withdraw(RRuntimeBlockingJob *job);
 /* Refuses new reservations, lets the threads drain the queue and joins them; on a pool thread,
    which exits the process, it only refuses reservations. */
 void r_runtime_blocking_stop(void);
+
+#if defined(R_RUNTIME_DARWIN_TASK_TESTING)
+/* Testing: hook runs once on the worker that executed a task with a budget, after the end of the
+   task is published and before the executor releases the task (M42-3); NULL disarms it. */
+void r_runtime_darwin_task_testing_after_end(void (*hook)(void));
+#endif
 
 #ifdef __cplusplus
 }

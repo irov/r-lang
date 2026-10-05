@@ -177,6 +177,12 @@ r_json_read_step(RRuntimeTaskExecution *execution, void *payload, void *result) 
                 r_runtime_task_execution_await(execution, &frame->child, state->read_storage);
             if (awaited == R_RUNTIME_TASK_EXECUTION_AWAIT_SUSPENDED)
                 return R_RUNTIME_TASK_STEP_SUSPENDED;
+            if (awaited == R_RUNTIME_TASK_EXECUTION_AWAIT_PANICKED) {
+                /* Core R-FUNC-0012: the read panicked; its panic is pending on this thread and
+                   ends this task as well. */
+                r_json_read_abandon(frame);
+                return R_RUNTIME_TASK_STEP_PANICKED;
+            }
             if (awaited != R_RUNTIME_TASK_EXECUTION_AWAIT_OK) {
                 r_json_read_abandon(frame);
                 return R_RUNTIME_TASK_STEP_CANCELLED;

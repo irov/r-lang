@@ -407,6 +407,7 @@ static const RStandardResultDescriptor r_standard_results[] = {
     {"std.async::clone_rw_lock", "std.async::rw_lock<T>"},
     {"std.async::clone_semaphore", "std.async::semaphore"},
     {"std.async::detach", "void"},
+    {"std.async::join", "std.thread::join_result<T>"},
     {"std.async::lock", "task<std.async::mutex_guard<T>>"},
     {"std.async::mutex_guard_mut", "T*"},
     {"std.async::mutex_guard_ref", "const T*"},

@@ -5,8 +5,10 @@ import std.tls;
 import std.pool;
 import std.text;
 import std.postgres;
+import std.time;
+import std.uuid;
 
-// The tests of std.postgres (Library R-SLIB-PG-0001..0012) against a PostgreSQL server that
+// The tests of std.postgres (Library R-SLIB-PG-0001..0016) against a PostgreSQL server that
 // tests/run_postgres_tests.py starts for them: the environment names the server as libpq reads it
 // (PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE), R_POSTGRES_SOCKET its socket directory and
 // R_POSTGRES_TLS_AUTHORITY the authority of its certificate. Without R_POSTGRES_TEST every test
@@ -470,4 +472,254 @@ async void closes_sessions_that_the_server_ended()
     }
     drop authority;
     await (move watcher).close();
+}
+
+// R-SLIB-PG-0013: timestamps with and without a zone, dates, uuids, JSON and arrays.
+@test
+async void reads_typed_cells() throws std.postgres::pg_error, std.error::fault, std.test::failure {
+    if (enabled() == false) { return; }
+    std.postgres::connection db = await std.postgres::connect(std.postgres::options::from_environment());
+    std.postgres::rows found = await db.query(
+        "SELECT timestamptz '2024-03-10 07:00:00.25+00', timestamp '2024-03-10 07:00:00', date '2024-02-29', "
+        "uuid '0190f7e1-1234-7abc-8def-0123456789ab', jsonb '{\"a\": [1, 2], \"b\": \"x\"}', "
+        "ARRAY['a', NULL, 'q\"uote', 'b,c', 'Ёжик 🦔'], timestamptz '1969-12-31 23:59:59-05:30'", values());
+    std.postgres::row first = core::replace(&found.items[0usize], std.postgres::row {.values = values()});
+    std.time::system_time at = first.time(0usize);
+    std.test::equal(at.unix_seconds, 1710054000i64);
+    std.test::equal(at.nanoseconds, 250000000u32);
+    std.time::system_time plain = first.time(1usize);
+    std.test::equal(plain.unix_seconds, 1710054000i64);
+    std.time::utc_datetime day = first.date(2usize);
+    std.test::equal(day.month, 2u8);
+    std.test::equal(day.day, 29u8);
+    std.uuid::uuid id = first.uuid(3usize);
+    std.string::string id_text = f"{id}";
+    std.test::equal_text(id_text.as_str(), "0190f7e1-1234-7abc-8def-0123456789ab");
+    std.json::value document = first.json(4usize);
+    std.test::equal(std.json::len(&document), 2usize);
+    array<o<std.string::string>> tags = first.text_array(5usize);
+    std.test::equal(len(tags), 5usize);
+    switch (tags[1usize]) {
+    case variant o::some(_): std.test::fail("a NULL element");
+    case variant o::none: break;
+    }
+    switch (tags[2usize]) {
+    case variant o::some(text): std.test::equal_text(text->as_str(), "q\"uote");
+    case variant o::none: std.test::fail("a quoted element");
+    }
+    switch (tags[3usize]) {
+    case variant o::some(text): std.test::equal_text(text->as_str(), "b,c");
+    case variant o::none: std.test::fail("an element with a comma");
+    }
+    switch (tags[4usize]) {
+    case variant o::some(text): std.test::equal_text(text->as_str(), "Ёжик 🦔");
+    case variant o::none: std.test::fail("an element outside ASCII");
+    }
+    std.time::system_time early = first.time(6usize);
+    std.test::equal(early.unix_seconds, 19799i64);
+    // A session reads dates in the ISO style even when the database writes another by default.
+    await db.execute_script("DO $$ BEGIN EXECUTE format('ALTER DATABASE %I SET DateStyle = ''SQL, DMY''', "
+                            "current_database()); END $$");
+    std.postgres::connection other = await std.postgres::connect(std.postgres::options::from_environment());
+    std.postgres::rows style = await other.query("SHOW DateStyle", values());
+    std.test::equal_text(style.items[0usize].text(0usize), "ISO, MDY");
+    std.postgres::rows dated = await other.query("SELECT date '2024-02-29', timestamptz '2024-03-10 07:00:00+00'", values());
+    std.time::utc_datetime leap = dated.items[0usize].date(0usize);
+    std.test::equal(leap.day, 29u8);
+    std.time::system_time stamped = dated.items[0usize].time(1usize);
+    std.test::equal(stamped.unix_seconds, 1710054000i64);
+    await (move other).close();
+    await db.execute_script("DO $$ BEGIN EXECUTE format('ALTER DATABASE %I RESET DateStyle', current_database()); END $$");
+    await (move db).close();
+}
+
+// R-SLIB-PG-0014: instants, uuids, JSON documents and arrays as parameters.
+@test
+async void writes_typed_parameters()
+    throws std.postgres::pg_error, std.json::error, std.error::fault, std.test::failure {
+    if (enabled() == false) { return; }
+    std.postgres::connection db = await std.postgres::connect(std.postgres::options::from_environment());
+    array<std.postgres::value> given = values();
+    add(&given, std.postgres::value::of_time(std.time::system_time {.unix_seconds = 1710054000i64, .nanoseconds = 250000000u32}));
+    std.uuid::uuid id = std.uuid::parse("0190f7e1-1234-7abc-8def-0123456789ab");
+    add(&given, std.postgres::value::of_uuid(&id));
+    std.json::value document = std.json::parse("{\"b\": \"x\"}");
+    add(&given, std.postgres::value::of_json(&document));
+    array<std.postgres::value> elements = values();
+    add(&elements, std.postgres::value::of_text("a\"b"));
+    add(&elements, std.postgres::value::null_value);
+    add(&elements, std.postgres::value::of_text("c,d"));
+    add(&elements, std.postgres::value::of_text("Ёжик 🦔"));
+    add(&given, std.postgres::value::of_array(&elements));
+    std.postgres::rows found = await db.query(
+        "SELECT $1::timestamptz = timestamptz '2024-03-10 07:00:00.25+00', $2::uuid::text, $3::jsonb->>'b', "
+        "array_length($4::text[], 1), ($4::text[])[1], ($4::text[])[2] IS NULL, ($4::text[])[3], ($4::text[])[4]", move given);
+    std.test::check(found.items[0usize].boolean(0usize), "same instant");
+    std.test::equal_text(found.items[0usize].text(1usize), "0190f7e1-1234-7abc-8def-0123456789ab");
+    std.test::equal_text(found.items[0usize].text(2usize), "x");
+    std.test::equal(found.items[0usize].integer(3usize), 4i64);
+    std.test::equal_text(found.items[0usize].text(4usize), "a\"b");
+    std.test::check(found.items[0usize].boolean(5usize), "a NULL element");
+    std.test::equal_text(found.items[0usize].text(6usize), "c,d");
+    std.test::equal_text(found.items[0usize].text(7usize), "Ёжик 🦔");
+    await (move db).close();
+}
+
+/* A player as the game writes it, and as it reads it back with a column computed by SELECT. */
+struct NewPlayer {
+    i64 id;
+    std.string::string nick;
+    std.string::string created;
+    array<std.string::string> tags;
+    std.json::value profile;
+    bool banned;
+    f64 score;
+    o<std.string::string> avatar;
+};
+
+struct Player {
+    i64 id;
+    std.string::string nick;
+    std.string::string created;
+    i64 created_unix;
+    array<std.string::string> tags;
+    std.json::value profile;
+    bool banned;
+    f64 score;
+    o<std.string::string> avatar;
+};
+
+protected array<std.string::string> two_tags(str first, str second) throws std.alloc::alloc_error {
+    array<std.string::string> made = [];
+    try {
+        made.push(std.string::from_str(first));
+        made.push(std.string::from_str(second));
+    } catch (std.array::push_error<std.string::string> rejected) {
+        (move rejected) as void;
+        throw std.alloc::alloc_error::out_of_memory;
+    }
+    return move made;
+}
+
+// R-SLIB-PG-0015: rows as structs and structs as parameters of INSERT and UPDATE.
+@test
+async void maps_rows_and_structs()
+    throws std.postgres::pg_error, std.json::error, std.error::fault, std.test::failure {
+    if (enabled() == false) { return; }
+    std.postgres::connection db = await std.postgres::connect(std.postgres::options::from_environment());
+    await db.execute_script("DROP TABLE IF EXISTS rtest_players; CREATE TABLE rtest_players (id bigint PRIMARY KEY, "
+                            "nick text NOT NULL, created timestamptz NOT NULL, tags text[] NOT NULL, profile jsonb NOT NULL, "
+                            "banned boolean NOT NULL, score double precision NOT NULL, avatar text)");
+    std.string::string insert = std.postgres::insert_statement::<NewPlayer>("rtest_players");
+    std.test::equal_text(insert.as_str(), "INSERT INTO rtest_players (\"id\", \"nick\", \"created\", \"tags\", \"profile\", \"banned\", \"score\", \"avatar\") VALUES ($1, $2, $3, $4, $5, $6, $7, $8)");
+    NewPlayer ann = {.id = 7i64, .nick = std.string::from_str("Ann"), .created = std.string::from_str("2024-03-10T07:00:00Z"),
+                     .tags = two_tags("vip", "a,b ёж"),
+                     .profile = std.json::parse("{\"level\": 3}"), .banned = false, .score = 2.5, .avatar = o::none};
+    u64 inserted = await db.execute(insert.as_str(), std.postgres::parameters_of(&ann));
+    std.test::equal(inserted, 1u64);
+    std.postgres::rows read = await db.query(
+        "SELECT *, extract(epoch FROM created)::bigint AS created_unix FROM rtest_players", values());
+    array<Player> players = read.decode_all::<Player>();
+    std.test::equal(len(players), 1usize);
+    std.test::equal(players[0usize].id, 7i64);
+    std.test::equal_text(players[0usize].nick.as_str(), "Ann");
+    std.test::equal_text(players[0usize].created.as_str(), "2024-03-10T07:00:00.000000Z");
+    std.test::equal(players[0usize].created_unix, 1710054000i64);
+    std.test::equal(len(players[0usize].tags), 2usize);
+    std.test::equal_text(players[0usize].tags[1usize].as_str(), "a,b ёж");
+    std.test::check(players[0usize].score == 2.5, "score");
+    switch (players[0usize].avatar) {
+    case variant o::some(_): std.test::fail("no avatar");
+    case variant o::none: break;
+    }
+    NewPlayer renamed = {.id = 7i64, .nick = std.string::from_str("Анна"), .created = std.string::from_str("2024-03-11T07:00:00Z"),
+                         .tags = [], .profile = std.json::parse("{}"), .banned = true, .score = 3.0,
+                         .avatar = o::some(std.string::from_str("a7"))};
+    std.string::string update = std.postgres::update_statement::<NewPlayer>("rtest_players", "id");
+    u64 updated = await db.execute(update.as_str(), std.postgres::parameters_of(&renamed));
+    std.test::equal(updated, 1u64);
+    std.postgres::rows again = await db.query("SELECT *, 0::bigint AS created_unix FROM rtest_players", values());
+    Player anna = again.decode::<Player>(0usize);
+    std.test::equal_text(anna.nick.as_str(), "Анна");
+    std.test::check(anna.banned, "banned");
+    std.test::equal(len(anna.tags), 0usize);
+    switch (anna.avatar) {
+    case variant o::some(name): std.test::equal_text(name->as_str(), "a7");
+    case variant o::none: std.test::fail("an avatar");
+    }
+    try {
+        Player partial = read.decode::<Player>(0usize);
+        drop partial;
+        std.postgres::rows narrow = await db.query("SELECT id FROM rtest_players", values());
+        Player missing = narrow.decode::<Player>(0usize);
+        drop missing;
+        std.test::fail("a row without the columns of the fields");
+    } catch (std.postgres::pg_error failure) {
+        std.test::check(failure.code == std.postgres::error_code::missing_column, "missing_column");
+        std.test::equal_text(failure.detail.as_str(), "nick");
+    }
+    await db.execute_script("DROP TABLE rtest_players");
+    await (move db).close();
+}
+
+protected std.postgres::migration step(u64 version, str name, str sql) throws std.alloc::alloc_error {
+    return std.postgres::migration {.version = version, .name = std.string::from_str(name), .sql = std.string::from_str(sql)};
+}
+
+protected void add_step(array<std.postgres::migration>* target, std.postgres::migration item) throws std.alloc::alloc_error {
+    try {
+        target->push(move item);
+    } catch (std.array::push_error<std.postgres::migration> rejected) {
+        (move rejected) as void;
+        throw std.alloc::alloc_error::out_of_memory;
+    }
+}
+
+protected array<std.postgres::migration> steps(bool changed, bool third) throws std.alloc::alloc_error {
+    array<std.postgres::migration> made = [];
+    add_step(&made, step(1u64, "accounts", "CREATE TABLE rtest_accounts (id bigint PRIMARY KEY)"));
+    if (changed == true) {
+        add_step(&made, step(2u64, "nicks", "ALTER TABLE rtest_accounts ADD COLUMN nick text NOT NULL DEFAULT 'player'"));
+    } else {
+        add_step(&made, step(2u64, "nicks", "ALTER TABLE rtest_accounts ADD COLUMN nick text"));
+    }
+    if (third == true) {
+        add_step(&made, step(3u64, "broken", "ALTER TABLE rtest_accounts ADD COLUMN broken no_such_type"));
+    }
+    return move made;
+}
+
+// R-SLIB-PG-0016: migrations are applied once, each in its own transaction; a changed applied
+// migration and a failing one are refused.
+@test
+async void applies_migrations() throws std.postgres::pg_error, std.error::fault, std.test::failure {
+    if (enabled() == false) { return; }
+    std.postgres::connection db = await std.postgres::connect(std.postgres::options::from_environment());
+    await db.execute_script("DROP TABLE IF EXISTS r_schema_migrations; DROP TABLE IF EXISTS rtest_accounts");
+    u64 first = await std.postgres::migrate(&db, steps(false, false));
+    std.test::equal(first, 2u64);
+    u64 second = await std.postgres::migrate(&db, steps(false, false));
+    std.test::equal(second, 0u64);
+    try {
+        u64 changed = await std.postgres::migrate(&db, steps(true, false));
+        changed as void;
+        std.test::fail("a changed migration");
+    } catch (std.postgres::pg_error failure) {
+        std.test::check(failure.code == std.postgres::error_code::migration_mismatch, "migration_mismatch");
+        std.test::equal_text(failure.detail.as_str(), "version 2");
+    }
+    try {
+        u64 broken = await std.postgres::migrate(&db, steps(false, true));
+        broken as void;
+        std.test::fail("a migration that fails");
+    } catch (std.postgres::pg_error failure) {
+        std.test::check(failure.code == std.postgres::error_code::server, "server error");
+    }
+    std.postgres::rows versions = await db.query("SELECT count(*) FROM r_schema_migrations", values());
+    std.test::equal(versions.items[0usize].integer(0usize), 2i64);
+    std.postgres::rows columns = await db.query(
+        "SELECT count(*) FROM information_schema.columns WHERE table_name = 'rtest_accounts'", values());
+    std.test::equal(columns.items[0usize].integer(0usize), 2i64);
+    await db.execute_script("DROP TABLE r_schema_migrations; DROP TABLE rtest_accounts");
+    await (move db).close();
 }

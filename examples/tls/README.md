@@ -1,6 +1,6 @@
 # TLS over loopback TCP
 
-Secure a TCP connection with TLS 1.3: `std.tls` (Library R-SLIB-TLS-0001..0006) runs a client
+Secure a TCP connection with TLS 1.3: `std.tls` (Library R-SLIB-TLS-0001..0007) runs a client
 and a server session over any `std.stream::Stream`, verifies the certificate chain and the name
 of the server, negotiates an application protocol by ALPN and is itself a stream. The engine is
 Mbed TLS 3.6, which the R part of `std.tls` calls through the checked C boundary.
@@ -10,6 +10,8 @@ ctest --test-dir build/debug -R 'example_tls' --output-on-failure
 F=tests/fixtures/tls
 build/debug/tests/codegen_example_tls echo $F/authority.pem $F/server.pem $F/server_key.pem localhost hello world
 build/debug/tests/codegen_example_tls check $F/other_authority.pem $F/server.pem $F/server_key.pem localhost
+build/debug/tests/codegen_example_tls check system $F/server.pem $F/server_key.pem localhost
+SSL_CERT_FILE=$F/authority.pem build/debug/tests/codegen_example_tls check system $F/server.pem $F/server_key.pem localhost
 ```
 
 Both commands start a server and a client in one process on a free loopback port. The client
@@ -55,6 +57,19 @@ handshake with `name_mismatch`, `untrusted_certificate` or `expired_certificate`
 
 ```text
 rejected: untrusted_certificate
+```
+
+With `system` in place of the authority file the client trusts the certificate authorities of the
+system through `std.tls::system_client_config()` (R-SLIB-TLS-0007): the PEM bundle that
+`SSL_CERT_FILE` names, or else the bundle file of the system, `/etc/ssl/cert.pem` on macOS. The
+test authority is not among the authorities of the system, so the first `system` command above
+ends with `rejected: untrusted_certificate`; with `SSL_CERT_FILE` naming that authority the
+handshake is trusted. A bundle without any certificate is `tls: missing_authorities`:
+
+```r
+std.tls::config trusted = await std.tls::system_client_config();
+trusted.add_protocol("h2");
+trusted.add_protocol("echo/1");
 ```
 
 A file that holds no certificate or no key is reported as `tls: invalid_certificate` or

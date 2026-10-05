@@ -9,6 +9,7 @@ R-TERM-0015), a few threads that are separate from the executor. The entry here 
 ctest --test-dir build-debug -R 'example_offload' --output-on-failure
 build-debug/tests/codegen_example_offload nap 30
 build-debug/tests/codegen_example_offload cancel 120
+build-debug/tests/codegen_example_offload fault 5
 ```
 
 `offload nap MILLISECONDS` starts six calls of that length at once beside a ticker task that
@@ -67,6 +68,32 @@ the whole nap. A call still waiting in the queue would be removed at once.
 the timer won: yes
 the group waited for the call to return: yes
 ```
+
+`offload fault INDEX` starts two calls of a plan of naps, `nap_at(0)` and `nap_at(INDEX)`. An
+index past the three entries of the plan panics with `bounds` on the pool thread (Core
+R-ERR-0009): the panic ends the task of that call and no other one. `std.async::join` (Library
+R-SLIB-ASYNC-0020) awaits the task and gives a `std.thread::join_result` instead of continuing
+the panic in the awaiting task, so the program reports it and goes on:
+
+```r
+std.thread::join_result<u32> joined = await std.async::join(move chosen);
+switch (move joined) {
+case variant std.thread::join_result::returned(move slept):
+    await std.console::print(f"call {index} returned after {slept} ms\n");
+case variant std.thread::join_result::panicked(move report):
+    constexpr str category = std.thread::panic_category(&report);
+    await std.console::print(f"call {index} panicked: {category}\n");
+}
+```
+
+```text
+call 5 panicked: bounds
+the other call returned after 10 ms
+```
+
+With an index inside the plan the call returns, `call 1 returned after 20 ms`. A plain
+`await move chosen` would continue the panic in this task instead, up to `main`, which ends the
+program with the report on standard error.
 
 To emit the program manually, supply both maps and the link manifest:
 

@@ -96,7 +96,29 @@ async i32 cancel(u32 ms) throws std.error::fault {
     return 0;
 }
 
-enum Command { nap, cancel };
+/* A call whose entry panics ends its task with the panic. std.async::join (Library
+   R-SLIB-ASYNC-0020) observes it instead of continuing it in this task, and the other call of the
+   group returns as usual. */
+async i32 fault(u32 index) throws std.error::fault {
+    u32 other = 0u32;
+    task_scope(2) group {
+        auto first = std.async::blocking(example.offload.native::nap_at, 0u32);
+        auto chosen = std.async::blocking(example.offload.native::nap_at, index);
+        std.thread::join_result<u32> joined = await std.async::join(move chosen);
+        switch (move joined) {
+        case variant std.thread::join_result::returned(move slept):
+            await std.console::print(f"call {index} returned after {slept} ms\n");
+        case variant std.thread::join_result::panicked(move report):
+            constexpr str category = std.thread::panic_category(&report);
+            await std.console::print(f"call {index} panicked: {category}\n");
+        }
+        other += await move first;
+    }
+    await std.console::print(f"the other call returned after {other} ms\n");
+    return 0;
+}
+
+enum Command { nap, cancel, fault };
 
 async i32 main() {
     i32 status = 0;
@@ -112,12 +134,13 @@ async i32 main() {
             switch (*chosen) {
             case Command::nap: status += await naps(ms);
             case Command::cancel: status += await cancel(ms);
+            case Command::fault: status += await fault(ms);
             }
         case variant o::none:
             // Help without arguments, a usage error otherwise.
             if (len(arguments) > 1usize) { status += 64; }
             await std.console::print(
-                std.string::from_str("offload nap|cancel MILLISECONDS\n"));
+                std.string::from_str("offload nap|cancel MILLISECONDS | fault INDEX\n"));
         }
         drop arguments;
     } catch (std.error::fault failure) {

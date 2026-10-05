@@ -3218,6 +3218,11 @@ static bool r_generic_clone_node(RGenericClone *clone,
     node.child_count = 0U;
     node.first_effect_exit = 0U;
     node.effect_exit_count = 0U;
+    /* L39: the panic drops of an instance name its own symbols; nodes that shared a block in
+       the definition share its clone. */
+    if (node.panic_cleanup != 0U &&
+        !r_generic_clone_node(clone, node.panic_cleanup, depth + 1U, &node.panic_cleanup))
+        goto cleanup;
     if (!r_hir_append_node(context, node, result)) {
         return false;
     }
@@ -3304,6 +3309,11 @@ static bool r_generic_clone_node(RGenericClone *clone,
         context->hir_nodes[*result - 1U].symbol = call.symbol;
         context->hir_nodes[*result - 1U].auxiliary_type =
             context->semantic_symbols[call.symbol - 1U].effect_carrier_type;
+        /* R-SLIB-JSON-0002: the schema of a generic body is built for the closed type. */
+        if (helper.json_operation == R_JSON_OPERATION_SCHEMA &&
+            !r_generic_type_is_dependent(context, closed_type, 0U) &&
+            !r_json_schema_attach(&body, node.span, closed_type, call.symbol))
+            goto cleanup;
     }
     if (children.count != 0U &&
         (node.kind == R_HIR_LENGTH || node.kind == R_HIR_INDEX_PLACE || node.kind == R_HIR_SLICE)) {

@@ -1,4 +1,4 @@
-(mir version=1 core_revision="0.1.0-draft.96"
+(mir version=1 core_revision="0.1.0-draft.97"
   (function name="test.async_copy_args::encode" visibility=protected return=i32 async=true start=(carrier (task i32) (effects (standard "std.async::start_error"))) state=definition
     (block bb0
       (parameter place=%arg0 name="hundreds" type=i32)
@@ -6,14 +6,17 @@
       (parameter place=%arg2 name="ones" type=i32)
       (%v0 = load place=%arg0 type=i32)
       (%v1 = constant type=i32 value=100)
-      (%v2 = binary op="*" left=%v0 right=%v1 type=i32)
+      (%v2 = binary op="*" left=%v0 right=%v1 type=i32 panic=bb1)
       (%v3 = load place=%arg1 type=i32)
       (%v4 = constant type=i32 value=10)
-      (%v5 = binary op="*" left=%v3 right=%v4 type=i32)
-      (%v6 = binary op="+" left=%v2 right=%v5 type=i32)
+      (%v5 = binary op="*" left=%v3 right=%v4 type=i32 panic=bb1)
+      (%v6 = binary op="+" left=%v2 right=%v5 type=i32 panic=bb1)
       (%v7 = load place=%arg2 type=i32)
-      (%v8 = binary op="+" left=%v6 right=%v7 type=i32)
+      (%v8 = binary op="+" left=%v6 right=%v7 type=i32 panic=bb1)
       (return value=%v8)
+    )
+    (block bb1
+      (panic)
     )
   )
   (function name="test.async_copy_args::main" visibility=exported return=i32 async=true start=(carrier (task i32 (effects (standard "core::utf8_error") (standard "std.alloc::alloc_error") (standard "std.async::start_error") (standard "std.bits::read_error") (standard "std.bytes::bytes_error") (standard "std.c::runtime_error") (standard "std.c::string_error") (standard "std.convert::parse_error") (standard "std.convert::range_error") (standard "std.env::env_error") (standard "std.error::error") (standard "std.format::format_error") (standard "std.fs::fs_error") (standard "std.fs::path_error") (standard "std.io::io_error") (standard "std.math::math_error") (standard "std.net::address_error") (standard "std.net::net_error") (standard "std.process::process_error") (standard "std.string::boundary_error") (standard "std.string::string_error") (standard "std.sync::barrier_error") (standard "std.thread::thread_error") (standard "std.time::duration_error") (standard "std.time::time_error"))) (effects (standard "std.async::start_error"))) state=definition
@@ -34,7 +37,7 @@
       (%v6 = async_start callee="test.async_copy_args::encode" arguments=(%v3 %v4 %v5) type=(carrier (task i32) (effects (standard "std.async::start_error"))) task=(task i32))
       (%v7 = effect_tag carrier=%v6 type=(carrier (task i32) (effects (standard "std.async::start_error"))))
       (%v8 = constant type=u32 value=1)
-      (%v9 = binary op="==" left=%v7 right=%v8 type=bool)
+      (%v9 = binary op="==" left=%v7 right=%v8 type=bool panic=bb10)
       (branch condition=%v9 then=bb3 else=bb4)
     )
     (block bb1
@@ -59,22 +62,22 @@
       (local place=%local4 name="preserved" type=i32)
       (%v12 = load place=%local0 type=i32)
       (%v13 = constant type=i32 value=100)
-      (%v14 = binary op="*" left=%v12 right=%v13 type=i32)
+      (%v14 = binary op="*" left=%v12 right=%v13 type=i32 panic=bb10)
       (%v15 = load place=%local1 type=i32)
       (%v16 = constant type=i32 value=10)
-      (%v17 = binary op="*" left=%v15 right=%v16 type=i32)
-      (%v18 = binary op="+" left=%v14 right=%v17 type=i32)
+      (%v17 = binary op="*" left=%v15 right=%v16 type=i32 panic=bb10)
+      (%v18 = binary op="+" left=%v14 right=%v17 type=i32 panic=bb10)
       (%v19 = load place=%local2 type=i32)
-      (%v20 = binary op="+" left=%v18 right=%v19 type=i32)
+      (%v20 = binary op="+" left=%v18 right=%v19 type=i32 panic=bb10)
       (store place=%local4 value=%v20)
       (%v21 = load place=%local4 type=i32)
       (%v22 = constant type=i32 value=123)
-      (%v23 = binary op="!=" left=%v21 right=%v22 type=bool)
+      (%v23 = binary op="!=" left=%v21 right=%v22 type=bool panic=bb10)
       (branch condition=%v23 then=bb5 else=bb6)
     )
     (block bb5
       (%v24 = move source=%local3 type=(task i32))
-      (standard_call operation=std.async::cancel arguments=(%v24) type=void task_result=i32)
+      (standard_call operation=std.async::cancel arguments=(%v24) type=void task_result=i32 panic=bb10)
       (%v25 = constant type=i32 value=4)
       (return value=%v25)
     )
@@ -83,17 +86,20 @@
       (jump target=bb7)
     )
     (block bb7
-      (%v26 = await source=%local3 task=(task i32) type=i32 resume=bb8 cancel=bb9 consuming)
+      (%v26 = await source=%local3 task=(task i32) type=i32 resume=bb8 cancel=bb9 consuming panic=bb10)
     )
     (block bb8
       (store place=%local5 value=%v26)
       (%v27 = load place=%local5 type=i32)
       (%v28 = constant type=i32 value=123)
-      (%v29 = binary op="-" left=%v27 right=%v28 type=i32)
+      (%v29 = binary op="-" left=%v27 right=%v28 type=i32 panic=bb10)
       (return value=%v29)
     )
     (block bb9
       (cancel)
+    )
+    (block bb10
+      (panic)
     )
   )
 )

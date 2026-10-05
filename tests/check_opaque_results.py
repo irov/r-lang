@@ -47,7 +47,7 @@ i32 main() {
             return result.stdout if accepted else result.stderr
 
         interface = emit('interface', [provider, consumer])
-        assert '(interface version=31 ' in interface
+        assert '(interface version=32 ' in interface
         assert 'return=(opaque module="hidden.provider"' in interface
         assert 'opaque_definition="' in interface
         make = next(line for line in interface.splitlines() if 'function name="hidden.provider::make"' in line)

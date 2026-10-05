@@ -252,7 +252,7 @@ static void r_compiler_test_mir_and_determinism(void) {
     R_COMPILER_CHECK((interface.length == reverse_interface.length) &&
                      (memcmp(interface.bytes, reverse_interface.bytes, interface.length) == 0));
     R_COMPILER_CHECK(strstr(interface.bytes, "compiler.beta::main") != NULL);
-    R_COMPILER_CHECK(strstr(interface.bytes, "(interface version=31 ") != NULL);
+    R_COMPILER_CHECK(strstr(interface.bytes, "(interface version=32 ") != NULL);
     R_COMPILER_CHECK(
         strstr(interface.bytes, "compiler.alpha::produce\" return=void parameters=((out i32))") !=
         NULL);

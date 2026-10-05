@@ -189,7 +189,9 @@ typedef enum RC17PendingCompletionKind {
     R_C17_PENDING_COMPLETION_CHECKED_ERROR,
     R_C17_PENDING_COMPLETION_BREAK,
     R_C17_PENDING_COMPLETION_CONTINUE,
-    R_C17_PENDING_COMPLETION_FALLTHROUGH
+    R_C17_PENDING_COMPLETION_FALLTHROUGH,
+    /* L39 (R-ERR-0005): a panic that leaves the function after its finally blocks. */
+    R_C17_PENDING_COMPLETION_PANIC
 } RC17PendingCompletionKind;
 
 typedef struct RC17FinallyRoute {
@@ -461,6 +463,14 @@ typedef struct RC17Emitter {
     uint64_t named_standard_move_headers;
     uint64_t named_standard_layout_headers;
     uint64_t named_standard_layout_records;
+    /* L39 (R-ERR-0005): the synchronous body being emitted unwinds on a panic, and the node
+       whose panic exit the next panic test or panic site leaves through. */
+    bool unwind_body;
+    const RHirNode *panic_source;
+    /* L39: in an async step, the panic block of the instruction being written, and whether a
+       panic transition was written, which needs the dispatch label of the step loop. */
+    RMirBlockId async_panic_target;
+    bool async_dispatch_used;
 } RC17Emitter;
 
 static bool r_c17_type_is_shared_owner_try_unwrap_result(const RC17Emitter *emitter,
@@ -7101,7 +7111,7 @@ static bool r_c17_mir_is_terminator(RMirInstructionKind kind) {
            (kind == R_MIR_INSTRUCTION_AWAIT) || (kind == R_MIR_INSTRUCTION_TASK_SCOPE_WAIT) ||
            (kind == R_MIR_INSTRUCTION_RETURN) || (kind == R_MIR_INSTRUCTION_THROW) ||
            (kind == R_MIR_INSTRUCTION_FINALLY_EXIT) || (kind == R_MIR_INSTRUCTION_CANCEL) ||
-           (kind == R_MIR_INSTRUCTION_UNREACHABLE);
+           (kind == R_MIR_INSTRUCTION_UNREACHABLE) || (kind == R_MIR_INSTRUCTION_PANIC);
 }
 
 static bool r_c17_prepare_replace(RC17Emitter *, RTypeId, RTypeId, RTypeId);
@@ -13102,7 +13112,17 @@ static bool r_c17_preflight_async_instruction(RC17Emitter *emitter,
             !r_c17_mir_target_is_valid(mir, instruction->target0) ||
             !r_c17_mir_target_is_valid(mir, instruction->target1) ||
             (instruction->target0 == instruction->target1) ||
-            ((type->second == R_TYPE_ID_INVALID) &&
+            /* R-SLIB-ASYNC-0020 (L39): a join of a task<T> without checked errors gives
+               std.thread::join_result<T>. */
+            ((instruction->integer_value == UINT64_C(1)) &&
+             ((type->second != R_TYPE_ID_INVALID) ||
+              !r_c17_type_is_thread_join_result(
+                  emitter, r_c17_type(emitter, r_c17_value_type(emitter, instruction->type))) ||
+              (r_c17_value_type(emitter, type->base) !=
+               r_c17_value_type(
+                   emitter,
+                   r_c17_type(emitter, r_c17_value_type(emitter, instruction->type))->base)))) ||
+            ((instruction->integer_value != UINT64_C(1)) && (type->second == R_TYPE_ID_INVALID) &&
              (r_c17_value_type(emitter, type->base) !=
               r_c17_value_type(emitter, instruction->type))) ||
             /* The carrier of a never task holds no success value (R-FUNC-0003). */
@@ -13124,6 +13144,7 @@ static bool r_c17_preflight_async_instruction(RC17Emitter *emitter,
         }
         return true;
     case R_MIR_INSTRUCTION_CANCEL:
+    case R_MIR_INSTRUCTION_PANIC:
         return (instruction->result == R_MIR_VALUE_ID_INVALID) &&
                        (instruction->operand0 == R_MIR_VALUE_ID_INVALID) &&
                        (instruction->operand1 == R_MIR_VALUE_ID_INVALID) &&
@@ -15497,18 +15518,22 @@ static bool r_c17_emit_wrapped_span(RC17Emitter *emitter, RSourceSpan span) {
     }
 }
 
+static bool r_c17_emit_panic_test(RC17Emitter *emitter, uint32_t depth);
+static bool r_c17_emit_panic_exit(RC17Emitter *emitter, uint32_t depth);
+static bool r_c17_helper_panics(const char *helper);
+
 /* `r_runtime_panic(CATEGORY, span);` with the span aligned under the first argument, or, when
    that alignment overflows the column limit at the current depth, with every argument on its
    own line one level deeper, as clang-format lays it out. */
-static bool r_c17_emit_panic_call(RC17Emitter *emitter,
-                                  const char *category,
-                                  RSourceSpan span,
-                                  uint32_t depth) {
+static bool r_c17_emit_panic_call_line(RC17Emitter *emitter,
+                                       const char *call,
+                                       const char *category,
+                                       RSourceSpan span,
+                                       uint32_t depth) {
     const size_t start = emitter->output.length;
 
-    if ((category == NULL) || !r_c17_indent(emitter, depth) ||
-        !r_c17_write(emitter, "r_runtime_panic(") || !r_c17_write(emitter, category) ||
-        !r_c17_write(emitter, ",\n") ||
+    if ((category == NULL) || !r_c17_indent(emitter, depth) || !r_c17_write(emitter, call) ||
+        !r_c17_write(emitter, category) || !r_c17_write(emitter, ",\n") ||
         !r_c17_spaces(emitter, (size_t)depth * 4U + sizeof("r_runtime_panic(") - 1U) ||
         !r_c17_emit_span(emitter, span)) {
         return false;
@@ -15523,16 +15548,45 @@ static bool r_c17_emit_panic_call(RC17Emitter *emitter,
     }
     if (((size_t)depth + 1U) * 4U + length + 2U <= 100U) {
         emitter->output.length = start;
-        return r_c17_indent(emitter, depth) && r_c17_write(emitter, "r_runtime_panic(\n") &&
-               r_c17_indent(emitter, depth + 1U) && r_c17_write(emitter, category) &&
-               r_c17_write(emitter, ",\n") && r_c17_indent(emitter, depth + 1U) &&
-               r_c17_write(emitter, text) && r_c17_write(emitter, ");\n");
+        return r_c17_indent(emitter, depth) && r_c17_write(emitter, call) &&
+               r_c17_write(emitter, "\n") && r_c17_indent(emitter, depth + 1U) &&
+               r_c17_write(emitter, category) && r_c17_write(emitter, ",\n") &&
+               r_c17_indent(emitter, depth + 1U) && r_c17_write(emitter, text) &&
+               r_c17_write(emitter, ");\n");
     }
     emitter->output.length = start;
-    return r_c17_indent(emitter, depth) && r_c17_write(emitter, "r_runtime_panic(") &&
+    return r_c17_indent(emitter, depth) && r_c17_write(emitter, call) &&
            r_c17_write(emitter, category) && r_c17_write(emitter, ",\n") &&
            r_c17_spaces(emitter, (size_t)depth * 4U + sizeof("r_runtime_panic(") - 1U) &&
            r_c17_emit_wrapped_span(emitter, span) && r_c17_write(emitter, ");\n");
+}
+
+/* L39 (R-ERR-0005): programs on the hosted runtime unwind, as its target manifest records; a
+   freestanding program forwards every panic to its environment. */
+static bool r_c17_profile_unwinds(const RC17Emitter *emitter) {
+    return emitter->frontend->profile != R_FRONTEND_PROFILE_FREESTANDING;
+}
+
+/* L39 (R-ERR-0005): whether a panic of category in the code being written unwinds: in a body that
+   unwinds, at a node with a panic exit, for every category but the contract violations of paths
+   that cannot be reached. */
+static bool r_c17_panic_unwinds(const RC17Emitter *emitter, const char *category) {
+    return ((emitter->unwind_body && (emitter->panic_source != NULL)) ||
+            (emitter->async_panic_target != R_MIR_BLOCK_ID_INVALID)) &&
+           (strcmp(category, "R_RUNTIME_PANIC_CONTRACT_VIOLATION") != 0);
+}
+
+/* A panic site: `r_runtime_panic(...)`, or under unwind `r_runtime_raise(...)`, which has the
+   same length and layout, followed by the panic exit. */
+static bool r_c17_emit_panic_call(RC17Emitter *emitter,
+                                  const char *category,
+                                  RSourceSpan span,
+                                  uint32_t depth) {
+    if ((category != NULL) && r_c17_panic_unwinds(emitter, category)) {
+        return r_c17_emit_panic_call_line(emitter, "r_runtime_raise(", category, span, depth) &&
+               r_c17_emit_panic_exit(emitter, depth);
+    }
+    return r_c17_emit_panic_call_line(emitter, "r_runtime_panic(", category, span, depth);
 }
 
 static bool r_c17_emit_named_stack_preflight(RC17Emitter *emitter,
@@ -15641,14 +15695,16 @@ static bool r_c17_emit_async_helper_stack_preflight(RC17Emitter *emitter,
 
 static bool r_c17_emit_bounds_panic(RC17Emitter *emitter, RSourceSpan span, uint32_t depth) {
     const size_t start = emitter->output.length;
+    const bool unwinds = r_c17_panic_unwinds(emitter, "R_RUNTIME_PANIC_BOUNDS");
+    const char *call = unwinds ? "r_runtime_raise(" : "r_runtime_panic(";
 
     if (!r_c17_indent(emitter, depth) ||
-        !r_c17_write(emitter, "r_runtime_panic(R_RUNTIME_PANIC_BOUNDS,\n") ||
+        !(r_c17_write(emitter, call) && r_c17_write(emitter, "R_RUNTIME_PANIC_BOUNDS,\n")) ||
         !r_c17_indent(emitter, depth + UINT32_C(4)) || !r_c17_emit_span(emitter, span)) {
         return false;
     }
     if ((r_c17_current_column(emitter) + 2U) <= 100U) {
-        return r_c17_write(emitter, ");\n");
+        return r_c17_write(emitter, ");\n") && (!unwinds || r_c17_emit_panic_exit(emitter, depth));
     }
     char span_text[160];
     size_t span_length;
@@ -15660,18 +15716,19 @@ static bool r_c17_emit_bounds_panic(RC17Emitter *emitter, RSourceSpan span, uint
         (((size_t)depth + 5U) * 4U + strlen(components) + 2U <= 100U)) {
         emitter->output.length = start;
         return r_c17_indent(emitter, depth) &&
-               r_c17_write(emitter, "r_runtime_panic(R_RUNTIME_PANIC_BOUNDS,\n") &&
+               (r_c17_write(emitter, call) && r_c17_write(emitter, "R_RUNTIME_PANIC_BOUNDS,\n")) &&
                r_c17_indent(emitter, depth + UINT32_C(4)) &&
                r_c17_write(emitter, "(RRuntimeSourceSpan){\n") &&
                r_c17_indent(emitter, depth + UINT32_C(5)) && r_c17_write(emitter, components) &&
-               r_c17_write(emitter, ");\n");
+               r_c17_write(emitter, ");\n") && (!unwinds || r_c17_emit_panic_exit(emitter, depth));
     }
     emitter->output.length = start;
-    return r_c17_indent(emitter, depth) && r_c17_write(emitter, "r_runtime_panic(\n") &&
+    return r_c17_indent(emitter, depth) &&
+           (r_c17_write(emitter, call) && r_c17_write(emitter, "\n")) &&
            r_c17_indent(emitter, depth + UINT32_C(1)) &&
            r_c17_write(emitter, "R_RUNTIME_PANIC_BOUNDS,\n") &&
            r_c17_indent(emitter, depth + UINT32_C(1)) && r_c17_emit_span(emitter, span) &&
-           r_c17_write(emitter, ");\n");
+           r_c17_write(emitter, ");\n") && (!unwinds || r_c17_emit_panic_exit(emitter, depth));
 }
 
 static bool r_c17_temporary_text(
@@ -17259,6 +17316,10 @@ static bool r_c17_emit_call(RC17Emitter *emitter,
                 }
             }
         }
+        /* L39: a callee that panicked returns with its panic pending, before its tag is read. */
+        if (!callee->is_import && !r_c17_emit_panic_test(emitter, depth)) {
+            goto cleanup;
+        }
         group_count =
             r_c17_group_effect_exits(emitter, carrier->second, node, member_groups, groups);
         for (effect_index = UINT32_C(0); effect_index < effect_count; ++effect_index) {
@@ -17450,6 +17511,9 @@ static bool r_c17_emit_call(RC17Emitter *emitter,
             goto cleanup;
         }
     }
+    if (!callee->is_import && !r_c17_emit_panic_test(emitter, depth)) {
+        goto cleanup;
+    }
     result->type = r_c17_value_type(emitter, node->type);
     result->temporary = temporary;
     result->has_value = returns_value;
@@ -17494,7 +17558,7 @@ r_c17_emit_binary(RC17Emitter *emitter, const RHirNode *node, uint32_t depth, RC
     RC17Value right;
     uint32_t temporary = 0U;
     const char *comparison;
-    const char *helper;
+    const char *helper = NULL;
     size_t expression_start;
 
     if ((node->operation == R_TOKEN_AMP_AMP) || (node->operation == R_TOKEN_PIPE_PIPE)) {
@@ -17582,7 +17646,9 @@ r_c17_emit_binary(RC17Emitter *emitter, const RHirNode *node, uint32_t depth, RC
             return false;
         }
     }
-    return r_c17_finish_temporary(emitter, node->type, temporary, result);
+    /* L39: a helper that raised returned a value nobody reads; the panic leaves first. */
+    return r_c17_finish_temporary(emitter, node->type, temporary, result) &&
+           (!r_c17_helper_panics(helper) || r_c17_emit_panic_test(emitter, depth));
 }
 
 static bool
@@ -17871,9 +17937,16 @@ static bool r_c17_prepare_place(RC17Emitter *emitter,
             return false;
         }
     }
-    if (!r_c17_write(emitter, "\n") ||
-        !r_c17_emit_bounds_panic(emitter, place->span, depth + UINT32_C(1)) ||
-        !r_c17_indent(emitter, depth) || !r_c17_write(emitter, "}\n") ||
+    /* L39-12: a place prepared outside the emission of an expression, such as the operand of
+       return or the destination of an assignment, leaves through its own panic exit. */
+    const RHirNode *outer = emitter->panic_source;
+    if (place->panic_cleanup != 0U) {
+        emitter->panic_source = place;
+    }
+    const bool checked = r_c17_write(emitter, "\n") &&
+                         r_c17_emit_bounds_panic(emitter, place->span, depth + UINT32_C(1));
+    emitter->panic_source = outer;
+    if (!checked || !r_c17_indent(emitter, depth) || !r_c17_write(emitter, "}\n") ||
         !r_c17_prepared_place_push(emitter, prepared, place, index.temporary)) {
         return false;
     }
@@ -18136,6 +18209,8 @@ r_c17_emit_unary(RC17Emitter *emitter, const RHirNode *node, uint32_t depth, RC1
                     emitter, helper, operand.temporary, node->span, depth)) {
                 return false;
             }
+            return r_c17_finish_temporary(emitter, node->type, temporary, result) &&
+                   (!r_c17_helper_panics(helper) || r_c17_emit_panic_test(emitter, depth));
         }
     } else if (node->operation == R_TOKEN_TILDE) {
         if (!r_c17_write(emitter, "(") || !r_c17_emit_value_type(emitter, node->type) ||
@@ -18628,7 +18703,8 @@ static bool r_c17_emit_assignment(RC17Emitter *emitter,
                        emitter, helper, old_value.temporary, right.temporary, node->span, depth)) {
             goto cleanup;
         }
-        if (!r_c17_write(emitter, ";\n")) {
+        if (!r_c17_write(emitter, ";\n") || ((bitwise == NULL) && r_c17_helper_panics(helper) &&
+                                             !r_c17_emit_panic_test(emitter, depth))) {
             goto cleanup;
         }
         replacement.type = r_c17_value_type(emitter, calculation_type);
@@ -19391,7 +19467,25 @@ static bool r_c17_emit_core_panic(RC17Emitter *emitter,
     (void)memset(&message, 0, sizeof(message));
     if ((node->child_count != UINT32_C(1)) ||
         !r_c17_emit_expression(emitter, r_c17_child(emitter, node, UINT32_C(0)), depth, &message) ||
-        !message.has_value || !r_c17_indent(emitter, depth) || !r_c17_write(emitter, "(void)") ||
+        !message.has_value) {
+        return false;
+    }
+    if (r_c17_panic_unwinds(emitter, "R_RUNTIME_PANIC_EXPLICIT")) {
+        /* L39: under unwind the message becomes the text of the report (R-LIB-0013). */
+        if (!r_c17_indent(emitter, depth) ||
+            !r_c17_write(emitter, "r_runtime_raise_text(R_RUNTIME_PANIC_EXPLICIT, ") ||
+            !r_c17_emit_span(emitter, node->span) || !r_c17_write(emitter, ", ") ||
+            !r_c17_emit_temporary_name(emitter, message.temporary) ||
+            !r_c17_write(emitter, ".data, ") ||
+            !r_c17_emit_temporary_name(emitter, message.temporary) ||
+            !r_c17_write(emitter, ".length);\n") || !r_c17_emit_panic_exit(emitter, depth)) {
+            return false;
+        }
+        result->type = r_c17_value_type(emitter, node->type);
+        result->has_value = false;
+        return true;
+    }
+    if (!r_c17_indent(emitter, depth) || !r_c17_write(emitter, "(void)") ||
         !r_c17_emit_temporary_name(emitter, message.temporary) || !r_c17_write(emitter, ";\n") ||
         !r_c17_emit_panic_call(emitter, "R_RUNTIME_PANIC_EXPLICIT", node->span, depth)) {
         return false;
@@ -20365,6 +20459,32 @@ static bool r_c17_emit_drop_descriptor(RC17Emitter *emitter, RTypeId type_id) {
            r_c17_write(emitter, ")};\n");
 }
 
+/* L39 (R-ERR-0008): the call of a user drop. While a panic is pending, as for the parts of a value
+   whose earlier user drop panicked, the drop runs as unwind cleanup: a panic in it is a second
+   panic, and its R code does not take the pending panic for one of its own callees. */
+static bool r_c17_emit_user_drop_call(RC17Emitter *emitter,
+                                      RSymbolId drop_function,
+                                      const char *argument,
+                                      uint32_t depth) {
+    if (!r_c17_profile_unwinds(emitter)) {
+        return r_c17_indent(emitter, depth) && r_c17_emit_function_name(emitter, drop_function) &&
+               r_c17_write(emitter, "(") && r_c17_write(emitter, argument) &&
+               r_c17_write(emitter, ");\n");
+    }
+    return r_c17_indent(emitter, depth) && r_c17_write(emitter, "if (r_runtime_unwinding()) {\n") &&
+           r_c17_indent(emitter, depth + 1U) &&
+           r_c17_write(emitter, "r_runtime_unwind_cleanup_enter();\n") &&
+           r_c17_indent(emitter, depth + 1U) && r_c17_emit_function_name(emitter, drop_function) &&
+           r_c17_write(emitter, "(") && r_c17_write(emitter, argument) &&
+           r_c17_write(emitter, ");\n") && r_c17_indent(emitter, depth + 1U) &&
+           r_c17_write(emitter, "r_runtime_unwind_cleanup_leave();\n") &&
+           r_c17_indent(emitter, depth) && r_c17_write(emitter, "} else {\n") &&
+           r_c17_indent(emitter, depth + 1U) && r_c17_emit_function_name(emitter, drop_function) &&
+           r_c17_write(emitter, "(") && r_c17_write(emitter, argument) &&
+           r_c17_write(emitter, ");\n") && r_c17_indent(emitter, depth) &&
+           r_c17_write(emitter, "}\n");
+}
+
 /* Descriptors, hook wrappers, member counts and cursors of every self-nesting type. */
 static bool r_c17_emit_recursive_drop_definitions(RC17Emitter *emitter) {
     size_t aggregate_index;
@@ -20405,10 +20525,11 @@ static bool r_c17_emit_recursive_drop_definitions(RC17Emitter *emitter) {
         }
         if ((aggregate->drop_function != R_SYMBOL_ID_INVALID) &&
             (!r_c17_format(emitter,
-                           "static void r_type_hook_a%08" PRIu32 "(void *value_pointer) {\n    ",
+                           "static void r_type_hook_a%08" PRIu32 "(void *value_pointer) {\n",
                            aggregate_id) ||
-             !r_c17_emit_function_name(emitter, aggregate->drop_function) ||
-             !r_c17_write(emitter, "(value_pointer);\n}\n\n"))) {
+             !r_c17_emit_user_drop_call(
+                 emitter, aggregate->drop_function, "value_pointer", UINT32_C(1)) ||
+             !r_c17_write(emitter, "}\n\n"))) {
             return false;
         }
         if (!r_c17_emit_recursive_cursor_definition(emitter, aggregate_id, aggregate)) {
@@ -21113,9 +21234,7 @@ static bool r_c17_emit_type_glue_struct_definition(RC17Emitter *emitter, RTypeId
         return false;
     }
     if ((aggregate->drop_function != R_SYMBOL_ID_INVALID) &&
-        (!r_c17_write(emitter, "    ") ||
-         !r_c17_emit_function_name(emitter, aggregate->drop_function) ||
-         !r_c17_write(emitter, "(value);\n"))) {
+        !r_c17_emit_user_drop_call(emitter, aggregate->drop_function, "value", UINT32_C(1))) {
         return false;
     }
     field_index = aggregate->field_count;
@@ -21182,9 +21301,9 @@ static bool r_c17_emit_type_glue_enum_definition(RC17Emitter *emitter, RTypeId t
         return r_c17_emit_recursive_drop_body(emitter, aggregate_id, true);
     }
     if ((aggregate->drop_function != R_SYMBOL_ID_INVALID) &&
-        (!r_c17_write(emitter, "    if (value->r_tag != UINT32_MAX) {\n        ") ||
-         !r_c17_emit_function_name(emitter, aggregate->drop_function) ||
-         !r_c17_write(emitter, "(value);\n    }\n"))) {
+        (!r_c17_write(emitter, "    if (value->r_tag != UINT32_MAX) {\n") ||
+         !r_c17_emit_user_drop_call(emitter, aggregate->drop_function, "value", UINT32_C(2)) ||
+         !r_c17_write(emitter, "    }\n"))) {
         return false;
     }
     for (index = 0U; index < aggregate->variant_count; ++index) {
@@ -22008,7 +22127,8 @@ r_c17_emit_new(RC17Emitter *emitter, const RHirNode *node, uint32_t depth, RC17V
         !r_c17_write(emitter, ",\n") || !r_c17_indent(emitter, depth + UINT32_C(1)) ||
         !r_c17_write(emitter, "&") || !r_c17_emit_temporary_name(emitter, payload.temporary) ||
         !r_c17_write(emitter, ",\n") || !r_c17_indent(emitter, depth + UINT32_C(1)) ||
-        !r_c17_emit_span(emitter, node->span) || !r_c17_write(emitter, ");\n")) {
+        !r_c17_emit_span(emitter, node->span) || !r_c17_write(emitter, ");\n") ||
+        !r_c17_emit_panic_test(emitter, depth)) {
         return false;
     }
     result->type = r_c17_value_type(emitter, node->type);
@@ -28691,8 +28811,40 @@ static bool r_c17_emit_conditional(RC17Emitter *emitter,
     return true;
 }
 
+static bool r_c17_emit_expression_node(RC17Emitter *emitter,
+                                       RHirNodeId node_id,
+                                       uint32_t depth,
+                                       RC17Value *result);
+
+/* L39: a node with a panic exit is the panic source of the code its emission writes; its
+   children set their own while they are written. */
 static bool
 r_c17_emit_expression(RC17Emitter *emitter, RHirNodeId node_id, uint32_t depth, RC17Value *result) {
+    const RHirNode *node = r_c17_node(emitter, node_id);
+    const RHirNode *outer = emitter->panic_source;
+    bool success;
+
+    if ((node != NULL) && (node->panic_cleanup != 0U)) {
+        emitter->panic_source = node;
+    }
+    success = r_c17_emit_expression_node(emitter, node_id, depth, result);
+    /* A standard operation may run R code through type glue or an initializer, whose panic
+       returns to it pending; the code continues in the panic exit of the call. */
+    if (success && (node != NULL) && (node->panic_cleanup != 0U) &&
+        (((node->kind == R_HIR_STANDARD_CALL) &&
+          (r_c17_value_kind(emitter, node->type) != R_SEMANTIC_TYPE_NEVER) &&
+          r_semantic_standard_call_runs_code(emitter->frontend, node)) ||
+         (node->kind == R_HIR_DISCARD))) {
+        success = r_c17_emit_panic_test(emitter, depth);
+    }
+    emitter->panic_source = outer;
+    return success;
+}
+
+static bool r_c17_emit_expression_node(RC17Emitter *emitter,
+                                       RHirNodeId node_id,
+                                       uint32_t depth,
+                                       RC17Value *result) {
     const RHirNode *node = r_c17_node(emitter, node_id);
 
     if ((node == NULL) || (result == NULL)) {
@@ -29013,6 +29165,16 @@ static bool r_c17_emit_transfer_cleanup_segment(RC17Emitter *emitter,
         if ((effect_source == NULL) || (cleanup_child_start > effect_source->child_count)) {
             return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
         }
+    } else if (error_type == R_TYPE_ID_INVALID) {
+        /* L39: the drops of a panic exit. */
+        if ((effect_source == NULL) || (effect_source->panic_cleanup == 0U)) {
+            return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+        }
+        cleanup_source = r_c17_node(emitter, effect_source->panic_cleanup);
+        if ((cleanup_source == NULL) || (cleanup_source->kind != R_HIR_BLOCK)) {
+            return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+        }
+        first_child = UINT32_C(0);
     } else {
         if ((effect_source == NULL) || (effect_source->effect_exit_count == UINT32_C(0))) {
             return true;
@@ -29504,6 +29666,8 @@ static bool r_c17_emit_pending_return_terminal(RC17Emitter *emitter,
            r_c17_write(emitter, ";\n");
 }
 
+static bool r_c17_emit_panic_return(RC17Emitter *emitter, uint32_t depth);
+
 static bool r_c17_emit_pending_route_terminal(RC17Emitter *emitter,
                                               const RC17FinallyRoute *route,
                                               uint32_t depth) {
@@ -29527,6 +29691,9 @@ static bool r_c17_emit_pending_route_terminal(RC17Emitter *emitter,
         return r_c17_format(emitter, "goto r_effect_after_%08" PRIu32 ";\n", route->target_label);
     case R_C17_PENDING_COMPLETION_RETURN:
         return r_c17_emit_pending_return_terminal(emitter, route, depth);
+    case R_C17_PENDING_COMPLETION_PANIC:
+        return r_c17_emit_pending_reason_clear(emitter, depth) &&
+               r_c17_emit_panic_return(emitter, depth);
     case R_C17_PENDING_COMPLETION_CHECKED_ERROR:
         if (!r_c17_emit_pending_payload_take(emitter, route->type, depth, &value_temporary) ||
             !r_c17_emit_pending_reason_clear(emitter, depth)) {
@@ -29854,6 +30021,78 @@ static bool r_c17_emit_effect_groups(RC17Emitter *emitter,
                                                                  depth);
 }
 
+/* L39 (R-ERR-0005): `r_runtime_unwind_cleanup_leave();` and the return of a function that a
+   panic leaves: no value for a void function or one with a checked-effect output, otherwise a zero
+   value the caller never reads, since it tests the panic first. */
+static bool r_c17_emit_panic_return(RC17Emitter *emitter, uint32_t depth) {
+    const RSemanticSymbol *function = r_c17_symbol(emitter, emitter->current_function);
+    const RSemanticTypeKind kind =
+        function == NULL ? R_SEMANTIC_TYPE_VOID : r_c17_value_kind(emitter, function->return_type);
+
+    if ((function == NULL) || !r_c17_indent(emitter, depth) ||
+        !r_c17_write(emitter, "r_runtime_unwind_cleanup_leave();\n") ||
+        !r_c17_indent(emitter, depth)) {
+        return false;
+    }
+    if ((function->effect_carrier_type != R_TYPE_ID_INVALID) || (kind == R_SEMANTIC_TYPE_VOID) ||
+        (kind == R_SEMANTIC_TYPE_NEVER)) {
+        return r_c17_write(emitter, "return;\n");
+    }
+    return r_c17_write(emitter, "return (") &&
+           r_c17_emit_value_type(emitter, function->return_type) && r_c17_write(emitter, "){0};\n");
+}
+
+/* L39 (R-ERR-0005): leaves the function for the pending panic of panic_source: the frame enters
+   cleanup, drops what lives at that node, runs the finally blocks with a pending panic and returns
+   to the caller with the panic pending again. */
+static bool r_c17_emit_panic_exit(RC17Emitter *emitter, uint32_t depth) {
+    const RHirNode *source = emitter->panic_source;
+
+    if (!emitter->unwind_body && (emitter->async_panic_target != R_MIR_BLOCK_ID_INVALID)) {
+        /* An async step continues in the panic block of the instruction, through the dispatch
+           label of its loop, since the code of an instruction may lie in a loop of its own. */
+        emitter->async_dispatch_used = true;
+        return r_c17_indent(emitter, depth) &&
+               r_c17_write(emitter, "r_runtime_task_panic_park(execution);\n") &&
+               r_c17_indent(emitter, depth) &&
+               r_c17_format(emitter,
+                            "frame->r_state = UINT32_C(%" PRIu32 ");\n",
+                            emitter->async_panic_target) &&
+               r_c17_indent(emitter, depth) && r_c17_write(emitter, "goto r_async_dispatch;\n");
+    }
+    if ((source == NULL) || (source->panic_cleanup == 0U)) {
+        return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+    }
+    if (!r_c17_indent(emitter, depth) ||
+        !r_c17_write(emitter, "r_runtime_unwind_cleanup_enter();\n") ||
+        !r_c17_emit_pending_aggregate_drops(emitter, depth)) {
+        return false;
+    }
+    if (emitter->finally_count != 0U) {
+        RC17FinallyRoute route;
+
+        (void)memset(&route, 0, sizeof(route));
+        route.kind = R_C17_PENDING_COMPLETION_PANIC;
+        route.type = R_TYPE_ID_INVALID;
+        return r_c17_emit_pending_transfer(
+            emitter, 0U, route, UINT32_C(0), source, UINT32_MAX, depth);
+    }
+    return r_c17_emit_transfer_cleanup(emitter, source, R_TYPE_ID_INVALID, UINT32_MAX, depth) &&
+           r_c17_emit_panic_return(emitter, depth);
+}
+
+/* L39: `if (r_runtime_unwinding()) { exit }` after code that may have begun a panic, in a body
+   that unwinds; elsewhere nothing. */
+static bool r_c17_emit_panic_test(RC17Emitter *emitter, uint32_t depth) {
+    if ((!emitter->unwind_body || (emitter->panic_source == NULL)) &&
+        (emitter->unwind_body || (emitter->async_panic_target == R_MIR_BLOCK_ID_INVALID))) {
+        return true;
+    }
+    return r_c17_indent(emitter, depth) && r_c17_write(emitter, "if (r_runtime_unwinding()) {\n") &&
+           r_c17_emit_panic_exit(emitter, depth + UINT32_C(1)) && r_c17_indent(emitter, depth) &&
+           r_c17_write(emitter, "}\n");
+}
+
 static bool r_c17_emit_checked_transfer(RC17Emitter *emitter,
                                         RTypeId error_type,
                                         uint32_t value_temporary,
@@ -30090,9 +30329,22 @@ static bool r_c17_emit_drop(RC17Emitter *emitter, const RHirNode *node, uint32_t
         return !r_c17_semantic_type_is_copy(emitter, place->type) &&
                r_c17_type_is_supported(emitter, place->type, false);
     }
-    return r_c17_indent(emitter, depth) && r_c17_emit_type_drop_name(emitter, place->type) &&
-           r_c17_write(emitter, "(&") && r_c17_emit_variable_name(emitter, place->symbol) &&
-           r_c17_write(emitter, ");\n");
+    if (!r_c17_indent(emitter, depth) || !r_c17_emit_type_drop_name(emitter, place->type) ||
+        !r_c17_write(emitter, "(&") || !r_c17_emit_variable_name(emitter, place->symbol) ||
+        !r_c17_write(emitter, ");\n")) {
+        return false;
+    }
+    if (node->panic_cleanup != 0U) {
+        /* L39 (R-ERR-0008): a panic of the drop leaves through the drops of the rest. */
+        const RHirNode *outer = emitter->panic_source;
+        bool tested;
+
+        emitter->panic_source = node;
+        tested = r_c17_emit_panic_test(emitter, depth);
+        emitter->panic_source = outer;
+        return tested;
+    }
+    return true;
 }
 
 static const RHirNode *r_c17_direct_copy_variant_payload_place(const RC17Emitter *emitter,
@@ -31338,7 +31590,9 @@ static bool r_c17_emit_statement(RC17Emitter *emitter, RHirNodeId node_id, uint3
     }
 }
 
-/* R-FUNC-0003: a never function without effects cannot return, which C17 spells _Noreturn. */
+/* R-FUNC-0003: a never function without effects cannot return, which C17 spells _Noreturn.
+   Under unwind (L39, R-ERR-0005) an R never function returns with its panic pending, so only
+   the abort strategy and imported C functions keep _Noreturn. */
 static bool r_c17_emit_function_result(RC17Emitter *emitter,
                                        const RSemanticSymbol *function,
                                        bool has_effect_output) {
@@ -31346,7 +31600,8 @@ static bool r_c17_emit_function_result(RC17Emitter *emitter,
         return r_c17_write(emitter, "void");
     }
     if (r_c17_value_kind(emitter, function->return_type) == R_SEMANTIC_TYPE_NEVER) {
-        return r_c17_write(emitter, "_Noreturn void");
+        const bool unwinds = !function->is_import && r_c17_profile_unwinds(emitter);
+        return r_c17_write(emitter, unwinds ? "void" : "_Noreturn void");
     }
     return r_c17_emit_value_type(emitter,
                                  (function->is_async && !emitter->direct_twin_signature)
@@ -31851,10 +32106,14 @@ static bool r_c17_emit_sync_initializer_support(RC17Emitter *emitter, RSymbolId 
         return false;
     }
     if (checked) {
+        /* L39: an initializer that panicked wrote no carrier; the once is poisoned. */
         if (!r_c17_indent(emitter, UINT32_C(1)) ||
             !r_c17_emit_function_name(emitter, initializer_id) ||
+            !r_c17_write(emitter, "(context);\n") ||
+            (r_c17_profile_unwinds(emitter) &&
+             !r_c17_write(emitter,
+                          "    if (r_runtime_unwinding()) {\n        return 0;\n    }\n")) ||
             !r_c17_write(emitter,
-                         "(context);\n"
                          "    if (context->r_tag != UINT32_C(0)) {\n"
                          "        return 0;\n"
                          "    }\n")) {
@@ -33914,7 +34173,8 @@ static bool r_c17_emit_async_new(RC17Emitter *emitter,
         !r_c17_emit_async_storage_reference(emitter, mir, function, false, instruction->operand0) ||
         !r_c17_write(emitter, ",\n") || !r_c17_indent(emitter, depth + UINT32_C(1)) ||
         !r_c17_emit_span(emitter, instruction->span) || !r_c17_write(emitter, ");\n") ||
-        !r_c17_indent(emitter, depth) ||
+        /* L39: before the owner is marked, so that the frame drops the payload, not the owner. */
+        !r_c17_emit_panic_test(emitter, depth) || !r_c17_indent(emitter, depth) ||
         !r_c17_emit_async_init_reference(emitter, "frame", false, instruction->result) ||
         !r_c17_write(emitter, " = 1;\n")) {
         return false;
@@ -34049,7 +34309,8 @@ static bool r_c17_emit_async_unary(RC17Emitter *emitter,
                    emitter, mir, function, false, instruction->operand0) &&
                r_c17_write(emitter, ",\n") &&
                r_c17_spaces(emitter, ((size_t)depth + 1U) * 4U + strlen(helper) + 1U) &&
-               r_c17_emit_span(emitter, instruction->span) && r_c17_write(emitter, ");\n");
+               r_c17_emit_span(emitter, instruction->span) && r_c17_write(emitter, ");\n") &&
+               (!r_c17_helper_panics(helper) || r_c17_emit_panic_test(emitter, depth));
     }
     return r_c17_write(emitter, "(") && r_c17_emit_value_type(emitter, instruction->type) &&
            r_c17_write(emitter, ")(") &&
@@ -34137,6 +34398,8 @@ static bool r_c17_emit_async_binary(RC17Emitter *emitter,
             !r_c17_emit_span(emitter, instruction->span) || !r_c17_write(emitter, ")")) {
             return false;
         }
+        return r_c17_write(emitter, ";\n") &&
+               (!r_c17_helper_panics(helper) || r_c17_emit_panic_test(emitter, depth));
     }
     return r_c17_write(emitter, ";\n");
 }
@@ -34700,13 +34963,50 @@ static bool r_c17_emit_async_start_instruction(RC17Emitter *emitter,
            r_c17_write(emitter, " = 1;\n");
 }
 
+/* The end of a completed await: the result is initialized, a cancellation requested meanwhile
+   drops it and leaves through the cancel block, otherwise the step resumes. */
+static bool r_c17_emit_async_await_completed(RC17Emitter *emitter,
+                                             const RMirInstruction *instruction,
+                                             bool has_result,
+                                             uint32_t depth) {
+    const bool flagged = has_result && r_c17_type_requires_init_flag(emitter, instruction->type);
+
+    return (!flagged ||
+            (r_c17_indent(emitter, depth + UINT32_C(1)) &&
+             r_c17_emit_async_init_reference(emitter, "frame", false, instruction->result) &&
+             r_c17_write(emitter, " = 1;\n"))) &&
+           r_c17_indent(emitter, depth + UINT32_C(1)) &&
+           r_c17_write(emitter, "if (r_runtime_task_execution_cancel_requested(execution)) {\n") &&
+           (!flagged || r_c17_emit_async_drop_field(emitter,
+                                                    instruction->type,
+                                                    R_C17_ASYNC_STORAGE_VALUE,
+                                                    instruction->result,
+                                                    depth + UINT32_C(2))) &&
+           r_c17_indent(emitter, depth + UINT32_C(2)) &&
+           r_c17_format(
+               emitter, "frame->r_state = UINT32_C(%" PRIu32 ");\n", instruction->target1) &&
+           r_c17_indent(emitter, depth + UINT32_C(2)) && r_c17_write(emitter, "continue;\n") &&
+           r_c17_indent(emitter, depth + UINT32_C(1)) && r_c17_write(emitter, "}\n") &&
+           r_c17_indent(emitter, depth + UINT32_C(1)) &&
+           r_c17_format(
+               emitter, "frame->r_state = UINT32_C(%" PRIu32 ");\n", instruction->target0) &&
+           r_c17_indent(emitter, depth + UINT32_C(1)) && r_c17_write(emitter, "continue;\n");
+}
+
 static bool
 r_c17_emit_async_await(RC17Emitter *emitter, const RMirInstruction *instruction, uint32_t depth) {
     const RC17AsyncStorageKind task_storage =
         instruction->place_is_parameter ? R_C17_ASYNC_STORAGE_PARAMETER : R_C17_ASYNC_STORAGE_LOCAL;
     const bool has_result = r_c17_result_has_value(emitter, instruction->type);
+    /* R-SLIB-ASYNC-0020 (L39): a join writes the value of the task into the returned payload of
+       its std.thread::join_result, or the report of its panic into the panicked one. */
+    const bool join = instruction->integer_value == UINT64_C(1);
+    const RSemanticType *join_type =
+        join ? r_c17_type(emitter, r_c17_value_type(emitter, instruction->type)) : NULL;
+    const bool join_returns =
+        (join_type != NULL) && (r_c17_value_kind(emitter, join_type->base) != R_SEMANTIC_TYPE_VOID);
 
-    if (!r_c17_indent(emitter, depth) ||
+    if ((join && !has_result) || !r_c17_indent(emitter, depth) ||
         !r_c17_write(emitter, "const RRuntimeTaskExecutionAwaitStatus await_status =\n") ||
         !r_c17_indent(emitter, depth + UINT32_C(1)) ||
         !r_c17_write(emitter, "r_runtime_task_execution_await(execution, &") ||
@@ -34715,7 +35015,17 @@ r_c17_emit_async_await(RC17Emitter *emitter, const RMirInstruction *instruction,
         !r_c17_write(emitter, ", ")) {
         return false;
     }
-    if (has_result) {
+    if (join) {
+        if (join_returns) {
+            if (!r_c17_write(emitter, "&") ||
+                !r_c17_emit_async_field_reference(emitter, "frame", false, instruction->result) ||
+                !r_c17_write(emitter, ".r_payload.r_returned")) {
+                return false;
+            }
+        } else if (!r_c17_write(emitter, "NULL")) {
+            return false;
+        }
+    } else if (has_result) {
         if (!r_c17_write(emitter, "&") ||
             !r_c17_emit_async_field_reference(emitter, "frame", false, instruction->result)) {
             return false;
@@ -34736,33 +35046,12 @@ r_c17_emit_async_await(RC17Emitter *emitter, const RMirInstruction *instruction,
         !r_c17_write(emitter, " = 0;\n")) {
         return false;
     }
-    if (has_result && r_c17_type_requires_init_flag(emitter, instruction->type) &&
-        (!r_c17_indent(emitter, depth + UINT32_C(1)) ||
-         !r_c17_emit_async_init_reference(emitter, "frame", false, instruction->result) ||
-         !r_c17_write(emitter, " = 1;\n"))) {
+    if (join && (!r_c17_indent(emitter, depth + UINT32_C(1)) ||
+                 !r_c17_emit_async_field_reference(emitter, "frame", false, instruction->result) ||
+                 !r_c17_write(emitter, ".r_tag = UINT32_C(0);\n"))) {
         return false;
     }
-    if (!r_c17_indent(emitter, depth + UINT32_C(1)) ||
-        !r_c17_write(emitter, "if (r_runtime_task_execution_cancel_requested(execution)) {\n")) {
-        return false;
-    }
-    if (has_result && r_c17_type_requires_init_flag(emitter, instruction->type) &&
-        !r_c17_emit_async_drop_field(emitter,
-                                     instruction->type,
-                                     R_C17_ASYNC_STORAGE_VALUE,
-                                     instruction->result,
-                                     depth + UINT32_C(2))) {
-        return false;
-    }
-    if (!r_c17_indent(emitter, depth + UINT32_C(2)) ||
-        !r_c17_format(emitter, "frame->r_state = UINT32_C(%" PRIu32 ");\n", instruction->target1) ||
-        !r_c17_indent(emitter, depth + UINT32_C(2)) || !r_c17_write(emitter, "continue;\n") ||
-        !r_c17_indent(emitter, depth + UINT32_C(1)) || !r_c17_write(emitter, "}\n")) {
-        return false;
-    }
-    if (!r_c17_indent(emitter, depth + UINT32_C(1)) ||
-        !r_c17_format(emitter, "frame->r_state = UINT32_C(%" PRIu32 ");\n", instruction->target0) ||
-        !r_c17_indent(emitter, depth + UINT32_C(1)) || !r_c17_write(emitter, "continue;\n") ||
+    if (!r_c17_emit_async_await_completed(emitter, instruction, has_result, depth) ||
         !r_c17_indent(emitter, depth) ||
         !r_c17_write(emitter, "case R_RUNTIME_TASK_EXECUTION_AWAIT_CANCELLED:\n") ||
         !r_c17_indent(emitter, depth + UINT32_C(1)) ||
@@ -34770,8 +35059,43 @@ r_c17_emit_async_await(RC17Emitter *emitter, const RMirInstruction *instruction,
             emitter, "frame", task_storage, instruction->place_ordinal) ||
         !r_c17_write(emitter, " = 0;\n") || !r_c17_indent(emitter, depth + UINT32_C(1)) ||
         !r_c17_format(emitter, "frame->r_state = UINT32_C(%" PRIu32 ");\n", instruction->target1) ||
-        !r_c17_indent(emitter, depth + UINT32_C(1)) || !r_c17_write(emitter, "continue;\n") ||
-        !r_c17_indent(emitter, depth) ||
+        !r_c17_indent(emitter, depth + UINT32_C(1)) || !r_c17_write(emitter, "continue;\n")) {
+        return false;
+    }
+    /* L39 (R-FUNC-0012): the awaited task panicked and its panic is pending here now; the step
+       continues in the panic block of the await. */
+    /* R-SLIB-ASYNC-0020 (L39): the panic of a joined task, which the await made pending here,
+       becomes the panicked report of the result, and the step goes on as after a completion. */
+    if (join && (!r_c17_indent(emitter, depth) ||
+                 !r_c17_write(emitter, "case R_RUNTIME_TASK_EXECUTION_AWAIT_PANICKED:\n") ||
+                 !r_c17_indent(emitter, depth + UINT32_C(1)) ||
+                 !r_c17_emit_async_object_init_reference(
+                     emitter, "frame", task_storage, instruction->place_ordinal) ||
+                 !r_c17_write(emitter, " = 0;\n") || !r_c17_indent(emitter, depth + UINT32_C(1)) ||
+                 !r_c17_emit_async_field_reference(emitter, "frame", false, instruction->result) ||
+                 !r_c17_write(emitter, ".r_tag = UINT32_C(1);\n") ||
+                 !r_c17_indent(emitter, depth + UINT32_C(1)) ||
+                 !r_c17_write(emitter, "r_std_async_join(&") ||
+                 !r_c17_emit_async_field_reference(emitter, "frame", false, instruction->result) ||
+                 !r_c17_write(emitter, ".r_payload.r_panicked);\n") ||
+                 !r_c17_emit_async_await_completed(emitter, instruction, has_result, depth))) {
+        return false;
+    }
+    if (!join && (instruction->panic_target != R_MIR_BLOCK_ID_INVALID) &&
+        (!r_c17_indent(emitter, depth) ||
+         !r_c17_write(emitter, "case R_RUNTIME_TASK_EXECUTION_AWAIT_PANICKED:\n") ||
+         !r_c17_indent(emitter, depth + UINT32_C(1)) ||
+         !r_c17_emit_async_object_init_reference(
+             emitter, "frame", task_storage, instruction->place_ordinal) ||
+         !r_c17_write(emitter, " = 0;\n") || !r_c17_indent(emitter, depth + UINT32_C(1)) ||
+         !r_c17_write(emitter, "r_runtime_task_panic_park(execution);\n") ||
+         !r_c17_indent(emitter, depth + UINT32_C(1)) ||
+         !r_c17_format(
+             emitter, "frame->r_state = UINT32_C(%" PRIu32 ");\n", instruction->panic_target) ||
+         !r_c17_indent(emitter, depth + UINT32_C(1)) || !r_c17_write(emitter, "continue;\n"))) {
+        return false;
+    }
+    if (!r_c17_indent(emitter, depth) ||
         !r_c17_write(emitter, "case R_RUNTIME_TASK_EXECUTION_AWAIT_INVALID:\n") ||
         !r_c17_indent(emitter, depth) || !r_c17_write(emitter, "default:\n") ||
         !r_c17_emit_async_contract_panic(emitter, instruction->span, depth + UINT32_C(1)) ||
@@ -41943,6 +42267,9 @@ static bool r_c17_emit_async_call(RC17Emitter *emitter,
     } else if (!r_c17_emit_async_call_expression(emitter, mir, function, instruction, depth)) {
         return false;
     }
+    if (!callee->is_import && !r_c17_emit_panic_test(emitter, depth)) {
+        return false;
+    }
     if ((instruction->result != R_MIR_VALUE_ID_INVALID) &&
         r_c17_type_requires_init_flag(emitter, instruction->type) &&
         (!r_c17_indent(emitter, depth) ||
@@ -42890,12 +43217,47 @@ static bool r_c17_emit_async_core_integer_unchecked(RC17Emitter *emitter,
 
 #include "task_scope.inc"
 
+static bool r_c17_emit_async_instruction_kind(RC17Emitter *emitter,
+                                              const RMirFunction *mir,
+                                              const RSemanticSymbol *function,
+                                              const RMirInstruction *instruction,
+                                              RMirBlockId block_id,
+                                              uint32_t depth);
+
+/* L39: an instruction with a panic block is the panic source of the code written for it. */
 static bool r_c17_emit_async_instruction(RC17Emitter *emitter,
                                          const RMirFunction *mir,
                                          const RSemanticSymbol *function,
                                          const RMirInstruction *instruction,
                                          RMirBlockId block_id,
                                          uint32_t depth) {
+    const RMirBlockId outer = emitter->async_panic_target;
+    bool success;
+
+    emitter->unwind_body = false;
+    emitter->async_panic_target = instruction->panic_target;
+    success =
+        r_c17_emit_async_instruction_kind(emitter, mir, function, instruction, block_id, depth);
+    /* As in a synchronous body, a standard operation may return with the panic of R code that it
+       ran. */
+    if (success &&
+        (((instruction->kind == R_MIR_INSTRUCTION_STANDARD_CALL) && instruction->runs_code) ||
+         (instruction->kind == R_MIR_INSTRUCTION_DROP) ||
+         (instruction->kind == R_MIR_INSTRUCTION_DISCARD)) &&
+        (instruction->panic_target != R_MIR_BLOCK_ID_INVALID) &&
+        (r_c17_value_kind(emitter, instruction->type) != R_SEMANTIC_TYPE_NEVER)) {
+        success = r_c17_emit_panic_test(emitter, depth);
+    }
+    emitter->async_panic_target = outer;
+    return success;
+}
+
+static bool r_c17_emit_async_instruction_kind(RC17Emitter *emitter,
+                                              const RMirFunction *mir,
+                                              const RSemanticSymbol *function,
+                                              const RMirInstruction *instruction,
+                                              RMirBlockId block_id,
+                                              uint32_t depth) {
     const RMirInstruction *place;
     const RMirInstruction *operand;
 
@@ -43375,6 +43737,19 @@ static bool r_c17_emit_async_instruction(RC17Emitter *emitter,
                 }
             }
             return r_c17_write(emitter, ");\n");
+        }
+        if ((instruction->standard_operation == R_STANDARD_CALL_CORE_PANIC) &&
+            r_c17_panic_unwinds(emitter, "R_RUNTIME_PANIC_EXPLICIT")) {
+            /* L39: under unwind the message becomes the text of the report (R-LIB-0013). */
+            const RMirValueId message = r_c17_mir_operand(emitter, instruction, UINT32_C(0));
+
+            return (instruction->operand_count == UINT32_C(1)) && r_c17_indent(emitter, depth) &&
+                   r_c17_write(emitter, "r_runtime_raise_text(R_RUNTIME_PANIC_EXPLICIT, ") &&
+                   r_c17_emit_span(emitter, instruction->span) && r_c17_write(emitter, ", ") &&
+                   r_c17_emit_async_storage_reference(emitter, mir, function, false, message) &&
+                   r_c17_write(emitter, ".data, ") &&
+                   r_c17_emit_async_storage_reference(emitter, mir, function, false, message) &&
+                   r_c17_write(emitter, ".length);\n") && r_c17_emit_panic_exit(emitter, depth);
         }
         if (instruction->standard_operation == R_STANDARD_CALL_CORE_PANIC) {
             /* The evaluated message stays referenced; the runtime reports the category. */
@@ -44082,6 +44457,11 @@ static bool r_c17_emit_async_instruction(RC17Emitter *emitter,
     case R_MIR_INSTRUCTION_CANCEL:
         return r_c17_indent(emitter, depth) &&
                r_c17_write(emitter, "return R_RUNTIME_TASK_STEP_CANCELLED;\n");
+    case R_MIR_INSTRUCTION_PANIC:
+        return r_c17_indent(emitter, depth) &&
+               r_c17_write(emitter, "r_runtime_task_panic_unpark(execution);\n") &&
+               r_c17_indent(emitter, depth) &&
+               r_c17_write(emitter, "return R_RUNTIME_TASK_STEP_PANICKED;\n");
     case R_MIR_INSTRUCTION_DROP:
         place = r_c17_mir_place_definition(
             emitter, mir, instruction->place_ordinal, instruction->place_is_parameter);
@@ -44308,6 +44688,7 @@ static bool r_c17_emit_async_step(RC17Emitter *emitter,
         return false;
     }
     body_start = emitter->output.length;
+    emitter->async_dispatch_used = false;
     if (!r_c17_write(emitter,
                      "\n"
                      "    for (;;) {\n"
@@ -44340,6 +44721,12 @@ static bool r_c17_emit_async_step(RC17Emitter *emitter,
         if (!r_c17_write(emitter, "        }\n")) {
             return false;
         }
+    }
+    /* L39: the panic transitions of the step continue its loop through this label. */
+    if (emitter->async_dispatch_used &&
+        !r_c17_insert_text(
+            emitter, body_start + sizeof("\n    for (;;) {\n") - 1U, "    r_async_dispatch:\n")) {
+        return false;
     }
     /* A void or never result, or a body that neither completes nor throws, such as one that only
        panics or exits, leaves the result storage unused. */
@@ -44826,10 +45213,15 @@ static bool r_c17_emit_c_export_wrapper(RC17Emitter *emitter, RSymbolId function
             return false;
         }
     }
-    return r_c17_write(emitter,
-                       r_c17_freestanding(emitter)
-                           ? ");\n"
-                           : ");\n    r_runtime_c_entry_end(&r_c_entry);\n") &&
+    /* L39 (R-ERR-0006): a panic that reaches the C boundary, after the R frames have run their
+       cleanup, aborts with its report instead of unwinding into C. */
+    return r_c17_write(emitter, ");\n") &&
+           (!r_c17_profile_unwinds(emitter) || r_c17_write(emitter,
+                                                           "    if (r_runtime_unwinding()) {\n"
+                                                           "        r_runtime_unwind_terminate();\n"
+                                                           "    }\n")) &&
+           (r_c17_freestanding(emitter) ||
+            r_c17_write(emitter, "    r_runtime_c_entry_end(&r_c_entry);\n")) &&
            (!has_result || r_c17_write(emitter, "    return r_c_result;\n")) &&
            r_c17_write(emitter, "}\n\n");
 }
@@ -45028,6 +45420,9 @@ static bool r_c17_emit_sync_function(RC17Emitter *emitter,
     emitter->finally_payload_type_count = 0U;
     emitter->loop_count = 0U;
     emitter->switch_count = 0U;
+    emitter->unwind_body = r_c17_profile_unwinds(emitter);
+    emitter->panic_source = NULL;
+    emitter->async_panic_target = R_MIR_BLOCK_ID_INVALID;
     (void)memset(emitter->direct_copy_carrier_temporaries,
                  0,
                  (emitter->frontend->semantic_symbol_count + 1U) *
@@ -48394,7 +48789,143 @@ static bool r_c17_emit_core_atomic_helpers(RC17Emitter *emitter) {
         "}\n\n");
 }
 
+/* L39 (R-ERR-0005): in a hosted program the helpers raise integer overflow, division by zero, an
+   invalid shift and the allocation failure of new instead of aborting. Each such panic line becomes
+   r_runtime_raise, which has the length of r_runtime_panic, followed by the return of a zero result
+   of the helper, which the caller never reads since it tests the panic after the call. Contract
+   violations, reference count overflow and thread-local lifetime panics still abort. */
+static bool r_c17_unwind_helpers(RC17Emitter *emitter, size_t start) {
+    static const char *const categories[] = {
+        "INTEGER_OVERFLOW", "DIVISION_BY_ZERO", "INVALID_SHIFT", "ALLOCATION_FAILURE"};
+    static const char panic_call[] = "r_runtime_panic(R_RUNTIME_PANIC_";
+    size_t *lines = NULL;
+    char (*types)[64] = NULL;
+    size_t line_count = 0U;
+    size_t line_capacity = 0U;
+    size_t position = start;
+    char type[64] = "";
+    bool success = false;
+
+    if ((emitter->frontend->profile == R_FRONTEND_PROFILE_FREESTANDING) ||
+        (emitter->frontend->profile == R_FRONTEND_PROFILE_ALLOCATION)) {
+        return true;
+    }
+    while (position < emitter->output.length) {
+        const char *line = (const char *)emitter->output.bytes + position;
+        const char *end = memchr(line, '\n', emitter->output.length - position);
+        const size_t length =
+            end == NULL ? emitter->output.length - position : (size_t)(end - line) + 1U;
+        size_t indent = 0U;
+
+        if ((length > 7U) && (memcmp(line, "static ", 7U) == 0)) {
+            const char *name = memchr(line + 7U, ' ', length - 7U);
+            const size_t type_length = name == NULL ? 0U : (size_t)(name - (line + 7U));
+            if ((type_length != 0U) && (type_length < sizeof(type))) {
+                (void)memcpy(type, line + 7U, type_length);
+                type[type_length] = '\0';
+            } else {
+                type[0] = '\0';
+            }
+        }
+        while ((indent < length) && (line[indent] == ' ')) {
+            indent += 1U;
+        }
+        if ((length > indent + sizeof(panic_call) - 1U) &&
+            (memcmp(line + indent, panic_call, sizeof(panic_call) - 1U) == 0)) {
+            const char *category = line + indent + sizeof(panic_call) - 1U;
+            for (size_t index = 0U; index < sizeof(categories) / sizeof(categories[0]); ++index) {
+                const size_t category_length = strlen(categories[index]);
+                if ((strncmp(category, categories[index], category_length) == 0) &&
+                    (strncmp(category + category_length, ", span);\n", 9U) == 0)) {
+                    if (line_count == line_capacity) {
+                        const size_t capacity = line_capacity == 0U ? 16U : line_capacity * 2U;
+                        size_t *grown_lines = r_c17_allocate(emitter, capacity * sizeof(*lines));
+                        char (*grown_types)[64] =
+                            r_c17_allocate(emitter, capacity * sizeof(*types));
+                        if ((grown_lines == NULL) || (grown_types == NULL)) {
+                            r_c17_free(emitter, grown_lines);
+                            r_c17_free(emitter, grown_types);
+                            goto cleanup;
+                        }
+                        if (line_count != 0U) {
+                            (void)memcpy(grown_lines, lines, line_count * sizeof(*lines));
+                            (void)memcpy(grown_types, types, line_count * sizeof(*types));
+                        }
+                        r_c17_free(emitter, lines);
+                        r_c17_free(emitter, types);
+                        lines = grown_lines;
+                        types = grown_types;
+                        line_capacity = capacity;
+                    }
+                    lines[line_count] = position;
+                    (void)memcpy(types[line_count], type, sizeof(type));
+                    line_count += 1U;
+                    break;
+                }
+            }
+        }
+        position += length;
+    }
+    while (line_count != 0U) {
+        const size_t line = lines[line_count - 1U];
+        const char *text = (const char *)emitter->output.bytes + line;
+        const char *end = memchr(text, '\n', emitter->output.length - line);
+        size_t indent = 0U;
+        char statement[160];
+        int written;
+
+        line_count -= 1U;
+        while (text[indent] == ' ') {
+            indent += 1U;
+        }
+        (void)memcpy(emitter->output.bytes + line + indent, "r_runtime_raise", 15U);
+        written = strcmp(types[line_count], "void") == 0
+                      ? snprintf(statement, sizeof(statement), "%*sreturn;\n", (int)indent, "")
+                      : snprintf(statement,
+                                 sizeof(statement),
+                                 "%*sreturn (%s){0};\n",
+                                 (int)indent,
+                                 "",
+                                 types[line_count]);
+        if ((end == NULL) || (types[line_count][0] == '\0') || (written < 0) ||
+            ((size_t)written >= sizeof(statement)) ||
+            !r_c17_insert_text(
+                emitter, (size_t)(end - (const char *)emitter->output.bytes) + 1U, statement)) {
+            goto cleanup;
+        }
+    }
+    success = true;
+
+cleanup:
+    r_c17_free(emitter, lines);
+    r_c17_free(emitter, types);
+    return success || r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+}
+
+/* L39: whether a helper of r_c17_helper_name, r_c17_shift_helper_name or
+   r_c17_negation_helper_name can raise a panic: the signed helpers, division and remainder, and the
+   shifts; unsigned addition, subtraction, multiplication and negation wrap. */
+static bool r_c17_helper_panics(const char *helper) {
+    const size_t length = helper == NULL ? 0U : strlen(helper);
+
+    if (length < 6U) {
+        return false;
+    }
+    return (strncmp(helper, "r_i", 3U) == 0) || (strcmp(helper + length - 4U, "_div") == 0) ||
+           (strcmp(helper + length - 4U, "_mod") == 0) ||
+           (strcmp(helper + length - 4U, "_shl") == 0) ||
+           (strcmp(helper + length - 4U, "_shr") == 0);
+}
+
+static bool r_c17_emit_helper_definitions(RC17Emitter *emitter);
+
 static bool r_c17_emit_helpers(RC17Emitter *emitter) {
+    const size_t start = emitter->output.length;
+
+    return r_c17_emit_helper_definitions(emitter) && r_c17_unwind_helpers(emitter, start);
+}
+
+static bool r_c17_emit_helper_definitions(RC17Emitter *emitter) {
     if (!r_c17_emit_core_key_helpers(emitter)) {
         return false;
     }
@@ -52025,6 +52556,12 @@ static bool r_c17_preflight_expression(RC17Emitter *emitter,
                 return false;
             }
         }
+    }
+    /* L39: a panic exit drops the live objects of its node, so their drop glue is requested
+       here as well. */
+    if ((node->panic_cleanup != 0U) &&
+        !r_c17_preflight_statement(emitter, node->panic_cleanup, function_symbol, depth + 1U)) {
+        return false;
     }
     kind = r_c17_value_kind(emitter, node->type);
     switch (node->kind) {

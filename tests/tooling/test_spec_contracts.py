@@ -75,7 +75,7 @@ class SpecificationContractTests(unittest.TestCase):
     def test_repository_catalogs_and_target_manifest_are_current(self) -> None:
         for specification, inventory, expected_count in (
             (CORE_SPECIFICATION, CORE_INVENTORY, "496 rules"),
-            (LIBRARY_SPECIFICATION, LIBRARY_INVENTORY, "440 rules"),
+            (LIBRARY_SPECIFICATION, LIBRARY_INVENTORY, "476 rules"),
         ):
             result = run_tool(
                 str(RULE_GENERATOR),
@@ -188,7 +188,7 @@ class SpecificationContractTests(unittest.TestCase):
         value["manifest_revision"] = 5
         result = self.run_target_with_manifest(value)
         self.assertEqual(result.returncode, 1)
-        self.assertIn("target manifest revision must be 9", result.stderr)
+        self.assertIn("target manifest revision must be 10", result.stderr)
 
     def test_checked_error_carrier_contract_is_closed(self) -> None:
         mutations = (
@@ -211,17 +211,17 @@ class SpecificationContractTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 1)
                 self.assertIn("checked-error carrier contract is not closed", result.stderr)
 
-    def test_first_target_rejects_unwind_panic_strategy(self) -> None:
+    def test_first_target_rejects_abort_panic_strategy(self) -> None:
         value = json.loads(TARGET_MANIFEST.read_text(encoding="utf-8"))
-        value["core"]["panic"]["strategy"] = "unwind"
+        value["core"]["panic"]["strategy"] = "abort"
 
         result = self.run_target_with_manifest(value)
         self.assertEqual(result.returncode, 1)
-        self.assertIn("first target panic strategy must be abort", result.stderr)
+        self.assertIn("first target panic strategy must be unwind", result.stderr)
 
         result = self.run_target_abi_with_manifest(value)
         self.assertEqual(result.returncode, 1)
-        self.assertIn("first target panic strategy must be abort", result.stderr)
+        self.assertIn("first target panic strategy must be unwind", result.stderr)
 
     def test_target_abi_panic_contract_is_closed(self) -> None:
         mutations = (

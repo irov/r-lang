@@ -2606,8 +2606,9 @@ static void r_codegen_test_async_mir_slice(void) {
             R_CODEGEN_CHECK(strstr(generated.bytes, stack_name) != NULL);
             R_CODEGEN_CHECK(strstr(generated.bytes, frame_name) == NULL);
         }
+        /* L39: a hosted async body raises the bounds panic and unwinds (R-ERR-0005). */
         R_CODEGEN_CHECK(r_codegen_count_occurrences(
-                            generated.bytes, "r_runtime_panic(R_RUNTIME_PANIC_BOUNDS,") == 2U);
+                            generated.bytes, "r_runtime_raise(R_RUNTIME_PANIC_BOUNDS,") == 2U);
         R_CODEGEN_CHECK(strstr(generated.bytes, ".r_data[(size_t)") != NULL);
         R_CODEGEN_CHECK(r_frontend_emit_c17(context, r_codegen_write, &repeated) == R_FRONTEND_OK);
         R_CODEGEN_CHECK(r_codegen_buffers_equal(&generated, &repeated));

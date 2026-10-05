@@ -1,4 +1,4 @@
-(mir version=1 core_revision="0.1.0-draft.96"
+(mir version=1 core_revision="0.1.0-draft.97"
   (function name="test.async_mir::consume" visibility=exported return=i32 async=true start=(carrier (task i32) (effects (standard "std.async::start_error"))) state=definition
     (block bb0
       (parameter place=%arg0 name="work" type=(task i32))
@@ -6,7 +6,7 @@
       (jump target=bb1)
     )
     (block bb1
-      (%v0 = await source=%arg0 task=(task i32) type=i32 resume=bb2 cancel=bb3 consuming)
+      (%v0 = await source=%arg0 task=(task i32) type=i32 resume=bb2 cancel=bb3 consuming panic=bb4)
     )
     (block bb2
       (store place=%local0 value=%v0)
@@ -16,6 +16,9 @@
     (block bb3
       (cancel)
     )
+    (block bb4
+      (panic)
+    )
   )
   (function name="test.async_mir::drain" visibility=exported return=void async=true start=(carrier (task void) (effects (standard "std.async::start_error"))) state=definition
     (block bb0
@@ -23,13 +26,16 @@
       (jump target=bb1)
     )
     (block bb1
-      (await source=%arg0 task=(task void) type=void resume=bb2 cancel=bb3 consuming)
+      (await source=%arg0 task=(task void) type=void resume=bb2 cancel=bb3 consuming panic=bb4)
     )
     (block bb2
       (return)
     )
     (block bb3
       (cancel)
+    )
+    (block bb4
+      (panic)
     )
   )
   (function name="test.async_mir::produce" visibility=exported return=i32 async=true start=(carrier (task i32) (effects (standard "std.async::start_error"))) state=definition

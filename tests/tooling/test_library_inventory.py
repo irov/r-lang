@@ -170,15 +170,15 @@ class LibraryInventoryTests(unittest.TestCase):
 
         layout = run_tool(str(LAYOUT_CHECKER), "--root", str(REPOSITORY_ROOT))
         self.assertEqual(layout.returncode, 0, layout.stderr)
-        self.assertIn("68 modules", layout.stdout)
+        self.assertIn("70 modules", layout.stdout)
         inventory = json.loads(INVENTORY.read_text(encoding="utf-8"))
         r_modules = [
             module
             for module in inventory["modules"]
             if module.get("implementation_language") == "r"
         ]
-        self.assertEqual(len(inventory["modules"]), 68)
-        self.assertEqual(len(r_modules), 37)
+        self.assertEqual(len(inventory["modules"]), 70)
+        self.assertEqual(len(r_modules), 39)
         for module in r_modules:
             self.assertTrue((REPOSITORY_ROOT / module["source"]).is_file(), module)
             self.assertIn(
@@ -217,13 +217,17 @@ class LibraryInventoryTests(unittest.TestCase):
         }
         expected_record_rules = {
             # std.tls::config::set_identity (R-SLIB-TLS-0003) takes its private key as a buffer,
-            # and std.crypto keeps secret keys and shared secrets in one (M28).
+            # std.crypto keeps secret keys and shared secrets in one (M28) and returns the DER
+            # and PEM of a private key in one (M36), and std.oauth2 keeps a client secret in one
+            # (M38).
             ("std.secret::buffer", "type"): {
                 "R-SLIB-SECRET-0001",
                 "R-SLIB-SECRET-0003",
                 "R-SLIB-TLS-0003",
                 "R-SLIB-CRYPTO-0001",
                 "R-SLIB-CRYPTO-0005",
+                "R-SLIB-CRYPTO-0012",
+                "R-SLIB-OAUTH2-0003",
             },
             # HMAC (R-SLIB-BYTES-0011) erases its padded keys with zeroize and directs callers
             # to constant_time_equal, so both operations cite that rule as well.
@@ -997,8 +1001,8 @@ class LibraryInventoryTests(unittest.TestCase):
             self.assertEqual(record["implementation"], canonical["implementation"])
 
     def test_async_sync_slice_has_canonical_mappings(self) -> None:
-        # R-SLIB-ASYNC-0013..0018 (L30, L31, M23): locks, semaphore, notify, broadcast, blocking
-        # calls and the task identifier.
+        # R-SLIB-ASYNC-0013..0018, R-SLIB-ASYNC-0020 (L30, L31, M23, L39): locks, semaphore,
+        # notify, broadcast, blocking calls, the task identifier and the join of a task.
         inventory = json.loads(INVENTORY.read_text(encoding="utf-8"))
         records = inventory_records(inventory)
         names = {
@@ -1010,7 +1014,7 @@ class LibraryInventoryTests(unittest.TestCase):
             "try_acquire", "release", "add_permits", "available_permits", "notify",
             "notify_new", "clone_notify", "notify_one", "notify_all", "notified", "broadcast",
             "broadcast_receiver", "broadcast_result", "clone_broadcast", "subscribe", "publish",
-            "broadcast_receive", "blocking", "task_id",
+            "broadcast_receive", "blocking", "task_id", "join",
         }
         self.assertEqual(set(STD_ASYNC_IMPLEMENTATIONS), {f"std.async::{name}" for name in names})
         for item_id, canonical in STD_ASYNC_IMPLEMENTATIONS.items():

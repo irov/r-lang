@@ -7,13 +7,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define R_RUNTIME_TARGET_MANIFEST_SHA256 "b1f6266a30a2ed4fb5f2d42675324bf16124baeacc43d5041a338210edb4eb4a"
+#define R_RUNTIME_TARGET_MANIFEST_SHA256 "05f7c0ffdcf1aec5fadbe7e8ba4ee5a59d067c36f84523c26fed6bcd962e338f"
 #define R_RUNTIME_TARGET_MANIFEST_SHA256_BYTES \
     { \
-        UINT8_C(0xb1), UINT8_C(0xf6), UINT8_C(0x26), UINT8_C(0x6a), UINT8_C(0x30), UINT8_C(0xa2), UINT8_C(0xed), UINT8_C(0x4f), \
-        UINT8_C(0xb5), UINT8_C(0xf2), UINT8_C(0xd4), UINT8_C(0x26), UINT8_C(0x75), UINT8_C(0x32), UINT8_C(0x4b), UINT8_C(0xf1), \
-        UINT8_C(0x61), UINT8_C(0x24), UINT8_C(0xba), UINT8_C(0xea), UINT8_C(0xcc), UINT8_C(0x43), UINT8_C(0xd5), UINT8_C(0x04), \
-        UINT8_C(0x1a), UINT8_C(0x33), UINT8_C(0x82), UINT8_C(0x10), UINT8_C(0xed), UINT8_C(0xb4), UINT8_C(0xeb), UINT8_C(0x4a) \
+        UINT8_C(0x05), UINT8_C(0xf7), UINT8_C(0xc0), UINT8_C(0xff), UINT8_C(0xdc), UINT8_C(0xf1), UINT8_C(0xae), UINT8_C(0xc5), \
+        UINT8_C(0xfa), UINT8_C(0xdb), UINT8_C(0xe7), UINT8_C(0xe8), UINT8_C(0xba), UINT8_C(0x4e), UINT8_C(0xe5), UINT8_C(0xa5), \
+        UINT8_C(0x9d), UINT8_C(0x06), UINT8_C(0x7c), UINT8_C(0x36), UINT8_C(0xf8), UINT8_C(0x45), UINT8_C(0x23), UINT8_C(0xc2), \
+        UINT8_C(0x6f), UINT8_C(0xed), UINT8_C(0x6b), UINT8_C(0xcd), UINT8_C(0x96), UINT8_C(0x2e), UINT8_C(0x33), UINT8_C(0x8f) \
     }
 
 #define R_RUNTIME_STACK_PROTECTED_LOW_BYTES \

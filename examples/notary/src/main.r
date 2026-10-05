@@ -6,17 +6,19 @@ import std.crypto;
 import std.cose;
 import example.notary.keys;
 import example.notary.tools;
+import example.notary.pki;
 
 /* notary signs and seals short messages as COSE messages (RFC 9052) with keys derived from a
    passphrase, verifies and opens them, and shows them in CBOR diagnostic notation. */
-enum Command { public_key, sign, verify, show, seal, open, exchange, password, digest, tag, document, demo };
+enum Command { public_key, sign, verify, show, seal, open, exchange, password, digest, tag, document, demo, keys, cbc };
 
 error Usage { u32 code; };
 
 protected const str usage_text =
     "notary public_key PASSPHRASE | sign PASSPHRASE MESSAGE | verify PUBLIC MESSAGE_HEX\n"
     "notary show MESSAGE_HEX | seal PASSPHRASE TEXT | open PASSPHRASE MESSAGE_HEX\n"
-    "notary exchange NOTE | password SECRET | digest TEXT | tag KEY MESSAGE | document | demo\n";
+    "notary exchange NOTE | password SECRET | digest TEXT | tag KEY MESSAGE | document | demo\n"
+    "notary keys PASSPHRASE | cbc PASSPHRASE TEXT\n";
 
 str word(const array<std.string::string>* arguments, usize index) {
     return (*arguments)[index].as_str();
@@ -217,6 +219,12 @@ async i32 main() {
             case Command::demo:
                 throw (given != 2usize) Usage {.code = 2u32};
                 await std.console::print(demo());
+            case Command::keys:
+                throw (given != 3usize) Usage {.code = 2u32};
+                await std.console::print(example.notary.pki::keys(word(&arguments, 2usize)));
+            case Command::cbc:
+                throw (given != 4usize) Usage {.code = 2u32};
+                await std.console::print(example.notary.pki::cbc(word(&arguments, 2usize), word(&arguments, 3usize)));
             }
             return 0;
         } catch (Usage failure) {

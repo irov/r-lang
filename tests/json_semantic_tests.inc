@@ -195,6 +195,21 @@ static void r_semantic_test_json(void) {
         {"@generic<T> void f() throws std.json::error, std.alloc::alloc_error { "
          "std.json::value s = std.json::schema::<T>(); drop s; }",
          "R-DIAG-JSON-001"},
+        /* M38: a type parameter with a JSON constraint has the schema of each instantiation. */
+        {"struct S { i32 n; }; @generic<T: json_decode> void f() throws std.json::error, "
+         "std.alloc::alloc_error { std.json::value s = std.json::schema::<T>(); drop s; } "
+         "void g() throws std.json::error, std.alloc::alloc_error { f::<S>(); }",
+         NULL},
+        {"struct S { i32 n; }; @generic<T: json_encode> void f() throws std.json::error, "
+         "std.alloc::alloc_error { std.json::value s = std.json::schema::<array<T>>(); drop s; } "
+         "void g() throws std.json::error, std.alloc::alloc_error { f::<S>(); }",
+         NULL},
+        {"struct S { i32 n; }; std.json::value S::json_marshal(const S* value) throws "
+         "std.json::error, std.alloc::alloc_error { return std.json::null(); } "
+         "@generic<T: json_encode> void f() throws std.json::error, std.alloc::alloc_error { "
+         "std.json::value s = std.json::schema::<T>(); drop s; } "
+         "void g() throws std.json::error, std.alloc::alloc_error { f::<S>(); }",
+         "R-DIAG-JSON-001"},
         {"struct S { i32 n; }; std.json::value S::json_marshal(const S* value) throws "
          "std.json::error, std.alloc::alloc_error { return std.json::null(); } "
          "void f() throws std.json::error, std.alloc::alloc_error { "

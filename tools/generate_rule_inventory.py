@@ -14,8 +14,8 @@ from typing import Any
 
 
 DOCUMENT_CONTRACTS = {
-    "R_LANGUAGE_SPECIFICATION_0_1.en.adoc": ("0.1.0-draft.96", 496),
-    "R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc": ("0.1.0-draft.62", 440),
+    "R_LANGUAGE_SPECIFICATION_0_1.en.adoc": ("0.1.0-draft.97", 496),
+    "R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc": ("0.1.0-draft.67", 476),
 }
 
 REVISION_RE = re.compile(r"^\|Document revision\|([^\s]+)$", re.MULTILINE)

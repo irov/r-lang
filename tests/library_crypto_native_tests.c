@@ -1,4 +1,4 @@
-/* The native provider of std.crypto (Library R-SLIB-CRYPTO-0001..0008): each primitive against a
+/* The native provider of std.crypto (Library R-SLIB-CRYPTO-0001..0012): each primitive against a
    known answer of its RFC, the refusals the R part relies on, and the BLAKE2b state kept in
    caller memory without alignment. */
 #include "r_std_crypto_native.h"
@@ -162,6 +162,136 @@ static void r_crypto_test_passwords(void) {
         r_std_crypto_native_password_verify(hash, strlen((const char *)hash), password, 3U) == -1);
 }
 
+/* RFC 6979 appendix A.2.5 (P-256, SHA-256) and A.2.6 (P-384, SHA-384), message "sample". */
+static void r_crypto_test_ecdsa(void) {
+    uint8_t scalar[48];
+    uint8_t point[97];
+    uint8_t signature[96];
+    uint8_t generated[48];
+    uint8_t generated_point[97];
+    const uint8_t *sample = (const uint8_t *)"sample";
+
+    (void)r_crypto_unhex(
+        "c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721", scalar, 32U);
+    R_CRYPTO_CHECK(r_std_crypto_native_ecdsa_public(0, scalar, point) == 0);
+    R_CRYPTO_CHECK(
+        r_crypto_equal_hex(point,
+                           65U,
+                           "0460fed4ba255a9d31c961eb74c6356d68c049b8923b61fa6ce669622e60f29fb6"
+                           "7903fe1008b8bc99a41ae9e95628bc64f2f1b20c2d7e9f5177a3c294d4462299"));
+    R_CRYPTO_CHECK(r_std_crypto_native_ecdsa_sign(0, scalar, sample, 6U, signature) == 0);
+    R_CRYPTO_CHECK(
+        r_crypto_equal_hex(signature,
+                           64U,
+                           "efd48b2aacb6a8fd1140dd9cd45e81d69d2c877b56aaf991c34d0ea84eaf3716"
+                           "f7cb1c942d657c41d436c7a1b6e29f65f3e900dbb9aff4064dc4ab2f843acda8"));
+    R_CRYPTO_CHECK(r_std_crypto_native_ecdsa_verify(0, point, 65U, sample, 6U, signature, 64U) ==
+                   0);
+    R_CRYPTO_CHECK(r_std_crypto_native_ecdsa_verify(0, point, 65U, sample, 5U, signature, 64U) ==
+                   R_STD_CRYPTO_NATIVE_REJECTED);
+    R_CRYPTO_CHECK(r_std_crypto_native_ecdsa_verify(0, point, 65U, sample, 6U, signature, 63U) ==
+                   R_STD_CRYPTO_NATIVE_REJECTED);
+    point[64] ^= 1U;
+    R_CRYPTO_CHECK(r_std_crypto_native_ecdsa_check(0, point, 65U) == R_STD_CRYPTO_NATIVE_INVALID);
+    R_CRYPTO_CHECK(r_std_crypto_native_ecdsa_verify(0, point, 65U, sample, 6U, signature, 64U) ==
+                   R_STD_CRYPTO_NATIVE_INVALID);
+    memset(scalar, 0, 32U);
+    R_CRYPTO_CHECK(r_std_crypto_native_ecdsa_public(0, scalar, point) ==
+                   R_STD_CRYPTO_NATIVE_INVALID);
+
+    (void)r_crypto_unhex("6b9d3dad2e1b8c1c05b19875b6659f4de23c3b667bf297ba9aa47740787137d8"
+                         "96d5724e4c70a825f872c9ea60d2edf5",
+                         scalar,
+                         48U);
+    R_CRYPTO_CHECK(r_std_crypto_native_ecdsa_public(1, scalar, point) == 0);
+    R_CRYPTO_CHECK(r_std_crypto_native_ecdsa_check(1, point, 97U) == 0);
+    R_CRYPTO_CHECK(r_std_crypto_native_ecdsa_sign(1, scalar, sample, 6U, signature) == 0);
+    R_CRYPTO_CHECK(
+        r_crypto_equal_hex(signature,
+                           96U,
+                           "94edbb92a5ecb8aad4736e56c691916b3f88140666ce9fa73d64c4ea95ad133c"
+                           "81a648152e44acf96e36dd1e80fabe4699ef4aeb15f178cea1fe40db2603138f"
+                           "130e740a19624526203b6351d0a3a94fa329c145786e679e7b82c71a38628ac8"));
+    R_CRYPTO_CHECK(r_std_crypto_native_ecdsa_verify(1, point, 97U, sample, 6U, signature, 96U) ==
+                   0);
+
+    R_CRYPTO_CHECK(r_std_crypto_native_ecdsa_generate(0, generated, generated_point) == 0);
+    R_CRYPTO_CHECK(r_std_crypto_native_ecdsa_public(0, generated, point) == 0);
+    R_CRYPTO_CHECK(memcmp(point, generated_point, 65U) == 0);
+    R_CRYPTO_CHECK(r_std_crypto_native_ecdsa_sign(0, generated, sample, 6U, signature) == 0);
+    R_CRYPTO_CHECK(
+        r_std_crypto_native_ecdsa_verify(0, generated_point, 65U, sample, 6U, signature, 64U) == 0);
+    R_CRYPTO_CHECK(r_std_crypto_native_ecdsa_public(2, generated, point) ==
+                   R_STD_CRYPTO_NATIVE_FAILED);
+}
+
+/* RSA keys of the provider's own generation: both schemes sign and verify, and a changed
+   message, a signature of another length and a key that is not DER are refused. */
+static void r_crypto_test_rsa(void) {
+    static uint8_t key[2400];
+    uint8_t signature[256];
+    const uint8_t *message = (const uint8_t *)"pay 10 coins";
+    int32_t length = r_std_crypto_native_rsa_generate(2048U, key, sizeof(key));
+    int32_t scheme;
+
+    R_CRYPTO_CHECK(length > 0);
+    if (length <= 0) {
+        return;
+    }
+    R_CRYPTO_CHECK(r_std_crypto_native_rsa_check_private(key, (size_t)length) == 2048);
+    R_CRYPTO_CHECK(r_std_crypto_native_rsa_check_private(key, 10U) == R_STD_CRYPTO_NATIVE_INVALID);
+    R_CRYPTO_CHECK(r_std_crypto_native_rsa_generate(1024U, key + 2048, 300U) ==
+                   R_STD_CRYPTO_NATIVE_INVALID);
+    for (scheme = 0; scheme < 6; ++scheme) {
+        R_CRYPTO_CHECK(r_std_crypto_native_rsa_sign(
+                           scheme, key, (size_t)length, message, 12U, signature, 256U) == 256);
+    }
+    R_CRYPTO_CHECK(
+        r_std_crypto_native_rsa_sign(6, key, (size_t)length, message, 12U, signature, 256U) ==
+        R_STD_CRYPTO_NATIVE_INVALID);
+    R_CRYPTO_CHECK(r_std_crypto_native_rsa_check_public(key, (size_t)length) ==
+                   R_STD_CRYPTO_NATIVE_INVALID);
+}
+
+/* NIST SP 800-38A F.2.1 (AES-128) with the PKCS#7 block that follows a whole block, and a short
+   message under AES-256; checked against the Python cryptography package. */
+static void r_crypto_test_cbc(void) {
+    uint8_t key[32];
+    uint8_t iv[16];
+    uint8_t plain[32];
+    uint8_t cipher[48];
+    uint8_t opened[48];
+    size_t index;
+
+    for (index = 0U; index < 16U; ++index) {
+        iv[index] = (uint8_t)index;
+    }
+    (void)r_crypto_unhex("2b7e151628aed2a6abf7158809cf4f3c", key, 16U);
+    (void)r_crypto_unhex("6bc1bee22e409f96e93d7e117393172a", plain, 16U);
+    R_CRYPTO_CHECK(r_std_crypto_native_cbc(1, key, 16U, iv, plain, 16U, cipher, sizeof(cipher)) ==
+                   32);
+    R_CRYPTO_CHECK(r_crypto_equal_hex(
+        cipher, 32U, "7649abac8119b246cee98e9b12e9197d8964e0b149c10b7b682e6e39aaeb731c"));
+    R_CRYPTO_CHECK(r_std_crypto_native_cbc(0, key, 16U, iv, cipher, 32U, opened, sizeof(opened)) ==
+                   16);
+    R_CRYPTO_CHECK(memcmp(opened, plain, 16U) == 0);
+    cipher[31] ^= 1U;
+    R_CRYPTO_CHECK(r_std_crypto_native_cbc(0, key, 16U, iv, cipher, 32U, opened, sizeof(opened)) ==
+                   R_STD_CRYPTO_NATIVE_REJECTED);
+    R_CRYPTO_CHECK(r_std_crypto_native_cbc(0, key, 16U, iv, cipher, 31U, opened, sizeof(opened)) ==
+                   R_STD_CRYPTO_NATIVE_INVALID);
+    R_CRYPTO_CHECK(r_std_crypto_native_cbc(1, key, 15U, iv, plain, 16U, cipher, sizeof(cipher)) ==
+                   R_STD_CRYPTO_NATIVE_INVALID);
+
+    (void)r_crypto_unhex(
+        "603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4", key, 32U);
+    R_CRYPTO_CHECK(r_std_crypto_native_cbc(
+                       1, key, 32U, iv, (const uint8_t *)"hello", 5U, cipher, sizeof(cipher)) ==
+                   16);
+    R_CRYPTO_CHECK(r_crypto_equal_hex(cipher, 16U, "11567e234fd4575f682ce39def007307"));
+    R_CRYPTO_CHECK(r_std_crypto_native_cbc(1, key, 32U, iv, NULL, 0U, cipher, 16U) == 16);
+}
+
 int main(void) {
     uint8_t random[32] = {0};
     R_CRYPTO_CHECK(r_std_crypto_native_ready() == 0);
@@ -171,6 +301,10 @@ int main(void) {
     r_crypto_test_aead();
     r_crypto_test_hkdf_and_blake2b();
     r_crypto_test_passwords();
+    R_CRYPTO_CHECK(r_std_crypto_native_pk_ready() == 0);
+    r_crypto_test_ecdsa();
+    r_crypto_test_rsa();
+    r_crypto_test_cbc();
     if (r_crypto_failures != 0) {
         (void)fprintf(stderr, "%d crypto native checks failed\n", r_crypto_failures);
         return 1;

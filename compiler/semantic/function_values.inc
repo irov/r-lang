@@ -5,6 +5,31 @@
  * prototype of the signature's callable trait applied to the function type (a dispatcher). */
 
 /* The function type spelled by the callable signature `node` in a type position. */
+/* M42-1: the Send and unborrowed requirements of an async function type (R-TYPE-0054); a type
+   that depends on a generic parameter is checked in each instance, since an instance of a generic
+   struct named in a field is not yet complete when the field is read. */
+static bool r_function_value_async_signature(const RFrontendContext *context,
+                                             const RTypeVector *parameters,
+                                             RTypeId result,
+                                             RTypeId effects) {
+    if (!r_generic_type_is_dependent(context, result, 0U) &&
+        !r_closure_async_value(context, result, true)) {
+        return false;
+    }
+    for (size_t index = 0U; index < parameters->count; ++index) {
+        if (!r_generic_type_is_dependent(context, parameters->items[index], 0U) &&
+            !r_closure_async_value(context, parameters->items[index], false)) {
+            return false;
+        }
+    }
+    for (uint32_t index = 0U; index < r_semantic_effect_count(context, effects); ++index) {
+        if (!r_closure_async_value(context, r_semantic_effect_at(context, effects, index), false)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool r_function_value_type(RFrontendContext *context, RAstRef node, RTypeId *result) {
     RAstNodeView view;
     RTypeVector types = {0};
@@ -75,9 +100,13 @@ static bool r_function_value_type(RFrontendContext *context, RAstRef node, RType
     for (size_t index = 0U; index <= types.count; ++index)
         if (!r_semantic_collect_type_on_demand(context, types.items[index]))
             goto cleanup;
-    valid = r_closure_sync_result(context, returned);
+    /* M42-1: a type that depends on a generic parameter, such as an instance of a generic
+       struct, is checked in each instance; the declaration only fixes its shape. */
+    valid = r_generic_type_is_dependent(context, returned, 0U) ||
+            r_closure_sync_result(context, returned);
     for (size_t parameter = 0U; valid && parameter < types.count; ++parameter)
-        valid = r_closure_sync_input(context, types.items[parameter]);
+        valid = r_generic_type_is_dependent(context, types.items[parameter], 0U) ||
+                r_closure_sync_input(context, types.items[parameter]);
     if (!valid) {
         success = r_semantic_add_diagnostic(
             context,
@@ -107,7 +136,7 @@ static bool r_function_value_type(RFrontendContext *context, RAstRef node, RType
                 view.span);
             goto cleanup;
         }
-    if (asynchronous && !r_closure_async_signature(context, &types, returned, effects)) {
+    if (asynchronous && !r_function_value_async_signature(context, &types, returned, effects)) {
         success = r_semantic_add_diagnostic(context,
                                             "R-DIAG-ASYNC-001",
                                             "R-TYPE-0054",
@@ -201,6 +230,44 @@ static bool r_function_value_record(RFrontendContext *context,
     context->function_value_targets[context->function_value_target_count++] =
         (RFunctionValueTarget){type, function, span};
     return true;
+}
+
+/* M42-2: whether the concrete function type `destination` meets the requirements of R-TYPE-0054.
+   A type that depends on a generic parameter passes its declaration (M42-1), so the types of an
+   instance, a field of `holder<const i32*>` for one, are checked where a function converts to
+   them: every function value comes from such a conversion (r_function_value_resolve_targets). */
+static bool r_function_value_concrete(RFrontendContext *context, RTypeId destination) {
+    const RSemanticType *function = r_semantic_type(context, destination);
+    RTypeVector parameters = {0};
+    RTypeId returned = function->base;
+    RTypeId effects = R_TYPE_ID_INVALID;
+    const RSemanticType *carrier = r_semantic_type(context, returned);
+    bool valid = true;
+    if (carrier != NULL && carrier->kind == R_SEMANTIC_TYPE_EFFECT_CARRIER) {
+        returned = carrier->base;
+        effects = carrier->second;
+    }
+    for (RTypeId chain = function->second; chain != R_TYPE_ID_INVALID;) {
+        const RSemanticType *item = r_semantic_type(context, chain);
+        if (item == NULL || item->kind != R_SEMANTIC_TYPE_FUNCTION_PARAMETER) {
+            context->resource_status = R_FRONTEND_INTERNAL_ERROR;
+            r_context_free(context, parameters.items);
+            return false;
+        }
+        if (!r_type_vector_push(context, &parameters, item->base)) {
+            r_context_free(context, parameters.items);
+            return false;
+        }
+        chain = item->second;
+    }
+    valid = r_generic_type_is_dependent(context, returned, 0U) || r_closure_sync_result(context, returned);
+    for (size_t index = 0U; valid && index < parameters.count; ++index)
+        valid = r_generic_type_is_dependent(context, parameters.items[index], 0U) ||
+                r_closure_sync_input(context, parameters.items[index]);
+    if (valid && (function->flags & R_SEMANTIC_TYPE_FLAG_CALL_ASYNC) != 0U)
+        valid = r_function_value_async_signature(context, &parameters, returned, effects);
+    r_context_free(context, parameters.items);
+    return valid;
 }
 
 /* R-TYPE-0054 (L28): a function item, or a function value with more guarantees, where a function
@@ -437,6 +504,21 @@ static bool r_function_value_resolve_targets(RFrontendContext *context) {
         if (node.kind == R_HIR_FUNCTION_ADDRESS && node.symbol != R_SYMBOL_ID_INVALID &&
             (size_t)node.symbol <= context->semantic_symbol_count &&
             !r_generic_function_is_open(context, &context->semantic_symbols[node.symbol - 1U])) {
+            if (!r_function_value_concrete(context, type)) {
+                const bool asynchronous =
+                    (r_semantic_type(context, type)->flags & R_SEMANTIC_TYPE_FLAG_CALL_ASYNC) != 0U;
+                if (context->resource_status != R_FRONTEND_OK ||
+                    !r_semantic_add_diagnostic(context,
+                                               asynchronous ? "R-DIAG-ASYNC-001" : "R-DIAG-TYPE-001",
+                                               "R-TYPE-0054",
+                                               asynchronous ? "an async function type has Send, unborrowed "
+                                                              "parameters, result and errors"
+                                                            : "a function type requires supported "
+                                                              "synchronous parameter and result types",
+                                               node.span))
+                    goto cleanup;
+                continue;
+            }
             if (!r_function_value_record(context, type, node.symbol, node.span))
                 goto cleanup;
         } else if (node.kind == R_HIR_CAST && node.child_count == 1U) {

@@ -304,9 +304,11 @@ RFrontendStatus r_test_expand(RFrontendContext *context, RSourceId source_id) {
     RTestWriter writer;
     RSourceSpan module_origin;
     char prefix[32];
+    char number[24];
     size_t depth = 0U;
     size_t base;
     size_t prologue_end;
+    size_t case_count = 0U;
     bool success = true;
 
     if ((source == NULL) || source->test_expanded || !r_test_entry_source(context, source_id)) {
@@ -346,11 +348,9 @@ RFrontendStatus r_test_expand(RFrontendContext *context, RSourceId source_id) {
     writer.source = source;
     writer.prefix = prefix;
     writer.ok = true;
-    r_test_write(&writer, "\nasync i32 main() {\n    std.test::runner ");
-    r_test_write_local(&writer, "runner = std.test::runner::create();\n");
-    prologue_end = output.count;
-    success =
-        writer.ok && r_test_add_region(context, source, base, 0U, prologue_end, module_origin);
+    /* Each test runs in an async function of its own that takes the runner and gives it back:
+       one main with every block made one step whose frame grew with the number of tests, past
+       the stack of an executor worker under ASan (L39-11). */
     depth = 0U;
     for (size_t index = r_skip_trivia(source, 0U); success && (index < source->token_count);
          index = r_derive_next(source, index)) {
@@ -372,13 +372,52 @@ RFrontendStatus r_test_expand(RFrontendContext *context, RSourceId source_id) {
             continue;
         }
         start = output.count;
+        (void)snprintf(number, sizeof(number), "%zu", case_count);
+        r_test_write(&writer, "\nasync std.test::runner ");
+        r_test_write_local(&writer, "case_");
+        r_test_write(&writer, number);
+        r_test_write(&writer, "(std.test::runner ");
+        r_test_write_local(&writer, "runner) throws std.error::fault {\n");
         r_test_write_block(&writer, &test);
+        r_test_write(&writer, "    return move ");
+        r_test_write_local(&writer, "runner;\n}\n");
         success = writer.ok && r_test_add_region(context,
                                                  source,
                                                  base,
                                                  start,
                                                  output.count,
                                                  source->tokens[test.attribute].span);
+        case_count += 1U;
+    }
+    if (success) {
+        const size_t start = output.count;
+        /* The runner passes through a local per test: `runner_0` is created, case k turns
+           `runner_k` into the next one, and the last one is `runner`. */
+        r_test_write(&writer, "\nasync i32 main() {\n    std.test::runner ");
+        r_test_write_local(&writer, case_count == 0U ? "runner" : "runner_0");
+        r_test_write(&writer, " = std.test::runner::create();\n");
+        for (size_t index = 0U; index < case_count; ++index) {
+            (void)snprintf(number, sizeof(number), "%zu", index);
+            r_test_write(&writer, "    std.test::runner ");
+            if (index + 1U == case_count) {
+                r_test_write_local(&writer, "runner");
+            } else {
+                char next[24];
+                (void)snprintf(next, sizeof(next), "%zu", index + 1U);
+                r_test_write_local(&writer, "runner_");
+                r_test_write(&writer, next);
+            }
+            r_test_write(&writer, " = await ");
+            r_test_write_local(&writer, "case_");
+            r_test_write(&writer, number);
+            r_test_write(&writer, "(move ");
+            r_test_write_local(&writer, "runner_");
+            r_test_write(&writer, number);
+            r_test_write(&writer, ");\n");
+        }
+        prologue_end = output.count;
+        success = writer.ok &&
+                  r_test_add_region(context, source, base, start, prologue_end, module_origin);
     }
     if (success) {
         const size_t start = output.count;

@@ -15,7 +15,7 @@ import subprocess
 import sys
 
 PANIC = re.compile(
-    r'r_runtime_panic\(\s*R_RUNTIME_PANIC_(BOUNDS|INVALID_CONVERSION),\s*\(RRuntimeSourceSpan\)\{'
+    r'r_runtime_(?:panic|raise)\(\s*R_RUNTIME_PANIC_(BOUNDS|INVALID_CONVERSION),\s*\(RRuntimeSourceSpan\)\{'
     r'UINT32_C\((\d+)\),\s*UINT32_C\((\d+)\),\s*UINT32_C\((\d+)\)\}\)')
 MARK = re.compile(r'/\* (proven|checked)( conversion)? \*/\s*$')
 

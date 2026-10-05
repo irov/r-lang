@@ -560,14 +560,55 @@ static bool r_json_schema_name(const RFrontendContext *context, RAstRef qualifie
            r_semantic_token_text_equal_owned(context, &components[2], "schema");
 }
 
-/* R-SLIB-JSON-0002: `std.json::schema::<T>()` parses the schema text of T. */
+/* R-SLIB-JSON-0002: builds the schema text of a closed type and attaches it, with the schema
+   hooks of its definitions, to the operation symbol; false after a diagnostic or a failure. */
+static bool r_json_schema_attach(RBodyContext *body, RSourceSpan span, RTypeId type, RSymbolId symbol) {
+    RFrontendContext *context = body->frontend;
+    RJsonSchemaWriter writer = {0};
+    bool success = false;
+    writer.body = body;
+    writer.span = span;
+    writer.root = type;
+    const size_t diagnostics = context->diagnostic_count;
+    if (!r_json_schema_build(&writer, type) || writer.failed || context->diagnostic_count != diagnostics)
+        goto cleanup;
+    uint32_t text;
+    if (!r_intern_bytes(context, (const uint8_t *)writer.text.bytes, writer.text.length, &text))
+        goto cleanup;
+    context->semantic_symbols[symbol - 1U].json_schema_text = text;
+    for (uint32_t index = 0U; index < writer.definition_count; ++index) {
+        bool known = false;
+        if (writer.definition_hooks[index] == 0U)
+            continue;
+        for (size_t entry = 0U; entry < context->json_schema_hook_count; ++entry)
+            known = known || (context->json_schema_hooks[entry].function == symbol &&
+                              context->json_schema_hooks[entry].hook == writer.definition_hooks[index]);
+        if (known)
+            continue;
+        if (!r_grow_array(context,
+                          (void **)&context->json_schema_hooks,
+                          &context->json_schema_hook_capacity,
+                          sizeof(*context->json_schema_hooks),
+                          context->json_schema_hook_count + 1U))
+            goto cleanup;
+        context->json_schema_hooks[context->json_schema_hook_count++] =
+            (RJsonSchemaHook){symbol, writer.definition_hooks[index], writer.definition_names[index]};
+    }
+    success = true;
+cleanup:
+    r_context_free(context, writer.text.bytes);
+    return success;
+}
+
+/* R-SLIB-JSON-0002: `std.json::schema::<T>()` parses the schema text of T. In a generic body a
+   type that depends on a parameter needs the json_encode or json_decode constraint of that
+   parameter; its text is built for each instantiation when the body is cloned. */
 static bool r_json_schema_lower(RBodyContext *body, RAstRef call, RExpressionResult *result) {
     RFrontendContext *context = body->frontend;
     RAstNodeView view;
     RAstRef type_ref = {0};
     RTypeId type = R_TYPE_ID_INVALID, json_value;
     RHirVector children = {0};
-    bool success = false;
     r_body_expression_invalid(result);
     if (!r_ast_view_kind(context, call, R_SYNTAX_STANDARD_TYPE_CALL, &view))
         return false;
@@ -596,51 +637,34 @@ static bool r_json_schema_lower(RBodyContext *body, RAstRef call, RExpressionRes
         !r_semantic_intern_named_standard_type(context, "std.json::value", &json_value))
         return context->resource_status == R_FRONTEND_OK;
     type = r_semantic_value_type(context, type);
-    RJsonSchemaWriter writer = {0};
-    writer.body = body;
-    writer.span = view.span;
-    writer.root = type;
-    const size_t diagnostics = context->diagnostic_count;
-    if (!r_json_schema_build(&writer, type) || writer.failed ||
-        context->diagnostic_count != diagnostics) {
-        success = context->resource_status == R_FRONTEND_OK;
-        goto cleanup;
+    if (r_generic_type_is_dependent(context, type, 0U)) {
+        if (!r_json_capability_visit(context, type, true, 0U, NULL) &&
+            !r_json_capability_visit(context, type, false, 0U, NULL))
+            return r_body_diagnostic(body,
+                                     "R-DIAG-JSON-001",
+                                     "R-SLIB-JSON-0002",
+                                     "std.json::schema of a type parameter requires its json_encode or "
+                                     "json_decode constraint",
+                                     view.span);
+        return r_json_call(body, view.span, R_JSON_OPERATION_SCHEMA, type, json_value, &children, true, false, result);
     }
-    uint32_t text;
-    if (!r_intern_bytes(context, (const uint8_t *)writer.text.bytes, writer.text.length, &text) ||
-        !r_json_call(body,
-                     view.span,
-                     R_JSON_OPERATION_SCHEMA,
-                     type,
-                     json_value,
-                     &children,
-                     true,
-                     false,
-                     result))
-        goto cleanup;
-    if (result->symbol != R_SYMBOL_ID_INVALID) {
-        context->semantic_symbols[result->symbol - 1U].json_schema_text = text;
-        for (uint32_t index = 0U; index < writer.definition_count; ++index) {
-            bool known = false;
-            if (writer.definition_hooks[index] == 0U)
-                continue;
-            for (size_t entry = 0U; entry < context->json_schema_hook_count; ++entry)
-                known = known || (context->json_schema_hooks[entry].function == result->symbol &&
-                                  context->json_schema_hooks[entry].hook == writer.definition_hooks[index]);
-            if (known)
-                continue;
-            if (!r_grow_array(context,
-                              (void **)&context->json_schema_hooks,
-                              &context->json_schema_hook_capacity,
-                              sizeof(*context->json_schema_hooks),
-                              context->json_schema_hook_count + 1U))
-                goto cleanup;
-            context->json_schema_hooks[context->json_schema_hook_count++] =
-                (RJsonSchemaHook){result->symbol, writer.definition_hooks[index], writer.definition_names[index]};
-        }
+    {
+        /* The schema is checked before the call exists, so that a type without one reports
+           its diagnostic and no operation. */
+        RJsonSchemaWriter writer = {0};
+        writer.body = body;
+        writer.span = view.span;
+        writer.root = type;
+        const size_t diagnostics = context->diagnostic_count;
+        const bool built = r_json_schema_build(&writer, type) && !writer.failed &&
+                           context->diagnostic_count == diagnostics;
+        r_context_free(context, writer.text.bytes);
+        if (!built)
+            return context->resource_status == R_FRONTEND_OK;
     }
-    success = true;
-cleanup:
-    r_context_free(context, writer.text.bytes);
-    return success;
+    if (!r_json_call(body, view.span, R_JSON_OPERATION_SCHEMA, type, json_value, &children, true, false, result))
+        return false;
+    if (result->symbol != R_SYMBOL_ID_INVALID && !r_json_schema_attach(body, view.span, type, result->symbol))
+        return context->resource_status == R_FRONTEND_OK;
+    return true;
 }

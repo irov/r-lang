@@ -115,6 +115,7 @@ enum error_code {
     invalid_argument,
     frozen,
     closed,
+    missing_authorities,
 };
 
 /* R-SLIB-TLS-0002: a failure of TLS; native_code is the error of Mbed TLS, zero when none. */
@@ -239,6 +240,105 @@ void config::set_verification(config* this, bool required) throws tls_error, std
         c_int32 status = r_std_tls_native_config_set_verification(handle, flag as c_int32);
         check(outcome {.status = status as i32, .native = 0i64});
     }
+}
+
+/* ---- The certificate authorities of the system ---- */
+
+/* The first index at or after `from` where `pattern` starts, or the length of `text`. */
+protected usize find_from(const u8[] text, usize from, const u8[] pattern) {
+    if (from >= len(text)) { return len(text); }
+    switch (std.bytes::find_slice(text[from..len(text)], pattern)) {
+    case variant o::some(found): return from + *found;
+    case variant o::none: return len(text);
+    }
+}
+
+/* Trusts each certificate of a PEM bundle on its own and returns how many it trusted. A block
+   that does not parse is skipped: the bundles of some systems hold certificates that Mbed TLS
+   does not read, and the others stay usable. */
+protected usize trust_bundle(config* settings, const u8[] text) throws tls_error, std.alloc::alloc_error {
+    str begin_text = "-----BEGIN CERTIFICATE-----";
+    const u8[] begin = begin_text;
+    str end_text = "-----END CERTIFICATE-----";
+    const u8[] end_marker = end_text;
+    usize trusted = 0usize;
+    usize from = 0usize;
+    while (from < len(text)) {
+        usize start = find_from(text, from, begin);
+        usize stop = find_from(text, start, end_marker);
+        if (stop >= len(text)) { break; }
+        usize after = stop + len(end_marker);
+        try {
+            settings->add_authority(text[start..after]);
+            trusted += 1usize;
+        } catch (tls_error rejected) {
+            if (rejected.code != error_code::invalid_certificate) { throw rejected; }
+        }
+        from = after;
+    }
+    return trusted;
+}
+
+/* The bundle files of the system, tried in order when SSL_CERT_FILE is not set: the one macOS
+   keeps, then those of common Linux distributions. */
+protected str system_bundle(usize index) {
+    switch (index) {
+    case 0usize: return "/etc/ssl/cert.pem";
+    case 1usize: return "/etc/ssl/certs/ca-certificates.crt";
+    case 2usize: return "/etc/pki/tls/certs/ca-bundle.crt";
+    case 3usize: return "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem";
+    case 4usize: return "/etc/ssl/ca-bundle.pem";
+    default: return "/etc/pki/tls/cacert.pem";
+    }
+}
+
+/* The value of an environment variable, none when it is unset, empty or not readable. */
+protected o<std.string::string> setting(str name) throws std.alloc::alloc_error {
+    try {
+        o<std.string::string> found = std.env::get(name);
+        switch (move found) {
+        case variant o::some(move value):
+            const u8[] text = value.as_bytes();
+            if (len(text) > 0usize) { return o::some(move value); }
+            drop value;
+        case variant o::none: break;
+        }
+    } catch (std.env::env_error rejected) {
+        rejected as void;
+    }
+    return o::none;
+}
+
+/* The largest bundle the module reads. */
+protected const usize bundle_limit = 16777216usize;
+
+/* R-SLIB-TLS-0007: a client configuration that trusts the certificate authorities of the system:
+   the PEM bundle named by SSL_CERT_FILE, or else the first bundle file of the system that can
+   be read. */
+async config system_client_config() throws tls_error, std.error::fault {
+    config made = client_config();
+    usize trusted = 0usize;
+    o<std.string::string> chosen = setting("SSL_CERT_FILE");
+    switch (move chosen) {
+    case variant o::some(move name):
+        std.fs::path path = std.fs::path_from_utf8(name.as_str());
+        bytes content = await std.fs::read_file(&path, bundle_limit);
+        trusted += trust_bundle(&made, content.as_slice());
+    case variant o::none:
+        bool found = false;
+        for (usize index = 0usize; index < 6usize && found == false; index += 1usize) {
+            try {
+                std.fs::path path = std.fs::path_from_utf8(system_bundle(index));
+                bytes content = await std.fs::read_file(&path, bundle_limit);
+                trusted += trust_bundle(&made, content.as_slice());
+                found = true;
+            } catch (std.fs::fs_error missing) {
+                missing as void;
+            }
+        }
+    }
+    throw (trusted == 0usize) tls_error {.code = error_code::missing_authorities, .native_code = 0i64};
+    return move made;
 }
 
 /* R-SLIB-TLS-0004: a TLS session over a byte stream; it reads and writes application data and

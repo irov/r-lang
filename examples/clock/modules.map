@@ -1,3 +1,4 @@
 example.calculator.common = ../calculator/src/common.r
 example.clock.operations = src/operations.r
+example.clock.zones = src/zones.r
 example.clock.main = src/main.r

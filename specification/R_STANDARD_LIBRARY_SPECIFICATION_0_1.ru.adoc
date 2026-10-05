@@ -15,7 +15,7 @@
 |Поле |Значение
 |Документ |R Standard Library Specification
 |Версия языка |0.1
-|Редакция документа |0.1.0-draft.62
+|Редакция документа |0.1.0-draft.67
 |Статус |Перевод нормативного черновика; не является стабильным стандартом R 1.0
 |Язык документа |Русский перевод; ключевые нормативные термины приведены на английском
 |Требуемый стандарт языка |R Core Language Specification 0.1
@@ -1467,9 +1467,10 @@ recoverable failures и priority failures определены R-SLIB-BITS-0003.
 === 7.5 Secret byte buffers
 
 [[R-SLIB-SECRET-0001]]
-*R-SLIB-SECRET-0001* — `+std.secret::buffer+` является Move-only, Send, non-Sync owner одной
+*R-SLIB-SECRET-0001* — `+std.secret::buffer+` является Move-only, Send и Sync owner одной
 contiguous byte allocation, contents которой стираются до release storage. У него нет
-operation clone либо copy. Точные operations:
+operation clone либо copy и нет внутренней изменяемости: общий доступ его только читает, так
+что ключ, который его держит, может жить в состоянии, общем для задач и потоков. Точные operations:
 
 * `+std.secret::with_length(usize length) ->
   std.secret::buffer throws std.alloc::alloc_error+`;
@@ -2077,8 +2078,9 @@ target horizon возвращает `+overflow+` до submission timer. Кажд
 
 [[R-SLIB-TIME-0006]]
 *R-SLIB-TIME-0006* — `+import std.time;+` также загружает R-часть module (R-SLIB-RSRC-0001)
-в profile `+hosted+` и выше: текстовые формы времени RFC 3339 и HTTP (RFC 9110) и интервал
-R-SLIB-TIME-0009.
+в profile `+hosted+` и выше: текстовые формы времени RFC 3339 и HTTP (RFC 9110), интервал
+R-SLIB-TIME-0009, часовые пояса R-SLIB-TIME-0010..0013 и местное время по шаблону
+R-SLIB-TIME-0014.
 `+std.time::format_rfc3339(std.time::system_time value, u32 digits) -> std.string::string throws std.time::time_error, std.alloc::alloc_error+`
 записывает дату и время UTC `+YYYY-MM-DDTHH:MM:SS+` значения value (RFC 3339, раздел 5.6),
 затем, если digits не ноль, точку и первые digits цифр девятизначных наносекунд, отбрасывая
@@ -2132,6 +2134,105 @@ n, считая с 1; тик n завершается не раньше нача
 а задержка даёт один поздний тик вместо пачки. Срок дальше 2^63 наносекунд после начала
 сообщает `+overflow+`. Отменённый тик завершается с `+cancelled+`, как
 `+std.time::sleep_until+` (R-SLIB-TIME-0005), и оставляет интервал неизменным.
+
+[[R-SLIB-TIME-0010]]
+*R-SLIB-TIME-0010* — R-часть модуля также даёт часовые пояса. `+std.time::zone_error_code+` —
+Copy fieldless enum ровно с `+invalid_name+`, `+unknown_zone+`, `+malformed+`,
+`+nonexistent_time+` и `+ambiguous_time+`, форматируемый именами вариантов, а
+`+std.time::zone_error+` — ошибка модуля с полем `+std.time::zone_error_code code+`.
+`+std.time::zone+` — Move, Send и Sync зона имени: её переходы с их типами местного времени
+(смещение к востоку от UTC в секундах, признак летнего времени, аббревиатура) и правило строки
+POSIX TZ для времени после её последнего перехода. Зоны создаются так:
+
+* `+std.time::utc_zone() -> std.time::zone throws std.alloc::alloc_error+`;
+* `+std.time::fixed_zone(i32 offset, str name) -> std.time::zone throws std.time::zone_error, std.alloc::alloc_error+`;
+* `+std.time::posix_zone(str rule) -> std.time::zone throws std.time::zone_error, std.alloc::alloc_error+`;
+* `+std.time::parse_tzif(str name, const u8[] data) -> std.time::zone throws std.time::zone_error, std.alloc::alloc_error+`;
+* `+async std.time::load_zone(std.string::string name) -> std.time::zone throws std.time::zone_error, std.error::fault+`;
+* `+async std.time::local_zone() -> std.time::zone throws std.time::zone_error, std.error::fault+`.
+
+`+utc_zone+` — UTC с аббревиатурой `+UTC+`; у `+fixed_zone+` одно смещение не больше 25 часов в
+любую сторону, а name — его имя и аббревиатура, любое другое смещение — `+malformed+`.
+`+posix_zone+` читает строку POSIX TZ с расширениями RFC 8536, раздел 3.3.1: аббревиатуры не
+короче трёх букв или в угловых скобках, смещения к западу от UTC в виде `+[+-]hh[:mm[:ss]]+` и
+даты правил `+Jn+`, `+n+` и `+Mm.w.d+` с необязательным `+/time+` от -167 до 167 часов (по
+умолчанию 2 часа ночи); летнее время на час впереди стандартного, когда за его аббревиатурой
+нет смещения, и правило США, когда нет дат; любой другой текст — `+malformed+`. `+parse_tzif+`
+читает файл TZif из RFC 8536 версий 1–4 в 64-битной форме с правилом хвоста, когда версия 2 или
+выше; записи високосных секунд пропускаются, а файл, который не является таким TZif, —
+`+malformed+`. В `+hosted-native-async+` `+load_zone+` читает файл имени IANA, например
+`+Asia/Shanghai+`, в каталоге, который называет переменная окружения `+TZDIR+`, иначе в
+`+/usr/share/zoneinfo+`: пустое имя, абсолютное, с компонентом из одних точек или с байтом кроме
+букв и цифр ASCII, `+_+`, `++++`, `+-+`, `+.+` и `+/+` — `+invalid_name+`, имя без файла —
+`+unknown_zone+`, а прочие неудачи файловой системы сообщаются. `+local_zone+` возвращает зону
+переменной окружения `+TZ+`, когда она задана: UTC, когда она пуста, иначе, после
+необязательного двоеточия, файл зоны этого имени, если он есть, а иначе строку POSIX TZ; без
+`+TZ+` она читает файл TZif `+/etc/localtime+` под именем `+localtime+`.
+
+[[R-SLIB-TIME-0011]]
+*R-SLIB-TIME-0011* — `+std.time::local_time+` — Copy-struct с открытыми полями `+i32 year+`,
+`+u8 month+`, `+u8 day+`, `+u8 hour+`, `+u8 minute+`, `+u8 second+`, `+u32 nanosecond+`,
+`+u8 weekday+` (1 — понедельник, 7 — воскресенье, ISO 8601), `+u16 year_day+` (1 — 1 января),
+`+i32 offset+` и `+bool dst+`:
+
+* `+std.time::zone::name(const std.time::zone* this) -> str+`;
+* `+std.time::zone::offset(const std.time::zone* this, std.time::system_time at) -> i32+`;
+* `+std.time::zone::abbreviation(const std.time::zone* this, std.time::system_time at) -> str+`;
+* `+std.time::zone::to_local(const std.time::zone* this, std.time::system_time at) -> std.time::local_time throws std.time::time_error+`.
+
+Тип местного времени мгновения — тип последнего перехода в него или раньше, первый тип для
+мгновений до первого перехода и тип правила хвоста после последнего перехода, когда оно у зоны
+есть; правило решает про летнее время по началу и концу года мгновения в стандартном времени,
+так что южная зона в летнем времени и через новый год. `+to_local+` возвращает дату и время
+пролептического григорианского календаря мгновения, сдвинутого на смещение, со смещением и
+признаком типа; поле наносекунд 10^9 и больше — `+invalid_value+`, а год вне i32 — `+overflow+`.
+
+[[R-SLIB-TIME-0012]]
+*R-SLIB-TIME-0012* — `+std.time::ambiguity+` — Copy fieldless enum ровно с `+earlier+`,
+`+later+` и `+reject+`:
+
+* `+std.time::zone::from_local(const std.time::zone* this, std.time::local_time wall, std.time::ambiguity choice) -> std.time::system_time throws std.time::zone_error, std.time::time_error+`.
+
+`+from_local+` читает поля даты и времени wall, которые должны быть верными датой и временем
+пролептического григорианского календаря (иначе `+invalid_value+`), и пропускает остальные.
+Местное время, которое зона показывает один раз, переводится в это мгновение; показанное дважды,
+в перекрытии, — в более раннее или более позднее мгновение; не показанное ни разу, в разрыве,
+читается со смещением до разрыва (`+earlier+`) или после него (`+later+`), как fold 0 и fold 1 из
+PEP 495. С `+reject+` перекрытие — `+ambiguous_time+`, а разрыв — `+nonexistent_time+`.
+
+[[R-SLIB-TIME-0013]]
+*R-SLIB-TIME-0013* — Календарные шаги в зоне:
+
+* `+std.time::zone::start_of_day(const std.time::zone* this, std.time::system_time at) -> std.time::system_time throws std.time::zone_error, std.time::time_error+`;
+* `+std.time::zone::add_days(const std.time::zone* this, std.time::system_time at, i64 days) -> std.time::system_time throws std.time::zone_error, std.time::time_error+`;
+* `+std.time::zone::add_months(const std.time::zone* this, std.time::system_time at, i64 months) -> std.time::system_time throws std.time::zone_error, std.time::time_error+`.
+
+`+start_of_day+` возвращает мгновение местной полуночи дня at, переведённое с `+earlier+`, —
+первое мгновение дня и тогда, когда полночь попадает в разрыв. `+add_days+` возвращает то же
+местное время через days дней, или раньше для отрицательного числа; `+add_months+` — то же
+местное время через months месяцев, а день за концом целевого месяца становится его последним
+днём. Оба переводят новое местное время с `+earlier+`, так что день перехода длится 23 или 25
+часов, и сообщают год вне i32 как `+overflow+`.
+
+[[R-SLIB-TIME-0014]]
+*R-SLIB-TIME-0014* — Местное время по шаблону:
+
+* `+std.time::format_local(std.time::local_time value, str pattern) -> std.string::string throws std.time::time_error, std.alloc::alloc_error+`;
+* `+std.time::parse_local(str text, str pattern) -> std.time::local_time throws std.convert::parse_error, std.time::time_error+`.
+
+Шаблон — последовательность полей и буквальных байтов. Серия одной ASCII-буквы — одно поле:
+`+yyyy+` — год четырьмя цифрами, `+MM+` — месяц, `+dd+` — день, `+HH+` — час от 00 до 23, `+mm+` —
+минута, `+ss+` — секунда, а `+S+`, повторённая от одного до девяти раз, — столько же старших
+цифр доли секунды; любая другая серия букв — `+invalid_value+`. Каждый байт, не являющийся
+ASCII-буквой, обозначает сам себя. `+format_local+` пишет поля value ровно своим числом цифр,
+отбрасывая лишние цифры доли; значение с недопустимыми полями даты и времени (R-SLIB-TIME-0012)
+или с годом вне 0..9999, если шаблон его пишет, — `+invalid_value+`. `+parse_local+` читает text по
+шаблону: каждое поле берёт ровно своё число цифр, каждый литерал — свой байт, и text кончается
+там же, где шаблон; текст, кончившийся раньше, — `+invalid_digit+` из `+std.convert::parse_error+`
+на его длине, любое другое несовпадение — `+invalid_digit+` на этом байте. Затем по порядку
+проверяются месяц, день, час, минута и секунда: `+below_minimum+` или `+above_maximum+` на первой
+цифре поля. Поля, которых нет в шаблоне, берутся из 1970-01-01 00:00:00; у результата смещение 0,
+`+dst+` false, а день недели и день года — своей даты.
 
 [[environment]]
 == 13. Environment процесса
@@ -2581,6 +2682,22 @@ acknowledgement и publication ждут return, причём handle, buffer и f
 него. Outcome следует R-SLIB-IO-0007 с точным progress возвращённых calls. Descriptor
 закрытого либо dropped file освобождается только после того, как его не использует ни
 один допущенный transfer.
+
+[[R-SLIB-ASYNC-0020]]
+*R-SLIB-ASYNC-0020* — `+std.async::join(task<T> operation) -> std.thread::join_result<T>+`
+наблюдает panic задачи, не продолжая её. Операция compiler-recognized и допускается только
+как полный операнд await, `+await std.async::join(move operation)+`, где `+operation+`
+называет одну задачу без checked errors и потребляется так же, как await из
+R-SLIB-ASYNC-0005; задача с checked errors, любой другой операнд либо любая другая позиция
+требуют `+R-DIAG-ASYNC-001+`. Await приостанавливается, публикует результат и отменяется
+точно так же, как этот await. Задача, завершившаяся нормально, даёт `+returned(T)+`, либо
+`+completed+`, когда T есть `+void+`. Задача, panic которой при unwind strategy дошёл до её
+корня (Core R-ERR-0009), даёт `+panicked(std.thread::panic_report)+`: panic заканчивается в
+join, ожидающая задача продолжается нормально, а отчёт не передаётся panic hook. Отчёт
+содержит категорию panic и, для явного panic (Core R-ERR-0004), его сообщение, обрезанное
+не более чем до 256 байт по границе скаляра, как text; у остальных категорий text пуст.
+Отчёт, для text которого не удалось выделить память, сохраняет категорию и пустой text. При
+abort strategy panic уже завершил процесс.
 
 [[io]]
 == 15. Native асинхронные byte streams
@@ -4284,7 +4401,10 @@ Accessors потребляют свой компонент один раз; drop
 вызываемая как `+std.json::schema::<T>()+` с явным аргументом типа и без аргументов-значений,
 возвращает JSON Schema (draft 2020-12) той JSON-формы, которую автоматическое преобразование
 R-SLIB-JSON-0001 пишет и читает для T. Схема выводится из той же модели типов, что
-`+marshal+` и `+unmarshal+`, при трансляции программы; вызов строит её как значение.
+`+marshal+` и `+unmarshal+`, при трансляции программы; вызов строит её как значение. В
+обобщённом теле T может зависеть от параметра типа с ограничением `+json_encode+` или
+`+json_decode+`; тогда схема выводится для каждой конкретизации, а конкретизация, у типа которой
+нет выведенной схемы, требует `+R-DIAG-JSON-001+`.
 `+bool+` — `+{"type":"boolean"}+`; целый тип — `+{"type":"integer"}+` с `+minimum+` и
 `+maximum+` своего диапазона; тип с плавающей точкой и `+std.json::number+` —
 `+{"type":"number"}+`; `+char+` — строка длины 1; строки — `+{"type":"string"}+`;
@@ -4322,6 +4442,13 @@ std.json::value User::json_schema() throws std.json::error, std.alloc::alloc_err
 параметр типа, словарь с ключами, отличными от владеющих строк, и тип без JSON-формы требуют
 `+R-DIAG-JSON-001+`. Схема, которую возвращает hook, не проверяется по конвертерам.
 
+[[R-SLIB-JSON-0003]]
+*R-SLIB-JSON-0003* — R-часть module, загружаемая `+import std.json;+`, даёт
+`+std.json::escape_html(str text) -> std.string::string throws std.alloc::alloc_error+` — text, в
+котором `+<+`, `+>+` и `+&+` записаны как `+\u003c+`, `+\u003e+` и `+\u0026+`, а U+2028 и
+U+2029 — как `+\u2028+` и `+\u2029+`, остальное без изменений. Применённая к тексту JSON, она не
+меняет значения, потому что вне строк в тексте JSON этих символов нет.
+
 [[r-source-modules]]
 == 21. Стандартные modules, написанные на R
 
@@ -4349,11 +4476,11 @@ implementation предоставляет на C, может иметь R-час
 `+std.slice+` и `+std.text+` (`+freestanding+`), `+std.iter+`, `+std.set+`, `+std.deque+`,
 `+std.heap+`, `+std.sorted+`, `+std.deflate+`, `+std.xml+`, `+std.arena+` и R-часть `+std.alloc+` (`+allocation+`),
 `+std.regex+`, `+std.encoding+`, `+std.uuid+`, `+std.args+`, `+std.url+`, `+std.mime+`, `+std.cbor+`,
-`+std.crypto+`, `+std.cose+` и R-части `+std.bytes+`,
+`+std.crypto+`, `+std.cose+`, `+std.jwt+` и R-части `+std.bytes+`,
 `+std.string+`, `+std.hash+`, `+std.random+`, `+std.test+` и `+std.time+` (`+hosted+`), а также
 `+std.service+`, `+std.stream+`, `+std.bufio+`, `+std.console+`, `+std.log+`, `+std.config+`,
 `+std.tls+`, `+std.http+`, `+std.dns+`, `+std.websocket+`, `+std.jsonrpc+`, `+std.mcp+`,
-`+std.sqlite+`, `+std.metrics+`, `+std.trace+`, `+std.pool+`, `+std.postgres+` и R-части `+std.net+` и `+std.fs+` (`+hosted-native-async+`). Отказ в импорте ниже этого profile предшествует любой проверке
+`+std.sqlite+`, `+std.metrics+`, `+std.trace+`, `+std.pool+`, `+std.postgres+`, `+std.oauth2+` и R-части `+std.net+` и `+std.fs+` (`+hosted-native-async+`). Отказ в импорте ниже этого profile предшествует любой проверке
 items module. В своём наименьшем profile и в каждом более высоком каждый module
 транслируется: item, которому нужен более высокий profile, объявлен под module `+@if+` по
 `+core::profile+` (Core R-META-0001). Каждый item ниже сохраняет Core-правила ownership, borrow и
@@ -5268,8 +5395,9 @@ std.convert::parse_error+` читает форму из 36 символов с �
 
 Поле записывается со своим именем, в котором каждый байт, кроме ASCII-буквы, цифры, `+_+`,
 `+.+` или `+-+`, становится `+_+`, сохраняются не больше первых 64 байт, пустое имя становится
-`+_+`, а `+time+`, `+level+`, `+task+` и `+message+`, которые есть в каждой записи, получают
-ведущий `+_+`, так что никакое имя не ломает запись. Секретное поле не хранит значения.
+`+_+`, а имя, равное имени члена, который есть в каждой записи logger (R-SLIB-LOG-0004), при
+записи получает ведущий `+_+`, так что никакое имя не ломает запись. Секретное поле не хранит
+значения.
 
 [[R-SLIB-LOG-0002]]
 *R-SLIB-LOG-0002* — `+std.log::logger+` — Move, Send+Sync handle, который форматирует записи в
@@ -5283,20 +5411,22 @@ std.convert::parse_error+` читает форму из 36 символов с �
 * `+std.log::logger::trace+`, `+debug+`, `+info+`, `+warn+` и `+error+`, каждый
   `+(const std.log::logger* this, str message) -> void throws std.error::fault+`.
 
-Запись уровня ниже порога logger не форматируется. Иначе строка содержит время
-`+std.time::system_now+` в RFC 3339 с тремя дробными цифрами, уровень, идентификатор
-R-SLIB-ASYNC-0018 вызывающей задачи, сообщение и поля по порядку. С `+format::text+` это
+Запись уровня ниже порога logger не форматируется. Иначе с раскладкой
+`+std.log::layout::standard()+` из R-SLIB-LOG-0004 строка содержит время `+std.time::system_now+`
+в RFC 3339 с тремя дробными цифрами, уровень, идентификатор R-SLIB-ASYNC-0018 вызывающей задачи,
+сообщение, привязанные поля logger и поля по порядку. С `+format::text+` это
 `+time=... level=... task=... message=...+`, за которым для каждого поля идут пробел и
 `+name=value+`; текстовое значение, пустое или содержащее пробел, `+"+`, `+=+`, обратную косую
 черту или управляющий символ, пишется в кавычках с экранированием `+\"+`, `+\\+`, `+\n+`,
-`+\t+`, `+\r+` и `+\u00XX+` со строчными шестнадцатеричными цифрами, а числа и флаги — как
+`+\t+`, `+\r+`, `+\b+`, `+\f+` и `+\u00XX+` со строчными шестнадцатеричными цифрами, а числа и флаги — как
 есть. С `+format::json+` это один JSON-объект с членами `+time+`, `+level+`, `+task+`,
 `+message+` и полями, где задача, числа и флаги без кавычек. Каждая строка заканчивается
-переводом строки. Секретное поле и поле, записываемое имя которого без учёта регистра ASCII
-равно `+password+`, `+secret+`, `+token+`, `+authorization+` или имени, переданному `+mask+`,
+переводом строки. Секретное поле и поле, имя или записываемое имя которого без учёта регистра
+ASCII равно `+password+`, `+secret+`, `+token+`, `+authorization+` или имени, переданному `+mask+`,
 пишется как `+***+`. Если очередь полна или её writer завершился, запись отбрасывается и
 учитывается: `+dropped+` возвращает число записей, отброшенных всеми loggers очереди. `+share+`
-возвращает другой logger той же очереди с порогом, форматом и маскируемыми именами оригинала —
+возвращает другой logger той же очереди с порогом, форматом, маскируемыми именами, раскладкой
+и привязанными полями оригинала —
 для другой задачи, а `+mask+` переписывает своё имя как имя поля.
 
 [[R-SLIB-LOG-0003]]
@@ -5317,6 +5447,54 @@ panic Core R-OBJ-0006. `+to_stderr+` пишет каждую строку в с�
 число записанных строк очереди. Обе забирают writer, поэтому loggers программы берутся у него
 до начала записи, и каждая задача, которая пишет в журнал, владеет logger, созданным
 `+writer::logger+` или `+share+`.
+
+[[R-SLIB-LOG-0004]]
+*R-SLIB-LOG-0004* — Copy, Send+Sync fieldless enum `+std.log::order+` имеет ровно `+time_first+`
+и `+level_first+`. `+std.log::layout+` — Move struct с открытыми полями
+`+std.string::string time_name+`, `+std.string::string level_name+`,
+`+std.string::string message_name+`, `+o<std.string::string> task_name+`, `+u32 time_digits+`,
+`+bool trim_time+`, `+bool omit_empty_message+` и `+std.log::order sequence+`:
+
+* `+std.log::layout::standard() -> std.log::layout throws std.alloc::alloc_error+`;
+* `+std.log::logger::set_layout(std.log::logger* this, std.log::layout value) -> void throws std.alloc::alloc_error+`;
+* `+std.log::logger::with(const std.log::logger* this, const std.log::fields* extra) -> std.log::logger throws std.alloc::alloc_error+`.
+
+`+standard+` — раскладка R-SLIB-LOG-0002, с которой начинает каждый logger `+writer::logger+`:
+`+time+` с тремя дробными цифрами, `+level+`, `+task+` и `+message+`, время первым, каждое
+сообщение пишется.
+`+set_layout+` заставляет logger писать записи с этой раскладкой. Члены носят её имена,
+переписанные как имена полей (R-SLIB-LOG-0001); задача не пишется, если `+task_name+` — none;
+время, всегда в UTC, имеет `+time_digits+` дробных цифр, девять при большем запросе, лишние
+отбрасываются, а с `+trim_time+` не пишутся его конечные нули и точка, если все цифры нулевые; с
+`+omit_empty_message+` у записи с пустым сообщением нет члена сообщения. С
+`+time_first+` время, уровень, задача и сообщение идут перед привязанными полями и полями
+записи; с `+level_first+` первым идёт уровень, затем привязанные поля, поля записи, время,
+задача и сообщение. `+with+` возвращает другой logger той же очереди, как `+share+`, записи
+которого несут привязанные поля этого logger, а затем поля extra перед полями каждой записи;
+этот logger не меняется.
+
+[[R-SLIB-LOG-0005]]
+*R-SLIB-LOG-0005* — `+std.log::panic_record+` — Move struct с открытыми полями
+`+std.string::string category+`, `+std.string::string text+` и `+std.string::string place+`, а
+`+std.log::panic_reports+` — Move, Send+Sync слушатель отчётов о panic, которые никто не
+наблюдает (Core R-ERR-0009), работающий через нативный провайдер `+std.log.native+`:
+
+* `+std.log::panic_reports::listen(usize capacity) -> std.log::panic_reports throws std.alloc::alloc_error+`;
+* `+std.log::panic_reports::take(const std.log::panic_reports* this) -> o<std.log::panic_record> throws std.alloc::alloc_error+`;
+* `+@scoped async std.log::panic_reports::next(const std.log::panic_reports* this) -> std.log::panic_record throws std.error::fault+`;
+* `+std.log::panic_reports::dropped(const std.log::panic_reports* this) -> u64+`.
+
+От `+listen+` до уничтожения слушателя отчёт, доставленный hook panic runtime (Core R-ERR-0009),
+который записал бы его строкой в standard error, вместо этого ставится в очередь — до capacity отчётов, но не меньше одного; отчёт, заставший
+очередь полной, пишется своей строкой и учитывается `+dropped+`, а уничтожение слушателя пишет
+строками отчёты, оставшиеся в его очереди. Отчёты получает только слушатель,
+созданный последним; более ранний ничего не берёт и не считает, а его уничтожение ничего не
+меняет. `+take+` возвращает самый старый отчёт из очереди: категорию panic, её текст, обрезанный
+по последнему целому скаляру, и место в том виде, в каком его пишет строка, —
+`+module M bytes [S,E)+`. `+next+` возвращает его же, а пока очередь пуста, проверяет её снова
+после паузы, которая начинается с одной миллисекунды и удваивается до 128 миллисекунд; отменённый
+`+next+` оставляет очередь без изменений. Записи в журнал программа делает сама, потому что там,
+где runtime доставляет отчёт, код R не выполняется.
 
 === 21.13 Аргументы командной строки: `+std.args+`
 
@@ -5387,7 +5565,8 @@ panic Core R-OBJ-0006. `+to_stderr+` пишет каждую строку в с�
 объявления. `+set+` заменяет значение и источник объявленного ключа, а необъявленный ключ
 сообщает `+unknown_key+` с индексом ноль. `+std.config::config_error+` — ошибка module с полями
 `+std.config::error_code code+` и `+usize index+`; enum имеет ровно `+invalid_key+`,
-`+duplicate_key+`, `+unknown_key+`, `+invalid_value+` и `+invalid_file+`.
+`+duplicate_key+`, `+unknown_key+`, `+invalid_value+`, `+invalid_file+` и `+missing_value+`,
+форматируемый именами вариантов.
 
 [[R-SLIB-CONFIG-0002]]
 *R-SLIB-CONFIG-0002* — Каждый слой заменяет значение и источник объявленных ключей, которые он
@@ -5425,6 +5604,26 @@ null оставляет ключ без изменений. Член, не на�
 `+true+` или `+false+`; любой другой текст сообщает `+invalid_value+` с индексом объявления.
 `+describe+` возвращает по строке `+key=value (source)+` на ключ в порядке объявления;
 значение ключа, содержащего `+password+`, `+secret+` или `+token+`, пишется как `+***+`.
+
+[[R-SLIB-CONFIG-0004]]
+*R-SLIB-CONFIG-0004* — Структура настроек читается одним вызовом:
+
+* `+std.config::from_environment<T: json_decode>(str prefix) -> T throws std.config::field_error, std.alloc::alloc_error+`;
+* `+std.config::config::decode<T: json_decode>(const std.config::config* this) -> T throws std.config::field_error, std.alloc::alloc_error+`.
+
+`+std.config::field_error+` — ошибка модуля с полями `+std.config::error_code code+` и
+`+std.string::string name+`, переменной окружения или ключом настройки. Обе читают свойства
+JSON Schema типа T (R-SLIB-JSON-0002), поля под их JSON-именами: `+from_environment+` —
+переменную окружения каждого, префикс и имя в верхнем регистре, где каждый байт, кроме буквы и
+цифры ASCII, записан как `+_+`, а `+decode+` — текущее значение объявленного ключа этого имени.
+Текст преобразуется по схеме своего поля: как есть для строки, как десятичное целое в пределах
+`+minimum+` и `+maximum+` для целого, как число JSON для числа, как `+true+`, `+1+`, `+yes+`,
+`+on+`, `+false+`, `+0+`, `+no+` или `+off+` в любом регистре для логического, как имя варианта
+для enum без нагрузок, как элементы через запятую для массива таких скаляров и как текст JSON
+в остальных случаях; текст, который не преобразуется, — `+invalid_value+` с именем.
+Отсутствующая настройка поля `+o<T>+` — none; отсутствующая настройка обязательного поля —
+`+missing_value+` с именем, а необязательного оставляет его значение по умолчанию. Затем
+значение читается через `+std.json::unmarshal+`, чьи правила решают значения по умолчанию.
 
 === 21.15 Тесты: `+std.test+`
 
@@ -5505,8 +5704,8 @@ C-часть — отказы выделения R-SLIB-TEST-0003. `+std.test::f
 *R-SLIB-TLS-0002* — `+std.tls::error_code+` — Copy fieldless enum ровно с
 `+invalid_certificate+`, `+invalid_key+`, `+untrusted_certificate+`, `+name_mismatch+`,
 `+expired_certificate+`, `+handshake_failed+`, `+peer_alert+`, `+protocol_error+`,
-`+invalid_argument+`, `+frozen+` и `+closed+`, форматируемый именами variants
-(`+@derive(format)+`). `+std.tls::tls_error+` — error этого module с fields
+`+invalid_argument+`, `+frozen+`, `+closed+` и `+missing_authorities+`, форматируемый именами
+variants (`+@derive(format)+`). `+std.tls::tls_error+` — error этого module с fields
 `+std.tls::error_code code+` и `+i64 native_code+`, ошибкой Mbed TLS или нулём.
 `+std.tls::version+` — Copy fieldless enum с `+tls12+` и `+tls13+`, форматируемый именами
 variants. Нехватка памяти в provider — `+std.alloc::alloc_error::out_of_memory+`.
@@ -5573,6 +5772,20 @@ session упорядочивает их records.
 `+std.io::io_error+` с `+other+` и ошибкой Mbed TLS в качестве native code. Неудавшаяся
 session сохраняет свою неудачу: каждая последующая операция сообщает о ней снова. Session
 освобождает состояние engine при drop, независимо от того, была ли она завершена.
+
+[[R-SLIB-TLS-0007]]
+*R-SLIB-TLS-0007* — `+async std.tls::system_client_config() -> std.tls::config throws
+std.tls::tls_error, std.error::fault+` возвращает клиентскую конфигурацию из R-SLIB-TLS-0003,
+которая доверяет удостоверяющим центрам системы. Когда переменная окружения `+SSL_CERT_FILE+`
+задана и не пуста, это сертификаты файла PEM, который она называет, и неудача чтения этого
+файла сообщается. Иначе это сертификаты первого читаемого файла системы из
+`+/etc/ssl/cert.pem+`, набора macOS, и `+/etc/ssl/certs/ca-certificates.crt+`,
+`+/etc/pki/tls/certs/ca-bundle.crt+`, `+/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem+`,
+`+/etc/ssl/ca-bundle.pem+` и `+/etc/pki/tls/cacert.pem+`, наборов распространённых
+дистрибутивов Linux. Каждый сертификат набора становится доверенным отдельно, а сертификат,
+который не разбирается, пропускается. Набор без единого разбираемого сертификата и система без
+такого файла — `+missing_authorities+`. Конфигурацию ещё можно менять до её первой session,
+так что программа может добавить собственные центры.
 
 === 21.17 URL: `+std.url+`
 
@@ -5947,6 +6160,104 @@ before-хуков и маршрутов:
 каждом соединении std.service::serve_all (R-SLIB-SERVICE-0007): TCP, сокеты Unix и HTTPS через
 TLS-listener, с тайм-аутом простоя, сигналами и состоянием здоровья этого сервиса. Соединение,
 чьё чтение ждёт дольше тайм-аута простоя, заканчивается так же, как закрытое клиентом.
+
+[[R-SLIB-HTTP-0015]]
+*R-SLIB-HTTP-0015* — Для разделяемого state `+S: send & sync & unborrowed+` и контекста request
+`+C: send & sync & unborrowed+` `+std.http::app<S, C>+` — Move набор routes и middleware сервера,
+requests которого несут контекст, а `+std.http::flow<C>+` — один request на пути через него, Move
+значение с полями `+std.http::request request+`, `+C context+`, `+std.http::notes notes+`,
+`+std.string::string route+`, `+std.http::response response+` и `+bool answered+`. `+std.http::notes+` — Move, Send+Sync handle
+именованных текстов одного request:
+
+* `+std.http::app<S, C>::create(fn(const S*, const std.http::request*) -> C context) -> std.http::app<S, C>+`;
+* `+std.http::app<S, C>::route(std.http::app<S, C>* this, std.http::method value, str pattern, async fn(arc S, std.http::flow<C>) -> std.http::flow<C> throws(std.error::fault) handler) -> void throws std.http::http_error, std.alloc::alloc_error+`;
+* `+std.http::app<S, C>::before(std.http::app<S, C>* this, str prefix, async fn(arc S, std.http::flow<C>) -> std.http::flow<C> throws(std.error::fault) hook) -> void throws std.http::http_error, std.alloc::alloc_error+`;
+* `+std.http::app<S, C>::after(std.http::app<S, C>* this, str prefix, async fn(arc S, std.http::flow<C>) -> std.http::flow<C> throws(std.error::fault) hook) -> void throws std.http::http_error, std.alloc::alloc_error+`;
+* `+std.http::app<S, C>::around(std.http::app<S, C>* this, str prefix, async fn(arc S, std.http::flow<C>) -> std.http::flow<C> throws(std.error::fault) before, async fn(arc S, std.http::flow<C>) -> std.http::flow<C> throws(std.error::fault) after) -> void throws std.http::http_error, std.alloc::alloc_error+`;
+* `+std.http::flow<C>::with(std.http::flow<C> this, std.http::response value) -> std.http::flow<C>+`;
+* `+std.http::notes::set(const std.http::notes* this, str name, str value) -> void throws std.alloc::alloc_error+`;
+* `+std.http::notes::get(const std.http::notes* this, str name) -> o<std.string::string> throws std.alloc::alloc_error+`;
+* `+std.http::notes::count(const std.http::notes* this) -> usize+`;
+* `+std.http::notes::name_at(const std.http::notes* this, usize index) -> o<std.string::string> throws std.alloc::alloc_error+`;
+* `+std.http::notes::value_at(const std.http::notes* this, usize index) -> o<std.string::string> throws std.alloc::alloc_error+`;
+* `+std.http::app<S, C>::on_panic(std.http::app<S, C>* this, fn(const S*, std.http::method, str, const std.http::notes*, const std.thread::panic_report*) -> void hook) -> void+`;
+* `+@scoped async std.http::app<S, C>::dispatch(const std.http::app<S, C>* this, arc S state, std.http::request incoming) -> std.http::response throws std.error::fault+`;
+* `+async std.http::serve_app(array<std.service::listener> listeners, std.service::options settings, std.sync::receiver<std.service::stop> stop, std.service::health status, arc S state, std.http::app<S, C> routes, std.http::limits bounds) -> std.service::report throws std.async::start_error, std.net::net_error, std.process::process_error, std.alloc::alloc_error+`.
+
+Pattern или prefix начинается с `+/+`, иначе вызов бросает `+invalid_url+`. Каждый request
+получает контекст, который `+context+` создаёт из state и request, во flow с пустыми notes,
+response которого имеет status 200, без полей и body, и не answered. `+set+` даёт имени текст,
+заменяя прежний; `+get+` возвращает копию текста имени; `+count+`, `+name_at+` и `+value_at+`
+дают имена и тексты в порядке, в котором имена были впервые заданы, и none за последним. Middleware применяется к request, path которого
+равен его prefix или продолжает его после `+/+`; prefix `+/+` применяется к каждому request. Before
+hooks применимых middleware выполняются в порядке вызовов, каждый с flow, который вернул
+предыдущий; hook может изменить request и контекст и отвечает на request, возвращая flow, созданный
+`+with+`, который задаёт response и `+answered+`: остальные before hooks и route тогда
+пропускаются. Иначе flow получает route по R-SLIB-HTTP-0018 с захваченными им parameters path и его pattern в
+`+route+`, который пуст, если ни один route не получает flow.
+Затем after hooks каждого применённого middleware, чей before hook, если он есть, выполнялся, видят
+flow в обратном порядке вызовов. На request отвечает response последнего flow. Hook или handler,
+бросивший ошибку, получает ответ 500 без body, и дальнейшие hooks не выполняются. `+dispatch+`
+отвечает на request так же, как сервер, без соединения: на preflight request отвечает по
+R-SLIB-HTTP-0017, а иначе выполняет hooks и route как отдельную задачу, которую ожидает через
+`+std.async::join+` (R-SLIB-ASYNC-0020). На panic этой задачи ответ — 500 с текстом `+reason+`; её
+отчёт получает hook последнего `+on_panic+` со state, method, target и notes request, которые
+переживают flow, а без hook он пишется в
+standard error одной строкой `+R panic: category in METHOD target+`, за которой следует
+`+: text+`, если у отчёта есть текст; раскрутка уничтожает контекст и все значения flow, а
+соединение и сервер продолжают работу. Затем добавляются поля R-SLIB-HTTP-0017. `+serve_app+`
+обслуживает соединения всех listeners так же, как `+serve_all+` из R-SLIB-HTTP-0014, отвечая на
+каждый request через `+dispatch+` и добавляя `+Date+`; streaming и upgrade routes у application нет.
+
+[[R-SLIB-HTTP-0016]]
+*R-SLIB-HTTP-0016* — Cookies (RFC 6265): `+std.http::cookie+` — Move значение с полями
+`+std.string::string name+`, `+std.string::string value+`, `+o<std.string::string> path+`,
+`+o<std.string::string> domain+`, `+o<i64> max_age+`, `+bool secure+`, `+bool http_only+` и
+`+o<std.string::string> same_site+`, значения по умолчанию которых — none и false:
+
+* `+std.http::request::cookie(const std.http::request* this, str name) -> o<str>+`;
+* `+std.http::response::set_cookie(std.http::response* this, const std.http::cookie* value) -> void throws std.http::http_error, std.alloc::alloc_error+`.
+
+`+cookie+` возвращает значение первой пары `+name=value+` с этим именем в полях `+Cookie+`
+request, пары которых разделены `+;+`, а имена и значения освобождены от пробелов по краям, без
+двойных кавычек вокруг значения; none, если пары с этим именем нет. `+set_cookie+` добавляет поле
+`+Set-Cookie+` `+name=value+`, за которым следуют `+; Path=+`, `+; Domain=+`, `+; Max-Age=+`,
+`+; Secure+`, `+; HttpOnly+` и `+; SameSite=+` для заданных атрибутов; имя, не являющееся token,
+или значение поля с управляющим символом бросает `+invalid_header+`.
+
+[[R-SLIB-HTTP-0017]]
+*R-SLIB-HTTP-0017* — Cross-origin resource sharing application: `+std.http::cors_policy+` — Move
+значение с полями `+array<std.string::string> origins+`, `+o<std.string::string> methods+`,
+`+o<std.string::string> headers+`, `+bool credentials+` и `+u32 max_age+`, значения по умолчанию
+которых — пустой список, none, none, false и 600:
+
+* `+std.http::app<S, C>::cors(std.http::app<S, C>* this, std.http::cors_policy policy) -> void+`.
+
+Origin разрешён, если список пуст или содержит его точно. С policy request `+OPTIONS+` с
+`+Origin+` и `+Access-Control-Request-Method+` — preflight request, на который отвечают до всех
+hooks: 403 для неразрешённого origin, иначе 204, `+Access-Control-Allow-Methods+` (methods policy,
+а иначе запрошенный method), `+Access-Control-Allow-Headers+` (headers policy, а иначе запрошенные
+`+Access-Control-Request-Headers+`, если они есть) и `+Access-Control-Max-Age+`. Каждый response на
+request с разрешённым `+Origin+`, включая ответ на preflight request, несёт
+`+Access-Control-Allow-Origin+`: `+*+`, если список пуст и credentials не разрешены, иначе origin
+вместе с `+Vary: Origin+`; с credentials также `+Access-Control-Allow-Credentials: true+`.
+Следующий вызов заменяет policy.
+
+[[R-SLIB-HTTP-0018]]
+*R-SLIB-HTTP-0018* — Routes application:
+
+* `+std.http::app<S, C>::redirect_trailing_slash(std.http::app<S, C>* this, bool enabled) -> void+`;
+* `+std.http::app<S, C>::method_not_allowed(std.http::app<S, C>* this, bool enabled) -> void+`.
+
+Route совпадает с request как в R-SLIB-HTTP-0006, причём `+HEAD+` совпадает и с routes `+GET+`. Из
+routes, pattern и method которых совпадают, отвечает самый конкретный независимо от порядка
+вызовов: при сравнении patterns по segments в первом различающемся segment литерал конкретнее
+`+{name}+`, а тот конкретнее `+*+`; из одинаково конкретных отвечает добавленный первым. Если ни
+один route не совпадает: при включённых redirects path, с которым route этого method совпадает
+после удаления завершающего `+/+` или его добавления, получает ответ 301 для `+GET+` и `+HEAD+` или
+308 для других methods с `+Location+`, называющим этот path с query request; иначе, если path
+совпадает с routes других methods, — 405 с `+Allow+`, перечисляющим их methods по одному разу,
+если 405 не отключён; иначе 404. Созданное application не перенаправляет и отвечает 405.
 
 === 21.20 Разрешение имён: `+std.dns+`
 
@@ -6831,14 +7142,17 @@ std.string::string throws std.alloc::alloc_error+` — диагностичес�
 
 [[R-SLIB-CRYPTO-0001]]
 *R-SLIB-CRYPTO-0001* — `+std.crypto+` — стандартный модуль на R в профиле `+hosted+` поверх
-нативного провайдера `+std.crypto.native+` (R-SLIB-RSRC-0003), который вызывает libsodium.
-Провайдер читает и пишет только переданные ему буферы и не хранит состояния; секретный ключ
-модуля живёт в `+std.secret::buffer+` (R-SLIB-SECRET-0001). `+std.crypto::error_code+` —
-Copy fieldless enum ровно с `+invalid_length+`, `+authentication_failed+`, `+weak_key+`,
-`+limits+`, `+resource_exhausted+` и `+unavailable+`, форматируемый именами вариантов, а
-`+std.crypto::crypto_error+` — ошибка модуля с полем `+std.crypto::error_code code+`. Каждая
-операция сообщает `+unavailable+`, когда libsodium не может запуститься, а ключ, nonce или
-длину вне размеров, названных ниже, — как `+invalid_length+`.
+нативного провайдера `+std.crypto.native+` (R-SLIB-RSRC-0003), который вызывает libsodium и
+интерфейс PSA Crypto библиотеки Mbed TLS 3.6. Провайдер читает и пишет только переданные ему
+буферы и не хранит ключей вызывающего между вызовами; секретный ключ модуля живёт в
+`+std.secret::buffer+` (R-SLIB-SECRET-0001). `+std.crypto::error_code+` — Copy fieldless enum
+ровно с `+invalid_length+`, `+authentication_failed+`, `+weak_key+`, `+limits+`,
+`+resource_exhausted+`, `+unavailable+`, `+invalid_key+`, `+invalid_padding+` и
+`+unsupported+`, форматируемый именами вариантов, а `+std.crypto::crypto_error+` — ошибка
+модуля с полем `+std.crypto::error_code code+`. Каждая операция сообщает `+unavailable+`,
+когда используемая ею библиотека не может запуститься, ключ, nonce или длину вне размеров,
+названных ниже, — как `+invalid_length+`, а память, которую провайдер не может получить, —
+как `+resource_exhausted+`.
 
 [[R-SLIB-CRYPTO-0002]]
 *R-SLIB-CRYPTO-0002* — `+std.crypto::random(usize length) -> bytes throws
@@ -6921,6 +7235,108 @@ libsodium — `+limits+`, а память, которую не удаётся в
 * `+std.crypto::blake2b_state::finish(std.crypto::blake2b_state* this) -> bytes throws std.alloc::alloc_error+`.
 
 `+finish+` возвращает дайджест частей, переданных после `+create+`, и стирает состояние.
+
+[[R-SLIB-CRYPTO-0009]]
+*R-SLIB-CRYPTO-0009* — `+std.crypto::curve+` — Copy fieldless enum ровно с `+p256+`, кривой
+secp256r1 с SHA-256, и `+p384+`, кривой secp384r1 с SHA-384 (RFC 5480). Его методы
+`+scalar_length+`, `+point_length+` и `+signature_length+` принимают enum по значению и
+возвращают 32, 65 и 64 байта для `+p256+` и 48, 97 и 96 байтов для `+p384+`.
+`+std.crypto::ecdsa_public_key+` — Move-ключ ECDSA кривой, чья точка — несжатая кодировка SEC1
+0x04 || X || Y, а `+std.crypto::ecdsa_key+` — Move-пара ключей ECDSA, чей защищённый закрытый
+скаляр живёт в секретном буфере:
+
+* `+std.crypto::ecdsa_public_key::from_point(std.crypto::curve which, const u8[] point) -> std.crypto::ecdsa_public_key throws std.alloc::alloc_error, std.crypto::crypto_error+`;
+* `+std.crypto::ecdsa_public_key::curve(const std.crypto::ecdsa_public_key* this) -> std.crypto::curve+`;
+* `+std.crypto::ecdsa_public_key::point(const std.crypto::ecdsa_public_key* this) -> const u8[]+`;
+* `+std.crypto::ecdsa_public_key::verify(const std.crypto::ecdsa_public_key* this, const u8[] message, const u8[] signature) -> bool throws std.crypto::crypto_error+`;
+* `+std.crypto::ecdsa_key::generate(std.crypto::curve which) -> std.crypto::ecdsa_key throws std.alloc::alloc_error, std.crypto::crypto_error+`;
+* `+std.crypto::ecdsa_key::from_scalar(std.crypto::curve which, const u8[] scalar) -> std.crypto::ecdsa_key throws std.alloc::alloc_error, std.crypto::crypto_error+`;
+* `+std.crypto::ecdsa_key::curve(const std.crypto::ecdsa_key* this) -> std.crypto::curve+`;
+* `+std.crypto::ecdsa_key::public_key(const std.crypto::ecdsa_key* this) -> std.crypto::ecdsa_public_key throws std.alloc::alloc_error+`;
+* `+std.crypto::ecdsa_key::sign(const std.crypto::ecdsa_key* this, const u8[] message) -> bytes throws std.alloc::alloc_error, std.crypto::crypto_error+`.
+
+`+from_point+` принимает только несжатую точку на кривой и сообщает любую другую точку как
+`+invalid_key+`. `+from_scalar+` принимает закрытый скаляр в порядке big-endian длиной скаляра
+или короче, без ведущих нулевых байтов, и сообщает ноль и скаляр не меньше порядка кривой как
+`+invalid_key+`. `+sign+` хеширует message хешем кривой и возвращает детерминированную подпись
+RFC 6979 как r и s длиной скаляра каждое в порядке big-endian, в форме JWS и COSE. `+verify+`
+истинно ровно тогда, когда signature — подпись ECDSA сообщения message этим ключом,
+детерминированная или нет; подпись другой длины такой не является.
+
+[[R-SLIB-CRYPTO-0010]]
+*R-SLIB-CRYPTO-0010* — `+std.crypto::rsa_scheme+` — Copy fieldless enum ровно с
+`+pkcs1_sha256+`, `+pkcs1_sha384+`, `+pkcs1_sha512+`, `+pss_sha256+`, `+pss_sha384+` и
+`+pss_sha512+`: подписи RSA из RFC 8017, RSASSA-PKCS1-v1_5 и RSASSA-PSS с MGF1 того же хеша и
+солью длины хеша, над SHA-256, SHA-384 и SHA-512. `+std.crypto::rsa_public_key+` — Move-ключ
+RSA, а `+std.crypto::rsa_key+` — Move-ключ RSA, чей защищённый PKCS#1 RSAPrivateKey живёт в
+секретном буфере; модуль любого из них имеет от 2048 до 4096 битов:
+
+* `+std.crypto::rsa_public_key::from_components(const u8[] modulus, const u8[] exponent) -> std.crypto::rsa_public_key throws std.alloc::alloc_error, std.crypto::crypto_error+`;
+* `+std.crypto::rsa_public_key::modulus(const std.crypto::rsa_public_key* this) -> const u8[]+`;
+* `+std.crypto::rsa_public_key::exponent(const std.crypto::rsa_public_key* this) -> const u8[]+`;
+* `+std.crypto::rsa_public_key::bits(const std.crypto::rsa_public_key* this) -> usize+`;
+* `+std.crypto::rsa_public_key::verify(const std.crypto::rsa_public_key* this, std.crypto::rsa_scheme scheme, const u8[] message, const u8[] signature) -> bool throws std.crypto::crypto_error+`;
+* `+std.crypto::rsa_key::generate(usize bits) -> std.crypto::rsa_key throws std.alloc::alloc_error, std.crypto::crypto_error+`;
+* `+std.crypto::rsa_key::bits(const std.crypto::rsa_key* this) -> usize+`;
+* `+std.crypto::rsa_key::public_key(const std.crypto::rsa_key* this) -> std.crypto::rsa_public_key throws std.alloc::alloc_error+`;
+* `+std.crypto::rsa_key::sign(const std.crypto::rsa_key* this, std.crypto::rsa_scheme scheme, const u8[] message) -> bytes throws std.alloc::alloc_error, std.crypto::crypto_error+`.
+
+`+from_components+` принимает модуль и открытую экспоненту как беззнаковые числа в порядке
+big-endian, пропускает их ведущие нулевые байты и сообщает ключ, который отвергает провайдер,
+или модуль вне 2048–4096 битов как `+invalid_key+`; `+modulus+` и `+exponent+` возвращают их без
+ведущих нулевых байтов. `+generate+` создаёт ключ с экспонентой 65537 и модулем из bits битов,
+где bits — от 2048 до 4096 и кратно 8. `+sign+` возвращает подпись размера модуля; подписи
+PKCS#1 v1.5 детерминированы, подписи PSS используют случайную соль. `+verify+` истинно ровно
+тогда, когда signature — подпись message по схеме scheme; подпись длины, отличной от модуля,
+такой не является.
+
+[[R-SLIB-CRYPTO-0011]]
+*R-SLIB-CRYPTO-0011* — AES в режиме CBC с дополнением PKCS#7 (RFC 5652, раздел 6.3) — это:
+
+* `+std.crypto::cbc_encrypt(const u8[] key, const u8[] iv, const u8[] plaintext) -> bytes throws std.alloc::alloc_error, std.crypto::crypto_error+`;
+* `+std.crypto::cbc_decrypt(const u8[] key, const u8[] iv, const u8[] ciphertext) -> bytes throws std.alloc::alloc_error, std.crypto::crypto_error+`.
+
+Ключ имеет 16, 24 или 32 байта и выбирает AES-128, AES-192 или AES-256; IV имеет 16 байтов.
+`+cbc_encrypt+` дополняет открытый текст 1–16 байтами до целых блоков и возвращает шифротекст.
+`+cbc_decrypt+` сообщает шифротекст, длина которого не кратна 16 или равна нулю, как
+`+invalid_length+`, а дополнение, которое не проходит проверку, — как `+invalid_padding+`, и
+иначе возвращает открытый текст без дополнения. CBC не удостоверяет данные: он служит
+протоколам, которые его требуют, а протокол, который может выбирать, использует AEAD из
+R-SLIB-CRYPTO-0003.
+
+[[R-SLIB-CRYPTO-0012]]
+*R-SLIB-CRYPTO-0012* — `+std.crypto::private_key+` — Move-enum закрытого ключа ровно с
+вариантами `+ecdsa(std.crypto::ecdsa_key)+`, `+rsa(std.crypto::rsa_key)+`,
+`+ed25519(std.crypto::signing_key)+` и `+x25519(std.crypto::exchange_key)+`, а
+`+std.crypto::public_key+` — Move-enum открытого ключа ровно с вариантами
+`+ecdsa(std.crypto::ecdsa_public_key)+`, `+rsa(std.crypto::rsa_public_key)+`,
+`+ed25519(u8[32])+` и `+x25519(u8[32])+`:
+
+* `+std.crypto::private_key::from_der(const u8[] der) -> std.crypto::private_key throws std.alloc::alloc_error, std.crypto::crypto_error+`;
+* `+std.crypto::private_key::from_pem(const u8[] text) -> std.crypto::private_key throws std.alloc::alloc_error, std.crypto::crypto_error+`;
+* `+std.crypto::private_key::to_der(const std.crypto::private_key* this) -> std.secret::buffer throws std.alloc::alloc_error+`;
+* `+std.crypto::private_key::to_pem(const std.crypto::private_key* this) -> std.secret::buffer throws std.alloc::alloc_error+`;
+* `+std.crypto::private_key::public_key(const std.crypto::private_key* this) -> std.crypto::public_key throws std.alloc::alloc_error+`;
+* `+std.crypto::public_key::from_der(const u8[] der) -> std.crypto::public_key throws std.alloc::alloc_error, std.crypto::crypto_error+`;
+* `+std.crypto::public_key::from_pem(const u8[] text) -> std.crypto::public_key throws std.alloc::alloc_error, std.crypto::crypto_error+`;
+* `+std.crypto::public_key::to_der(const std.crypto::public_key* this) -> bytes throws std.alloc::alloc_error+`;
+* `+std.crypto::public_key::to_pem(const std.crypto::public_key* this) -> std.string::string throws std.alloc::alloc_error+`.
+
+`+private_key::from_der+` читает DER незашифрованного PKCS#8 PrivateKeyInfo (RFC 5958) ключа
+id-ecPublicKey на кривой из R-SLIB-CRYPTO-0009, ключа rsaEncryption, ключа Ed25519 или X25519
+(RFC 8410), SEC1 ECPrivateKey (RFC 5915), который называет свою кривую, или двухпростого PKCS#1
+RSAPrivateKey, различая их по структуре. `+public_key::from_der+` читает DER
+SubjectPublicKeyInfo (RFC 5280, RFC 5480, RFC 8410) тех же видов с несжатой точкой EC или
+PKCS#1 RSAPublicKey. `+from_pem+` читает первый блок текста PEM (RFC 7468) с меткой
+`+PRIVATE KEY+`, `+EC PRIVATE KEY+` или `+RSA PRIVATE KEY+`, соответственно `+PUBLIC KEY+` или
+`+RSA PUBLIC KEY+`, и пропускает блоки с другими метками. Зашифрованный закрытый ключ, другой
+алгоритм или кривая и сжатая точка — `+unsupported+`; любой другой вход, который не является
+таким ключом, в том числе текст без такого блока, — `+invalid_key+`, а ключи вне
+R-SLIB-CRYPTO-0009 и R-SLIB-CRYPTO-0010 отвергаются, как там. `+to_der+` возвращает DER PKCS#8
+PrivateKeyInfo версии 0, чей ECPrivateKey содержит открытую точку и не содержит кривой,
+соответственно SubjectPublicKeyInfo; `+to_pem+` возвращает этот DER как блок PEM с меткой
+`+PRIVATE KEY+`, соответственно `+PUBLIC KEY+`, по 64 символа base64 в строке и с переводом
+строки после каждой строки. Закрытый ключ и его текст PEM возвращаются в секретных буферах.
 
 === 21.26 CBOR Object Signing and Encryption: `+std.cose+`
 
@@ -7372,15 +7788,17 @@ SSLRequest протокола или через Unix-domain socket. Каждая
 [[R-SLIB-PG-0002]]
 *R-SLIB-PG-0002* — `+std.postgres::error_code+` — Copy fieldless enum ровно с `+server+`,
 `+connection+`, `+protocol+`, `+authentication+`, `+unsupported+`, `+closed+`,
-`+invalid_value+`, `+column_range+` и `+null_value+`, а `+std.postgres::pg_error+` — error с
-публичными полями `+std.postgres::error_code code+`, `+std.string::string sqlstate+`,
+`+invalid_value+`, `+column_range+`, `+null_value+`, `+missing_column+` и
+`+migration_mismatch+`, а `+std.postgres::pg_error+` — error с публичными полями `+std.postgres::error_code code+`, `+std.string::string sqlstate+`,
 `+std.string::string message+`, `+std.string::string detail+` и `+std.string::string hint+`.
 ErrorResponse сервера — `+server+` с SQLSTATE, message, detail и hint, которые он несёт; отсутствующие
 поля пусты; `+connection+` — недостижимый сервер или отказ от TLS, `+protocol+` — сообщение сервера
 вне протокола, которое завершает сессию, `+authentication+` — обмен SCRAM, не прошедший проверку,
 `+unsupported+` — метод или механизм аутентификации, которого нет у клиента, `+closed+` — операция
-соединения, чья сессия завершилась, а `+invalid_value+`, `+column_range+` и `+null_value+` — отказы
-R-SLIB-PG-0003 и R-SLIB-PG-0004.
+соединения, чья сессия завершилась, `+invalid_value+`, `+column_range+` и `+null_value+` — отказы
+R-SLIB-PG-0003, R-SLIB-PG-0004 и R-SLIB-PG-0013–R-SLIB-PG-0015, `+missing_column+` — столбец,
+который R-SLIB-PG-0015 ищет и не находит, а `+migration_mismatch+` — отказ R-SLIB-PG-0016; оба
+называют столбец или версию в detail.
 
 [[R-SLIB-PG-0003]]
 *R-SLIB-PG-0003* — `+std.postgres::value+` — Move tagged enum ровно с `+null_value+`,
@@ -7438,8 +7856,8 @@ JSON в своих текстовых формах. Операции строк�
 from_environment читает переменные libpq: PGHOST (каталог socket, если начинается с `+/+`), PGPORT,
 PGUSER, PGPASSWORD, PGDATABASE и PGAPPNAME; не заданная переменная оставляет значение по умолчанию,
 а PGPORT, не являющийся портом, — `+invalid_value+`. connect открывает transport, отправляет startup
-message с пользователем, базой, именем приложения и client encoding UTF8 и отвечает на
-аутентификацию, которую запрашивает сервер: никакую, cleartext password, md5 или SASL с
+message с пользователем, базой, именем приложения, client encoding UTF8 и DateStyle
+`+ISO, MDY+` и отвечает на аутентификацию, которую запрашивает сервер: никакую, cleartext password, md5 или SASL с
 SCRAM-SHA-256 (RFC 5802, RFC 7677) без channel binding, чью server signature он проверяет;
 пароль используется как его UTF-8 bytes, без нормализации SASLprep из RFC 4013. Отказ
 сервера пользователю — ошибка `+server+`, например SQLSTATE 28P01 при неверном пароле. connect_tls
@@ -7536,6 +7954,293 @@ cancel отправляет cancel request протокола по собств�
 подключает size соединений с settings одно за другим и возвращает их как pool из R-SLIB-POOL-0001,
 чьи leases одалживают их tasks.
 
+[[R-SLIB-PG-0013]]
+*R-SLIB-PG-0013* — Типизированное чтение столбца:
+
+* `+std.postgres::row::time(const std.postgres::row* this, usize index) -> std.time::system_time throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::row::date(const std.postgres::row* this, usize index) -> std.time::utc_datetime throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::row::uuid(const std.postgres::row* this, usize index) -> std.uuid::uuid throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::row::json(const std.postgres::row* this, usize index) -> std.json::value throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::row::text_array(const std.postgres::row* this, usize index) -> array<o<std.string::string>> throws std.postgres::pg_error, std.alloc::alloc_error+`.
+
+Каждая читает текст столбца так же, как text из R-SLIB-PG-0004, с теми же отказами. time читает
+ISO-форму timestamptz, `+YYYY-MM-DD HH:MM:SS+` с дробной частью до девяти цифр и смещением
+`+±HH+`, `+±HH:MM+` или `+±HH:MM:SS+`, которое сервер пишет в часовом поясе сессии, и
+возвращает момент; timestamp без смещения читается как UTC. date читает ISO-форму
+`+YYYY-MM-DD+` даты как полночь этого дня. uuid читает текстовую форму uuid, json — текст
+столбца json или jsonb как документ R-SLIB-JSON-0001, а text_array — одномерный массив в
+текстовой форме сервера: элемент в двойных кавычках теряет кавычки и обратные косые черты,
+экранирующие его символы, NULL без кавычек в любом регистре — none, байты остальных элементов
+сохраняются как текст UTF-8, а начальное `+[lower:upper]=+` пропускается. Текст не своей формы,
+например `+infinity+`, дата до н. э. или после 9999 года, DateStyle, отличный от ISO, или элемент не в
+UTF-8, — `+invalid_value+`, а массив больше чем одного измерения — `+unsupported+`.
+
+[[R-SLIB-PG-0014]]
+*R-SLIB-PG-0014* — Типизированные параметры:
+
+* `+std.postgres::value::of_time(std.time::system_time at) -> std.postgres::value throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::value::of_uuid(const std.uuid::uuid* id) -> std.postgres::value throws std.alloc::alloc_error+`;
+* `+std.postgres::value::of_json(const std.json::value* document) -> std.postgres::value throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::value::of_array(const array<std.postgres::value>* items) -> std.postgres::value throws std.postgres::pg_error, std.alloc::alloc_error+`.
+
+Каждая возвращает текст, который сервер преобразует к типу своего места, как любой параметр
+R-SLIB-PG-0003. of_time пишет момент в RFC 3339 в UTC с шестью цифрами дробной части, точностью
+сервера, и отказывает моменту вне годов 0–9999 с `+invalid_value+`; of_uuid пишет форму с
+дефисами в нижнем регистре, а of_json — документ так, как его пишет `+std.json::stringify+`;
+документ, который нельзя записать, — `+invalid_value+`. of_array пишет литерал одномерного
+массива: элементы по порядку в фигурных скобках через запятую, `+null_value+` как NULL, а любой
+другой элемент — его текст параметра в двойных кавычках, где двойные кавычки и обратные косые
+черты экранированы обратной косой чертой.
+
+[[R-SLIB-PG-0015]]
+*R-SLIB-PG-0015* — Строки как структуры и структуры как параметры:
+
+* `+std.postgres::rows::column_index(const std.postgres::rows* this, str name) -> usize throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::rows::decode<T: json_decode>(const std.postgres::rows* this, usize at) -> T throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::rows::decode_all<T: json_decode>(const std.postgres::rows* this) -> array<T> throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::insert_statement<T: json_encode>(str table) -> std.string::string throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::update_statement<T: json_encode>(str table, str key) -> std.string::string throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::parameters_of<T: json_encode>(const T* item) -> array<std.postgres::value> throws std.postgres::pg_error, std.alloc::alloc_error+`.
+
+column_index возвращает индекс первого столбца с этим именем, а без такого — `+missing_column+`
+с именем. decode читает строку с индексом `+at+`, индекс после последней строки —
+`+column_range+`, а decode_all — все строки по порядку, через JSON Schema типа T
+(R-SLIB-JSON-0002): каждое свойство берёт первый столбец своего JSON-имени. Отсутствующий
+столбец обязательного поля не `+o<T>+` — `+missing_column+`, а NULL в нём — `+null_value+`, оба
+с именем; иначе отсутствующий столбец или NULL поля не `+o<T>+` оставляет поле пропущенным, а
+NULL поля `+o<T>+` — none. Значение преобразуется по своему столбцу и схеме поля: логическое —
+boolean; целое — число, а для строкового поля его десятичный текст; вещественное — число, а
+нечисловое или бесконечное — `+invalid_value+`; binary — Base64 для строкового поля, иначе массив
+чисел байтов; timestamp или timestamptz — его момент, прочитанный как time из R-SLIB-PG-0013,
+записанный в RFC 3339 с шестью цифрами дробной части для строкового поля, целыми секундами от
+эпохи для целого поля и секундами с дробной частью для числового; столбец json или jsonb — его
+документ, если поле не строковое; массив bool, bytea, int2, int4, int8, float4, float8, numeric,
+text, varchar, date, timestamp, timestamptz, uuid, json или jsonb для поля-массива — его
+элементы, прочитанные как text_array, каждый преобразованный как текст, а NULL — null; любой
+другой текст — число JSON для целого или числового поля, boolean для логического поля, если он
+`+t+`, `+true+`, `+f+` или `+false+`, и строка в остальных случаях. Затем документ читается через
+`+std.json::unmarshal+`, чьи правила решают значения по умолчанию; документ, который не
+читается как T, — `+invalid_value+`, а T без схемы — `+unsupported+`.
+
+insert_statement возвращает `+INSERT INTO table ("f1", ..., "fn") VALUES ($1, ..., $n)+`, а
+update_statement — `+UPDATE table SET "f" = $i, ... WHERE "key" = $k+` для JSON-имён свойств
+схемы T в их порядке, каждое имя — идентификатор в кавычках с удвоенными двойными кавычками,
+параметр i-го свойства имеет номер i, а ключ не входит в список SET; table пишется как дано, а
+ключ, который не называет свойство, — `+missing_column+` с ключом. parameters_of пишет item через
+`+std.json::marshal+` и возвращает по параметру на свойство в том же порядке: отсутствующее
+значение или null — `+null_value+`, boolean — логическое значение, строка или число — их текст,
+массив поля-массива — литерал of_array его элементов, преобразованных так же, а любое другое
+значение — его текст JSON.
+
+[[R-SLIB-PG-0016]]
+*R-SLIB-PG-0016* — `+std.postgres::migration+` — Move struct с публичными полями
+`+u64 version+`, `+std.string::string name+` и `+std.string::string sql+`.
+
+* `+std.postgres::migrate(const std.postgres::connection* conn, array<std.postgres::migration> steps) -> task<u64 throws std.postgres::pg_error, std.error::fault> throws std.async::start_error+`.
+
+migrate применяет шаги, которых база ещё не применила, и возвращает их число. Она берёт
+advisory lock уровня сессии 125806466509938 сервера, чтобы миграции нескольких процессов шли
+одна за другой, создаёт таблицу `+r_schema_migrations+` со столбцами version (bigint, первичный
+ключ), name, checksum (text) и applied_at (timestamptz), если её нет, и читает применённые
+версии. Версии, которые в steps не строго возрастают, применённая версия, которой нет в steps,
+применённая версия, чей sql имеет другую контрольную сумму — SHA-256 его байтов в шестнадцатеричном
+виде в нижнем регистре, — и неприменённый шаг с версией ниже наибольшей применённой —
+`+migration_mismatch+` с `+version N+` в detail, до запуска любого шага. Затем каждый ожидающий
+шаг выполняется по возрастанию в своей транзакции: BEGIN, его sql как скрипт R-SLIB-PG-0006,
+строка с его версией, именем и контрольной суммой и COMMIT; ошибка сервера откатывает шаг и
+выбрасывается, а шаги до него остаются применёнными. Блокировка снимается после последнего шага и
+после любого `+pg_error+`; fault завершает сессию, а с ней и блокировку. Поэтому sql шага не может
+сам завершить транзакцию или выполнить оператор, который блок транзакции отвергает.
+
+=== 21.33 JSON Web Tokens: `+std.jwt+`
+
+[[R-SLIB-JWT-0001]]
+*R-SLIB-JWT-0001* — `+std.jwt+` — стандартный модуль на R в профиле `+hosted+`, который
+создаёт и проверяет JSON Web Signatures в компактной сериализации (RFC 7515), чья полезная
+нагрузка — JSON Web Token (RFC 7519), поверх `+std.crypto+`, `+std.hash+` и `+std.json+`, и
+читает и пишет JSON Web Keys (RFC 7517, RFC 7518). `+std.jwt::error_code+` — Copy fieldless
+enum ровно с `+malformed+`, `+unsupported_algorithm+`, `+key_mismatch+`, `+no_key+`,
+`+invalid_signature+`, `+expired+`, `+not_yet_valid+`, `+invalid_issuer+`,
+`+invalid_audience+`, `+missing_claim+`, `+invalid_claim+` и `+invalid_key+`, форматируемый
+именами вариантов, а `+std.jwt::jwt_error+` — ошибка модуля с полем
+`+std.jwt::error_code code+`. Signers, verifiers и наборы ключей — Send и Sync.
+
+[[R-SLIB-JWT-0002]]
+*R-SLIB-JWT-0002* — `+std.jwt::algorithm+` — Copy fieldless enum ровно с `+hs256+`,
+`+hs384+`, `+hs512+`, `+rs256+`, `+rs384+`, `+rs512+`, `+ps256+`, `+ps384+`, `+ps512+`,
+`+es256+`, `+es384+` и `+eddsa+`: HMAC с SHA-2, RSASSA-PKCS1-v1_5 и RSASSA-PSS из
+R-SLIB-CRYPTO-0010, ECDSA на P-256 и P-384 из R-SLIB-CRYPTO-0009 (RFC 7518, раздел 3) и
+Ed25519 (RFC 8037). Его методы —
+`+std.jwt::algorithm::name(std.jwt::algorithm this) -> str+`, имя `+alg+`, например `+ES256+`
+или `+EdDSA+`, и
+`+std.jwt::algorithm::parse(str name) -> std.jwt::algorithm throws std.jwt::jwt_error+`, который
+сообщает `+none+` и любое другое имя как `+unsupported_algorithm+`.
+
+[[R-SLIB-JWT-0003]]
+*R-SLIB-JWT-0003* — `+std.jwt::signer+` — Move-ключ, который подписывает токены одним
+алгоритмом и называет в них идентификатор ключа:
+
+* `+std.jwt::signer::hmac(std.jwt::algorithm alg, const u8[] secret) -> std.jwt::signer throws std.jwt::jwt_error, std.alloc::alloc_error+`;
+* `+std.jwt::signer::with_private_key(std.jwt::algorithm alg, std.crypto::private_key key) -> std.jwt::signer throws std.jwt::jwt_error+`;
+* `+std.jwt::signer::set_key_id(std.jwt::signer* this, str kid) -> void throws std.alloc::alloc_error+`.
+
+`+hmac+` принимает алгоритм HS и секрет не короче хеша (RFC 7518, раздел 3.2);
+`+with_private_key+` принимает ключ RSA для алгоритмов RS и PS, ключ ECDSA кривой ES256 или
+ES384 и ключ Ed25519 для EdDSA. Любой другой алгоритм, ключ или более короткий секрет —
+`+key_mismatch+`. Пустой идентификатор ключа не называет никакого.
+
+[[R-SLIB-JWT-0004]]
+*R-SLIB-JWT-0004* — `+std.jwt::verifier+` — Move-ключ, который проверяет токены, ограниченный
+одним алгоритмом или, если прочитан из JWK без `+alg+`, алгоритмами, которым подходит его ключ,
+а `+std.jwt::key_set+` — Move-набор verifiers, из которого выбирает проверка:
+
+* `+std.jwt::verifier::hmac(std.jwt::algorithm alg, const u8[] secret) -> std.jwt::verifier throws std.jwt::jwt_error, std.alloc::alloc_error+`;
+* `+std.jwt::verifier::with_public_key(std.jwt::algorithm alg, std.crypto::public_key key) -> std.jwt::verifier throws std.jwt::jwt_error+`;
+* `+std.jwt::verifier::set_key_id(std.jwt::verifier* this, str kid) -> void throws std.alloc::alloc_error+`;
+* `+std.jwt::key_set::create() -> std.jwt::key_set+`;
+* `+std.jwt::key_set::add(std.jwt::key_set* this, std.jwt::verifier key) -> void throws std.alloc::alloc_error+`;
+* `+std.jwt::key_set::size(const std.jwt::key_set* this) -> usize+`.
+
+Verifier принимает те же ключи, что и R-SLIB-JWT-0003, только открытые вместо закрытых.
+
+[[R-SLIB-JWT-0005]]
+*R-SLIB-JWT-0005* — Токены создаются, а их заголовок читается так:
+
+* `+std.jwt::sign(const std.jwt::signer* key, const std.json::value* claims) -> std.string::string throws std.jwt::jwt_error, std.alloc::alloc_error+`;
+* `+std.jwt::sign_claims<T: json_encode>(const std.jwt::signer* key, const T* claims) -> std.string::string throws std.jwt::jwt_error, std.alloc::alloc_error+`;
+* `+std.jwt::header(str token) -> std.json::value throws std.jwt::jwt_error, std.alloc::alloc_error+`.
+
+`+sign+` записывает утверждения, которые должны быть объектом JSON, а `+sign_claims+` —
+то, что для них пишет `+std.json::marshal+`, тоже объект; всё остальное — `+malformed+`.
+Защищённый заголовок — `+{"alg":A,"typ":"JWT"}+` с `+"kid"+` последним, когда signer его
+называет; заголовок и полезная нагрузка записаны в base64url без дополнения, а подпись — это
+HMAC, подпись RSA, r и s из R-SLIB-CRYPTO-0009 или подпись Ed25519 их соединённого текста.
+`+header+` возвращает заголовок токена, который должен быть объектом JSON, не проверяя токен;
+текст, который не является тремя частями base64url, соединёнными двумя точками, —
+`+malformed+`.
+
+[[R-SLIB-JWT-0006]]
+*R-SLIB-JWT-0006* — `+std.jwt::validation+` — Move-struct проверок зарегистрированных
+утверждений с полями `+std.string::string issuer+`, `+array<std.string::string> audiences+`,
+`+u64 leeway+` (секунды, по умолчанию 60) и `+bool require_expiration+` (по умолчанию true):
+
+* `+std.jwt::validation::create() -> std.jwt::validation+`;
+* `+std.jwt::validation::set_issuer(std.jwt::validation* this, str issuer) -> void throws std.alloc::alloc_error+`;
+* `+std.jwt::validation::add_audience(std.jwt::validation* this, str audience) -> void throws std.alloc::alloc_error+`;
+* `+std.jwt::verify(const std.jwt::key_set* keys, str token, const std.jwt::validation* rules, std.time::system_time now) -> std.json::value throws std.jwt::jwt_error, std.alloc::alloc_error+`;
+* `+std.jwt::verify_claims<T: json_decode>(const std.jwt::key_set* keys, str token, const std.jwt::validation* rules, std.time::system_time now) -> T throws std.jwt::jwt_error, std.json::error, std.alloc::alloc_error+`.
+
+Проверка читает заголовок: нужен `+alg+` из R-SLIB-JWT-0002, а член `+crit+` —
+`+unsupported_algorithm+`. Кандидаты — ключи набора, чей алгоритм допускает `+alg+`, чей ключ
+ему подходит и, когда заголовок называет `+kid+`, чей идентификатор ключа равен ему; ни одного
+кандидата — `+no_key+`, кандидаты, ни один из которых не подтверждает подпись, —
+`+invalid_signature+`. Полезная нагрузка должна быть объектом JSON. С `+now+` в целых секундах
+и допуском: `+exp+` при now ≥ exp + leeway — `+expired+`; отсутствующий `+exp+` —
+`+missing_claim+`, когда срок обязателен; `+nbf+` при now + leeway < nbf — `+not_yet_valid+`;
+NumericDate, который не является числом, — `+invalid_claim+`; при заданном издателе `+iss+`,
+который не равен этой строке, — `+invalid_issuer+`; при заданных аудиториях `+aud+`, строка или
+массив строк, который не называет ни одной из них, — `+invalid_audience+`. `+verify+`
+возвращает утверждения; `+verify_claims+` читает их как T через `+std.json::unmarshal+`.
+
+[[R-SLIB-JWT-0007]]
+*R-SLIB-JWT-0007* — JSON Web Keys читаются и пишутся так:
+
+* `+std.jwt::key_set::from_jwks(const u8[] text) -> std.jwt::key_set throws std.jwt::jwt_error, std.alloc::alloc_error+`;
+* `+std.jwt::jwk(const std.crypto::public_key* key, std.jwt::algorithm alg, str kid) -> std.json::value throws std.jwt::jwt_error, std.alloc::alloc_error+`.
+
+`+from_jwks+` читает JWK Set `+{"keys": [...]}+` или один JWK: ключи `+RSA+` с `+n+` и `+e+`,
+ключи `+EC+` кривых `+P-256+` и `+P-384+` с `+x+` и `+y+`, ключи `+OKP+` кривой `+Ed25519+` с `+x+`
+и ключи `+oct+` с `+k+`, в base64url, с их `+kid+` и `+alg+`. Ключ другого типа или кривой, ключ,
+чей `+use+` не `+sig+`, и ключ с `+alg+` вне R-SLIB-JWT-0002 пропускаются; ключ известного типа
+без верного ключа — `+invalid_key+`. `+jwk+` возвращает открытый JWK ключа, подходящего
+алгоритму, с `+kty+`, `+crv+` для ключей EC и OKP, членами ключа, `+alg+`, `+use+` `+sig+` и
+`+kid+`, когда он не пуст; ключ, который не подходит, — `+key_mismatch+`.
+
+=== 21.34 Клиенты OAuth 2.0: `+std.oauth2+`
+
+[[R-SLIB-OAUTH2-0001]]
+*R-SLIB-OAUTH2-0001* — `+std.oauth2+` — стандартный модуль на R в профиле
+`+hosted-native-async+` для программ, которые вызывают API под защитой OAuth 2.0 (RFC 6749):
+запросы к точке выдачи токенов поверх `+std.http+`, грант JWT bearer из RFC 7523 для
+сервисных аккаунтов поверх `+std.jwt+` и кэш токена доступа, общий для задач.
+`+std.oauth2::error_code+` — Copy fieldless enum ровно с `+invalid_request+`,
+`+invalid_response+`, `+endpoint_error+` и `+invalid_key_file+`, форматируемый именами
+вариантов, а `+std.oauth2::oauth2_error+` — ошибка модуля с полями
+`+std.oauth2::error_code code+`, `+u16 status+`, статусом ответа точки или нулём, и
+`+std.string::string error+` и `+std.string::string description+`, `+error+` и
+`+error_description+` ответа с ошибкой (RFC 6749, раздел 5.2) или пустыми строками.
+
+[[R-SLIB-OAUTH2-0002]]
+*R-SLIB-OAUTH2-0002* — `+std.oauth2::token+` — Move-struct токена доступа с полями
+`+std.string::string access_token+`, `+std.string::string token_type+`,
+`+o<std.time::system_time> expires_at+`, `+std.string::string refresh_token+` и
+`+std.string::string scope+`, последние два пусты, когда точка их не дала.
+
+[[R-SLIB-OAUTH2-0003]]
+*R-SLIB-OAUTH2-0003* — `+std.oauth2::code_grant+` — Move-struct кода авторизации с полями
+`+std.string::string code+`, `+std.string::string redirect_uri+` и
+`+std.string::string verifier+` (RFC 7636), пустые строки — их нет. `+std.oauth2::grant+` —
+Move-enum ровно с `+client_credentials+`, `+refresh_token(std.string::string)+`,
+`+authorization_code(std.oauth2::code_grant)+` и `+jwt_bearer(std.string::string)+`,
+утверждением. `+std.oauth2::token_request+` — Move-struct запроса с полями
+`+std.string::string endpoint+`, `+std.string::string client_id+`,
+`+std.secret::buffer client_secret+`, `+std.string::string scope+` и
+`+std.oauth2::grant kind+`:
+
+* `+std.oauth2::token_request::create(str endpoint, std.oauth2::grant kind) -> std.oauth2::token_request throws std.alloc::alloc_error+`;
+* `+std.oauth2::token_request::set_client(std.oauth2::token_request* this, str client_id, const u8[] secret) -> void throws std.alloc::alloc_error+`;
+* `+std.oauth2::token_request::set_scope(std.oauth2::token_request* this, str scope) -> void throws std.alloc::alloc_error+`.
+
+Идентификатор клиента с секретом удостоверяется через HTTP Basic по идентификатору и секрету в
+кодировке формы (RFC 6749, раздел 2.3.1); идентификатор без секрета отправляется как
+`+client_id+` в теле, как это делает публичный клиент; пустой идентификатор не отправляет
+ни того ни другого. Пустая область не отправляется.
+
+[[R-SLIB-OAUTH2-0004]]
+*R-SLIB-OAUTH2-0004* —
+`+@scoped async std.oauth2::request_token(std.http::client* http, const std.oauth2::token_request* request, std.time::system_time now) -> std.oauth2::token throws std.oauth2::oauth2_error, std.http::http_error, std.tls::tls_error, std.error::fault+`
+отправляет запрос методом POST с телом `+application/x-www-form-urlencoded+`, в котором
+`+grant_type+` и члены его гранта (RFC 6749, разделы 4.1.3, 4.4.2 и 6, RFC 7523, раздел 2.1),
+и читает ответ. Ответ 200, который является объектом JSON со строковыми `+access_token+` и
+`+token_type+`, даёт токен, чей `+expires_at+` — `+now+` плюс `+expires_in+`, когда это целое
+число; другой ответ 200 — `+invalid_response+`. Любой другой статус — `+endpoint_error+` с
+`+error+` и `+error_description+` ответа JSON с ошибкой и `+invalid_response+` со статусом для
+всего остального. Секрет, который не является UTF-8, — `+invalid_request+`.
+
+[[R-SLIB-OAUTH2-0005]]
+*R-SLIB-OAUTH2-0005* — `+std.oauth2::service_account+` — Move-сервисный аккаунт файла ключа с
+полями `+std.string::string client_email+` и `+std.string::string token_uri+` и защищённым
+signer RS256 из R-SLIB-JWT-0003, который называет идентификатор ключа из файла:
+
+* `+std.oauth2::service_account::from_json(const u8[] text) -> std.oauth2::service_account throws std.oauth2::oauth2_error, std.alloc::alloc_error+`;
+* `+std.oauth2::service_account::assertion(const std.oauth2::service_account* this, str scope, str subject, std.time::system_time now) -> std.string::string throws std.oauth2::oauth2_error, std.alloc::alloc_error+`;
+* `+std.oauth2::service_account::request_for(const std.oauth2::service_account* this, str scope, str subject, std.time::system_time now) -> std.oauth2::token_request throws std.oauth2::oauth2_error, std.alloc::alloc_error+`.
+
+`+from_json+` читает JSON-файл ключа Google Cloud: `+type+` `+service_account+`, если он есть,
+`+client_email+`, `+private_key+` с ключом RSA в PEM (R-SLIB-CRYPTO-0012), `+private_key_id+`
+и `+token_uri+`, по умолчанию `+https://oauth2.googleapis.com/token+`; любой другой файл —
+`+invalid_key_file+`. `+assertion+` подписывает JWT с утверждениями `+iss+` — аккаунт, `+scope+`,
+если не пуст, `+aud+` — точка выдачи токенов, `+sub+`, если не пуст, `+iat+` — `+now+` и `+exp+`
+на час позже (RFC 7523, раздел 3). `+request_for+` возвращает запрос гранта `+jwt_bearer+` с
+таким утверждением к точке выдачи токенов.
+
+[[R-SLIB-OAUTH2-0006]]
+*R-SLIB-OAUTH2-0006* — `+std.oauth2::token_source+` — Move, Send и Sync handle токена доступа,
+общего для задач программы; он владеет HTTP-клиентом и источником своих токенов:
+
+* `+std.oauth2::token_source::from_request(std.http::client http, std.oauth2::token_request request) -> std.oauth2::token_source throws std.alloc::alloc_error+`;
+* `+std.oauth2::token_source::from_service_account(std.http::client http, std.oauth2::service_account account, str scope, str subject) -> std.oauth2::token_source throws std.alloc::alloc_error+`;
+* `+std.oauth2::token_source::access_token(const std.oauth2::token_source* this) -> task<std.string::string throws std.oauth2::oauth2_error, std.http::http_error, std.tls::tls_error, std.error::fault> throws std.async::start_error, std.alloc::alloc_error+`;
+* `+std.oauth2::token_source::renew(const std.oauth2::token_source* this) -> task<std.string::string throws std.oauth2::oauth2_error, std.http::http_error, std.tls::tls_error, std.error::fault> throws std.async::start_error, std.alloc::alloc_error+`.
+
+`+access_token+` возвращает токен из кэша, пока до его истечения больше 60 секунд или срока у
+него нет, и иначе получает новый; `+renew+` получает новый в любом случае, как после того, как
+API отверг токен из кэша. Запросы одного источника идут по очереди, так что задачи, которым токен
+нужен одновременно, отправляют один запрос. Источник запроса отправляет его снова, с токеном
+обновления, который точка вернула последним, вместо его гранта, так что код обменивается один
+раз, а сменившийся токен обновления подхватывается; источник сервисного аккаунта каждый раз
+подписывает новое утверждение для своей области и субъекта.
+
 == Приложение A — Нормативный inventory public API
 
 [[R-SLIB-API-A001]]
@@ -7625,7 +8330,7 @@ volatile/intrinsic без allocation
 |Bounded C17 unsigned shifts и masks; 64-bit case никогда не shifts на 64
 
 |`+std.secret+`: R-SLIB-SECRET-0001..0004
-|Move owner `+buffer+`, Send и non-Sync; views являются call-bounded и несут origin buffer
+|Move owner `+buffer+`, Send и Sync; views являются call-bounded и несут origin buffer
 |`+with_length+` может выделять память транзакционно; adoption, views, erasure и comparison не выделяют
 |Без panic; drop стирает всю allocation через volatile stores до release
 |C allocation/movement, volatile byte stores и branch-free accumulated comparison
@@ -7674,6 +8379,15 @@ volatile/intrinsic без allocation
 |Нет panic; clock calls являются thread-safe
 |C17 `<time.h>` и bounded native query monotonic clock; R-часть транслируется с программой
 (R-SLIB-RSRC-0001)
+
+|Зоны и шаблоны `+std.time+`: R-SLIB-TIME-0010..0014
+|Move `+zone+` владеет своими переходами, типами и правилом; Copy `+local_time+`; имена и
+аббревиатуры — views зоны
+|Ошибки зон — `+std.time::zone_error+`, ошибки полей и диапазонов — `+std.time::time_error+`;
+нечитаемый файл зоны — fault модуля `+std.fs+`
+|Зоны являются Send+Sync; только Core arithmetic и bounds panics
+|R source транслируется с программой; `+load_zone+` и `+local_zone+` читают файлы TZif через
+`+std.fs+` (R-SLIB-RSRC-0001)
 
 |Конструктор типа языка `+task<T throws E...>+`, все public types `+std.async+`, synchronous controls
 `+cancel+`/`+detach+` и `+task_id+`:
@@ -7861,6 +8575,13 @@ parameter deadline нет
 |Task является Send iff R и каждый E являются Send; arguments следуют Core R-MEM-0013
 |Пул блокирующих вызовов Core R-TERM-0015; calls берутся в порядке submission
 
+|`+std.async::join+`: R-SLIB-ASYNC-0020
+|Потребляет observation right задачи; owned результат `+std.thread::join_result<T>+`
+|Cancellation и deadline ожидающей задачи как для await; text отчёта — единственное
+allocation
+|Результат Send iff T есть Send; panic задачи заканчивается в join
+|Task outcome Core R-FUNC-0012; отчёт берётся из panic state потока
+
 |`+std.service+`: R-SLIB-SERVICE-0001..0003
 |Владеет listener, receiver остановки и ссылкой на общее состояние; Copy report
 |Запрос остановки, deadline соединения и cancellation task; задачи-обработчики завершаются до возврата
@@ -7884,7 +8605,7 @@ panics
 |Только Core arithmetic и bounds panics
 |R source транслируется вместе с программой (R-SLIB-RSRC-0001); C symbol нет
 
-|`+std.http+`: R-SLIB-HTTP-0001..0012
+|`+std.http+`: R-SLIB-HTTP-0001..0018
 |Move сообщения, header sections, routers и clients; router разделяется сервером через `+arc+`;
 views потоков и bodies на время вызова
 |Ошибки протокола — `+std.http::http_error+`; сервер отвечает на них и никогда их не бросает;
@@ -7928,11 +8649,12 @@ handlers разделяют его состояние `+arc S+`; подписк�
 |R source транслируется вместе с программой поверх `+std.jsonrpc+`, `+std.http+`, `+std.process+`
 и `+std.tls+` (R-SLIB-RSRC-0001)
 
-|`+std.tls+`: R-SLIB-TLS-0001..0006
+|`+std.tls+`: R-SLIB-TLS-0001..0007
 |Move configuration и session; session владеет своим transport, а configuration живёт до
 окончания последней session; views certificates на время вызова и заимствованный secret key
 |Ошибки configuration и отказы handshake — `+std.tls::tls_error+`, нехватка памяти —
-`+std.alloc::alloc_error+`, прочие неудачи session после handshake — `+std.io::io_error+`
+`+std.alloc::alloc_error+`, прочие неудачи session после handshake — `+std.io::io_error+`;
+нечитаемый системный набор — fault модуля `+std.fs+`
 |Configurations и sessions — Send+Sync; один читатель и один писатель одновременно; только Core
 arithmetic и bounds panics
 |R source транслируется вместе с программой поверх native provider `+std.tls.native+` и
@@ -7947,7 +8669,7 @@ contract unsafe `+map_file+` сохраняет range в файле и неиз�
 |R source, транслируемый с program поверх native provider `+std.fs.native+`
 (R-SLIB-RSRC-0003)
 
-|`+std.postgres+`: R-SLIB-PG-0001..0012
+|`+std.postgres+`: R-SLIB-PG-0001..0016
 |Move options, connections, statements, rows и notifications; соединение разделяется своими handles
 через `+arc+`, и каждая операция удерживает его новой ссылкой; views строки заимствуют строку
 |Ошибки сервера — `+std.postgres::pg_error+` с SQLSTATE, message, detail и hint; неудачи transport —
@@ -7956,7 +8678,24 @@ faults и завершают сессию
 |R source, транслируемый с program поверх `+std.net+`, `+std.tls+` и `+std.pool+`
 (R-SLIB-RSRC-0001)
 
-|`+std.log+`, `+std.config+`: R-SLIB-LOG-0001..0003, R-SLIB-CONFIG-0001..0003
+|`+std.jwt+`: R-SLIB-JWT-0001..0007
+|Move signers, verifiers, наборы ключей и validations; токен — строка; ключи перемещаются в
+signers и verifiers
+|Отвергнутые токены и ключи — `+std.jwt::jwt_error+`; типизированные утверждения сообщают `+std.json::error+`
+|Signers, verifiers и наборы ключей являются Send+Sync; только Core arithmetic и bounds panics
+|R source, транслируемый с program поверх `+std.crypto+`, `+std.hash+`, `+std.encoding+` и
+`+std.json+` (R-SLIB-RSRC-0001)
+
+|`+std.oauth2+`: R-SLIB-OAUTH2-0001..0006
+|Move tokens, grants, requests и service accounts; источник токена владеет HTTP-клиентом и
+разделяет токен через `+arc+`; `+request_token+` заимствует клиента на время вызова
+|Отказы точки и нечитаемые ответы или файлы ключей — `+std.oauth2::oauth2_error+`;
+неудачи transport — ошибки `+std.http+`, `+std.tls+` и faults
+|Источники токенов являются Send+Sync, их запросы идут по очереди; только Core arithmetic и bounds panics
+|R source, транслируемый с program поверх `+std.http+`, `+std.jwt+` и `+std.crypto+`
+(R-SLIB-RSRC-0001)
+
+|`+std.log+`, `+std.config+`: R-SLIB-LOG-0001..0005, R-SLIB-CONFIG-0001..0004
 |Loggers владеют отправителем одной ограниченной очереди; writer — её получателем;
 конфигурация владеет значениями и одалживает их `+get+`
 |Журналирование никогда не ждёт: полная очередь отбрасывает и считает запись; writer

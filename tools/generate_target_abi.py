@@ -200,8 +200,17 @@ EXPECTED_CHECKED_ERRORS = {
     "setjmp_longjmp": False,
 }
 
+# L39 (Core R-ERR-0005, R-IDB-005): the hosted target unwinds.
 EXPECTED_PANIC = {
-    "strategy": "abort",
+    "strategy": "unwind",
+    "propagation": (
+        "a per-thread panic state tested after calls and panic sites; no native exception "
+        "unwinding and no setjmp/longjmp"
+    ),
+    "runtime_panics": "a panic inside runtime or library C code aborts (R-ERR-0006)",
+    "unobserved_reports": (
+        "delivered once to the panic hook, which writes the report line to the diagnostic sink"
+    ),
     "diagnostic_sink": "file descriptor 2 through allocation-free write",
     "stack_exhaustion": "allocation-free panic followed by abort",
 }
@@ -231,7 +240,7 @@ def load_manifest(path: Path) -> tuple[bytes, dict[str, Any], dict[str, Any], st
     manifest = json.loads(manifest_bytes)
     require(isinstance(manifest, dict), "target manifest root must be an object")
     require(manifest.get("schema") == "r-target-manifest-0.1", "unexpected manifest schema")
-    require(manifest.get("manifest_revision") == 9, "unexpected target manifest revision")
+    require(manifest.get("manifest_revision") == 10, "unexpected target manifest revision")
     require(
         manifest.get("status") == "draft-implementation-contract",
         "unexpected target manifest status",
@@ -259,7 +268,7 @@ def load_manifest(path: Path) -> tuple[bytes, dict[str, Any], dict[str, Any], st
     else:
         require(
             core.get("panic") == EXPECTED_PANIC,
-            "first target panic strategy must be abort and its contract must be closed",
+            "first target panic strategy must be unwind and its contract must be closed",
         )
     allocator = core.get("allocator")
     require(isinstance(allocator, dict), "target manifest allocator must be an object")

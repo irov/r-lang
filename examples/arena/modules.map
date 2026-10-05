@@ -1,0 +1,6 @@
+example.arena.main = src/main.r
+example.arena.sessions = src/sessions.r
+example.arena.google = src/google.r
+example.arena.settings = src/settings.r
+example.arena.store = src/store.r
+example.arena.server = src/server.r

@@ -29,13 +29,16 @@ _Bool r_library_internal_sync_once_call(const RStdSyncOnce *source,
     for (;;) {
         unsigned int state = atomic_load_explicit(&once->state, memory_order_acquire);
         unsigned int expected;
+        _Bool succeeded;
 
         if (state == R_LIBRARY_SYNC_ONCE_COMPLETED) {
             return 1;
         }
         if ((state == R_LIBRARY_SYNC_ONCE_POISONED) && !force) {
-            r_runtime_panic(R_RUNTIME_PANIC_ONCE_POISONED,
+            /* L39: the once_poisoned panic begins here and the caller unwinds after the call. */
+            r_runtime_raise(R_RUNTIME_PANIC_ONCE_POISONED,
                             (RRuntimeSourceSpan){UINT32_C(0), UINT32_C(0), UINT32_C(0)});
+            return 0;
         }
         if (state == R_LIBRARY_SYNC_ONCE_RUNNING) {
             if (atomic_load_explicit(&once->owner_token, memory_order_acquire) == token) {
@@ -53,7 +56,15 @@ _Bool r_library_internal_sync_once_call(const RStdSyncOnce *source,
             continue;
         }
         atomic_store_explicit(&once->owner_token, token, memory_order_release);
-        if (!initializer(context)) {
+        succeeded = initializer(context);
+        if (r_runtime_unwinding()) {
+            /* L39: an initializer that panicked poisons the once; the panic continues in the
+               caller. */
+            atomic_store_explicit(&once->owner_token, (uintptr_t)0U, memory_order_relaxed);
+            atomic_store_explicit(&once->state, R_LIBRARY_SYNC_ONCE_POISONED, memory_order_release);
+            return 0;
+        }
+        if (!succeeded) {
             atomic_store_explicit(&once->owner_token, (uintptr_t)0U, memory_order_relaxed);
             atomic_store_explicit(&once->state, state, memory_order_release);
             return 0;

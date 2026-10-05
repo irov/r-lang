@@ -1,6 +1,6 @@
 {
   "schema": "r-target-manifest-0.1",
-  "manifest_revision": 9,
+  "manifest_revision": 10,
   "status": "draft-implementation-contract",
   "conformance_claim": false,
   "identity": {
@@ -8,8 +8,8 @@
     "target_triple": "arm64-apple-darwin",
     "profile": "freestanding",
     "minimum_os_version": "26.5",
-    "core_specification_revision": "0.1.0-draft.96",
-    "standard_library_specification_revision": "0.1.0-draft.62"
+    "core_specification_revision": "0.1.0-draft.97",
+    "standard_library_specification_revision": "0.1.0-draft.67"
   },
   "toolchain": {
     "c_compiler": "Apple clang",

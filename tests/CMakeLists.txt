@@ -333,9 +333,9 @@ add_test(NAME r_library_format_unit COMMAND r_library_format_tests)
 # (std.tls, std.crypto, std.sqlite, std.alloc). A program links those its generated code bridges
 # to.
 set(R_STD_NATIVE_INCLUDE_DIRS
-    "${R_STD_TLS_NATIVE_INCLUDE_DIR};${R_STD_CRYPTO_NATIVE_INCLUDE_DIR};${R_STD_SQLITE_NATIVE_INCLUDE_DIR};${R_STD_ALLOC_NATIVE_INCLUDE_DIR};${R_STD_FS_NATIVE_INCLUDE_DIR}")
+    "${R_STD_TLS_NATIVE_INCLUDE_DIR};${R_STD_CRYPTO_NATIVE_INCLUDE_DIR};${R_STD_SQLITE_NATIVE_INCLUDE_DIR};${R_STD_ALLOC_NATIVE_INCLUDE_DIR};${R_STD_FS_NATIVE_INCLUDE_DIR};${R_STD_LOG_NATIVE_INCLUDE_DIR}")
 set(R_STD_NATIVE_LINK_ARCHIVES
-    "${R_STD_TLS_NATIVE_LINK_ARCHIVES};${R_STD_CRYPTO_NATIVE_LINK_ARCHIVES};${R_STD_SQLITE_NATIVE_LINK_ARCHIVES};${R_STD_ALLOC_NATIVE_LINK_ARCHIVES};${R_STD_FS_NATIVE_LINK_ARCHIVES}")
+    "${R_STD_TLS_NATIVE_LINK_ARCHIVES};${R_STD_CRYPTO_NATIVE_LINK_ARCHIVES};${R_STD_SQLITE_NATIVE_LINK_ARCHIVES};${R_STD_ALLOC_NATIVE_LINK_ARCHIVES};${R_STD_FS_NATIVE_LINK_ARCHIVES};${R_STD_LOG_NATIVE_LINK_ARCHIVES}")
 
 # Library R-SLIB-CRYPTO-0001 (M28): the native provider of std.crypto over libsodium, each
 # primitive against a known answer of its RFC.
@@ -4200,6 +4200,8 @@ if(NOT MSVC)
             library_text_oom
             encoding_driver
             json_schema_driver
+            json_schema_generics
+            async_json_schema_generics
             library_random
             library_uuid
             library_hmac
@@ -4212,6 +4214,8 @@ if(NOT MSVC)
             time_driver
             cbor_driver
             crypto_driver
+            jwt_driver
+            zone_driver
             cose_driver
             sqlite_driver
             dead_new_helpers
@@ -4454,7 +4458,11 @@ if(NOT MSVC)
             checked_finally_control
             checked_finally_control_o2
             effect_cleanup
-            abort_skips_finally
+            unwind_second_panic_finally
+            unwind_second_panic_drop
+            async_unwind_cleanup
+            async_unwind_drops
+            async_unwind_places
             async_checked_effects
             async_cancel_finally
             async_shared_finally
@@ -4640,6 +4648,7 @@ if(NOT MSVC)
             async_ffi_types
             ffi_records
             ffi_userdata
+            ffi_callback_panic
             ffi_conformance
             ffi_null_ingress
             ffi_enum_ingress
@@ -4752,6 +4761,7 @@ if(NOT MSVC)
         set(R_CODEGEN_PROGRAM_INPUT_FILE "")
         set(R_CODEGEN_EXPECTED_EXIT_STATUS 0)
         set(R_CODEGEN_EXPECTED_STDERR "")
+        set(R_CODEGEN_EXPECTED_SECOND_PANIC "")
         set(R_CODEGEN_LINK_MANIFEST "")
         set(R_CODEGEN_EXTRA_C_SOURCES "")
         set(R_CODEGEN_ABI_VERIFY OFF)
@@ -5429,11 +5439,46 @@ if(NOT MSVC)
             set(R_CODEGEN_C_WRAPPER
                 "${CMAKE_CURRENT_SOURCE_DIR}/codegen_effect_cleanup_wrapper.c")
             set(R_CODEGEN_EXPECTED_PANIC "")
-        elseif(R_CODEGEN_CASE STREQUAL "abort_skips_finally")
+        elseif(R_CODEGEN_CASE STREQUAL "unwind_second_panic_finally")
             set(R_CODEGEN_SOURCE_1
-                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_abort_skips_finally.r")
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_unwind_second_panic_finally.r")
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_EXPECTED_PANIC "integer_overflow")
+            set(R_CODEGEN_EXPECTED_SECOND_PANIC "division_by_zero")
+        elseif(R_CODEGEN_CASE STREQUAL "unwind_second_panic_drop")
+            # L39 (R-ERR-0008): a user drop that panics during unwinding aborts with both reports.
+            set(R_CODEGEN_SOURCE_1
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_unwind_second_panic_drop.r")
+            set(R_CODEGEN_SOURCE_2 "")
+            set(R_CODEGEN_EXPECTED_PANIC "explicit")
+            set(R_CODEGEN_EXPECTED_SECOND_PANIC "bounds")
+        elseif(R_CODEGEN_CASE STREQUAL "async_unwind_cleanup")
+            # L39 (R-ERR-0005, R-SLIB-ASYNC-0020): unwinding drops and finally blocks in the order
+            # of a normal exit, releases an arc and poisons a held lock.
+            set(R_CODEGEN_SOURCE_1
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_async_unwind_cleanup.r")
+            set(R_CODEGEN_SOURCE_2 "")
+            set(R_CODEGEN_EXPECTED_PANIC "")
+            set(R_CODEGEN_CHECK_STDOUT TRUE)
+            set(R_CODEGEN_EXPECTED_STDOUT
+                "unwound 91324\nreturned 91324 value 3\nowners 1\npoisoned 1\n")
+        elseif(R_CODEGEN_CASE STREQUAL "async_unwind_places")
+            # L39-12: indexed places prepared by return and assignments unwind.
+            set(R_CODEGEN_SOURCE_1
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_async_unwind_places.r")
+            set(R_CODEGEN_SOURCE_2 "")
+            set(R_CODEGEN_EXPECTED_PANIC "")
+            set(R_CODEGEN_CHECK_STDOUT TRUE)
+            set(R_CODEGEN_EXPECTED_STDOUT "places unwind\n")
+        elseif(R_CODEGEN_CASE STREQUAL "async_unwind_drops")
+            # L39 (R-ERR-0008, R-MEM-0016): panics that begin in user drops and in scoped threads.
+            set(R_CODEGEN_SOURCE_1
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_async_unwind_drops.r")
+            set(R_CODEGEN_SOURCE_2 "")
+            set(R_CODEGEN_EXPECTED_PANIC "")
+            set(R_CODEGEN_CHECK_STDOUT TRUE)
+            set(R_CODEGEN_EXPECTED_STDOUT
+                "block 2 3721\nblock 1 37291\nstatement 2 741\nscope 3 61\nreturn 2 71\ncaller 2 718\n")
         elseif(R_CODEGEN_CASE STREQUAL "async_checked_effects")
             set(R_CODEGEN_SOURCE_1
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_async_checked_effects.r")
@@ -5506,7 +5551,7 @@ if(NOT MSVC)
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_EXPECTED_PANIC "")
-        elseif(R_CODEGEN_CASE MATCHES "^(async_owner_shapes|async_owner_matrix|null_type|async_null_type|explicit_generics|async_explicit_generics|consteval|async_consteval|consteval_checked|async_consteval_checked|consteval_floats|async_consteval_floats|consteval_owners|consteval_frozen|async_consteval_frozen|deadline_blocks|budget_blocks|recursion_bounds|async_for|expression_forms|async_channels|group_detach|group_vacancy|group_capacity|effect_relay|swap_clone|async_swap_clone|derive|async_derive|cmp_impls|function_values|static_values|async_static_values|computed_bounds|async_computed_bounds|typed_constants|async_typed_constants|associated_constants|async_associated_constants|dyn_interfaces|async_dyn_interfaces|dyn_owners|async_dyn_owners|async_locks|async_broadcast|async_reserve|async_blocking|async_blocking_start|core_format|async_core_format|field_defaults|async_field_defaults|json_field_defaults|overloads|dict_custom_keys|common_error_fields|sync_initializer_cleanup_growth|fs_metadata_fields|string_outcomes|async_parameter_reassignment|process_outcome_records|async_math_records|numeric_error_codes|regex|regex_o2|async_regex|regex_oom|regex_driver|regex_example|regex_captures|library_text|library_encoding|library_iter_reductions|library_byte_cursor|async_library_text|library_text_oom|encoding_driver|json_schema_driver|library_random|library_uuid|library_hmac|async_library_tokens|hash_driver|hash_digest_values|hash_operations|hash_independent|async_hash_independent|library_time_formats|library_time_interval|standard_record_constructors|time_driver|cbor_driver|crypto_driver|cose_driver|sqlite_driver|dead_new_helpers|library_signal|library_net_connect|library_net_options|library_net_unix|library_args|library_config|library_log|library_async_task_id|library_task_id_outside|async_direct_calls|arc_clone_only|async_arc_clone_only|test_mode|string_keys)$")
+        elseif(R_CODEGEN_CASE MATCHES "^(async_owner_shapes|async_owner_matrix|null_type|async_null_type|explicit_generics|async_explicit_generics|consteval|async_consteval|consteval_checked|async_consteval_checked|consteval_floats|async_consteval_floats|consteval_owners|consteval_frozen|async_consteval_frozen|deadline_blocks|budget_blocks|recursion_bounds|async_for|expression_forms|async_channels|group_detach|group_vacancy|group_capacity|effect_relay|swap_clone|async_swap_clone|derive|async_derive|cmp_impls|function_values|static_values|async_static_values|computed_bounds|async_computed_bounds|typed_constants|async_typed_constants|associated_constants|async_associated_constants|dyn_interfaces|async_dyn_interfaces|dyn_owners|async_dyn_owners|async_locks|async_broadcast|async_reserve|async_blocking|async_blocking_start|core_format|async_core_format|field_defaults|async_field_defaults|json_field_defaults|overloads|dict_custom_keys|common_error_fields|sync_initializer_cleanup_growth|fs_metadata_fields|string_outcomes|async_parameter_reassignment|process_outcome_records|async_math_records|numeric_error_codes|regex|regex_o2|async_regex|regex_oom|regex_driver|regex_example|regex_captures|library_text|library_encoding|library_iter_reductions|library_byte_cursor|async_library_text|library_text_oom|encoding_driver|json_schema_driver|json_schema_generics|async_json_schema_generics|library_random|library_uuid|library_hmac|async_library_tokens|hash_driver|hash_digest_values|hash_operations|hash_independent|async_hash_independent|library_time_formats|library_time_interval|standard_record_constructors|time_driver|cbor_driver|crypto_driver|jwt_driver|zone_driver|cose_driver|sqlite_driver|dead_new_helpers|library_signal|library_net_connect|library_net_options|library_net_unix|library_args|library_config|library_log|library_async_task_id|library_task_id_outside|async_direct_calls|arc_clone_only|async_arc_clone_only|test_mode|string_keys)$")
             set(R_CODEGEN_SOURCE_1
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
             set(R_CODEGEN_SOURCE_2 "")
@@ -6264,7 +6309,7 @@ if(NOT MSVC)
             set(R_CODEGEN_ABI_INVENTORY ON)
             set(R_CODEGEN_HEADER_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ffi")
         elseif(R_CODEGEN_CASE MATCHES
-               "^((async_)?ffi_import|ffi_bridge|(async_)?ffi_types|ffi_records|ffi_userdata|ffi_conformance|ffi_null_ingress|ffi_enum_ingress|ffi_repr_c_(imports|objects)|async_ffi_repr_c|ffi_(enum_result|struct_result|struct_null|callback_struct)_ingress|(async_)?ffi_object_enum_ingress|ffi_never_results|(async_)?ffi_never_returns)$")
+               "^((async_)?ffi_import|ffi_bridge|(async_)?ffi_types|ffi_records|ffi_userdata|ffi_callback_panic|ffi_conformance|ffi_null_ingress|ffi_enum_ingress|ffi_repr_c_(imports|objects)|async_ffi_repr_c|ffi_(enum_result|struct_result|struct_null|callback_struct)_ingress|(async_)?ffi_object_enum_ingress|ffi_never_results|(async_)?ffi_never_returns)$")
             set(R_CODEGEN_SOURCE_1
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
             set(R_CODEGEN_SOURCE_2 "")
@@ -6288,6 +6333,10 @@ if(NOT MSVC)
             if(R_CODEGEN_CASE MATCHES "^(async_)?ffi_never_returns$")
                 # R-TYPE-0007: a C function declared never that returns panics at the call.
                 set(R_CODEGEN_EXPECTED_PANIC "contract_violation")
+            endif()
+            if(R_CODEGEN_CASE STREQUAL "ffi_callback_panic")
+                # L39 (R-ERR-0006): a panic that reaches the C boundary of a callback aborts.
+                set(R_CODEGEN_EXPECTED_PANIC "explicit at module 1 bytes [")
             endif()
         elseif(R_CODEGEN_CASE MATCHES
                "^audit_(aggregate_slice_field|std_library_schema_calls|float_arithmetic|float_to_integer_cast|mixed_integer_arithmetic|for_statement|aggregate_checked_initializer_cleanup|async_aggregate_checked_initializer_cleanup|move_assignment_replacement_cleanup|async_move_assignment_replacement_cleanup|move_field_assignment_replacement_cleanup|async_move_field_assignment_replacement_cleanup|own_assignment_replacement_cleanup|assignment_close_cases|async_assignment_close_cases|assignment_array_reallocation_close|async_assignment_array_reallocation_close|compound_rhs_overlapping_write|float_compound_assignment|prefix_increment|postfix_increment|async_compound_updates|update_place_evaluated_once)$" OR
@@ -6478,6 +6527,7 @@ if(NOT MSVC)
                 -DRUNTIME_UTF8_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/utf8.c
                 -DRUNTIME_PANIC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/panic_abort.c
                 -DEXPECTED_PANIC=${R_CODEGEN_EXPECTED_PANIC}
+                -DEXPECTED_SECOND_PANIC=${R_CODEGEN_EXPECTED_SECOND_PANIC}
                 -DEXPECTED_EXIT_STATUS=${R_CODEGEN_EXPECTED_EXIT_STATUS}
                 "-DEXPECTED_STDERR=${R_CODEGEN_EXPECTED_STDERR}"
                 -DPROGRAM_ARGUMENTS=${R_CODEGEN_PROGRAM_ARGUMENTS}
@@ -7103,7 +7153,7 @@ if(NOT MSVC)
     add_test(NAME r_example_numbers_generated
         COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/generate_numeric_example.py" --check)
 
-    foreach(R_EXAMPLE_APP IN ITEMS preflight jobs tournament c_bridge logbook registers quotes ledger workers netlab json_tool workspace bytepipe dispatch environment process_status runner binary text deflate xml statistics snapshots playlist buffer_compare warehouse clock receipt fanout streams keystore pipeline wordstats tally settings service offload status relay textkit tokens ipc testing tls http realtime assistant notary registry telemetry ingest journal)
+    foreach(R_EXAMPLE_APP IN ITEMS preflight jobs tournament c_bridge logbook registers quotes ledger workers netlab json_tool workspace bytepipe dispatch environment process_status runner binary text deflate xml statistics snapshots playlist buffer_compare warehouse clock receipt fanout streams keystore pipeline wordstats tally settings service offload status relay textkit tokens ipc testing tls http realtime assistant notary registry telemetry ingest journal arena)
         set_tests_properties(r_frontend_codegen_example_${R_EXAMPLE_APP}
             PROPERTIES FIXTURES_SETUP r_example_${R_EXAMPLE_APP})
         add_test(NAME r_example_${R_EXAMPLE_APP}_commands
@@ -7113,9 +7163,9 @@ if(NOT MSVC)
             FIXTURES_REQUIRED r_example_${R_EXAMPLE_APP} TIMEOUT 300 LABELS "examples")
     endforeach()
 
-    # Library R-SLIB-PG-0001..0012 (M35): the std.postgres tests run against a temporary
-    # PostgreSQL cluster when its server programs are found; the program built by
-    # r_frontend_codegen_rtest_postgres passes without a server there.
+    # Library R-SLIB-PG-0001..0016 (M35, M41): the std.postgres tests and the database commands
+    # of the examples run against a temporary PostgreSQL cluster when its server programs are
+    # found; the program built by r_frontend_codegen_rtest_postgres passes without a server there.
     find_program(R_POSTGRES_PG_CTL NAMES pg_ctl
         HINTS /opt/homebrew/opt/postgresql@17/bin /usr/local/opt/postgresql@17/bin
               /opt/homebrew/opt/postgresql/bin)
@@ -7131,6 +7181,12 @@ if(NOT MSVC)
                 --bin "${R_POSTGRES_BIN_DIR}")
         set_tests_properties(r_example_orders_commands PROPERTIES
             FIXTURES_REQUIRED r_example_orders TIMEOUT 300 LABELS "examples;postgres")
+        add_test(NAME r_example_arena_database
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/run_arena_examples.py"
+                --executable "${CMAKE_CURRENT_BINARY_DIR}/codegen_example_arena"
+                --bin "${R_POSTGRES_BIN_DIR}")
+        set_tests_properties(r_example_arena_database PROPERTIES
+            FIXTURES_REQUIRED r_example_arena TIMEOUT 300 LABELS "examples;postgres")
         add_test(NAME r_postgres_tests
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/run_postgres_tests.py"
                 --executable "${CMAKE_CURRENT_BINARY_DIR}/codegen_rtest_postgres"
@@ -7187,6 +7243,20 @@ if(NOT MSVC)
             --executable "${CMAKE_CURRENT_BINARY_DIR}/codegen_crypto_driver")
     set_tests_properties(r_crypto_vectors PROPERTIES
         FIXTURES_REQUIRED r_crypto_driver TIMEOUT 300 LABELS "crypto;differential")
+    # M38: std.jwt against a JWS made with the Python cryptography package for every algorithm.
+    set_tests_properties(r_frontend_codegen_jwt_driver PROPERTIES FIXTURES_SETUP r_jwt_driver)
+    add_test(NAME r_jwt_vectors
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/jwt_vectors.py"
+            --executable "${CMAKE_CURRENT_BINARY_DIR}/codegen_jwt_driver")
+    set_tests_properties(r_jwt_vectors PROPERTIES
+        FIXTURES_REQUIRED r_jwt_driver TIMEOUT 300 LABELS "jwt;differential")
+    # M39: the time zones of std.time against the Python zoneinfo module over the zone files.
+    set_tests_properties(r_frontend_codegen_zone_driver PROPERTIES FIXTURES_SETUP r_zone_driver)
+    add_test(NAME r_zone_vectors
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/zone_vectors.py"
+            --executable "${CMAKE_CURRENT_BINARY_DIR}/codegen_zone_driver")
+    set_tests_properties(r_zone_vectors PROPERTIES
+        FIXTURES_REQUIRED r_zone_driver TIMEOUT 600 LABELS "time;differential")
     set_tests_properties(r_frontend_codegen_cose_driver PROPERTIES FIXTURES_SETUP r_cose_driver)
     # The examples of the IETF COSE working group (public domain, the Unlicense) at a pinned commit.
     include("${PROJECT_SOURCE_DIR}/cmake/RThirdParty.cmake")
@@ -7410,10 +7480,10 @@ if(NOT MSVC)
         PROPERTIES LABELS "codegen;freestanding"
     )
 
-    # R-SLIB-SECRET-0001: std.secret::buffer is Send and not Sync.
+    # R-SLIB-SECRET-0001: std.secret::buffer is Send and Sync.
     foreach(R_SECRET_CASE IN ITEMS
             "secret_send:accept:none"
-            "secret_not_sync:reject:R-DIAG-ASYNC-001")
+            "secret_sync:accept:none")
         string(REPLACE ":" ";" R_SECRET_PARTS "${R_SECRET_CASE}")
         list(GET R_SECRET_PARTS 0 R_SECRET_FIXTURE)
         list(GET R_SECRET_PARTS 1 R_SECRET_EXPECTATION)

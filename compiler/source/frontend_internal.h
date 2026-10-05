@@ -1893,7 +1893,11 @@ typedef enum RStandardCallOperation {
     /* R-LIB-0019 (P4.2): std.array::filled(length, value), length copies of one Copy value in
        one allocation; the children are the length and the value, auxiliary_type the effect
        carrier of the array and std.alloc::alloc_error. */
-    R_STANDARD_CALL_ARRAY_FILLED
+    R_STANDARD_CALL_ARRAY_FILLED,
+    /* R-SLIB-ASYNC-0020 (L39): std.async::join names the operand of an await only; that await
+       (HIR integer_value 1, MIR integer_value 1) observes a panic of the task into a
+       std.thread::join_result instead of continuing it. */
+    R_STANDARD_CALL_ASYNC_JOIN
 } RStandardCallOperation;
 
 typedef struct RStandardMathOperationDescriptor {
@@ -1948,6 +1952,9 @@ typedef struct RHirNode {
     uint32_t child_count;
     uint32_t first_effect_exit;
     uint32_t effect_exit_count;
+    /* L39 (R-ERR-0005): the block of drops that leaves the function when this node panics under
+       the unwind strategy; consecutive nodes with the same live objects share one block. */
+    RHirNodeId panic_cleanup;
     uint64_t integer_value;
     uint32_t aggregate_member;
     /* BREAK/CONTINUE of a labeled jump (R-STMT-0004): n targets the n-th innermost enclosing
@@ -2033,7 +2040,9 @@ typedef enum RMirInstructionKind {
     R_MIR_INSTRUCTION_FINALLY_ENTER,
     R_MIR_INSTRUCTION_FINALLY_EXIT,
     R_MIR_INSTRUCTION_CANCEL,
-    R_MIR_INSTRUCTION_UNREACHABLE
+    R_MIR_INSTRUCTION_UNREACHABLE,
+    /* L39 (R-ERR-0005): ends a step whose finalies ran for a pending panic. */
+    R_MIR_INSTRUCTION_PANIC
 } RMirInstructionKind;
 
 typedef enum RMirPendingCompletionReason {
@@ -2083,6 +2092,12 @@ typedef struct RMirInstruction {
     RMirCallBorrowMask call_borrow_mask; /* Bit i marks operand i as a call-bounded borrow. */
     RMirBlockId target0;
     RMirBlockId target1;
+    /* L39 (R-ERR-0005): in an async body that unwinds, the block a panic of this instruction
+       continues in: the active finalies, then PANIC. */
+    RMirBlockId panic_target;
+    /* L39: a standard call that may run R code (r_semantic_standard_call_runs_code), after which
+       an async step tests for a panic of that code. */
+    bool runs_code;
     uint64_t integer_value;
     uint32_t place_ordinal;
     uint32_t aggregate_member;
@@ -2796,6 +2811,9 @@ bool r_semantic_type_is_scoped_staged_move(const RFrontendContext *context, RTyp
 bool r_semantic_type_is_sync(const RFrontendContext *context, RTypeId type_id);
 bool r_semantic_type_crosses_await(const RFrontendContext *context, RTypeId type_id);
 uint32_t r_semantic_effect_count(const RFrontendContext *context, RTypeId effect_set);
+/* L39: whether a standard call may run R code on the calling thread, through the glue of a user
+   type it handles or an initializer it calls, and so return with a panic of that code pending. */
+bool r_semantic_standard_call_runs_code(const RFrontendContext *context, const RHirNode *node);
 RTypeId r_semantic_effect_at(const RFrontendContext *context, RTypeId effect_set, uint32_t index);
 bool r_semantic_effect_contains(const RFrontendContext *context,
                                 RTypeId effect_set,

@@ -3,13 +3,14 @@ import std.console;
 import std.time;
 import example.calculator.common::{Usage};
 import example.clock.operations;
+import example.clock.zones;
 
 struct CommandStorage1 { std.time::duration value; };
 
 // Output and exit status shared by command and error branches.
 struct CommandResponse { std.string::string output; i32 status; };
 
-enum Command { now, shift, utc, add, sub, compare, mul, sleep, rfc3339, http, parse, ticks };
+enum Command { now, shift, utc, add, sub, compare, mul, sleep, rfc3339, http, parse, ticks, zone, zones, wall, tzif, local };
 
 async i32 main(const str[] arguments) {
     CommandResponse response = {.output = std.string::create(), .status = 0};
@@ -17,7 +18,7 @@ async i32 main(const str[] arguments) {
     try {
         usize count = len(arguments);
         if (count == 1usize) {
-            response.output = std.string::from_str("clock now\nclock shift UNIX_SECONDS NANOSECONDS DELTA_SECONDS\nclock utc YEAR MONTH DAY HOUR MINUTE SECOND NANOSECOND\nclock add|sub|compare SECONDS NANOSECONDS SECONDS NANOSECONDS\nclock mul SECONDS NANOSECONDS FACTOR\nclock sleep MILLISECONDS\nclock rfc3339 UNIX_SECONDS NANOSECONDS DIGITS\nclock http UNIX_SECONDS\nclock parse TEXT\nclock ticks COUNT MILLISECONDS [PAUSE_MILLISECONDS]\n");
+            response.output = std.string::from_str("clock now\nclock shift UNIX_SECONDS NANOSECONDS DELTA_SECONDS\nclock utc YEAR MONTH DAY HOUR MINUTE SECOND NANOSECOND\nclock add|sub|compare SECONDS NANOSECONDS SECONDS NANOSECONDS\nclock mul SECONDS NANOSECONDS FACTOR\nclock sleep MILLISECONDS\nclock rfc3339 UNIX_SECONDS NANOSECONDS DIGITS\nclock http UNIX_SECONDS\nclock parse TEXT\nclock ticks COUNT MILLISECONDS [PAUSE_MILLISECONDS]\nclock zone NAME UNIX_SECONDS\nclock zones UNIX_SECONDS\nclock wall NAME YEAR MONTH DAY HOUR MINUTE SECOND\nclock tzif PATH UNIX_SECONDS\nclock local UNIX_SECONDS\n");
         } else {
             o<Command> parsed = core::enum_from_name::<Command>(arguments[1]);
             Command command = Command::now;
@@ -87,6 +88,34 @@ async i32 main(const str[] arguments) {
                     Usage { .message = "demo limit is 1 to 100 ticks of 1 to 1000 ms and a 5000 ms pause" };
                 std.string::string report = await example.clock.operations::ticked(ticks, period, pause);
                 response.output = move report; break;
+            case Command::zone:
+                throw (count != 4usize) Usage { .message = "zone needs a zone name and a timestamp" };
+                std.time::system_time instant = { .unix_seconds = std.convert::parse_i64(arguments[3], 10u32), .nanoseconds = 0u32 };
+                std.string::string text = await example.clock.zones::named(std.string::from_str(arguments[2]), instant);
+                response.output = move text; break;
+            case Command::zones:
+                throw (count != 3usize) Usage { .message = "zones needs a timestamp" };
+                std.time::system_time instant = { .unix_seconds = std.convert::parse_i64(arguments[2], 10u32), .nanoseconds = 0u32 };
+                response.output = example.clock.zones::three_zones(instant); break;
+            case Command::wall:
+                throw (count != 9usize) Usage { .message = "wall needs a zone name and six calendar components" };
+                std.time::local_time wall = { .year = std.convert::parse_i32(arguments[3], 10u32),
+                    .month = std.convert::parse_u8(arguments[4], 10u32), .day = std.convert::parse_u8(arguments[5], 10u32),
+                    .hour = std.convert::parse_u8(arguments[6], 10u32), .minute = std.convert::parse_u8(arguments[7], 10u32),
+                    .second = std.convert::parse_u8(arguments[8], 10u32), .nanosecond = 0u32, .weekday = 0u8,
+                    .year_day = 0u16, .offset = 0i32, .dst = false };
+                std.string::string text = await example.clock.zones::named_wall(std.string::from_str(arguments[2]), wall);
+                response.output = move text; break;
+            case Command::tzif:
+                throw (count != 4usize) Usage { .message = "tzif needs a file and a timestamp" };
+                std.time::system_time instant = { .unix_seconds = std.convert::parse_i64(arguments[3], 10u32), .nanoseconds = 0u32 };
+                std.string::string text = await example.clock.zones::from_file(std.string::from_str(arguments[2]), instant);
+                response.output = move text; break;
+            case Command::local:
+                throw (count != 3usize) Usage { .message = "local needs a timestamp" };
+                std.time::system_time instant = { .unix_seconds = std.convert::parse_i64(arguments[2], 10u32), .nanoseconds = 0u32 };
+                std.string::string text = await example.clock.zones::process_zone(instant);
+                response.output = move text; break;
             case Command::add: fallthrough;
             case Command::sub: fallthrough;
             case Command::compare: fallthrough;
@@ -122,6 +151,9 @@ async i32 main(const str[] arguments) {
         std.string::string diagnostic = error.diagnostic();
         usize index = failure.index;
         response.output = f"{diagnostic} index={index}\n"; response.status = 65;
+    } catch (std.time::zone_error failure) {
+        std.time::zone_error_code code = failure.code;
+        response.output = f"zone: {code}\n"; response.status = 65;
     } catch (std.time::duration_error failure) {
         response.output = std.string::from_str("invalid or overflowing duration\n"); response.status = 65;
     } catch (std.time::time_error failure) {

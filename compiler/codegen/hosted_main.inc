@@ -279,6 +279,9 @@ static bool r_c17_emit_hosted_main(RC17Emitter *emitter) {
             !r_c17_write(emitter,
                          "    }\n"
                          "    r_await_status = r_runtime_task_await(&r_root.task, &r_outcome);\n"
+                         "    if (r_await_status == R_RUNTIME_TASK_AWAIT_PANICKED) {\n"
+                         "        r_runtime_unwind_terminate();\n"
+                         "    }\n"
                          "    if (r_await_status != R_RUNTIME_TASK_AWAIT_OK) {\n") ||
             !r_c17_emit_async_contract_panic(emitter, node->span, UINT32_C(2)) ||
             !r_c17_write(emitter, "    }\n"))
@@ -289,6 +292,13 @@ static bool r_c17_emit_hosted_main(RC17Emitter *emitter) {
             !r_c17_write(emitter, "    ") ||
             !r_c17_emit_function_name(emitter, emitter->entry_symbol) ||
             !r_c17_write(emitter, args ? "(&r_outcome, r_startup_args);\n" : "(&r_outcome);\n"))
+            return false;
+        /* L39 (R-ERR-0009): a panic that reaches main has unwound its frames; the process ends
+           with its diagnostic. */
+        if (!r_c17_write(emitter,
+                         "    if (r_runtime_unwinding()) {\n"
+                         "        r_runtime_unwind_terminate();\n"
+                         "    }\n"))
             return false;
     }
     return r_c17_emit_main_outcome(emitter, entry, node->span) &&

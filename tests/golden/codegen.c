@@ -120,6 +120,9 @@ int main(int argc, char *argv[]) {
     r_runtime_stack_require(R_STACK_ENTRY(r_f00000001),
                             (RRuntimeSourceSpan){UINT32_C(1), UINT32_C(24), UINT32_C(52)});
     r_f00000001(&r_outcome);
+    if (r_runtime_unwinding()) {
+        r_runtime_unwind_terminate();
+    }
     if (r_outcome.r_tag == UINT32_C(0)) {
         r_result = r_outcome.r_payload.r_ok;
         if (r_result < 0 || r_result > 111) {

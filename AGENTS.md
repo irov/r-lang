@@ -19,7 +19,7 @@ repository holds everything of its 0.1 implementation for one target, `arm64-app
 | `specification/` | The normative Core (`R_LANGUAGE_SPECIFICATION_0_1`) and Standard Library (`R_STANDARD_LIBRARY_SPECIFICATION_0_1`) specifications, English and Russian, AsciiDoc (Core also rendered to Markdown); `generated/` holds the rule inventories derived from them |
 | `compiler/` | `r-front`: re2c lexer, CST, AST, whole-program semantic analysis, typed HIR and MIR, strict ISO C17 emitter. Strict C17, no stable external ABI |
 | `runtime/` | The hosted runtime (allocator, containers, strings, tasks) and `runtime/darwin` (executor, payload I/O, sockets, processes, timers, file-system lane) |
-| `library/` | The standard library: `core` and `std/*` in C (one public operation per `.c` file), `r/std/*.r` modules written in R and listed in `library/r/library.map`, `native/*` providers behind the checked FFI (TLS over Mbed TLS, crypto over libsodium, SQLite, mmap), `internal/` shared code, `generated/` inventories |
+| `library/` | The standard library: `core` and `std/*` in C (one public operation per `.c` file), `r/std/*.r` modules written in R and listed in `library/r/library.map`, `native/*` providers behind the checked FFI (TLS over Mbed TLS, crypto over libsodium and Mbed TLS, SQLite, mmap), `internal/` shared code, `generated/` inventories |
 | `targets/` | The pinned target manifests (toolchain, ABI, stack budgets, specification revisions) |
 | `tests/` | C unit tests, CMake check drivers, R fixtures, golden artifacts, Python differential tests and the `run_*_examples.py` drivers of the examples |
 | `examples/` | The example applications, each with `src/*.r`, `modules.map` and a README; `catalogue.cmake`, `coverage.json` and `syntax-coverage.json` index them |
@@ -61,7 +61,7 @@ and comments, tests and documents cite those identifiers.
 
 macOS on Apple silicon with the Xcode command-line tools pinned by `targets/*.json` (the build
 checks the compiler and SDK: `target-toolchain-check`), CMake ≥ 3.25, Python 3, and from
-Homebrew: `mbedtls@3` (std.tls), `libsodium` (std.crypto), optionally `postgresql@17` (the
+Homebrew: `mbedtls@3` (std.tls, std.crypto), `libsodium` (std.crypto), optionally `postgresql@17` (the
 std.postgres tests and the `orders` example register only when `pg_ctl` is found). The build
 downloads the SQLite amalgamation and the COSE examples on first configuration; a machine
 without network needs the archives copied into `build/third_party` (the error message names the
@@ -217,6 +217,18 @@ as finished. The matrix records their results per stage.
   `r_runtime_task_external_try_select_completion` never replaces a selected cancellation, so a
   cancel callback may acknowledge a waiter it withdrew; only `..._at` with a sequence captured
   at the native event may replace one, and its adapter must then not acknowledge twice (P4.1-8).
+- Hosted programs unwind panics by explicit propagation (L39, compiler/README.md *Panic unwind*):
+  `r_runtime_raise` begins a panic and returns, and generated code tests `r_runtime_unwinding()`
+  after calls, standard operations and drops that may run R code. `r_runtime_panic` in runtime or
+  library C still aborts (R-ERR-0006), so C code reports conditions R code must observe as a
+  status, or raises and returns when only generated code calls it (`once_poisoned`, the
+  escalation of a scoped thread). C code that calls back into R (type glue, initializers, pool
+  and thread entries) must expect the callee to return with a panic pending: test
+  `r_runtime_unwinding()` before reading what the callee wrote, and never run R code of another
+  task while one is pending. An unobserved report goes first to the panic sink
+  (`r_runtime_panic_set_sink`, used by the `std.log.native` provider for
+  `std.log::panic_reports`) and becomes the default stderr line only when the sink does not take
+  it; the sink runs on the delivering thread and must neither block nor run R code.
 - Testing hooks (`R_RUNTIME_DARWIN_IO_TESTING`, `R_RUNTIME_DARWIN_FS_LANE_TESTING`) pause a worker
   at a chosen point so a race becomes a deterministic test; prefer them to sleeps. New one-shot
   pauses use `RRuntimeDarwinIoTestPause` (`io_internal.h`). An unarmed hook costs one atomic load:
@@ -237,7 +249,13 @@ these rules are the ones that most often reject otherwise reasonable code:
 
 - Grammar: `if (c) { } else { }` only — there is no `else if`; use `switch`, early `return` or
   nested blocks. `throw (condition) error_value;` is the conditional throw.
-- Reserved words that look like names: `list`, `raw`, `import`, `export`, `move`, `drop`.
+- Reserved words that look like names: `list`, `raw`, `import`, `export`, `move`, `drop`, `task`,
+  `module`.
+- R-NAME-0009: a parameter or local may not reuse a component of an imported module path or the
+  name of a module function (`server` in a program with `example.arena.server`, `failure` where
+  the module declares `failure`).
+- R-FUNC-0024: a call does not continue after a method call unless the method is `@chain`;
+  parenthesize the receiver, as in `(lease.get())->query(...)`.
 - Functions are declared before use in source order; `protected` marks module-private items.
 - R-FUNC-0020: every result is used, forwarded or discarded with `as void` on every path, including
   the zero-iteration path of a loop; a named Move value is discarded with `drop name;`.
@@ -252,6 +270,9 @@ these rules are the ones that most often reject otherwise reasonable code:
   to a local first.
 - Importing an R-source module requires `import std.x;` even for the R part of a C module.
 - `constexpr str` converts to `const u8[]` through a `str` local (one conversion per expression).
+- A panic ends its task and `await` continues it in the awaiting task; to survive the panic of a
+  child (a request handler), await it as `await std.async::join(move t)`, which gives a
+  `std.thread::join_result<T>` and admits only a task without checked errors (catch them inside).
 - R-FUNC-0012: a task with checked errors must be awaited, cancelled or detached on every path,
   throws included, so a member that lives across a whole loop returns its failure as a value
   instead of throwing it (`watch_stop` in `std.service`).

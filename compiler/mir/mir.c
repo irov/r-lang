@@ -36,7 +36,21 @@ typedef struct RMirFinally {
     RHirNodeId node;
     size_t entry_block;
     uint32_t identifier;
+    /* L39: the placeholder of the panic block of the code this finally encloses directly. */
+    RMirBlockId panic_block;
 } RMirFinally;
+
+/* L39: a panic block requested while the body was lowered: the finally stack at the request,
+   built into a block after the body so that the blocks of the body keep their numbers. */
+typedef struct RMirPanicRequest {
+    RMirFinally *finalies;
+    size_t finally_count;
+    RSourceSpan span;
+    RMirBlockId block;
+} RMirPanicRequest;
+
+/* A panic target is a placeholder until its block exists. */
+#define R_MIR_PANIC_PLACEHOLDER UINT32_C(0x80000000)
 
 typedef struct RMirPendingCompletion {
     RMirPendingCompletionReason reason;
@@ -54,6 +68,16 @@ typedef struct RMirLoopTarget {
 
 typedef struct RMirBuildContext {
     RFrontendContext *frontend;
+    /* L39 (R-ERR-0005): an async body of a hosted program unwinds; its panic block outside every
+       finally, and whether a panic block is being built, whose instructions get no target. */
+    bool unwind;
+    bool building_panic_block;
+    /* The HIR node whose lowering is in progress (r_mir_lower_expression). */
+    const RHirNode *lowering_node;
+    RMirBlockId root_panic_block;
+    RMirPanicRequest *panic_requests;
+    size_t panic_request_count;
+    size_t panic_request_capacity;
     RMirTemporaryBlock *blocks;
     size_t block_count;
     size_t block_capacity;
@@ -276,9 +300,58 @@ static bool r_mir_add_block(RMirBuildContext *build, size_t *block_index) {
     return true;
 }
 
+static bool r_mir_panic_target(RMirBuildContext *build, RSourceSpan span, RMirBlockId *target);
+
+/* L39 (R-ERR-0005): the instructions whose code can begin a panic or observe one. A drop is left
+   out: its slot is marked dropped after the drop returns, so a panic test before that mark would
+   let the frame destructor drop the slot again. */
+static bool r_mir_kind_can_panic(RMirInstructionKind kind) {
+    switch (kind) {
+    case R_MIR_INSTRUCTION_CALL:
+    case R_MIR_INSTRUCTION_INDIRECT_CALL:
+    case R_MIR_INSTRUCTION_STANDARD_CALL:
+    case R_MIR_INSTRUCTION_BINARY:
+    case R_MIR_INSTRUCTION_UNARY:
+    case R_MIR_INSTRUCTION_CAST:
+    case R_MIR_INSTRUCTION_INDEX:
+    case R_MIR_INSTRUCTION_SLICE:
+    case R_MIR_INSTRUCTION_NEW:
+    case R_MIR_INSTRUCTION_ARRAY:
+    case R_MIR_INSTRUCTION_AGGREGATE:
+    case R_MIR_INSTRUCTION_VARIANT:
+    case R_MIR_INSTRUCTION_AWAIT:
+    case R_MIR_INSTRUCTION_TASK_SCOPE_WAIT:
+    case R_MIR_INSTRUCTION_TASK_SCOPE_CLOSE:
+        return true;
+    default:
+        return false;
+    }
+}
+
 static bool r_mir_append_instruction(RMirBuildContext *build, RMirInstruction instruction) {
     RMirTemporaryBlock *block;
 
+    if ((instruction.kind == R_MIR_INSTRUCTION_DISCARD) && build->unwind &&
+        !build->building_panic_block && (instruction.panic_target == R_MIR_BLOCK_ID_INVALID) &&
+        (build->lowering_node != NULL) && (build->lowering_node->kind == R_HIR_DISCARD) &&
+        (build->lowering_node->panic_cleanup != R_HIR_NODE_ID_INVALID) &&
+        !r_mir_panic_target(build, instruction.span, &instruction.panic_target)) {
+        /* L39 (R-ERR-0008): `move value as void` of a value whose drop may panic. */
+        return false;
+    }
+    if (instruction.kind == R_MIR_INSTRUCTION_STANDARD_CALL) {
+        /* A standard call lowered outside its own node counts as one that runs R code. */
+        instruction.runs_code =
+            (build->lowering_node == NULL) || (build->lowering_node->kind != R_HIR_STANDARD_CALL) ||
+            r_semantic_standard_call_runs_code(build->frontend, build->lowering_node);
+    }
+
+    if (build->unwind && !build->building_panic_block &&
+        (instruction.panic_target == R_MIR_BLOCK_ID_INVALID) &&
+        r_mir_kind_can_panic(instruction.kind) &&
+        !r_mir_panic_target(build, instruction.span, &instruction.panic_target)) {
+        return false;
+    }
     if (build->current_block >= build->block_count) {
         build->frontend->resource_status = R_FRONTEND_INTERNAL_ERROR;
         return false;
@@ -304,7 +377,8 @@ static bool r_mir_append_instruction(RMirBuildContext *build, RMirInstruction in
         (instruction.kind == R_MIR_INSTRUCTION_THROW) ||
         (instruction.kind == R_MIR_INSTRUCTION_FINALLY_EXIT) ||
         (instruction.kind == R_MIR_INSTRUCTION_CANCEL) ||
-        (instruction.kind == R_MIR_INSTRUCTION_UNREACHABLE)) {
+        (instruction.kind == R_MIR_INSTRUCTION_UNREACHABLE) ||
+        (instruction.kind == R_MIR_INSTRUCTION_PANIC)) {
         block->terminated = true;
     }
     return true;
@@ -376,6 +450,7 @@ static bool r_mir_push_finally(RMirBuildContext *build,
     finally_context->node = node;
     finally_context->entry_block = entry_block;
     finally_context->identifier = build->next_finally_identifier;
+    finally_context->panic_block = R_MIR_BLOCK_ID_INVALID;
     build->finally_count += 1U;
     if (identifier != NULL) {
         *identifier = finally_context->identifier;
@@ -721,6 +796,104 @@ static bool r_mir_lower_active_finalies(RMirBuildContext *build,
     return r_mir_begin_pending_completion(
                build, stop_count, transfer_span, pending, &resume_block) &&
            r_mir_finish_pending_completion(build, stop_count, transfer_span, pending, resume_block);
+}
+
+/* L39 (R-ERR-0005): the block a panic continues in at the current finally depth: the active
+   finalies with a pending panic, innermost first, then PANIC. One block serves every panic site
+   that the same innermost finally encloses. The target is a placeholder until
+   r_mir_build_panic_blocks makes the blocks after the body. */
+static bool r_mir_panic_target(RMirBuildContext *build, RSourceSpan span, RMirBlockId *target) {
+    const size_t depth = build->finally_count;
+    RMirBlockId cached =
+        depth == 0U ? build->root_panic_block : build->finalies[depth - 1U].panic_block;
+    RMirPanicRequest *request;
+
+    if (cached != R_MIR_BLOCK_ID_INVALID) {
+        *target = cached;
+        return true;
+    }
+    if ((build->panic_request_count >= (size_t)R_MIR_PANIC_PLACEHOLDER - 1U) ||
+        !r_grow_array(build->frontend,
+                      (void **)&build->panic_requests,
+                      &build->panic_request_capacity,
+                      sizeof(*build->panic_requests),
+                      build->panic_request_count + 1U)) {
+        if (build->frontend->resource_status == R_FRONTEND_OK) {
+            build->frontend->resource_status = R_FRONTEND_LIMIT_EXCEEDED;
+        }
+        return false;
+    }
+    request = &build->panic_requests[build->panic_request_count];
+    (void)memset(request, 0, sizeof(*request));
+    request->span = span;
+    request->finally_count = depth;
+    if (depth != 0U) {
+        request->finalies = r_context_allocate(build->frontend, depth * sizeof(*request->finalies));
+        if (request->finalies == NULL) {
+            return false;
+        }
+        (void)memcpy(request->finalies, build->finalies, depth * sizeof(*request->finalies));
+    }
+    build->panic_request_count += 1U;
+    cached = R_MIR_PANIC_PLACEHOLDER | (RMirBlockId)build->panic_request_count;
+    if (depth == 0U) {
+        build->root_panic_block = cached;
+    } else {
+        build->finalies[depth - 1U].panic_block = cached;
+    }
+    *target = cached;
+    return true;
+}
+
+/* L39: makes the requested panic blocks after the body and gives every panic target its block. */
+static bool r_mir_build_panic_blocks(RMirBuildContext *build) {
+    RMirFinally *const saved_finalies = build->finalies;
+    const size_t saved_count = build->finally_count;
+    const size_t saved_block = build->current_block;
+    const RMirPendingCompletion pending =
+        r_mir_pending_completion(R_MIR_PENDING_COMPLETION_PANIC_UNWIND,
+                                 R_TYPE_ID_INVALID,
+                                 R_MIR_VALUE_ID_INVALID,
+                                 R_MIR_BLOCK_ID_INVALID);
+    bool success = true;
+
+    build->building_panic_block = true;
+    for (size_t index = 0U; success && (index < build->panic_request_count); ++index) {
+        RMirPanicRequest *request = &build->panic_requests[index];
+        RMirInstruction panic;
+        size_t panic_block;
+
+        (void)memset(&panic, 0, sizeof(panic));
+        panic.kind = R_MIR_INSTRUCTION_PANIC;
+        panic.span = request->span;
+        build->finalies = request->finalies;
+        build->finally_count = request->finally_count;
+        success = r_mir_add_block(build, &panic_block);
+        if (success) {
+            build->current_block = panic_block;
+            success = r_mir_lower_active_finalies(build, 0U, request->span, &pending) &&
+                      r_mir_append_instruction(build, panic);
+            request->block = (RMirBlockId)(panic_block + 1U);
+        }
+        build->finalies = saved_finalies;
+        build->finally_count = saved_count;
+    }
+    build->building_panic_block = false;
+    build->current_block = saved_block;
+    for (size_t block = 0U; success && (block < build->block_count); ++block) {
+        for (size_t at = 0U; at < build->blocks[block].instruction_count; ++at) {
+            RMirBlockId *target = &build->blocks[block].instructions[at].panic_target;
+            if ((*target & R_MIR_PANIC_PLACEHOLDER) != 0U) {
+                const size_t request = (size_t)(*target & ~R_MIR_PANIC_PLACEHOLDER) - 1U;
+                if (request >= build->panic_request_count) {
+                    build->frontend->resource_status = R_FRONTEND_INTERNAL_ERROR;
+                    return false;
+                }
+                *target = build->panic_requests[request].block;
+            }
+        }
+    }
+    return success;
 }
 
 static bool r_mir_lower_pending_cleanup_segments(RMirBuildContext *build,
@@ -1597,9 +1770,15 @@ static bool r_mir_lower_await(RMirBuildContext *build,
     size_t resume_block;
     size_t cancel_block;
 
+    /* R-SLIB-ASYNC-0020 (L39): a join gives std.thread::join_result<T> of a task<T>. */
+    const bool join = node->integer_value == UINT64_C(1);
+
     if ((node->child_count != UINT32_C(1)) || !node->is_move ||
         (node->operation != R_TOKEN_KW_AWAIT) || (task_type == NULL) ||
-        (task_type->kind != R_SEMANTIC_TYPE_TASK) || (task_type->base != node->type) ||
+        (task_type->kind != R_SEMANTIC_TYPE_TASK) ||
+        (join ? ((result_type == NULL) || (result_type->base != task_type->base) ||
+                 (task_errors != R_TYPE_ID_INVALID))
+              : (task_type->base != node->type)) ||
         (result_type == NULL) ||
         !r_mir_lower_expression(
             build, r_mir_hir_child(build->frontend, node, UINT32_C(0)), depth + 1U, &place) ||
@@ -1626,6 +1805,7 @@ static bool r_mir_lower_await(RMirBuildContext *build,
     instruction.operand1 = place.place_projection;
     instruction.target0 = (RMirBlockId)(resume_block + 1U);
     instruction.target1 = (RMirBlockId)(cancel_block + 1U);
+    instruction.integer_value = join ? UINT64_C(1) : UINT64_C(0);
     /* A task that never completes normally yields no value, like task<void> (R-FUNC-0003). */
     if (!((carrier_type == R_TYPE_ID_INVALID) &&
           ((result_kind == R_SEMANTIC_TYPE_VOID) || (result_kind == R_SEMANTIC_TYPE_NEVER))) &&
@@ -3445,10 +3625,30 @@ static bool r_mir_lower_assignment(RMirBuildContext *build,
     return true;
 }
 
+static bool r_mir_lower_expression_node(RMirBuildContext *build,
+                                        RHirNodeId node_id,
+                                        uint32_t depth,
+                                        RMirExpressionResult *result);
+
+/* L39: the node being lowered is the source of the instructions appended meanwhile; the append
+   hook reads it to mark the standard calls that may run R code. */
 static bool r_mir_lower_expression(RMirBuildContext *build,
                                    RHirNodeId node_id,
                                    uint32_t depth,
                                    RMirExpressionResult *result) {
+    const RHirNode *outer = build->lowering_node;
+    bool success;
+
+    build->lowering_node = r_mir_hir_node(build->frontend, node_id);
+    success = r_mir_lower_expression_node(build, node_id, depth, result);
+    build->lowering_node = outer;
+    return success;
+}
+
+static bool r_mir_lower_expression_node(RMirBuildContext *build,
+                                        RHirNodeId node_id,
+                                        uint32_t depth,
+                                        RMirExpressionResult *result) {
     const RHirNode *node = r_mir_hir_node(build->frontend, node_id);
     RMirInstruction instruction;
 
@@ -5728,6 +5928,13 @@ static bool r_mir_lower_statement(RMirBuildContext *build, RHirNodeId node_id, u
         instruction.place_ordinal = place.place_ordinal;
         instruction.place_is_parameter = place.place_is_parameter;
         instruction.operand1 = place.place_projection;
+        /* L39 (R-ERR-0008): a drop that may run R code continues in a panic block; the frame
+           destructor drops what is still initialized. */
+        if ((node->panic_cleanup != R_HIR_NODE_ID_INVALID) && build->unwind &&
+            !build->building_panic_block &&
+            !r_mir_panic_target(build, node->span, &instruction.panic_target)) {
+            return false;
+        }
         return r_mir_append_instruction(build, instruction);
     }
     if (node->kind == R_HIR_RETURN) {
@@ -5843,6 +6050,10 @@ static void r_mir_destroy_build(RMirBuildContext *build) {
     r_context_free(build->frontend, build->effect_handlers);
     r_context_free(build->frontend, build->pending_aggregate_values.items);
     r_context_free(build->frontend, build->finalies);
+    for (index = 0U; index < build->panic_request_count; ++index) {
+        r_context_free(build->frontend, build->panic_requests[index].finalies);
+    }
+    r_context_free(build->frontend, build->panic_requests);
     (void)memset(build, 0, sizeof(*build));
 }
 
@@ -6093,6 +6304,7 @@ static bool r_mir_await_union_successors(const RMirBuildContext *build,
     case R_MIR_INSTRUCTION_THROW:
     case R_MIR_INSTRUCTION_CANCEL:
     case R_MIR_INSTRUCTION_UNREACHABLE:
+    case R_MIR_INSTRUCTION_PANIC:
         break;
     default:
         build->frontend->resource_status = R_FRONTEND_INTERNAL_ERROR;
@@ -6386,6 +6598,7 @@ static bool r_mir_lower_function(RFrontendContext *context, RHirNodeId node_id) 
     symbol = &context->semantic_symbols[(size_t)node->symbol - 1U];
     (void)memset(&build, 0, sizeof(build));
     build.frontend = context;
+    build.unwind = symbol->is_async && (context->profile != R_FRONTEND_PROFILE_FREESTANDING);
     build.break_target = SIZE_MAX;
     build.continue_target = SIZE_MAX;
     build.break_finally_count = 0U;
@@ -6449,7 +6662,8 @@ static bool r_mir_lower_function(RFrontendContext *context, RHirNodeId node_id) 
             goto cleanup;
         }
     }
-    if ((symbol->is_async && !r_mir_validate_await_liveness(&build, symbol)) ||
+    if (!r_mir_build_panic_blocks(&build) ||
+        (symbol->is_async && !r_mir_validate_await_liveness(&build, symbol)) ||
         !r_mir_append_function_storage(context, &build, node->symbol, node->type)) {
         goto cleanup;
     }
@@ -6853,6 +7067,8 @@ const char *r_mir_instruction_kind_name(RMirInstructionKind kind) {
         return "cancel";
     case R_MIR_INSTRUCTION_UNREACHABLE:
         return "unreachable";
+    case R_MIR_INSTRUCTION_PANIC:
+        return "panic";
     case R_MIR_INSTRUCTION_INVALID:
     default:
         return "invalid";
@@ -7977,7 +8193,9 @@ static bool r_mir_dump_instruction(const RFrontendContext *context,
             !r_mir_write_block(writer, user_data, instruction->target0) ||
             !r_write_text(writer, user_data, " cancel=") ||
             !r_mir_write_block(writer, user_data, instruction->target1) ||
-            !r_write_text(writer, user_data, " consuming")) {
+            !r_write_text(writer, user_data, " consuming") ||
+            ((instruction->integer_value == UINT64_C(1)) &&
+             !r_write_text(writer, user_data, " join"))) {
             return false;
         }
         break;
@@ -9776,6 +9994,8 @@ static bool r_mir_dump_instruction(const RFrontendContext *context,
         break;
     case R_MIR_INSTRUCTION_UNREACHABLE:
         break;
+    case R_MIR_INSTRUCTION_PANIC:
+        break;
     case R_MIR_INSTRUCTION_INVALID:
     default:
         return false;
@@ -9788,6 +10008,12 @@ static bool r_mir_dump_instruction(const RFrontendContext *context,
          (instruction->kind == R_MIR_INSTRUCTION_CALL)) &&
         (!r_write_text(writer, user_data, " borrow_origin=") ||
          !r_mir_write_borrow_origin(context, instruction->borrow_origin, writer, user_data))) {
+        return false;
+    }
+    /* L39: the block a panic of the instruction continues in. */
+    if ((instruction->panic_target != R_MIR_BLOCK_ID_INVALID) &&
+        (!r_write_text(writer, user_data, " panic=") ||
+         !r_mir_write_block(writer, user_data, instruction->panic_target))) {
         return false;
     }
     return r_write_text(writer, user_data, ")\n");
@@ -10119,7 +10345,7 @@ RFrontendStatus r_frontend_dump_interface(const RFrontendContext *context,
     }
     if (!r_write_text(writer,
                       user_data,
-                      "(interface version=31 core_revision=\"" R_FRONTEND_CORE_REVISION "\"\n") ||
+                      "(interface version=32 core_revision=\"" R_FRONTEND_CORE_REVISION "\"\n") ||
         !r_mir_write_indent(writer, user_data, UINT32_C(1)) ||
         !r_write_text(writer, user_data, "(profile ") ||
         !r_write_escaped(

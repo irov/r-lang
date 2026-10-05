@@ -38,6 +38,28 @@ void f() { fn once(i32) -> i32 g = a; }
     'async-borrow': ('''
 void f() { o<async fn(const i32*) -> i32> g = o::none; }
 ''', [(2, 14, 'R-DIAG-ASYNC-001', 'R-TYPE-0054', 'Send, unborrowed')]),
+    # M42-2: a type that depends on a generic parameter is checked where a function converts to
+    # the type of an instance, also inside the instance of a generic function.
+    'async-instance': ('''
+@generic<T>
+struct holder { async fn(T) -> i32 step; };
+@scoped
+async i32 peek(const i32* v) { return *v; }
+holder<const i32*> make() { return holder<const i32*> {.step = peek}; }
+''', [(6, 64, 'R-DIAG-ASYNC-001', 'R-TYPE-0054', 'Send, unborrowed')]),
+    'async-generic-body': ('''
+@generic<T: send>
+struct holder { async fn(T) -> i32 step; };
+@generic<T: send>
+@scoped
+async i32 peek(T v) {
+    (move v) as void;
+    return 1;
+}
+@generic<T: send>
+holder<T> wrap() { return holder<T> {.step = peek::<T>}; }
+holder<const i32*> make() { return wrap::<const i32*>(); }
+''', [(11, 46, 'R-DIAG-ASYNC-001', 'R-TYPE-0054', 'Send, unborrowed')]),
     'method': ('''
 i32 a(i32 v) { return v; }
 i32 f() { fn(i32) -> i32 x = a; return x.apply(1); }
@@ -74,6 +96,24 @@ Route make() { return Route {.run = half, .fast = inc, .slow = later}; }
 i32 call(const Route* route) throws Rejected { return route->run(4) + route->fast(1); }
 '''
 
+# M42-1: async function types over generic parameters, checked in each instance.
+GENERIC_ACCEPTED = '''
+@generic<T: send & unborrowed>
+struct holder { async fn(T) -> i32 step; };
+@generic<T: send & unborrowed>
+async i32 count(T v) {
+    (move v) as void;
+    return 1;
+}
+@generic<T: send & unborrowed>
+holder<T> wrap() { return holder<T> {.step = count::<T>}; }
+async i32 run() throws std.error::fault {
+    holder<i64> h = wrap::<i64>();
+    auto chosen = h.step;
+    return await chosen(5i64);
+}
+'''
+
 DIAGNOSTIC = re.compile(r'^(?P<path>.*?):(?P<line>\d+):(?P<column>\d+): error '
                         r'(?P<code>R-DIAG-[A-Z]+-\d+) \[(?P<rule>[A-Z0-9-]+)\]: (?P<message>.*)$')
 
@@ -102,6 +142,9 @@ def main():
                 assert diagnostic['code'] == code and diagnostic['rule'] == rule, (name, diagnostic)
                 assert fragment in diagnostic['message'], (name, diagnostic)
 
+        result = run('mir', GENERIC_ACCEPTED, 'generic')
+        assert result.returncode == 0, result.stderr
+
         result = run('hir', ACCEPTED, 'accepted')
         assert result.returncode == 0, result.stderr
         hir = result.stdout
@@ -118,7 +161,7 @@ def main():
         result = run('interface', ACCEPTED, 'accepted')
         assert result.returncode == 0, result.stderr
         text = result.stdout
-        assert '(interface version=31 ' in text or 'version=31' in text, text[:200]
+        assert '(interface version=32 ' in text or 'version=32' in text, text[:200]
         for field in ('(index=0 name="run" type=(fn parameters=(i32) return=i32 throws=(effects '
                       '(struct "values.accepted"::"Rejected")))',
                       '(index=1 name="fast" type=(fn parameters=(i32) return=i32 noalloc=true)',

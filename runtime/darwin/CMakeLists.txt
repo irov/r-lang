@@ -239,7 +239,12 @@ if(R_RUNTIME_DARWIN_BUILD_TESTS)
     add_test(NAME r_runtime_darwin_io_direct COMMAND r_runtime_darwin_io_direct_tests)
     set_tests_properties(r_runtime_darwin_io_direct PROPERTIES TIMEOUT 60)
 
+    target_compile_definitions(r_runtime_darwin_task PRIVATE R_RUNTIME_DARWIN_TASK_TESTING=1)
     add_executable(r_runtime_darwin_task_tests tests/task_tests.c)
+    target_compile_definitions(
+        r_runtime_darwin_task_tests
+        PRIVATE R_RUNTIME_DARWIN_TASK_TESTING=1
+    )
     target_link_libraries(
         r_runtime_darwin_task_tests
         PRIVATE r_runtime_darwin_task r_runtime_darwin_test_allocator

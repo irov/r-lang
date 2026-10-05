@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Check UTC conversion, exact duration arithmetic and the text forms of time against independent\ncalculations and the Python standard library, and intervals by their lower bounds."""
+"""Check UTC conversion, exact duration arithmetic and the text forms of time against independent\ncalculations and the Python standard library, intervals by their lower bounds, and local time in\nzones against the Python zoneinfo module (M39)."""
 import argparse
+import calendar as calendar_module
 import datetime
+import os
 import email.utils
 import re
 import subprocess
@@ -89,7 +91,53 @@ def main():
         assert len(numbers)==args[1] and numbers[0]>=1 and numbers[1]>=least_second,output
         assert all(left<right for left,right in zip(numbers,numbers[1:])),output
         assert int(match[2])>=numbers[-1]*period,output
-    print(f'Clock: {count} UTC, duration, clock, suspension, date text and interval checks passed')
+    # Zones: local time and calendar steps against zoneinfo, the instants of a repeated and a
+    # skipped local time, a TZif file read directly, and the zone of TZ.
+    from zoneinfo import ZoneInfo
+    def shown(label,zone,seconds):
+        moment=datetime.datetime.fromtimestamp(seconds,zone)
+        dst='true' if moment.dst() else 'false'
+        offset=int(moment.utcoffset().total_seconds())
+        return (f'{label}: {moment.year}-{moment.month}-{moment.day} {moment.hour}:{moment.minute}:{moment.second} '
+                f'{moment.tzname()} offset={offset} dst={dst} weekday={moment.isoweekday()} day={moment.timetuple().tm_yday}\n')
+    def stamp(zone,wall,fold=0):
+        return int(wall.replace(tzinfo=zone,fold=fold).timestamp())
+    for name,seconds in [('Asia/Shanghai',1700000000),('America/New_York',1710054000),('Europe/London',1711846800),
+                         ('Australia/Lord_Howe',1712419200),('America/Sao_Paulo',0)]:
+        zone=ZoneInfo(name)
+        moment=datetime.datetime.fromtimestamp(seconds,zone).replace(tzinfo=None)
+        midnight=stamp(zone,moment.replace(hour=0,minute=0,second=0))
+        tomorrow=stamp(zone,moment.replace(hour=0,minute=0,second=0)+datetime.timedelta(days=1))
+        year,month0=divmod(moment.year*12+moment.month,12)
+        last=calendar_module.monthrange(year,month0+1)[1]
+        next_month=stamp(zone,moment.replace(year=year,month=month0+1,day=min(moment.day,last)))
+        run(['zone',name,seconds],shown(name,zone,seconds)+
+            f'day starts {midnight} and lasts {(tomorrow-midnight)//3600} hours\nnext month {next_month}\n')
+    utc=datetime.timezone.utc
+    run(['zones',1700000000],shown('UTC',ZoneInfo('UTC'),1700000000).replace('UTC: ','UTC: ',1)+
+        shown('IST',datetime.timezone(datetime.timedelta(seconds=19800),'IST'),1700000000).replace('dst=false','dst=false')+
+        shown('AEST-10AEDT,M10.1.0,M4.1.0/3',ZoneInfo('Australia/Sydney'),1700000000))
+    york=ZoneInfo('America/New_York')
+    repeated=datetime.datetime(2024,11,3,1,30)
+    run(['wall','America/New_York',2024,11,3,1,30,0],
+        f'earlier={stamp(york,repeated)} later={stamp(york,repeated,1)} reject=ambiguous_time\n')
+    skipped=datetime.datetime(2024,3,10,2,30)
+    run(['wall','America/New_York',2024,3,10,2,30,0],
+        f'earlier={stamp(york,skipped)} later={stamp(york,skipped,1)} reject=nonexistent_time\n')
+    run(['wall','Europe/Berlin',2024,6,1,12,0,0],
+        f'earlier=1717236000 later=1717236000 reject=1717236000\n')
+    run(['zone','Nowhere/City',0],'zone: unknown_zone\n',65)
+    run(['zone','../../etc/passwd',0],'zone: invalid_name\n',65)
+    run(['tzif','/usr/share/zoneinfo/Europe/Berlin',1700000000],shown('file',ZoneInfo('Europe/Berlin'),1700000000))
+    run(['tzif',os.path.abspath(__file__),0],'zone: malformed\n',65)
+    environment=dict(os.environ,TZ='Europe/Kyiv')
+    result=subprocess.run([exe,'local','1700000000'],capture_output=True,text=True,timeout=10,env=environment)
+    assert (result.returncode,result.stdout)==(0,shown('Europe/Kyiv',ZoneInfo('Europe/Kyiv'),1700000000)),result
+    environment['TZ']='<+04>-4'
+    result=subprocess.run([exe,'local','0'],capture_output=True,text=True,timeout=10,env=environment)
+    assert (result.returncode,result.stdout)==(0,'<+04>-4: 1970-1-1 4:0:0 +04 offset=14400 dst=false weekday=4 day=1\n'),result
+    count+=2
+    print(f'Clock: {count} UTC, duration, clock, suspension, date text, interval and zone checks passed')
 
 
 if __name__=='__main__':main()

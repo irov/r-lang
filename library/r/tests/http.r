@@ -1062,3 +1062,342 @@ async void upgrades_connections()
         std.test::equal(account.failed, 0u64);
     }
 }
+
+// ---- Applications (R-SLIB-HTTP-0015..0018) ----
+
+/* The context of a request of the application tests: the account its token named and the digits
+   of the stages it passed. */
+protected struct Visit { std.string::string account; u32 trail; };
+
+protected Visit open_visit(const Counter* state, const std.http::request* incoming) {
+    state as void;
+    incoming as void;
+    return Visit {.account = std.string::create(), .trail = 0u32};
+}
+
+protected std.http::flow<Visit> step(std.http::flow<Visit> current, u32 digit) {
+    current.context.trail = current.context.trail * 10u32 + digit;
+    return move current;
+}
+
+/* A before hook that reads the account of the token cookie or answers 401. */
+protected async std.http::flow<Visit> sign_in(arc Counter state, std.http::flow<Visit> current)
+    throws std.error::fault {
+    drop state;
+    o<std.string::string> token = o::none;
+    switch (current.request.cookie("token")) {
+    case variant o::some(value): token = o::some(std.string::from_str(*value));
+    case variant o::none: break;
+    }
+    switch (move token) {
+    case variant o::some(move name):
+        current.notes.set("account", name.as_str());
+        std.string::append_str(&current.context.account, name.as_str());
+        return step(move current, 1u32);
+    case variant o::none:
+        std.http::flow<Visit> refused = step(move current, 9u32);
+        return (move refused).with(std.http::response::text(401u16, "no token"));
+    }
+}
+
+/* An after hook that writes the trail of the request into a field of its response. */
+protected async std.http::flow<Visit> stamp(arc Counter state, std.http::flow<Visit> current)
+    throws std.error::fault {
+    drop state;
+    std.http::flow<Visit> passed = step(move current, 3u32);
+    u32 trail = passed.context.trail;
+    std.string::string text = f"{trail}";
+    add_field(&passed.response, "X-Trail", text.as_str());
+    return move passed;
+}
+
+protected async std.http::flow<Visit> show_user(arc Counter state, std.http::flow<Visit> current)
+    throws std.error::fault {
+    drop state;
+    std.http::flow<Visit> handled = step(move current, 2u32);
+    std.string::string body = std.string::from_str("user ");
+    switch (handled.request.param("id")) {
+    case variant o::some(id): std.string::append_str(&body, *id);
+    case variant o::none: break;
+    }
+    return (move handled).with(std.http::response::text(200u16, body.as_str()));
+}
+
+protected async std.http::flow<Visit> show_me(arc Counter state, std.http::flow<Visit> current)
+    throws std.error::fault {
+    drop state;
+    std.http::flow<Visit> handled = step(move current, 4u32);
+    std.string::string body = std.string::from_str("me ");
+    std.string::append_str(&body, handled.context.account.as_str());
+    return (move handled).with(std.http::response::text(200u16, body.as_str()));
+}
+
+protected async std.http::flow<Visit> show_all(arc Counter state, std.http::flow<Visit> current)
+    throws std.error::fault {
+    drop state;
+    return (move current).with(std.http::response::text(200u16, "all"));
+}
+
+protected async std.http::flow<Visit> refuse(arc Counter state, std.http::flow<Visit> current)
+    throws std.error::fault {
+    drop state;
+    drop current;
+    throw std.alloc::alloc_error::out_of_memory;
+}
+
+protected u8 element(const u8[] values, usize at) { return values[at]; }
+
+protected async std.http::flow<Visit> crash(arc Counter state, std.http::flow<Visit> current)
+    throws std.error::fault {
+    drop state;
+    u8[2] values = {1u8, 2u8};
+    u8 read = element(values[0usize..2usize], 5usize);
+    read as void;
+    return move current;
+}
+
+/* The panics the hook of the application received, with a digit per failed check. */
+atomic u32 panics = 0u32;
+
+protected void note_panic(const Counter* state, std.http::method sent, str target, const std.http::notes* noted,
+                          const std.thread::panic_report* report) {
+    state as void;
+    u32 seen = 1u32;
+    try {
+        o<std.string::string> account = noted->get("account");
+        switch (move account) {
+        case variant o::some(move named):
+            if (std.bytes::equal(named.as_bytes(), "ann") == false) { seen = 100u32; }
+            drop named;
+        case variant o::none: seen = 100u32;
+        }
+    } catch (std.alloc::alloc_error failure) {
+        failure as void;
+        seen = 100u32;
+    }
+    if (sent != std.http::method::get) { seen = 100u32; }
+    if (std.bytes::equal(target, "/api/crash") == false) { seen = 100u32; }
+    constexpr str category = std.thread::panic_category(report);
+    if (std.bytes::equal(category, "bounds") == false) { seen = 100u32; }
+    core::atomic_fetch_add(&panics, seen, core::memory_order::relaxed) as void;
+}
+
+protected std.http::app<Counter, Visit> application() throws std.http::http_error, std.alloc::alloc_error {
+    std.http::app<Counter, Visit> served = std.http::app<Counter, Visit>::create(open_visit);
+    served.around("/api", sign_in, stamp);
+    served.route(std.http::method::get, "/api/users/{id}", show_user);
+    served.route(std.http::method::get, "/api/users/me", show_me);
+    served.route(std.http::method::get, "/api/*", show_all);
+    served.route(std.http::method::post, "/api/orders", show_user);
+    served.route(std.http::method::get, "/api/refuse", refuse);
+    served.route(std.http::method::get, "/api/crash", crash);
+    served.route(std.http::method::get, "/shop/", show_all);
+    served.on_panic(note_panic);
+    return move served;
+}
+
+protected std.http::request with_cookie(std.http::method value, str target, str cookie)
+    throws std.http::http_error, std.alloc::alloc_error {
+    std.http::request made = std.http::request::create(value, target);
+    const u8[] bytes = cookie;
+    if (len(bytes) != 0usize) { made.headers.add("Cookie", cookie); }
+    return move made;
+}
+
+protected void expect_field(const std.http::response* result, str name, str value)
+    throws std.test::failure, std.alloc::alloc_error {
+    switch (result->headers.get(name)) {
+    case variant o::some(found): std.test::equal_text(*found, value);
+    case variant o::none: std.test::fail(name);
+    }
+}
+
+protected void expect_trail(const std.http::response* result, str trail)
+    throws std.test::failure, std.alloc::alloc_error {
+    switch (result->headers.get("X-Trail")) {
+    case variant o::some(value): std.test::equal_text(*value, trail);
+    case variant o::none: std.test::fail(trail);
+    }
+}
+
+// R-SLIB-HTTP-0015, R-SLIB-HTTP-0018: hooks in order and back, the context, the most specific
+// route whatever the order of the calls, 405 and 404, the redirect of a trailing slash and the
+// answer to a handler that throws.
+@test
+async void applications_run_middleware_and_routes()
+    throws std.error::fault, std.test::failure, std.http::http_error {
+    std.http::app<Counter, Visit> served = application();
+    arc Counter state = new arc Counter {.hits = 0u32};
+    task_scope(1) calls {
+        std.http::response user = await served.dispatch(std.arc::clone(&state),
+                                                        with_cookie(std.http::method::get, "/api/users/42", "token=ann"));
+        expect_text(&user, 200u16, "user 42");
+        expect_trail(&user, "123");
+        std.http::response me = await served.dispatch(std.arc::clone(&state),
+                                                      with_cookie(std.http::method::get, "/api/users/me", "a=b; token=\"ann\""));
+        expect_text(&me, 200u16, "me ann");
+        expect_trail(&me, "143");
+        std.http::response other = await served.dispatch(std.arc::clone(&state),
+                                                         with_cookie(std.http::method::get, "/api/x/y", "token=ann"));
+        expect_text(&other, 200u16, "all");
+        std.http::response anonymous = await served.dispatch(std.arc::clone(&state),
+                                                             with_cookie(std.http::method::get, "/api/users/me", ""));
+        expect_text(&anonymous, 401u16, "no token");
+        expect_trail(&anonymous, "93");
+        std.http::response wrong = await served.dispatch(std.arc::clone(&state),
+                                                         with_cookie(std.http::method::delete, "/api/orders", "token=ann"));
+        std.test::equal(wrong.status, 405u16);
+        switch (wrong.headers.get("Allow")) {
+        // The pattern `/api/*` of a GET route matches the path too.
+        case variant o::some(value): std.test::equal_text(*value, "GET, POST");
+        case variant o::none: std.test::fail("Allow");
+        }
+        std.http::response refused = await served.dispatch(std.arc::clone(&state),
+                                                           with_cookie(std.http::method::get, "/api/refuse", "token=ann"));
+        std.test::equal(refused.status, 500u16);
+        std.http::response missing = await served.dispatch(std.arc::clone(&state),
+                                                           with_cookie(std.http::method::get, "/shop", ""));
+        expect_text(&missing, 404u16, "Not Found");
+    }
+    served.redirect_trailing_slash(true);
+    served.method_not_allowed(false);
+    task_scope(1) settings {
+        std.http::response redirected = await served.dispatch(std.arc::clone(&state),
+                                                         with_cookie(std.http::method::get, "/shop?page=2", ""));
+        std.test::equal(redirected.status, 301u16);
+        switch (redirected.headers.get("Location")) {
+        case variant o::some(value): std.test::equal_text(*value, "/shop/?page=2");
+        case variant o::none: std.test::fail("Location");
+        }
+        std.http::response gone = await served.dispatch(std.arc::clone(&state),
+                                                        with_cookie(std.http::method::delete, "/api/orders", "token=ann"));
+        std.test::equal(gone.status, 404u16);
+    }
+}
+
+// R-SLIB-HTTP-0015: a handler that panics is answered with 500, its report goes to the hook and
+// the application answers the next request.
+@test
+async void applications_isolate_a_panicking_handler()
+    throws std.error::fault, std.test::failure, std.http::http_error {
+    std.http::app<Counter, Visit> served = application();
+    arc Counter state = new arc Counter {.hits = 0u32};
+    core::atomic_store(&panics, 0u32, core::memory_order::relaxed);
+    task_scope(1) calls {
+        std.http::response crashed = await served.dispatch(std.arc::clone(&state),
+                                                           with_cookie(std.http::method::get, "/api/crash", "token=ann"));
+        expect_text(&crashed, 500u16, "Internal Server Error");
+        std.http::response after = await served.dispatch(std.arc::clone(&state),
+                                                         with_cookie(std.http::method::get, "/api/users/7", "token=bob"));
+        expect_text(&after, 200u16, "user 7");
+    }
+    std.test::equal(core::atomic_load(&panics, core::memory_order::relaxed), 1u32);
+}
+
+// R-SLIB-HTTP-0016, R-SLIB-HTTP-0017: cookies, and cross-origin requests of an allowed and of
+// another origin.
+@test
+async void applications_answer_cors_and_cookies()
+    throws std.error::fault, std.test::failure, std.http::http_error {
+    std.http::app<Counter, Visit> served = application();
+    std.http::cors_policy policy = {.credentials = true, .max_age = 60u32};
+    try {
+        policy.origins.push(std.string::from_str("https://game.example"));
+    } catch (std.array::push_error<std.string::string> rejected) {
+        (move rejected) as void;
+        std.test::fail("an origin");
+    }
+    served.cors(move policy);
+    arc Counter state = new arc Counter {.hits = 0u32};
+    task_scope(1) calls {
+        std.http::request asked = std.http::request::create(std.http::method::options, "/api/users/1");
+        asked.headers.add("Origin", "https://game.example");
+        asked.headers.add("Access-Control-Request-Method", "PUT");
+        asked.headers.add("Access-Control-Request-Headers", "X-Command");
+        std.http::response preflight = await served.dispatch(std.arc::clone(&state), move asked);
+        std.test::equal(preflight.status, 204u16);
+        expect_field(&preflight, "Access-Control-Allow-Origin", "https://game.example");
+        expect_field(&preflight, "Access-Control-Allow-Credentials", "true");
+        expect_field(&preflight, "Access-Control-Allow-Methods", "PUT");
+        expect_field(&preflight, "Access-Control-Allow-Headers", "X-Command");
+        expect_field(&preflight, "Access-Control-Max-Age", "60");
+        std.http::request foreign = std.http::request::create(std.http::method::options, "/api/users/1");
+        foreign.headers.add("Origin", "https://other.example");
+        foreign.headers.add("Access-Control-Request-Method", "GET");
+        std.http::response refused = await served.dispatch(std.arc::clone(&state), move foreign);
+        std.test::equal(refused.status, 403u16);
+        std.http::request plain = with_cookie(std.http::method::get, "/api/users/5", "token=ann");
+        plain.headers.add("Origin", "https://game.example");
+        std.http::response marked = await served.dispatch(std.arc::clone(&state), move plain);
+        expect_text(&marked, 200u16, "user 5");
+        expect_field(&marked, "Access-Control-Allow-Origin", "https://game.example");
+        expect_field(&marked, "Vary", "Origin");
+    }
+    std.http::cookie session = {.name = std.string::from_str("token"), .value = std.string::from_str("t1"),
+                                .path = o::some(std.string::from_str("/")), .max_age = o::some(3600i64),
+                                .secure = true, .http_only = true,
+                                .same_site = o::some(std.string::from_str("Lax"))};
+    std.http::response answer = std.http::response::create(200u16);
+    answer.set_cookie(&session);
+    switch (answer.headers.get("Set-Cookie")) {
+    case variant o::some(value):
+        std.test::equal_text(*value, "token=t1; Path=/; Max-Age=3600; Secure; HttpOnly; SameSite=Lax");
+    case variant o::none: std.test::fail("Set-Cookie");
+    }
+}
+
+protected async u32 application_clients(std.net::socket_address endpoint,
+                                         std.sync::sender<std.service::stop> stopper)
+    throws std.error::fault, std.test::failure, std.http::http_error {
+    std.net::tcp_stream stream = await endpoint.connect();
+    std.bufio::reader<std.net::tcp_stream> connection =
+        std.bufio::reader<std.net::tcp_stream>::create(move stream, 4096usize);
+    u32 checked = 0u32;
+    task_scope(1) io {
+        std.http::response first = await call(&connection, with_cookie(std.http::method::get, "/api/users/1", "token=ann"));
+        expect_text(&first, 200u16, "user 1");
+        std.test::check(first.headers.contains("Date"), "a Date field");
+        std.http::response crashed = await call(&connection, with_cookie(std.http::method::get, "/api/crash", "token=ann"));
+        expect_text(&crashed, 500u16, "Internal Server Error");
+        std.http::response after = await call(&connection, with_cookie(std.http::method::get, "/api/users/me", "token=bob"));
+        expect_text(&after, 200u16, "me bob");
+        checked += 1u32;
+    }
+    std.sync::send_result<std.service::stop> sent = std.sync::send(&stopper, std.service::stop::drain);
+    drop sent;
+    return checked;
+}
+
+// R-SLIB-HTTP-0015: serve_app answers on a kept-alive connection, which a panicking handler does
+// not end.
+@test
+async void serves_applications()
+    throws std.error::fault, std.test::failure, std.http::http_error {
+    std.net::tcp_listener listener = await open_listener();
+    std.net::socket_address endpoint = listener.local_address();
+    std.sync::channel<std.service::stop> factory = std.sync::channel::<std.service::stop>();
+    std.sync::sender<std.service::stop> stopper = std.sync::sender(&factory);
+    std.sync::receiver<std.service::stop> stop = std.sync::receiver(move factory);
+    arc Counter state = new arc Counter {.hits = 0u32};
+    array<std.service::listener> listeners = [];
+    try {
+        listeners.push(std.service::listener::tcp(move listener));
+    } catch (std.array::push_error<std.service::listener> rejected) {
+        drop rejected;
+        throw std.alloc::alloc_error::out_of_memory;
+    }
+    std.service::options settings = {};
+    std.http::limits bounds = {};
+    core::atomic_store(&panics, 0u32, core::memory_order::relaxed);
+    task_scope(2) group {
+        auto server = std.http::serve_app(move listeners, settings, move stop, std.service::health::create(),
+                                          move state, application(), bounds);
+        auto client = application_clients(endpoint, move stopper);
+        u32 checked = await move client;
+        std.service::report account = await move server;
+        std.test::equal(checked, 1u32);
+        std.test::equal(account.accepted, 1u64);
+        std.test::equal(account.failed, 0u64);
+    }
+    std.test::equal(core::atomic_load(&panics, core::memory_order::relaxed), 1u32);
+}

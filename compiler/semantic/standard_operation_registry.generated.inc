@@ -81,6 +81,7 @@ static const RStandardOperationRegistryEntry r_standard_operation_registry[] = {
     {"std", "async", "clone_rw_lock", false},
     {"std", "async", "clone_semaphore", false},
     {"std", "async", "detach", false},
+    {"std", "async", "join", false},
     {"std", "async", "lock", false},
     {"std", "async", "mutex_guard_mut", false},
     {"std", "async", "mutex_guard_ref", false},

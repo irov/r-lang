@@ -12,6 +12,7 @@ set(R_STD_ASYNC_PUBLIC_SOURCES
     source/clone_rw_lock.c
     source/clone_semaphore.c
     source/detach.c
+    source/join.c
     source/lock.c
     source/mutex_guard_mut.c
     source/mutex_guard_ref.c
@@ -50,4 +51,4 @@ target_include_directories(r_std_async PUBLIC "${R_LIBRARY_REPOSITORY_ROOT}/runt
 target_include_directories(r_std_async PRIVATE
     "${R_LIBRARY_REPOSITORY_ROOT}/library/internal/async_sync/include"
 )
-target_link_libraries(r_std_async PUBLIC r_std_alloc r_runtime_0_1 Threads::Threads)
+target_link_libraries(r_std_async PUBLIC r_std_alloc r_std_thread r_runtime_0_1 Threads::Threads)

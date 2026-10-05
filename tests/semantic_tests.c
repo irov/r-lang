@@ -1887,6 +1887,111 @@ static void r_semantic_test_async_cancel(void) {
     }
 }
 
+/* R-SLIB-ASYNC-0020 (L39): `await std.async::join(move task)` observes the panic of a task without
+   checked errors into a std.thread::join_result; any other use is rejected. */
+static void r_semantic_test_async_join(void) {
+    static const char positive_source[] = "module semantic.async_join_positive;\n"
+                                          "async i32 run(task<i32> operation) {\n"
+                                          "    std.thread::join_result<i32> joined =\n"
+                                          "        await std.async::join(move operation);\n"
+                                          "    switch (move joined) {\n"
+                                          "    case variant std.thread::join_result::returned("
+                                          "move value):\n"
+                                          "        return value;\n"
+                                          "    case variant std.thread::join_result::panicked("
+                                          "move report):\n"
+                                          "        drop report;\n"
+                                          "        return 0;\n"
+                                          "    }\n"
+                                          "}\n";
+    static const struct {
+        const char *source;
+        const char *code;
+        const char *rule_id;
+    } negative_cases[] = {
+        {
+            "module semantic.async_join_outside_await;\n"
+            "void run(task<i32> operation) {\n"
+            "    std.thread::join_result<i32> joined = std.async::join(move operation);\n"
+            "    drop joined;\n"
+            "}\n",
+            "R-DIAG-ASYNC-001",
+            "R-SLIB-ASYNC-0020",
+        },
+        {
+            "module semantic.async_join_missing_move;\n"
+            "async void run(task<i32> operation) {\n"
+            "    std.thread::join_result<i32> joined = await std.async::join(operation);\n"
+            "    drop joined;\n"
+            "}\n",
+            "R-DIAG-MOVE-001",
+            "R-SLIB-ASYNC-0020",
+        },
+        {
+            "module semantic.async_join_checked_errors;\n"
+            "error task_error { i32 code; };\n"
+            "async void run(task<i32 throws task_error> operation) {\n"
+            "    std.thread::join_result<i32> joined = await std.async::join(move operation);\n"
+            "    drop joined;\n"
+            "}\n",
+            "R-DIAG-ASYNC-001",
+            "R-SLIB-ASYNC-0020",
+        },
+        {
+            "module semantic.async_join_statement;\n"
+            "async void run(task<i32> operation) {\n"
+            "    await std.async::join(move operation);\n"
+            "}\n",
+            "R-DIAG-ASYNC-001",
+            "R-STMT-0012",
+        },
+    };
+    RFrontendContext *context = r_frontend_create(NULL);
+    RSemanticTestBuffer mir = {0};
+    RSourceId source_id = R_SOURCE_ID_INVALID;
+    size_t index;
+
+    R_SEMANTIC_CHECK(context != NULL);
+    if (context == NULL) {
+        return;
+    }
+    R_SEMANTIC_CHECK(r_frontend_add_source(context,
+                                           "async-join-positive.r",
+                                           (const uint8_t *)positive_source,
+                                           strlen(positive_source),
+                                           &source_id) == R_FRONTEND_OK);
+    R_SEMANTIC_CHECK(r_frontend_analyze(context) == R_FRONTEND_OK);
+    R_SEMANTIC_CHECK(r_frontend_diagnostic_count(context) == 0U);
+    R_SEMANTIC_CHECK(r_frontend_lower_mir(context) == R_FRONTEND_OK);
+    R_SEMANTIC_CHECK(r_frontend_dump_mir(context, r_semantic_test_write, &mir) == R_FRONTEND_OK);
+    R_SEMANTIC_CHECK((mir.bytes != NULL) && (strstr(mir.bytes, " consuming join") != NULL));
+    free(mir.bytes);
+    r_frontend_destroy(context);
+
+    for (index = 0U; index < (sizeof(negative_cases) / sizeof(negative_cases[0])); ++index) {
+        const RDiagnostic *diagnostic;
+
+        context = r_frontend_create(NULL);
+        R_SEMANTIC_CHECK(context != NULL);
+        if (context == NULL) {
+            continue;
+        }
+        source_id = r_semantic_add_bytes(context,
+                                         "async-join-negative.r",
+                                         (const uint8_t *)negative_cases[index].source,
+                                         strlen(negative_cases[index].source));
+        (void)source_id;
+        R_SEMANTIC_CHECK(r_frontend_analyze(context) == R_FRONTEND_INVALID_SOURCE);
+        R_SEMANTIC_CHECK(r_frontend_diagnostic_count(context) >= 1U);
+        diagnostic = r_frontend_diagnostic(context, UINT32_C(0));
+        R_SEMANTIC_CHECK((diagnostic != NULL) &&
+                         (strcmp(diagnostic->code, negative_cases[index].code) == 0) &&
+                         (strcmp(diagnostic->rule_id, negative_cases[index].rule_id) == 0) &&
+                         (diagnostic->phase == R_DIAGNOSTIC_PHASE_SEMANTIC));
+        r_frontend_destroy(context);
+    }
+}
+
 static void r_semantic_test_effectful_task_resolution(void) {
     static const char positive_source[] =
         "module semantic.effectful_task_resolution_positive;\n"
@@ -2668,7 +2773,8 @@ static void r_semantic_test_mir_pending_completion(void) {
             }
         }
     }
-    R_SEMANTIC_CHECK(set_count == 18U);
+    /* L39 (R-ERR-0005): the panic block of the async body runs its active finally once. */
+    R_SEMANTIC_CHECK(set_count == 19U);
     R_SEMANTIC_CHECK(resume_count == set_count);
     R_SEMANTIC_CHECK(finally_push_count == 15U);
     R_SEMANTIC_CHECK(finally_enter_count == finally_push_count);
@@ -2680,7 +2786,7 @@ static void r_semantic_test_mir_pending_completion(void) {
     R_SEMANTIC_CHECK(reason_counts[R_MIR_PENDING_COMPLETION_CONTINUE] == 1U);
     R_SEMANTIC_CHECK(reason_counts[R_MIR_PENDING_COMPLETION_CANCEL] == 1U);
     R_SEMANTIC_CHECK(reason_counts[R_MIR_PENDING_COMPLETION_FALLTHROUGH] == 0U);
-    R_SEMANTIC_CHECK(reason_counts[R_MIR_PENDING_COMPLETION_PANIC_UNWIND] == 0U);
+    R_SEMANTIC_CHECK(reason_counts[R_MIR_PENDING_COMPLETION_PANIC_UNWIND] == 1U);
     R_SEMANTIC_CHECK(checked_target_count == 1U);
     R_SEMANTIC_CHECK(checked_propagate_count == 2U);
     R_SEMANTIC_CHECK(staged_before_drop_count == 4U);
@@ -10538,6 +10644,7 @@ int main(int argc, char **argv) {
         r_semantic_test_async_hir();
         r_semantic_test_implicit_final_return();
         r_semantic_test_async_cancel();
+        r_semantic_test_async_join();
         r_semantic_test_effectful_task_resolution();
         r_semantic_test_mir_pending_completion();
         r_semantic_test_pending_cleanup_oom_sweep();

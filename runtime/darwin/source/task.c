@@ -65,8 +65,10 @@ struct RRuntimeTask {
      * each task this one prepares. */
     RRuntimeTaskDeadline deadline;
     /* Core R-STMT-0020: the budget charged for the allocations and starts of this task, held by
-     * one reference; read and written only by code executing this task. counted when this task
-     * counts under the budget of the task that prepared it. */
+     * one reference; read and written only by code executing this task. counted while this task
+     * counts under the budget of the task that prepared it: from its start until its await
+     * completes, which clears it under the task lock, or until its release when nothing awaits
+     * it. */
     RRuntimeBudget *budget;
     _Bool counted;
     size_t scope_index;
@@ -95,6 +97,16 @@ struct RRuntimeTask {
     _Bool external_acknowledged;
     _Bool resume_pending;
     _Bool resumable_started;
+    /* Core R-ERR-0005 (L39): the task ended with a panic; its report waits for the observer or,
+       when nobody observes it, is delivered to the panic hook once. */
+    _Bool panicked;
+    _Bool panic_delivered;
+    _Bool panic_parked;
+    /* A panic that began where no panic exit tests it, in a drop on a return, break or
+       checked-error path or in a thread-local drop, and was still pending when the step
+       suspended; it is pending again when the step resumes. */
+    _Bool panic_stray;
+    RRuntimePanicReportData panic_report;
     /* The task this thread was executing when this one started executing inline over it. */
     RRuntimeTask *executing_outer;
     /* The native thread this task waits to join, while it waits; zero otherwise. */
@@ -267,6 +279,14 @@ static void task_release_reference(RRuntimeTask *task) {
 }
 
 static void task_worker(void *context);
+
+#if defined(R_RUNTIME_DARWIN_TASK_TESTING)
+static _Atomic(void (*)(void)) task_testing_after_end;
+
+void r_runtime_darwin_task_testing_after_end(void (*hook)(void)) {
+    atomic_store_explicit(&task_testing_after_end, hook, memory_order_release);
+}
+#endif
 
 static void task_dispatch(RRuntimeTask *task) {
     dispatch_queue_t queue = r_runtime_executor.queue;
@@ -459,6 +479,7 @@ static void task_execute(RRuntimeTask *task, _Bool on_worker) {
     RRuntimeTaskExecution execution;
     _Bool execute_body;
     _Bool drop_result = 0;
+    _Bool deliver_panic = 0;
     _Bool dispatch_resume = 0;
     RRuntimeTaskStepStatus step_status = R_RUNTIME_TASK_STEP_COMPLETED;
     RRuntimeBudget *outer_budget;
@@ -492,16 +513,48 @@ static void task_execute(RRuntimeTask *task, _Bool on_worker) {
         task->executing_outer = r_runtime_executor_current_task;
         r_runtime_executor_current_task = task;
         outer_budget = r_runtime_budget_swap_current(task->budget);
+        if (task->panic_stray) {
+            task->panic_stray = 0;
+            r_runtime_panic_resume(&task->panic_report);
+        }
         if (task->kind == R_RUNTIME_TASK_KIND_RESUMABLE) {
             step_status = task->step(&execution, task_payload(task), task_result(task));
         } else {
             task->body(&execution, task_payload(task), task_result(task));
+        }
+        if (step_status == R_RUNTIME_TASK_STEP_PANICKED) {
+            /* R-ERR-0005: thread-local and frame drops below run as cleanup of the panic; a panic
+               that begins in them is a second panic (R-ERR-0008). */
+            r_runtime_unwind_cleanup_enter();
         }
         (void)r_runtime_budget_swap_current(outer_budget);
         r_runtime_executor_current_task = task->executing_outer;
         task->executing_outer = NULL;
         if (on_worker) {
             r_runtime_thread_local_cleanup_current();
+        }
+        /* L39 (R-ERR-0009): a panic still pending here began where no panic exit tests it. A
+           suspended step keeps it in its task, so that this thread runs other tasks without it;
+           a step that ended ends the task with it, and the result it wrote is dropped. */
+        if ((step_status != R_RUNTIME_TASK_STEP_PANICKED) && r_runtime_unwinding()) {
+            if (step_status == R_RUNTIME_TASK_STEP_SUSPENDED) {
+                RRuntimePanicReportData stray;
+
+                (void)r_runtime_panic_take(&stray);
+                if (task->panic_parked) {
+                    /* It began on the way of a parked panic: a second panic (R-ERR-0008). */
+                    r_runtime_panic_second(&task->panic_report, stray.category, stray.span);
+                }
+                task->panic_report = stray;
+                task->panic_stray = 1;
+            } else {
+                r_runtime_unwind_cleanup_enter();
+                if ((step_status == R_RUNTIME_TASK_STEP_COMPLETED) &&
+                    (task->result_type.size != 0U)) {
+                    drop_value(task->result_type, task_result(task));
+                }
+                step_status = R_RUNTIME_TASK_STEP_PANICKED;
+            }
         }
         r_runtime_executor_worker_depth -= 1U;
     }
@@ -532,7 +585,8 @@ static void task_execute(RRuntimeTask *task, _Bool on_worker) {
     }
     if (task->kind == R_RUNTIME_TASK_KIND_RESUMABLE && execute_body &&
         (step_status != R_RUNTIME_TASK_STEP_COMPLETED) &&
-        (step_status != R_RUNTIME_TASK_STEP_CANCELLED)) {
+        (step_status != R_RUNTIME_TASK_STEP_CANCELLED) &&
+        (step_status != R_RUNTIME_TASK_STEP_PANICKED)) {
         abort();
     }
 
@@ -543,15 +597,26 @@ static void task_execute(RRuntimeTask *task, _Bool on_worker) {
         drop_value(task->payload_type, task_payload(task));
         task->payload_initialized = 0;
     }
+    if (step_status == R_RUNTIME_TASK_STEP_PANICKED) {
+        r_runtime_unwind_cleanup_leave();
+        if (!r_runtime_panic_take(&task->panic_report)) {
+            abort();
+        }
+        task->panicked = 1;
+    }
 
     task_lock(task);
-    task->result_initialized = execute_body &&
+    task->result_initialized = execute_body && !task->panicked &&
                                ((task->kind != R_RUNTIME_TASK_KIND_RESUMABLE) ||
                                 (step_status == R_RUNTIME_TASK_STEP_COMPLETED)) &&
                                (task->result_type.size != 0U);
-    if (atomic_load_explicit(&task->cancel_requested, memory_order_acquire) ||
-        ((task->kind == R_RUNTIME_TASK_KIND_RESUMABLE) &&
-         (step_status == R_RUNTIME_TASK_STEP_CANCELLED))) {
+    if (task->panicked) {
+        /* A panic is the terminal outcome even when cancellation was requested; an observer
+           that cancelled or detached leaves the report to the hook. */
+        task->state = R_RUNTIME_TASK_COMPLETED;
+    } else if (atomic_load_explicit(&task->cancel_requested, memory_order_acquire) ||
+               ((task->kind == R_RUNTIME_TASK_KIND_RESUMABLE) &&
+                (step_status == R_RUNTIME_TASK_STEP_CANCELLED))) {
         task->state = R_RUNTIME_TASK_CANCELLED;
     } else {
         task->state = R_RUNTIME_TASK_COMPLETED;
@@ -563,13 +628,30 @@ static void task_execute(RRuntimeTask *task, _Bool on_worker) {
         task->result_initialized = 0;
         drop_result = 1;
     }
+    if (task->panicked && !task->observer_attached && !task->panic_delivered) {
+        task->panic_delivered = 1;
+        deliver_panic = 1;
+    }
     task_unlock(task);
 
     if (drop_result) {
         drop_value(task->result_type, task_result(task));
     }
+    if (deliver_panic) {
+        r_runtime_panic_deliver(&task->panic_report);
+    }
 
     task_publish_terminal(task);
+#if defined(R_RUNTIME_DARWIN_TASK_TESTING)
+    if (on_worker && (task->budget != NULL)) {
+        void (*hook)(void) =
+            atomic_exchange_explicit(&task_testing_after_end, NULL, memory_order_acq_rel);
+
+        if (hook != NULL) {
+            hook();
+        }
+    }
+#endif
     executor_remove_task(task, on_worker);
 }
 
@@ -1210,6 +1292,7 @@ void r_runtime_task_start_abort(RRuntimeTask **transaction) {
 RRuntimeTaskAwaitStatus r_runtime_task_await(RRuntimeTask **task_slot, void *result_storage) {
     RRuntimeTask *task;
     RRuntimeTaskAwaitStatus status;
+    _Bool return_count;
 
     task = *task_slot;
 
@@ -1229,7 +1312,16 @@ RRuntimeTaskAwaitStatus r_runtime_task_await(RRuntimeTask **task_slot, void *res
     }
     task->observer_attached = 0;
     *task_slot = NULL;
-    if (task->state == R_RUNTIME_TASK_COMPLETED) {
+    /* Core R-STMT-0020: an awaited task stops counting under its budget when its await
+       completes, also while the worker that ran it still holds it (M42-3). */
+    return_count = task->counted;
+    task->counted = 0;
+    if ((task->state == R_RUNTIME_TASK_COMPLETED) && task->panicked) {
+        /* R-FUNC-0012: the observed panic is re-raised at the await. */
+        task->panic_delivered = 1;
+        r_runtime_panic_resume(&task->panic_report);
+        status = R_RUNTIME_TASK_AWAIT_PANICKED;
+    } else if (task->state == R_RUNTIME_TASK_COMPLETED) {
         if (task->result_type.size != 0U) {
             if (!task->result_initialized) {
                 abort();
@@ -1247,6 +1339,9 @@ RRuntimeTaskAwaitStatus r_runtime_task_await(RRuntimeTask **task_slot, void *res
         abort();
     }
     task_unlock(task);
+    if (return_count) {
+        r_runtime_budget_return_task(task->budget);
+    }
     task_scope_publish(task);
     task_release_reference(task);
     return status;
@@ -1261,6 +1356,8 @@ static RRuntimeTaskExecutionAwaitStatus task_execution_await_terminal(RRuntimeTa
         return R_RUNTIME_TASK_EXECUTION_AWAIT_OK;
     case R_RUNTIME_TASK_AWAIT_CANCELLED:
         return R_RUNTIME_TASK_EXECUTION_AWAIT_CANCELLED;
+    case R_RUNTIME_TASK_AWAIT_PANICKED:
+        return R_RUNTIME_TASK_EXECUTION_AWAIT_PANICKED;
     case R_RUNTIME_TASK_AWAIT_INVALID:
     case R_RUNTIME_TASK_AWAIT_WOULD_BLOCK:
     default:
@@ -1367,9 +1464,40 @@ RRuntimeTaskExecutionAwaitStatus r_runtime_task_execution_await(RRuntimeTaskExec
     return R_RUNTIME_TASK_EXECUTION_AWAIT_SUSPENDED;
 }
 
+void r_runtime_task_panic_park(RRuntimeTaskExecution *execution) {
+    RRuntimeTask *task = execution == NULL ? NULL : execution->task;
+    RRuntimePanicReportData second;
+
+    if (task == NULL) {
+        abort();
+    }
+    if (task->panic_parked) {
+        /* R-ERR-0005: a panic that begins in a finally block run for a panic. */
+        if (!r_runtime_panic_take(&second)) {
+            abort();
+        }
+        r_runtime_panic_second(&task->panic_report, second.category, second.span);
+    }
+    if (!r_runtime_panic_take(&task->panic_report)) {
+        abort();
+    }
+    task->panic_parked = 1;
+}
+
+void r_runtime_task_panic_unpark(RRuntimeTaskExecution *execution) {
+    RRuntimeTask *task = execution == NULL ? NULL : execution->task;
+
+    if ((task == NULL) || !task->panic_parked) {
+        abort();
+    }
+    task->panic_parked = 0;
+    r_runtime_panic_resume(&task->panic_report);
+}
+
 static void consume_observer(RRuntimeTask **task_slot, _Bool cancel) {
     RRuntimeTask *task;
     _Bool drop_result = 0;
+    _Bool deliver_panic = 0;
 
     if (task_slot == NULL || *task_slot == NULL) {
         return;
@@ -1394,12 +1522,20 @@ static void consume_observer(RRuntimeTask **task_slot, _Bool cancel) {
         drop_result = 1;
         task->observer_cleanup_active = 1;
     }
+    if (task->terminal_decided && task->panicked && !task->panic_delivered) {
+        task->panic_delivered = 1;
+        deliver_panic = 1;
+    }
     task_unlock(task);
     if (drop_result) {
         drop_value(task->result_type, task_result(task));
         task_lock(task);
         task->observer_cleanup_active = 0;
         task_unlock(task);
+    }
+    if (deliver_panic) {
+        /* R-MEM-0017: the report of a task that nobody observes goes to the panic hook. */
+        r_runtime_panic_deliver(&task->panic_report);
     }
     task_scope_publish(task);
     task_release_reference(task);
@@ -1542,6 +1678,51 @@ void r_runtime_task_external_acknowledge(RRuntimeTaskExternalExecution *executio
         drop_value(task->result_type, task_result(task));
     }
 
+    task_publish_terminal(task);
+    executor_remove_task(task, 1);
+}
+
+/* L39 (R-ERR-0009): an external task whose native work ran R code that panicked ends with that
+   panic, which is the terminal outcome even after a selected cancellation, as for a resumable task:
+   an observer re-raises it at its await, and without one the report goes to the panic hook. */
+void r_runtime_task_external_acknowledge_panic(RRuntimeTaskExternalExecution *execution,
+                                               const struct RRuntimePanicReportData *report) {
+    RRuntimeTask *task = external_task(execution);
+    _Bool drop_payload;
+    _Bool deliver_panic = 0;
+
+    if ((task == NULL) || (report == NULL)) {
+        abort();
+    }
+    task_lock(task);
+    if (!task->external_start_ready || task->external_acknowledged) {
+        task_unlock(task);
+        abort();
+    }
+    if (task->external_selection == R_RUNTIME_TASK_EXTERNAL_SELECTION_NONE) {
+        task->external_selection = R_RUNTIME_TASK_EXTERNAL_SELECTION_COMPLETION;
+        task->external_selection_sequence = r_runtime_darwin_event_sequence_next();
+        task->terminal_decided = 1;
+    }
+    task->external_acknowledged = 1;
+    task->state = R_RUNTIME_TASK_COMPLETED;
+    task->panicked = 1;
+    task->panic_report = *report;
+    task->result_initialized = 0;
+    drop_payload = task->payload_initialized;
+    task->payload_initialized = 0;
+    if (!task->observer_attached && !task->panic_delivered) {
+        task->panic_delivered = 1;
+        deliver_panic = 1;
+    }
+    task_unlock(task);
+
+    if (drop_payload) {
+        drop_value(task->payload_type, task_payload(task));
+    }
+    if (deliver_panic) {
+        r_runtime_panic_deliver(&task->panic_report);
+    }
     task_publish_terminal(task);
     executor_remove_task(task, 1);
 }

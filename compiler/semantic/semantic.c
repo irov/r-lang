@@ -749,6 +749,20 @@ typedef struct RBodyContext {
        next lowering of that expression returns this result instead of lowering it again. */
     RAstRef prelowered_expression;
     const struct RExpressionResult *prelowered_result;
+    /* L39 (R-ERR-0005): the panic exits of a synchronous body under the unwind strategy. A node
+       that can panic receives the block of drops of every live object; the last block and the
+       objects it drops are kept so that the next node with the same objects shares it. Building
+       a block suspends the exits, as do the drops inside it. */
+    bool panic_exits;
+    uint32_t panic_exit_suspend;
+    RHirNodeId last_panic_cleanup;
+    RSymbolVector last_panic_symbols;
+    RSymbolVector last_panic_defers;
+    /* L39 (R-ERR-0008): a drop at the end of a block or a `drop` statement whose value may run R
+       code when destroyed gets a panic exit too; at the end of a block that exit drops only the
+       objects below active index panic_drop_bound - 1, the ones the block has not dropped yet. */
+    bool panic_drops;
+    size_t panic_drop_bound;
 } RBodyContext;
 
 typedef struct RExpressionResult {
@@ -6816,8 +6830,8 @@ static bool r_semantic_standard_type_has_capability(const RFrontendContext *cont
                    context, type->base, capability, visits, depth + 1U);
     }
     if (r_semantic_standard_type_name_equal(context, type, "std.secret::buffer")) {
-        /* R-SLIB-SECRET-0001: the owner is Send and not Sync. */
-        return capability == R_SEMANTIC_CAPABILITY_SEND;
+        /* R-SLIB-SECRET-0001: the owner is Send and Sync; shared access only reads it. */
+        return true;
     }
     if (r_semantic_standard_copy_abi(context, type) != NULL) {
         return true;
@@ -15405,6 +15419,311 @@ static bool r_body_suppress_unresolved_dependency(RBodyContext *body) {
 
 static bool r_body_validate_standard_call_children(RBodyContext *body, const RHirVector *children);
 
+static bool r_body_transfer_drop_defer_finally_count(const RBodyContext *body,
+                                                     size_t symbol_index,
+                                                     size_t target_scope_base,
+                                                     bool crosses_equal_scope,
+                                                     uint32_t *defer_finally_count);
+static bool r_body_append_node(RBodyContext *body,
+                               RHirKind kind,
+                               RSourceSpan span,
+                               RTypeId type,
+                               RSymbolId symbol,
+                               RTokenKind operation,
+                               uint64_t integer_value,
+                               bool is_place,
+                               const RHirVector *children,
+                               RHirNodeId *node_id);
+
+/* L39 (R-ERR-0005): the node kinds whose lowering can begin a panic or observe one: calls, checked
+   arithmetic and conversions, bounds checks, allocations, awaits and the drop of a replaced value.
+   A drop node is excluded here: the drops of a scope run in a batch whose order the exit of each
+   drop would have to follow, which the batch builders do not record yet. */
+static bool r_hir_kind_can_panic(RHirKind kind) {
+    switch (kind) {
+    case R_HIR_CALL:
+    case R_HIR_INDIRECT_CALL:
+    case R_HIR_STANDARD_CALL:
+    case R_HIR_BINARY:
+    case R_HIR_UNARY:
+    case R_HIR_CAST:
+    case R_HIR_INDEX_PLACE:
+    case R_HIR_SLICE:
+    case R_HIR_NEW:
+    case R_HIR_ARRAY_INIT:
+    case R_HIR_AGGREGATE_INIT:
+    case R_HIR_VARIANT:
+    case R_HIR_DEFAULT_VALUE:
+    case R_HIR_AWAIT:
+    case R_HIR_ASYNC_START:
+    case R_HIR_TASK_SCOPE_WAIT:
+    case R_HIR_TASK_SCOPE_CLOSE:
+    case R_HIR_ASSIGN:
+    case R_HIR_COMPOUND_ASSIGN:
+        return true;
+    default:
+        return false;
+    }
+}
+
+/* Whether the panic cleanup drops symbol: the objects an uncaught transfer drops, except
+   must-resolve tasks, which a later step of L39 cancels instead. */
+static bool r_body_panic_drops(RBodyContext *body, RSymbolId symbol_id) {
+    const RSemanticSymbol *symbol = r_body_symbol(body, symbol_id);
+
+    return (symbol != NULL) && !symbol->is_static && (symbol->pattern_place == 0U) &&
+           ((symbol->object_state == R_SEMANTIC_OBJECT_STATE_INITIALIZED) ||
+            (symbol->object_state == R_SEMANTIC_OBJECT_STATE_STAGED_ASYNC_MOVE)) &&
+           !r_semantic_type_is_must_resolve(body->frontend, symbol->type) &&
+           r_semantic_type_is_supported_move(body->frontend, symbol->type);
+}
+
+/* L39 (R-ERR-0008): whether destroying a value of the type may begin a panic: it runs a user drop
+   of the type or of a part, drops an owned interface whose targets are not known here, or ends a
+   scoped thread, whose panic escalates (R-MEM-0016). Deep or recursive types count as such. */
+static bool
+r_semantic_type_drop_may_panic(const RFrontendContext *context, RTypeId type_id, uint32_t depth) {
+    const RSemanticType *type;
+
+    if (depth > UINT32_C(24)) {
+        return true;
+    }
+    type_id = r_semantic_value_type(context, type_id);
+    type = r_semantic_type(context, type_id);
+    if (type == NULL) {
+        return false;
+    }
+    switch (type->kind) {
+    case R_SEMANTIC_TYPE_STRUCT:
+    case R_SEMANTIC_TYPE_ENUM: {
+        const RSemanticAggregate *aggregate = r_semantic_aggregate_for_type(context, type_id);
+        uint32_t index;
+
+        if (aggregate == NULL) {
+            return false;
+        }
+        if (aggregate->drop_function != R_SYMBOL_ID_INVALID) {
+            return true;
+        }
+        for (index = 0U; index < aggregate->field_count; ++index) {
+            const size_t field = (size_t)aggregate->first_field + (size_t)index;
+
+            if ((field < context->semantic_field_count) &&
+                r_semantic_type_drop_may_panic(
+                    context, context->semantic_fields[field].type, depth + 1U)) {
+                return true;
+            }
+        }
+        for (index = 0U; aggregate->is_tagged && (index < aggregate->variant_count); ++index) {
+            const RSemanticVariant *variant = r_semantic_tagged_variant(context, type_id, index);
+
+            if ((variant != NULL) && (variant->payload_type != R_TYPE_ID_INVALID) &&
+                r_semantic_type_drop_may_panic(context, variant->payload_type, depth + 1U)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    case R_SEMANTIC_TYPE_DYN:
+        return true;
+    case R_SEMANTIC_TYPE_OWN:
+    case R_SEMANTIC_TYPE_ARC:
+    case R_SEMANTIC_TYPE_RC:
+    case R_SEMANTIC_TYPE_ARRAY:
+    case R_SEMANTIC_TYPE_LIST:
+    case R_SEMANTIC_TYPE_FIXED_ARRAY:
+    case R_SEMANTIC_TYPE_OPTION:
+    case R_SEMANTIC_TYPE_DICT:
+    case R_SEMANTIC_TYPE_RESULT:
+    case R_SEMANTIC_TYPE_STANDARD:
+        if ((type->kind == R_SEMANTIC_TYPE_STANDARD) &&
+            r_semantic_standard_type_name_equal(context, type, "std.thread::scoped_join_handle")) {
+            return true;
+        }
+        return ((type->base != R_TYPE_ID_INVALID) &&
+                r_semantic_type_drop_may_panic(context, type->base, depth + 1U)) ||
+               ((type->kind != R_SEMANTIC_TYPE_FIXED_ARRAY) &&
+                (type->second != R_TYPE_ID_INVALID) &&
+                r_semantic_type_drop_may_panic(context, type->second, depth + 1U));
+    default:
+        return false;
+    }
+}
+
+/* L39: whether a value of the type can lead a standard operation into R code: a user aggregate,
+   whose drop, clone, hash, equality, format and JSON hooks are R functions, an interface, a
+   function value or a generic parameter, at any depth of a standard or built-in container. */
+static bool
+r_semantic_type_reaches_r_code(const RFrontendContext *context, RTypeId type_id, uint32_t depth) {
+    const RSemanticType *type;
+    uint32_t index;
+
+    if (type_id == R_TYPE_ID_INVALID) {
+        return false;
+    }
+    if (depth > UINT32_C(24)) {
+        return true;
+    }
+    type = r_semantic_type(context, type_id);
+    if (type == NULL) {
+        return false;
+    }
+    switch (type->kind) {
+    case R_SEMANTIC_TYPE_STRUCT:
+    case R_SEMANTIC_TYPE_ENUM:
+    case R_SEMANTIC_TYPE_DYN:
+    case R_SEMANTIC_TYPE_PARAMETER:
+    case R_SEMANTIC_TYPE_RAW_FUNCTION:
+    case R_SEMANTIC_TYPE_FUNCTION:
+    case R_SEMANTIC_TYPE_FUNCTION_PARAMETER:
+    case R_SEMANTIC_TYPE_TYPE_FUNCTION:
+        return true;
+    case R_SEMANTIC_TYPE_EFFECT_SET:
+        for (index = 0U; index < r_semantic_effect_count(context, type_id); ++index) {
+            if (r_semantic_type_reaches_r_code(
+                    context, r_semantic_effect_at(context, type_id, index), depth + 1U)) {
+                return true;
+            }
+        }
+        return false;
+    case R_SEMANTIC_TYPE_FIXED_ARRAY:
+    case R_SEMANTIC_TYPE_SLICE:
+    case R_SEMANTIC_TYPE_CONSTANT_EXPR:
+        return r_semantic_type_reaches_r_code(context, type->base, depth + 1U);
+    case R_SEMANTIC_TYPE_BORROW:
+    case R_SEMANTIC_TYPE_ARRAY:
+    case R_SEMANTIC_TYPE_LIST:
+    case R_SEMANTIC_TYPE_DICT:
+    case R_SEMANTIC_TYPE_TASK:
+    case R_SEMANTIC_TYPE_ARC:
+    case R_SEMANTIC_TYPE_RC:
+    case R_SEMANTIC_TYPE_WEAK:
+    case R_SEMANTIC_TYPE_OWN:
+    case R_SEMANTIC_TYPE_RAW:
+    case R_SEMANTIC_TYPE_STANDARD:
+    case R_SEMANTIC_TYPE_OPTION:
+    case R_SEMANTIC_TYPE_RESULT:
+    case R_SEMANTIC_TYPE_CONST:
+    case R_SEMANTIC_TYPE_ATOMIC:
+    case R_SEMANTIC_TYPE_EFFECT_CARRIER:
+        return r_semantic_type_reaches_r_code(context, type->base, depth + 1U) ||
+               r_semantic_type_reaches_r_code(context, type->second, depth + 1U);
+    default:
+        return false;
+    }
+}
+
+bool r_semantic_standard_call_runs_code(const RFrontendContext *context, const RHirNode *node) {
+    uint32_t index;
+
+    if ((node == NULL) || (node->kind != R_HIR_STANDARD_CALL)) {
+        return true;
+    }
+    switch (node->standard_operation) {
+    case R_STANDARD_CALL_SYNC_CALL_ONCE:
+    case R_STANDARD_CALL_SYNC_CALL_ONCE_FORCE:
+    case R_STANDARD_CALL_SYNC_GET_OR_INIT:
+        return true;
+    default:
+        break;
+    }
+    if (r_semantic_type_reaches_r_code(context, node->type, 0U) ||
+        r_semantic_type_reaches_r_code(context, node->auxiliary_type, 0U)) {
+        return true;
+    }
+    for (index = 0U; index < node->child_count; ++index) {
+        const size_t child = (size_t)node->first_child + (size_t)index;
+        const RHirNodeId child_id =
+            child < context->hir_child_count ? context->hir_children[child] : R_HIR_NODE_ID_INVALID;
+
+        if ((child_id == R_HIR_NODE_ID_INVALID) || ((size_t)child_id > context->hir_node_count) ||
+            r_semantic_type_reaches_r_code(
+                context, context->hir_nodes[(size_t)child_id - 1U].type, 0U)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool r_body_symbol_vectors_equal(const RSymbolVector *left, const RSymbolVector *right) {
+    return (left->count == right->count) &&
+           ((left->count == 0U) ||
+            (memcmp(left->items, right->items, left->count * sizeof(*left->items)) == 0));
+}
+
+/* L39 (R-ERR-0005): the block of drops of every live object, innermost first, each deferred past
+   the finally blocks it lies outside of, as for an uncaught transfer to the caller. */
+static bool r_body_panic_cleanup(RBodyContext *body, RSourceSpan span, RHirNodeId *cleanup) {
+    RSymbolVector symbols = {0};
+    RSymbolVector defers = {0};
+    RHirVector drops = {0};
+    RTypeId void_type;
+    size_t index = body->active_symbols.count;
+    bool success = false;
+
+    if ((body->panic_drop_bound != 0U) && ((body->panic_drop_bound - 1U) < index)) {
+        index = body->panic_drop_bound - 1U;
+    }
+    while (index > 0U) {
+        uint32_t defer_finally_count;
+        RSymbolId symbol_id;
+
+        index -= 1U;
+        symbol_id = body->active_symbols.items[index];
+        if (!r_body_panic_drops(body, symbol_id)) {
+            continue;
+        }
+        if (!r_body_transfer_drop_defer_finally_count(
+                body, index, 0U, true, &defer_finally_count) ||
+            !r_symbol_vector_push(body->frontend, &symbols, symbol_id) ||
+            !r_symbol_vector_push(body->frontend, &defers, (RSymbolId)defer_finally_count)) {
+            goto cleanup;
+        }
+    }
+    if ((body->last_panic_cleanup != 0U) &&
+        r_body_symbol_vectors_equal(&symbols, &body->last_panic_symbols) &&
+        r_body_symbol_vectors_equal(&defers, &body->last_panic_defers)) {
+        *cleanup = body->last_panic_cleanup;
+        success = true;
+        goto cleanup;
+    }
+    body->panic_exit_suspend += 1U;
+    for (index = 0U; index < symbols.count; ++index) {
+        if (!r_body_append_implicit_drop_with_state(
+                body, symbols.items[index], span, &drops, false, (uint32_t)defers.items[index])) {
+            body->panic_exit_suspend -= 1U;
+            goto cleanup;
+        }
+    }
+    success = r_semantic_type_from_token(body->frontend, R_TOKEN_KW_VOID, &void_type) &&
+              r_body_append_node(body,
+                                 R_HIR_BLOCK,
+                                 span,
+                                 void_type,
+                                 R_SYMBOL_ID_INVALID,
+                                 R_TOKEN_INVALID,
+                                 UINT64_C(0),
+                                 false,
+                                 &drops,
+                                 cleanup);
+    body->panic_exit_suspend -= 1U;
+    if (success) {
+        RSymbolVector swap = body->last_panic_symbols;
+        body->last_panic_symbols = symbols;
+        symbols = swap;
+        swap = body->last_panic_defers;
+        body->last_panic_defers = defers;
+        defers = swap;
+        body->last_panic_cleanup = *cleanup;
+    }
+
+cleanup:
+    r_context_free(body->frontend, symbols.items);
+    r_context_free(body->frontend, defers.items);
+    r_context_free(body->frontend, drops.items);
+    return success;
+}
+
 static bool r_body_append_node(RBodyContext *body,
                                RHirKind kind,
                                RSourceSpan span,
@@ -15459,6 +15778,20 @@ static bool r_body_append_node(RBodyContext *body,
     node.operation = operation;
     node.integer_value = integer_value;
     node.is_place = is_place;
+    if (body->panic_exits && (body->panic_exit_suspend == 0U) &&
+        (r_hir_kind_can_panic(kind) ||
+         /* `move value as void` destroys the value at once. */
+         ((kind == R_HIR_DISCARD) && (children != NULL) && (children->count == 1U) &&
+          ((size_t)children->items[0] <= body->frontend->hir_node_count) &&
+          (children->items[0] != R_HIR_NODE_ID_INVALID) &&
+          r_semantic_type_drop_may_panic(
+              body->frontend, body->frontend->hir_nodes[children->items[0] - 1U].type, 0U)) ||
+         ((kind == R_HIR_DROP) && body->panic_drops && (symbol != R_SYMBOL_ID_INVALID) &&
+          (r_body_symbol(body, symbol) != NULL) &&
+          r_semantic_type_drop_may_panic(body->frontend, r_body_symbol(body, symbol)->type, 0U))) &&
+        !r_body_panic_cleanup(body, span, &node.panic_cleanup)) {
+        return false;
+    }
     if (!r_hir_append_node(body->frontend, node, node_id)) {
         return false;
     }
@@ -31716,18 +32049,26 @@ static bool r_semantic_prepare_fs_open_file_options_schema(RFrontendContext *con
                                                            RTypeId *options_type) {
     const RSemanticAggregate *access;
     const RSemanticAggregate *create;
+    RTypeId access_type;
     RTypeId bool_type;
     RStandardSchemaField fields[5];
 
-    if (!r_semantic_prepare_fs_access_schema(context, &access) ||
-        !r_semantic_prepare_fs_create_mode_schema(context, &create) ||
-        !r_semantic_intern_named_standard_type(
+    /* Preparing a schema may grow the aggregate table, so each type is read before the next
+       schema is prepared. */
+    if (!r_semantic_prepare_fs_access_schema(context, &access)) {
+        return false;
+    }
+    access_type = access->type;
+    if (!r_semantic_prepare_fs_create_mode_schema(context, &create)) {
+        return false;
+    }
+    fields[1] = (RStandardSchemaField){"create", create->type};
+    if (!r_semantic_intern_named_standard_type(
             context, "std.fs::open_file_options", options_type) ||
         !r_semantic_type_from_token(context, R_TOKEN_KW_BOOL, &bool_type)) {
         return false;
     }
-    fields[0] = (RStandardSchemaField){"access", access->type};
-    fields[1] = (RStandardSchemaField){"create", create->type};
+    fields[0] = (RStandardSchemaField){"access", access_type};
     fields[2] = (RStandardSchemaField){"truncate", bool_type};
     fields[3] = (RStandardSchemaField){"append", bool_type};
     fields[4] = (RStandardSchemaField){"follow_final_symlink", bool_type};
@@ -32194,11 +32535,13 @@ static bool r_semantic_prepare_standard_outcome(RFrontendContext *context,
         if (!r_semantic_intern_named_standard_type(context, "std.fs::directory_iter", &iterator) ||
             !r_semantic_intern_named_standard_type(context, "std.fs::directory_entry", &entry) ||
             !r_semantic_intern_named_standard_type(context, "std.fs::path", &path) ||
-            !r_semantic_prepare_fs_enum_schema(context, "std.fs::file_kind", &kind_schema) ||
-            !r_semantic_prepare_fs_error_schema(context, &error_type) ||
+            !r_semantic_prepare_fs_enum_schema(context, "std.fs::file_kind", &kind_schema))
+            return false;
+        /* The error schema may grow the aggregate table that kind_schema points into. */
+        kind = kind_schema->type;
+        if (!r_semantic_prepare_fs_error_schema(context, &error_type) ||
             !r_semantic_type_from_token(context, R_TOKEN_KW_VOID, &payload_types[1]))
             return false;
-        kind = kind_schema->type;
         fields[0] = (RStandardSchemaField){"name", path};
         fields[1] = (RStandardSchemaField){"kind", kind};
         if (!r_semantic_ensure_hidden_schema_struct(
@@ -33389,6 +33732,8 @@ static bool r_body_standard_async_resolution_operation(const RFrontendContext *c
         *operation = R_STANDARD_CALL_ASYNC_DETACH;
     } else if (r_semantic_token_text_equal_owned(context, &components[2], "blocking")) {
         *operation = R_STANDARD_CALL_ASYNC_BLOCKING;
+    } else if (r_semantic_token_text_equal_owned(context, &components[2], "join")) {
+        *operation = R_STANDARD_CALL_ASYNC_JOIN;
     } else {
         return false;
     }
@@ -34657,6 +35002,8 @@ static bool r_body_core_operation_is_reflection(const RFrontendContext *context,
 
 static bool r_json_schema_name(const RFrontendContext *context, RAstRef qualified);
 static bool r_json_schema_lower(RBodyContext *body, RAstRef call, RExpressionResult *result);
+static bool
+r_json_schema_attach(RBodyContext *body, RSourceSpan span, RTypeId type, RSymbolId symbol);
 
 static bool r_body_lower_standard_type_call(RBodyContext *body,
                                             RAstRef call,
@@ -35517,6 +35864,15 @@ static bool r_body_lower_standard_async_resolution(RBodyContext *body,
 
     r_body_expression_invalid(result);
     r_body_expression_invalid(&argument);
+    if (operation == R_STANDARD_CALL_ASYNC_JOIN) {
+        /* An operand of await is lowered by r_body_lower_await_operation. */
+        return r_body_diagnostic(body,
+                                 "R-DIAG-ASYNC-001",
+                                 "R-SLIB-ASYNC-0020",
+                                 "std.async::join is the operand of await and takes one moved "
+                                 "task: await std.async::join(move task)",
+                                 call_span);
+    }
     if (arguments_view->child_count != UINT32_C(1)) {
         return r_body_diagnostic(body,
                                  "R-DIAG-TYPE-001",
@@ -50566,6 +50922,7 @@ static bool r_body_await_task_symbol(RBodyContext *body,
                                      bool is_statement,
                                      bool check_expected_type,
                                      RHirNodeId task_local,
+                                     bool join,
                                      RExpressionResult *result) {
     RSemanticSymbol *symbol;
     const RSemanticType *task_type;
@@ -50627,6 +50984,24 @@ static bool r_body_await_task_symbol(RBodyContext *body,
             "task result type shall not contain a borrow, slice, or runtime str",
             view.span);
     }
+    if (join) {
+        /* R-SLIB-ASYNC-0020 (L39): the join of a task without checked errors gives its value or
+           the report of its panic. */
+        if (r_semantic_effect_count(body->frontend, task_type->second) != UINT32_C(0)) {
+            return r_body_diagnostic(body,
+                                     "R-DIAG-ASYNC-001",
+                                     "R-SLIB-ASYNC-0020",
+                                     "std.async::join requires a task without checked errors",
+                                     name.span);
+        }
+        if (!r_semantic_intern_parametric_standard_type(body->frontend,
+                                                        "std.thread::join_result",
+                                                        result_type,
+                                                        R_TYPE_ID_INVALID,
+                                                        &result_type)) {
+            return false;
+        }
+    }
     if (is_statement &&
         (r_semantic_value_kind(body->frontend, result_type) != R_SEMANTIC_TYPE_VOID) &&
         (r_semantic_value_kind(body->frontend, result_type) != R_SEMANTIC_TYPE_NEVER) &&
@@ -50675,7 +51050,7 @@ static bool r_body_await_task_symbol(RBodyContext *body,
                             result_type,
                             symbol_id,
                             R_TOKEN_KW_AWAIT,
-                            UINT64_C(0),
+                            join ? UINT64_C(1) : UINT64_C(0),
                             false,
                             &children,
                             &await_id)) {
@@ -50699,6 +51074,50 @@ static bool r_body_await_task_symbol(RBodyContext *body,
     result->symbol = symbol_id;
     result->valid = true;
     return true;
+}
+
+/* The first token of the source of ref, at any depth. */
+static bool r_body_ast_leading_token(const RFrontendContext *context,
+                                     RAstRef ref,
+                                     RAstTokenView *token,
+                                     uint32_t depth) {
+    RAstNodeView view;
+    RAstRef child;
+
+    if (r_ast_ref_token(context, ref, token)) {
+        return true;
+    }
+    return (depth <= r_frontend_tree_depth_limit(context)) && r_ast_ref_view(context, ref, &view) &&
+           (view.child_count != UINT32_C(0)) &&
+           r_ast_ref_child(context, ref, UINT32_C(0), &child) &&
+           r_body_ast_leading_token(context, child, token, depth + 1U);
+}
+
+/* R-SLIB-ASYNC-0020 (L39): whether call is `std.async::join(argument)`, and its argument. */
+static bool r_body_await_join_argument(RBodyContext *body, RAstRef call, RAstRef *argument) {
+    RAstNodeView view;
+    RAstNodeView suffix_view;
+    RAstNodeView primary_view;
+    RAstNodeView arguments_view;
+    RAstRef primary;
+    RAstRef suffix;
+    RAstRef name_ref;
+    RAstRef arguments;
+    RStandardCallOperation operation = R_STANDARD_CALL_INVALID;
+
+    return r_ast_ref_view(body->frontend, call, &view) && (view.child_count == UINT32_C(2)) &&
+           r_ast_ref_child(body->frontend, call, UINT32_C(0), &primary) &&
+           r_ast_ref_child(body->frontend, call, UINT32_C(1), &suffix) &&
+           r_ast_view_kind(body->frontend, suffix, R_SYNTAX_CALL_SUFFIX, &suffix_view) &&
+           r_ast_ref_view(body->frontend, primary, &primary_view) &&
+           (primary_view.child_count == UINT32_C(1)) &&
+           r_ast_ref_child(body->frontend, primary, UINT32_C(0), &name_ref) &&
+           r_body_standard_async_resolution_operation(body->frontend, name_ref, &operation, NULL) &&
+           (operation == R_STANDARD_CALL_ASYNC_JOIN) &&
+           r_ast_find_direct_child(body->frontend, suffix, R_SYNTAX_ARGUMENT_LIST, &arguments) &&
+           r_ast_ref_view(body->frontend, arguments, &arguments_view) &&
+           (arguments_view.child_count == UINT32_C(1)) &&
+           r_ast_ref_child(body->frontend, arguments, UINT32_C(0), argument);
 }
 
 static bool r_body_lower_await_operation(RBodyContext *body,
@@ -50745,6 +51164,32 @@ static bool r_body_lower_await_operation(RBodyContext *body,
             return false;
         if (handled)
             return true;
+        RAstRef join_argument;
+        if (r_body_await_join_argument(body, call_ref, &join_argument)) {
+            RAstTokenView first;
+            if (!r_body_ast_leading_token(body->frontend, join_argument, &first, 0U) ||
+                (first.kind != R_TOKEN_KW_MOVE) ||
+                !r_scope_first_name(body->frontend, join_argument, &name, 0U)) {
+                return r_body_diagnostic(body,
+                                         "R-DIAG-MOVE-001",
+                                         "R-SLIB-ASYNC-0020",
+                                         "std.async::join requires an explicit moved task",
+                                         view.span);
+            }
+            symbol_id = r_body_resolve_name(body, &name, &lookup_issue);
+            return r_body_await_task_symbol(body,
+                                            symbol_id,
+                                            lookup_issue,
+                                            name.span,
+                                            view.span,
+                                            await_token.span,
+                                            expected_type,
+                                            is_statement,
+                                            check_expected_type,
+                                            *task_local,
+                                            true,
+                                            result);
+        }
         RExpressionResult task;
 
         RAstRef previous_call = body->awaited_call;
@@ -50791,6 +51236,7 @@ static bool r_body_lower_await_operation(RBodyContext *body,
                                     is_statement,
                                     check_expected_type,
                                     *task_local,
+                                    false,
                                     result);
 }
 
@@ -52333,20 +52779,21 @@ r_body_lower_drop_statement(RBodyContext *body, RAstRef statement, RHirNodeId *n
     children.items = child_storage;
     children.count = UINT32_C(1);
     children.capacity = UINT32_C(1);
-    if (!r_body_append_node(body,
-                            R_HIR_DROP,
-                            view.span,
-                            void_type,
-                            operand.symbol,
-                            R_TOKEN_KW_DROP,
-                            UINT64_C(0),
-                            false,
-                            &children,
-                            node_id)) {
-        return false;
-    }
+    /* L39 (R-ERR-0008): the panic exit of the drop leaves the dropped object out. */
     symbol->object_state = R_SEMANTIC_OBJECT_STATE_MOVED;
-    return true;
+    body->panic_drops = true;
+    const bool dropped = r_body_append_node(body,
+                                            R_HIR_DROP,
+                                            view.span,
+                                            void_type,
+                                            operand.symbol,
+                                            R_TOKEN_KW_DROP,
+                                            UINT64_C(0),
+                                            false,
+                                            &children,
+                                            node_id);
+    body->panic_drops = false;
+    return dropped;
 }
 
 static bool r_body_lower_return(RBodyContext *body,
@@ -56085,8 +56532,14 @@ static bool r_body_lower_switch_clause(RBodyContext *body,
         size_t drop_index = body->active_symbols.count;
         while (drop_index > scope_base) {
             drop_index -= 1U;
-            if (!r_body_append_implicit_drop(
-                    body, body->active_symbols.items[drop_index], view.span, &statements)) {
+            /* L39 (R-ERR-0008): a panic of this drop leaves the ones below it to the exit. */
+            body->panic_drops = true;
+            body->panic_drop_bound = drop_index + 1U;
+            const bool dropped = r_body_append_implicit_drop(
+                body, body->active_symbols.items[drop_index], view.span, &statements);
+            body->panic_drops = false;
+            body->panic_drop_bound = 0U;
+            if (!dropped) {
                 goto cleanup;
             }
         }
@@ -57538,8 +57991,14 @@ static bool r_body_lower_block(RBodyContext *body,
                 r_semantic_type_is_must_resolve(body->frontend, dropping->type)) {
                 continue;
             }
-            if (!r_body_append_implicit_drop(
-                    body, body->active_symbols.items[drop_index], view.span, &statements)) {
+            /* L39 (R-ERR-0008): a panic of this drop leaves the ones below it to the exit. */
+            body->panic_drops = true;
+            body->panic_drop_bound = drop_index + 1U;
+            const bool dropped = r_body_append_implicit_drop(
+                body, body->active_symbols.items[drop_index], view.span, &statements);
+            body->panic_drops = false;
+            body->panic_drop_bound = 0U;
+            if (!dropped) {
                 goto cleanup;
             }
         }
@@ -58375,6 +58834,10 @@ static bool r_hir_build_function(RFrontendContext *context,
     body_context.throws_type = function_snapshot.throws_type;
     body_context.is_async = function_snapshot.is_async;
     body_context.unsafe_depth = function_snapshot.is_unsafe ? UINT32_C(1) : UINT32_C(0);
+    /* L39 (R-ERR-0005): hosted programs unwind. An async body leaves its steps through the
+       frame destructor, but its direct twin (P4.4) is emitted from this HIR as an ordinary
+       function and needs the drop blocks as well. */
+    body_context.panic_exits = context->profile != R_FRONTEND_PROFILE_FREESTANDING;
     function_ref.source = function_snapshot.module_source;
     function_ref.node = function_snapshot.declaration_ast;
     if (!r_ast_ref_view(context, function_ref, &function_view) ||
@@ -58691,6 +59154,8 @@ cleanup:
     r_context_free(context, body_context.loop_flows.items);
     r_context_free(context, body_context.active_loop_symbol_bases.items);
     r_context_free(context, body_context.active_symbols.items);
+    r_context_free(context, body_context.last_panic_symbols.items);
+    r_context_free(context, body_context.last_panic_defers.items);
     r_context_free(context, body_context.loop_labels);
     r_context_free(context, function_children.items);
     r_context_free(context, out_locals.items);

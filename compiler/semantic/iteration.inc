@@ -833,6 +833,7 @@ static bool r_iteration_async_next(RBodyContext *body,
                                     false,
                                     false,
                                     *task_local,
+                                    false,
                                     result);
 }
 

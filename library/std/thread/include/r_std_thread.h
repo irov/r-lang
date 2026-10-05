@@ -126,6 +126,11 @@ void r_library_internal_thread_identity_destroy(RStdThread *thread);
 void r_library_internal_thread_handle_destroy(RStdThreadJoinHandle *handle);
 void r_library_internal_thread_join_result_destroy(RStdThreadJoinResult *result);
 void r_library_internal_thread_panic_report_destroy(RStdThreadPanicReport *report);
+/* Copies the runtime report of a panic into an owned report (R-ERR-0009, std.async::join). */
+void r_library_internal_thread_panic_report_from(RStdThreadPanicReport *report,
+                                                 const RRuntimePanicReportData *data);
+/* Takes the pending panic of this thread into report (std.async::join, R-SLIB-ASYNC-0020). */
+void r_library_internal_thread_panic_report_take(RStdThreadPanicReport *report);
 void r_library_internal_thread_join_result_move(RStdThreadJoinResult *result, void *destination);
 
 /*

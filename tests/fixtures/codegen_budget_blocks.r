@@ -54,12 +54,14 @@ protected async i32 nested() throws std.error::fault {
 
 protected async u32 work(u32 value) { return value + 1u32; }
 
-/* One task fits a task limit of one; a second start beside it is refused. */
+/* One task fits a task limit of one; a second start beside it is refused, also when the first
+   has ended but nothing has awaited it yet (M42-3). */
 protected async i32 tasks() throws std.error::fault {
     i32 code = 0;
     budget (std.alloc::limits {.tasks = o::some(1usize)}) {
         task_scope(2) group {
             auto first = work(1u32);
+            await std.time::sleep_for(std.time::duration_from_parts(0i64, 20000000u32));
             bool refused = false;
             try {
                 auto second = work(2u32);
@@ -71,6 +73,30 @@ protected async i32 tasks() throws std.error::fault {
             if (refused == false) { code = 30; }
             u32 value = await move first;
             if (value != 2u32) { code = 31; }
+        }
+    }
+    return code;
+}
+
+protected async u32 pause(u32 value) throws std.error::fault {
+    await std.time::sleep_for(std.time::duration_from_parts(0i64, 1000u32));
+    return value + 1u32;
+}
+
+/* A task counts until its await completes: starts that each follow the await of the one before
+   never exceed a task limit of one, also when the task ends on another thread than the one that
+   awaits it (M42-3). */
+protected async i32 sequential() throws std.error::fault {
+    i32 code = 0;
+    for (u32 round = 0u32; round < 2000u32; round += 1u32) {
+        budget (std.alloc::limits {.tasks = o::some(1usize)}) {
+            try {
+                u32 first = await pause(round);
+                u32 second = await pause(first);
+                if (second != round + 2u32) { code = 60; }
+            } catch (std.async::start_error failure) {
+                if (failure == std.async::start_error::budget_exhausted) { code = 61; }
+            }
         }
     }
     return code;
@@ -94,6 +120,8 @@ async i32 main() {
     if (second != 0) { return second; }
     i32 third = await tasks();
     if (third != 0) { return third; }
+    i32 ordered = await sequential();
+    if (ordered != 0) { return ordered; }
     i32 fourth = await inherited();
     if (fourth != 0) { return fourth; }
     i32 outside = try_bytes(100000usize);

@@ -2,8 +2,8 @@
   "schema_version": 3,
   "generated_from": {
     "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-    "revision": "0.1.0-draft.62",
-    "sha256": "1615b3fe3c6f40998f28d70aa522cef21845bf35bd9384bd91f5ab6c8378768b"
+    "revision": "0.1.0-draft.67",
+    "sha256": "d3f8392f1e9bf22ead7b79ba3b88080b0e1ef57d4f6ccc57a4d8c2326fae1eba"
   },
   "extraction": {
     "qualified_item_pattern": "(?<![A-Za-z0-9_.])((?:core|std\\.[a-z][a-z0-9]*)::[A-Za-z_][A-Za-z0-9_]*)",
@@ -2646,7 +2646,11 @@
       "cmake_target": "r_std_json",
       "directory": "library/std/json",
       "descriptor_symbol": "r_library_internal_module_std_json_descriptor",
-      "descriptor_source": "library/internal/diagnostics/source/module_descriptor.c"
+      "descriptor_source": "library/internal/diagnostics/source/module_descriptor.c",
+      "r_part": {
+        "source": "library/r/std/json.r",
+        "minimum_profile": "hosted"
+      }
     },
     {
       "r_module": "std.math",
@@ -2931,6 +2935,12 @@
       "minimum_profile": "hosted"
     },
     {
+      "r_module": "std.jwt",
+      "implementation_language": "r",
+      "source": "library/r/std/jwt.r",
+      "minimum_profile": "hosted"
+    },
+    {
       "r_module": "std.sqlite",
       "implementation_language": "r",
       "source": "library/r/std/sqlite.r",
@@ -2964,6 +2974,12 @@
       "r_module": "std.postgres",
       "implementation_language": "r",
       "source": "library/r/std/postgres.r",
+      "minimum_profile": "hosted-native-async"
+    },
+    {
+      "r_module": "std.oauth2",
+      "implementation_language": "r",
+      "source": "library/r/std/oauth2.r",
       "minimum_profile": "hosted-native-async"
     }
   ],
@@ -6147,6 +6163,7 @@
         "R-SLIB-CONFIG-0001",
         "R-SLIB-CONFIG-0002",
         "R-SLIB-CONFIG-0003",
+        "R-SLIB-CONFIG-0004",
         "R-SLIB-COSE-0002",
         "R-SLIB-COSE-0003",
         "R-SLIB-COSE-0004",
@@ -6159,6 +6176,10 @@
         "R-SLIB-CRYPTO-0006",
         "R-SLIB-CRYPTO-0007",
         "R-SLIB-CRYPTO-0008",
+        "R-SLIB-CRYPTO-0009",
+        "R-SLIB-CRYPTO-0010",
+        "R-SLIB-CRYPTO-0011",
+        "R-SLIB-CRYPTO-0012",
         "R-SLIB-DEFLATE-0003",
         "R-SLIB-DEFLATE-0004",
         "R-SLIB-DEFLATE-0005",
@@ -6187,13 +6208,23 @@
         "R-SLIB-HTTP-0011",
         "R-SLIB-HTTP-0013",
         "R-SLIB-HTTP-0014",
+        "R-SLIB-HTTP-0015",
+        "R-SLIB-HTTP-0016",
         "R-SLIB-JSON-0001",
         "R-SLIB-JSON-0002",
+        "R-SLIB-JSON-0003",
         "R-SLIB-JSONRPC-0002",
         "R-SLIB-JSONRPC-0003",
+        "R-SLIB-JWT-0003",
+        "R-SLIB-JWT-0004",
+        "R-SLIB-JWT-0005",
+        "R-SLIB-JWT-0006",
+        "R-SLIB-JWT-0007",
         "R-SLIB-LOG-0001",
         "R-SLIB-LOG-0002",
         "R-SLIB-LOG-0003",
+        "R-SLIB-LOG-0004",
+        "R-SLIB-LOG-0005",
         "R-SLIB-MCP-0002",
         "R-SLIB-MCP-0003",
         "R-SLIB-MCP-0004",
@@ -6214,6 +6245,9 @@
         "R-SLIB-MIME-0001",
         "R-SLIB-NET-0001",
         "R-SLIB-NET-0018",
+        "R-SLIB-OAUTH2-0003",
+        "R-SLIB-OAUTH2-0005",
+        "R-SLIB-OAUTH2-0006",
         "R-SLIB-PG-0001",
         "R-SLIB-PG-0003",
         "R-SLIB-PG-0004",
@@ -6224,6 +6258,9 @@
         "R-SLIB-PG-0009",
         "R-SLIB-PG-0010",
         "R-SLIB-PG-0011",
+        "R-SLIB-PG-0013",
+        "R-SLIB-PG-0014",
+        "R-SLIB-PG-0015",
         "R-SLIB-POOL-0002",
         "R-SLIB-PROFILE-0001",
         "R-SLIB-REGEX-0002",
@@ -6248,6 +6285,8 @@
         "R-SLIB-TEXT-0004",
         "R-SLIB-TIME-0006",
         "R-SLIB-TIME-0008",
+        "R-SLIB-TIME-0010",
+        "R-SLIB-TIME-0014",
         "R-SLIB-TLS-0002",
         "R-SLIB-TLS-0003",
         "R-SLIB-TLS-0006",
@@ -8613,6 +8652,54 @@
       "scoped": false
     },
     {
+      "record_id": "std.async::join#operation",
+      "id": "std.async::join",
+      "facet": "operation",
+      "module": "std.async",
+      "item_kind": "operation_schema",
+      "normative_rules": [
+        "R-SLIB-API-A001",
+        "R-SLIB-ASYNC-0020",
+        "R-SLIB-HTTP-0015"
+      ],
+      "implementation": {
+        "kind": "source",
+        "source": "library/std/async/source/join.c",
+        "c_symbol": "r_std_async_join"
+      },
+      "source_signature": "std.async::join(task<T> operation) -> std.thread::join_result<T>",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "std.thread::join_result<T>",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "std.thread::join_result<T>"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "std.thread::join_result<T>",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "std.thread::join_result<T>"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "9b0487a0508b8c544ce52ad6983070edaa8ad1ee762416d7558a9e6efcd8600e"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
       "record_id": "std.async::lock#operation",
       "id": "std.async::lock",
       "facet": "operation",
@@ -9670,8 +9757,10 @@
         "R-SLIB-GEN-0009",
         "R-SLIB-HTTP-0007",
         "R-SLIB-HTTP-0014",
+        "R-SLIB-HTTP-0015",
         "R-SLIB-JSON-0001",
         "R-SLIB-NET-0011",
+        "R-SLIB-OAUTH2-0006",
         "R-SLIB-PG-0001",
         "R-SLIB-PG-0005",
         "R-SLIB-PG-0006",
@@ -9681,6 +9770,7 @@
         "R-SLIB-PG-0010",
         "R-SLIB-PG-0011",
         "R-SLIB-PG-0012",
+        "R-SLIB-PG-0016",
         "R-SLIB-SERVICE-0003",
         "R-SLIB-SERVICE-0007",
         "R-SLIB-SQLITE-0001",
@@ -12378,7 +12468,8 @@
       "normative_rules": [
         "R-SLIB-CONFIG-0001",
         "R-SLIB-CONFIG-0002",
-        "R-SLIB-CONFIG-0003"
+        "R-SLIB-CONFIG-0003",
+        "R-SLIB-CONFIG-0004"
       ],
       "implementation": {
         "kind": "r_source",
@@ -12417,7 +12508,8 @@
       "module": "std.config",
       "item_kind": "public_type",
       "normative_rules": [
-        "R-SLIB-CONFIG-0001"
+        "R-SLIB-CONFIG-0001",
+        "R-SLIB-CONFIG-0004"
       ],
       "implementation": {
         "kind": "r_source",
@@ -12427,6 +12519,43 @@
       },
       "pod": false,
       "checked_error": false
+    },
+    {
+      "record_id": "std.config::field_error#type",
+      "id": "std.config::field_error",
+      "facet": "type",
+      "module": "std.config",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-CONFIG-0004"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/config.r",
+        "r_symbol": "std.config::field_error",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": true,
+      "checked_error_arity": 0
+    },
+    {
+      "record_id": "std.config::from_environment#operation",
+      "id": "std.config::from_environment",
+      "facet": "operation",
+      "module": "std.config",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-CONFIG-0004"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/config.r",
+        "r_symbol": "std.config::from_environment"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
     },
     {
       "record_id": "std.config::source#type",
@@ -12872,6 +13001,7 @@
         "R-SLIB-GEN-0002",
         "R-SLIB-TIME-0007",
         "R-SLIB-TIME-0008",
+        "R-SLIB-TIME-0014",
         "R-SLIB-UUID-0003"
       ],
       "implementation": {
@@ -13327,6 +13457,42 @@
       "checked_error": false
     },
     {
+      "record_id": "std.crypto::cbc_decrypt#operation",
+      "id": "std.crypto::cbc_decrypt",
+      "facet": "operation",
+      "module": "std.crypto",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-CRYPTO-0011"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/crypto.r",
+        "r_symbol": "std.crypto::cbc_decrypt"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "std.crypto::cbc_encrypt#operation",
+      "id": "std.crypto::cbc_encrypt",
+      "facet": "operation",
+      "module": "std.crypto",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-CRYPTO-0011"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/crypto.r",
+        "r_symbol": "std.crypto::cbc_encrypt"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
       "record_id": "std.crypto::crypto_error#type",
       "id": "std.crypto::crypto_error",
       "facet": "type",
@@ -13342,7 +13508,11 @@
         "R-SLIB-CRYPTO-0005",
         "R-SLIB-CRYPTO-0006",
         "R-SLIB-CRYPTO-0007",
-        "R-SLIB-CRYPTO-0008"
+        "R-SLIB-CRYPTO-0008",
+        "R-SLIB-CRYPTO-0009",
+        "R-SLIB-CRYPTO-0010",
+        "R-SLIB-CRYPTO-0011",
+        "R-SLIB-CRYPTO-0012"
       ],
       "implementation": {
         "kind": "r_source",
@@ -13353,6 +13523,62 @@
       "pod": false,
       "checked_error": true,
       "checked_error_arity": 0
+    },
+    {
+      "record_id": "std.crypto::curve#type",
+      "id": "std.crypto::curve",
+      "facet": "type",
+      "module": "std.crypto",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-CRYPTO-0009"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/crypto.r",
+        "r_symbol": "std.crypto::curve",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.crypto::ecdsa_key#type",
+      "id": "std.crypto::ecdsa_key",
+      "facet": "type",
+      "module": "std.crypto",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-CRYPTO-0009",
+        "R-SLIB-CRYPTO-0012"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/crypto.r",
+        "r_symbol": "std.crypto::ecdsa_key",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.crypto::ecdsa_public_key#type",
+      "id": "std.crypto::ecdsa_public_key",
+      "facet": "type",
+      "module": "std.crypto",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-CRYPTO-0009",
+        "R-SLIB-CRYPTO-0012"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/crypto.r",
+        "r_symbol": "std.crypto::ecdsa_public_key",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
     },
     {
       "record_id": "std.crypto::error_code#type",
@@ -13379,7 +13605,8 @@
       "module": "std.crypto",
       "item_kind": "public_type",
       "normative_rules": [
-        "R-SLIB-CRYPTO-0005"
+        "R-SLIB-CRYPTO-0005",
+        "R-SLIB-CRYPTO-0012"
       ],
       "implementation": {
         "kind": "r_source",
@@ -13499,6 +13726,45 @@
       "scoped": false
     },
     {
+      "record_id": "std.crypto::private_key#type",
+      "id": "std.crypto::private_key",
+      "facet": "type",
+      "module": "std.crypto",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-CRYPTO-0012",
+        "R-SLIB-JWT-0003"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/crypto.r",
+        "r_symbol": "std.crypto::private_key",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.crypto::public_key#type",
+      "id": "std.crypto::public_key",
+      "facet": "type",
+      "module": "std.crypto",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-CRYPTO-0012",
+        "R-SLIB-JWT-0004",
+        "R-SLIB-JWT-0007"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/crypto.r",
+        "r_symbol": "std.crypto::public_key",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
       "record_id": "std.crypto::random#operation",
       "id": "std.crypto::random",
       "facet": "operation",
@@ -13515,6 +13781,62 @@
       "panics_on_allocation_failure": false,
       "discardable_result": false,
       "scoped": false
+    },
+    {
+      "record_id": "std.crypto::rsa_key#type",
+      "id": "std.crypto::rsa_key",
+      "facet": "type",
+      "module": "std.crypto",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-CRYPTO-0010",
+        "R-SLIB-CRYPTO-0012"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/crypto.r",
+        "r_symbol": "std.crypto::rsa_key",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.crypto::rsa_public_key#type",
+      "id": "std.crypto::rsa_public_key",
+      "facet": "type",
+      "module": "std.crypto",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-CRYPTO-0010",
+        "R-SLIB-CRYPTO-0012"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/crypto.r",
+        "r_symbol": "std.crypto::rsa_public_key",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.crypto::rsa_scheme#type",
+      "id": "std.crypto::rsa_scheme",
+      "facet": "type",
+      "module": "std.crypto",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-CRYPTO-0010"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/crypto.r",
+        "r_symbol": "std.crypto::rsa_scheme",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
     },
     {
       "record_id": "std.crypto::seal#operation",
@@ -13542,7 +13864,8 @@
       "item_kind": "public_type",
       "normative_rules": [
         "R-SLIB-COSE-0004",
-        "R-SLIB-CRYPTO-0004"
+        "R-SLIB-CRYPTO-0004",
+        "R-SLIB-CRYPTO-0012"
       ],
       "implementation": {
         "kind": "r_source",
@@ -15334,9 +15657,11 @@
         "R-SLIB-HTTP-0009",
         "R-SLIB-HTTP-0011",
         "R-SLIB-HTTP-0012",
+        "R-SLIB-HTTP-0015",
         "R-SLIB-JSONRPC-0004",
         "R-SLIB-LOG-0002",
         "R-SLIB-LOG-0003",
+        "R-SLIB-LOG-0005",
         "R-SLIB-MCP-0011",
         "R-SLIB-MCP-0014",
         "R-SLIB-MCP-0017",
@@ -15344,6 +15669,8 @@
         "R-SLIB-MCP-0019",
         "R-SLIB-MCP-0021",
         "R-SLIB-MCP-0024",
+        "R-SLIB-OAUTH2-0004",
+        "R-SLIB-OAUTH2-0006",
         "R-SLIB-PG-0001",
         "R-SLIB-PG-0005",
         "R-SLIB-PG-0006",
@@ -15353,11 +15680,14 @@
         "R-SLIB-PG-0010",
         "R-SLIB-PG-0011",
         "R-SLIB-PG-0012",
+        "R-SLIB-PG-0016",
         "R-SLIB-SERVICE-0003",
         "R-SLIB-SERVICE-0007",
         "R-SLIB-STREAM-0001",
         "R-SLIB-TEST-0002",
+        "R-SLIB-TIME-0010",
         "R-SLIB-TLS-0004",
+        "R-SLIB-TLS-0007",
         "R-SLIB-WS-0002",
         "R-SLIB-WS-0005"
       ],
@@ -20844,6 +21174,26 @@
       "checked_error": false
     },
     {
+      "record_id": "std.http::app#type",
+      "id": "std.http::app",
+      "facet": "type",
+      "module": "std.http",
+      "item_kind": "public_type_schema",
+      "normative_rules": [
+        "R-SLIB-HTTP-0015",
+        "R-SLIB-HTTP-0017",
+        "R-SLIB-HTTP-0018"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/http.r",
+        "r_symbol": "std.http::app",
+        "generic_arity": 2
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
       "record_id": "std.http::body_state#type",
       "id": "std.http::body_state",
       "facet": "type",
@@ -20889,6 +21239,8 @@
         "R-SLIB-HTTP-0008",
         "R-SLIB-HTTP-0011",
         "R-SLIB-HTTP-0012",
+        "R-SLIB-OAUTH2-0004",
+        "R-SLIB-OAUTH2-0006",
         "R-SLIB-WS-0002"
       ],
       "implementation": {
@@ -20913,6 +21265,42 @@
         "kind": "r_source",
         "source": "library/r/std/http.r",
         "r_symbol": "std.http::client_options",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.http::cookie#type",
+      "id": "std.http::cookie",
+      "facet": "type",
+      "module": "std.http",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-HTTP-0016"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/http.r",
+        "r_symbol": "std.http::cookie",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.http::cors_policy#type",
+      "id": "std.http::cors_policy",
+      "facet": "type",
+      "module": "std.http",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-HTTP-0017"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/http.r",
+        "r_symbol": "std.http::cors_policy",
         "generic_arity": 0
       },
       "pod": false,
@@ -20953,6 +21341,24 @@
       "panics_on_allocation_failure": false,
       "discardable_result": false,
       "scoped": false
+    },
+    {
+      "record_id": "std.http::flow#type",
+      "id": "std.http::flow",
+      "facet": "type",
+      "module": "std.http",
+      "item_kind": "public_type_schema",
+      "normative_rules": [
+        "R-SLIB-HTTP-0015"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/http.r",
+        "r_symbol": "std.http::flow",
+        "generic_arity": 1
+      },
+      "pod": false,
+      "checked_error": false
     },
     {
       "record_id": "std.http::handshake#type",
@@ -21028,7 +21434,11 @@
         "R-SLIB-HTTP-0011",
         "R-SLIB-HTTP-0012",
         "R-SLIB-HTTP-0013",
+        "R-SLIB-HTTP-0015",
+        "R-SLIB-HTTP-0016",
         "R-SLIB-MCP-0016",
+        "R-SLIB-OAUTH2-0004",
+        "R-SLIB-OAUTH2-0006",
         "R-SLIB-WS-0002"
       ],
       "implementation": {
@@ -21051,7 +21461,8 @@
         "R-SLIB-HTTP-0004",
         "R-SLIB-HTTP-0007",
         "R-SLIB-HTTP-0008",
-        "R-SLIB-HTTP-0014"
+        "R-SLIB-HTTP-0014",
+        "R-SLIB-HTTP-0015"
       ],
       "implementation": {
         "kind": "r_source",
@@ -21074,7 +21485,8 @@
         "R-SLIB-HTTP-0004",
         "R-SLIB-HTTP-0006",
         "R-SLIB-HTTP-0009",
-        "R-SLIB-HTTP-0011"
+        "R-SLIB-HTTP-0011",
+        "R-SLIB-HTTP-0015"
       ],
       "implementation": {
         "kind": "r_source",
@@ -21102,6 +21514,24 @@
       "panics_on_allocation_failure": false,
       "discardable_result": false,
       "scoped": false
+    },
+    {
+      "record_id": "std.http::notes#type",
+      "id": "std.http::notes",
+      "facet": "type",
+      "module": "std.http",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-HTTP-0015"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/http.r",
+        "r_symbol": "std.http::notes",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
     },
     {
       "record_id": "std.http::parse_method#operation",
@@ -21244,6 +21674,8 @@
         "R-SLIB-HTTP-0009",
         "R-SLIB-HTTP-0011",
         "R-SLIB-HTTP-0012",
+        "R-SLIB-HTTP-0015",
+        "R-SLIB-HTTP-0016",
         "R-SLIB-WS-0002"
       ],
       "implementation": {
@@ -21269,7 +21701,9 @@
         "R-SLIB-HTTP-0008",
         "R-SLIB-HTTP-0009",
         "R-SLIB-HTTP-0011",
-        "R-SLIB-HTTP-0012"
+        "R-SLIB-HTTP-0012",
+        "R-SLIB-HTTP-0015",
+        "R-SLIB-HTTP-0016"
       ],
       "implementation": {
         "kind": "r_source",
@@ -21335,6 +21769,24 @@
         "kind": "r_source",
         "source": "library/r/std/http.r",
         "r_symbol": "std.http::serve_all"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "std.http::serve_app#operation",
+      "id": "std.http::serve_app",
+      "facet": "operation",
+      "module": "std.http",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-HTTP-0015"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/http.r",
+        "r_symbol": "std.http::serve_app"
       },
       "panics_on_allocation_failure": false,
       "discardable_result": false,
@@ -23763,12 +24215,14 @@
       "module": "std.json",
       "item_kind": "public_type",
       "normative_rules": [
+        "R-SLIB-API-A001",
         "R-SLIB-CONFIG-0002",
         "R-SLIB-JSON-0001",
         "R-SLIB-JSON-0002",
         "R-SLIB-JSONRPC-0002",
         "R-SLIB-JSONRPC-0003",
         "R-SLIB-JSONRPC-0004",
+        "R-SLIB-JWT-0006",
         "R-SLIB-MCP-0003",
         "R-SLIB-MCP-0004",
         "R-SLIB-MCP-0006"
@@ -23803,6 +24257,24 @@
       },
       "pod": false,
       "checked_error": false
+    },
+    {
+      "record_id": "std.json::escape_html#operation",
+      "id": "std.json::escape_html",
+      "facet": "operation",
+      "module": "std.json",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-JSON-0003"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/json.r",
+        "r_symbol": "std.json::escape_html"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
     },
     {
       "record_id": "std.json::feed#operation",
@@ -24444,7 +24916,9 @@
       "item_kind": "operation_schema",
       "normative_rules": [
         "R-SLIB-JSON-0001",
-        "R-SLIB-MCP-0006"
+        "R-SLIB-JWT-0005",
+        "R-SLIB-MCP-0006",
+        "R-SLIB-PG-0015"
       ],
       "implementation": {
         "kind": "generated",
@@ -25421,7 +25895,8 @@
       "module": "std.json",
       "item_kind": "operation",
       "normative_rules": [
-        "R-SLIB-JSON-0001"
+        "R-SLIB-JSON-0001",
+        "R-SLIB-PG-0014"
       ],
       "implementation": {
         "kind": "source",
@@ -25975,8 +26450,11 @@
       "module": "std.json",
       "item_kind": "operation_schema",
       "normative_rules": [
+        "R-SLIB-CONFIG-0004",
         "R-SLIB-JSON-0001",
-        "R-SLIB-MCP-0006"
+        "R-SLIB-JWT-0006",
+        "R-SLIB-MCP-0006",
+        "R-SLIB-PG-0015"
       ],
       "implementation": {
         "kind": "generated",
@@ -26122,11 +26600,16 @@
         "R-SLIB-JSON-0002",
         "R-SLIB-JSONRPC-0001",
         "R-SLIB-JSONRPC-0002",
+        "R-SLIB-JWT-0005",
+        "R-SLIB-JWT-0006",
+        "R-SLIB-JWT-0007",
         "R-SLIB-MCP-0003",
         "R-SLIB-MCP-0006",
         "R-SLIB-MCP-0007",
         "R-SLIB-MCP-0017",
-        "R-SLIB-MCP-0024"
+        "R-SLIB-MCP-0024",
+        "R-SLIB-PG-0013",
+        "R-SLIB-PG-0014"
       ],
       "implementation": {
         "kind": "header",
@@ -26433,6 +26916,254 @@
         "kind": "r_source",
         "source": "library/r/std/jsonrpc.r",
         "r_symbol": "std.jsonrpc::write_message"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "std.jwt::algorithm#type",
+      "id": "std.jwt::algorithm",
+      "facet": "type",
+      "module": "std.jwt",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-JWT-0002",
+        "R-SLIB-JWT-0003",
+        "R-SLIB-JWT-0004",
+        "R-SLIB-JWT-0007"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/jwt.r",
+        "r_symbol": "std.jwt::algorithm",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.jwt::error_code#type",
+      "id": "std.jwt::error_code",
+      "facet": "type",
+      "module": "std.jwt",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-JWT-0001"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/jwt.r",
+        "r_symbol": "std.jwt::error_code",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.jwt::header#operation",
+      "id": "std.jwt::header",
+      "facet": "operation",
+      "module": "std.jwt",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-JWT-0005"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/jwt.r",
+        "r_symbol": "std.jwt::header"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "std.jwt::jwk#operation",
+      "id": "std.jwt::jwk",
+      "facet": "operation",
+      "module": "std.jwt",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-JWT-0007"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/jwt.r",
+        "r_symbol": "std.jwt::jwk"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "std.jwt::jwt_error#type",
+      "id": "std.jwt::jwt_error",
+      "facet": "type",
+      "module": "std.jwt",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-API-A001",
+        "R-SLIB-JWT-0001",
+        "R-SLIB-JWT-0002",
+        "R-SLIB-JWT-0003",
+        "R-SLIB-JWT-0004",
+        "R-SLIB-JWT-0005",
+        "R-SLIB-JWT-0006",
+        "R-SLIB-JWT-0007"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/jwt.r",
+        "r_symbol": "std.jwt::jwt_error",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": true,
+      "checked_error_arity": 0
+    },
+    {
+      "record_id": "std.jwt::key_set#type",
+      "id": "std.jwt::key_set",
+      "facet": "type",
+      "module": "std.jwt",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-JWT-0004",
+        "R-SLIB-JWT-0006",
+        "R-SLIB-JWT-0007"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/jwt.r",
+        "r_symbol": "std.jwt::key_set",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.jwt::sign#operation",
+      "id": "std.jwt::sign",
+      "facet": "operation",
+      "module": "std.jwt",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-JWT-0005"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/jwt.r",
+        "r_symbol": "std.jwt::sign"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "std.jwt::sign_claims#operation",
+      "id": "std.jwt::sign_claims",
+      "facet": "operation",
+      "module": "std.jwt",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-JWT-0005"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/jwt.r",
+        "r_symbol": "std.jwt::sign_claims"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "std.jwt::signer#type",
+      "id": "std.jwt::signer",
+      "facet": "type",
+      "module": "std.jwt",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-JWT-0003",
+        "R-SLIB-JWT-0005"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/jwt.r",
+        "r_symbol": "std.jwt::signer",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.jwt::validation#type",
+      "id": "std.jwt::validation",
+      "facet": "type",
+      "module": "std.jwt",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-JWT-0006"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/jwt.r",
+        "r_symbol": "std.jwt::validation",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.jwt::verifier#type",
+      "id": "std.jwt::verifier",
+      "facet": "type",
+      "module": "std.jwt",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-JWT-0004"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/jwt.r",
+        "r_symbol": "std.jwt::verifier",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.jwt::verify#operation",
+      "id": "std.jwt::verify",
+      "facet": "operation",
+      "module": "std.jwt",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-JWT-0006"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/jwt.r",
+        "r_symbol": "std.jwt::verify"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "std.jwt::verify_claims#operation",
+      "id": "std.jwt::verify_claims",
+      "facet": "operation",
+      "module": "std.jwt",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-JWT-0006"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/jwt.r",
+        "r_symbol": "std.jwt::verify_claims"
       },
       "panics_on_allocation_failure": false,
       "discardable_result": false,
@@ -27328,7 +28059,8 @@
       "item_kind": "public_type",
       "normative_rules": [
         "R-SLIB-LOG-0001",
-        "R-SLIB-LOG-0002"
+        "R-SLIB-LOG-0002",
+        "R-SLIB-LOG-0004"
       ],
       "implementation": {
         "kind": "r_source",
@@ -27353,6 +28085,25 @@
         "kind": "r_source",
         "source": "library/r/std/log.r",
         "r_symbol": "std.log::format",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.log::layout#type",
+      "id": "std.log::layout",
+      "facet": "type",
+      "module": "std.log",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-LOG-0002",
+        "R-SLIB-LOG-0004"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/log.r",
+        "r_symbol": "std.log::layout",
         "generic_arity": 0
       },
       "pod": false,
@@ -27386,12 +28137,67 @@
       "item_kind": "public_type",
       "normative_rules": [
         "R-SLIB-LOG-0002",
-        "R-SLIB-LOG-0003"
+        "R-SLIB-LOG-0003",
+        "R-SLIB-LOG-0004"
       ],
       "implementation": {
         "kind": "r_source",
         "source": "library/r/std/log.r",
         "r_symbol": "std.log::logger",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.log::order#type",
+      "id": "std.log::order",
+      "facet": "type",
+      "module": "std.log",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-LOG-0004"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/log.r",
+        "r_symbol": "std.log::order",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.log::panic_record#type",
+      "id": "std.log::panic_record",
+      "facet": "type",
+      "module": "std.log",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-LOG-0005"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/log.r",
+        "r_symbol": "std.log::panic_record",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.log::panic_reports#type",
+      "id": "std.log::panic_reports",
+      "facet": "type",
+      "module": "std.log",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-LOG-0005"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/log.r",
+        "r_symbol": "std.log::panic_reports",
         "generic_arity": 0
       },
       "pod": false,
@@ -48188,6 +48994,7 @@
         "R-SLIB-GEN-0002",
         "R-SLIB-HTTP-0007",
         "R-SLIB-HTTP-0014",
+        "R-SLIB-HTTP-0015",
         "R-SLIB-JSON-0001",
         "R-SLIB-NET-0002",
         "R-SLIB-NET-0003",
@@ -51885,6 +52692,178 @@
       "scoped": true
     },
     {
+      "record_id": "std.oauth2::code_grant#type",
+      "id": "std.oauth2::code_grant",
+      "facet": "type",
+      "module": "std.oauth2",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-OAUTH2-0003"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/oauth2.r",
+        "r_symbol": "std.oauth2::code_grant",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.oauth2::error_code#type",
+      "id": "std.oauth2::error_code",
+      "facet": "type",
+      "module": "std.oauth2",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-OAUTH2-0001"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/oauth2.r",
+        "r_symbol": "std.oauth2::error_code",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.oauth2::grant#type",
+      "id": "std.oauth2::grant",
+      "facet": "type",
+      "module": "std.oauth2",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-OAUTH2-0003"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/oauth2.r",
+        "r_symbol": "std.oauth2::grant",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.oauth2::oauth2_error#type",
+      "id": "std.oauth2::oauth2_error",
+      "facet": "type",
+      "module": "std.oauth2",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-API-A001",
+        "R-SLIB-OAUTH2-0001",
+        "R-SLIB-OAUTH2-0004",
+        "R-SLIB-OAUTH2-0005",
+        "R-SLIB-OAUTH2-0006"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/oauth2.r",
+        "r_symbol": "std.oauth2::oauth2_error",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": true,
+      "checked_error_arity": 0
+    },
+    {
+      "record_id": "std.oauth2::request_token#operation",
+      "id": "std.oauth2::request_token",
+      "facet": "operation",
+      "module": "std.oauth2",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-OAUTH2-0004"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/oauth2.r",
+        "r_symbol": "std.oauth2::request_token"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "std.oauth2::service_account#type",
+      "id": "std.oauth2::service_account",
+      "facet": "type",
+      "module": "std.oauth2",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-OAUTH2-0005",
+        "R-SLIB-OAUTH2-0006"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/oauth2.r",
+        "r_symbol": "std.oauth2::service_account",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.oauth2::token#type",
+      "id": "std.oauth2::token",
+      "facet": "type",
+      "module": "std.oauth2",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-OAUTH2-0002",
+        "R-SLIB-OAUTH2-0004"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/oauth2.r",
+        "r_symbol": "std.oauth2::token",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.oauth2::token_request#type",
+      "id": "std.oauth2::token_request",
+      "facet": "type",
+      "module": "std.oauth2",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-OAUTH2-0003",
+        "R-SLIB-OAUTH2-0004",
+        "R-SLIB-OAUTH2-0005",
+        "R-SLIB-OAUTH2-0006"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/oauth2.r",
+        "r_symbol": "std.oauth2::token_request",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.oauth2::token_source#type",
+      "id": "std.oauth2::token_source",
+      "facet": "type",
+      "module": "std.oauth2",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-OAUTH2-0006"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/oauth2.r",
+        "r_symbol": "std.oauth2::token_source",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
       "record_id": "std.pool::lease#type",
       "id": "std.pool::lease",
       "facet": "type",
@@ -52044,7 +53023,8 @@
         "R-SLIB-PG-0009",
         "R-SLIB-PG-0010",
         "R-SLIB-PG-0011",
-        "R-SLIB-PG-0012"
+        "R-SLIB-PG-0012",
+        "R-SLIB-PG-0016"
       ],
       "implementation": {
         "kind": "r_source",
@@ -52068,6 +53048,60 @@
         "kind": "r_source",
         "source": "library/r/std/postgres.r",
         "r_symbol": "std.postgres::error_code",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.postgres::insert_statement#operation",
+      "id": "std.postgres::insert_statement",
+      "facet": "operation",
+      "module": "std.postgres",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-PG-0015"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/postgres.r",
+        "r_symbol": "std.postgres::insert_statement"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "std.postgres::migrate#operation",
+      "id": "std.postgres::migrate",
+      "facet": "operation",
+      "module": "std.postgres",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-PG-0016"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/postgres.r",
+        "r_symbol": "std.postgres::migrate"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "std.postgres::migration#type",
+      "id": "std.postgres::migration",
+      "facet": "type",
+      "module": "std.postgres",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-PG-0016"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/postgres.r",
+        "r_symbol": "std.postgres::migration",
         "generic_arity": 0
       },
       "pod": false,
@@ -52111,6 +53145,24 @@
       "checked_error": false
     },
     {
+      "record_id": "std.postgres::parameters_of#operation",
+      "id": "std.postgres::parameters_of",
+      "facet": "operation",
+      "module": "std.postgres",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-PG-0015"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/postgres.r",
+        "r_symbol": "std.postgres::parameters_of"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
       "record_id": "std.postgres::pg_error#type",
       "id": "std.postgres::pg_error",
       "facet": "type",
@@ -52128,7 +53180,11 @@
         "R-SLIB-PG-0009",
         "R-SLIB-PG-0010",
         "R-SLIB-PG-0011",
-        "R-SLIB-PG-0012"
+        "R-SLIB-PG-0012",
+        "R-SLIB-PG-0013",
+        "R-SLIB-PG-0014",
+        "R-SLIB-PG-0015",
+        "R-SLIB-PG-0016"
       ],
       "implementation": {
         "kind": "r_source",
@@ -52147,7 +53203,8 @@
       "module": "std.postgres",
       "item_kind": "public_type",
       "normative_rules": [
-        "R-SLIB-PG-0004"
+        "R-SLIB-PG-0004",
+        "R-SLIB-PG-0013"
       ],
       "implementation": {
         "kind": "r_source",
@@ -52167,7 +53224,8 @@
       "normative_rules": [
         "R-SLIB-PG-0004",
         "R-SLIB-PG-0006",
-        "R-SLIB-PG-0007"
+        "R-SLIB-PG-0007",
+        "R-SLIB-PG-0015"
       ],
       "implementation": {
         "kind": "r_source",
@@ -52215,6 +53273,24 @@
       "checked_error": false
     },
     {
+      "record_id": "std.postgres::update_statement#operation",
+      "id": "std.postgres::update_statement",
+      "facet": "operation",
+      "module": "std.postgres",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-PG-0015"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/postgres.r",
+        "r_symbol": "std.postgres::update_statement"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
       "record_id": "std.postgres::value#type",
       "id": "std.postgres::value",
       "facet": "type",
@@ -52224,7 +53300,9 @@
         "R-SLIB-PG-0003",
         "R-SLIB-PG-0004",
         "R-SLIB-PG-0006",
-        "R-SLIB-PG-0007"
+        "R-SLIB-PG-0007",
+        "R-SLIB-PG-0014",
+        "R-SLIB-PG-0015"
       ],
       "implementation": {
         "kind": "r_source",
@@ -52762,6 +53840,7 @@
       "normative_rules": [
         "R-SLIB-GEN-0002",
         "R-SLIB-HTTP-0014",
+        "R-SLIB-HTTP-0015",
         "R-SLIB-PROC-0001",
         "R-SLIB-PROC-0002",
         "R-SLIB-PROC-0003",
@@ -54488,6 +55567,8 @@
       "normative_rules": [
         "R-SLIB-CRYPTO-0001",
         "R-SLIB-CRYPTO-0005",
+        "R-SLIB-CRYPTO-0012",
+        "R-SLIB-OAUTH2-0003",
         "R-SLIB-SECRET-0001",
         "R-SLIB-SECRET-0003",
         "R-SLIB-TLS-0003"
@@ -54784,6 +55865,7 @@
       "normative_rules": [
         "R-SLIB-HTTP-0013",
         "R-SLIB-HTTP-0014",
+        "R-SLIB-HTTP-0015",
         "R-SLIB-SERVICE-0006",
         "R-SLIB-SERVICE-0007"
       ],
@@ -54804,6 +55886,7 @@
       "item_kind": "public_type",
       "normative_rules": [
         "R-SLIB-HTTP-0014",
+        "R-SLIB-HTTP-0015",
         "R-SLIB-SERVICE-0004",
         "R-SLIB-SERVICE-0007"
       ],
@@ -54855,6 +55938,7 @@
       "normative_rules": [
         "R-SLIB-HTTP-0007",
         "R-SLIB-HTTP-0014",
+        "R-SLIB-HTTP-0015",
         "R-SLIB-SERVICE-0001",
         "R-SLIB-SERVICE-0003",
         "R-SLIB-SERVICE-0007"
@@ -54895,6 +55979,7 @@
       "normative_rules": [
         "R-SLIB-HTTP-0007",
         "R-SLIB-HTTP-0014",
+        "R-SLIB-HTTP-0015",
         "R-SLIB-SERVICE-0002",
         "R-SLIB-SERVICE-0003",
         "R-SLIB-SERVICE-0007"
@@ -54973,6 +56058,7 @@
       "normative_rules": [
         "R-SLIB-HTTP-0007",
         "R-SLIB-HTTP-0014",
+        "R-SLIB-HTTP-0015",
         "R-SLIB-MCP-0021",
         "R-SLIB-SERVICE-0001",
         "R-SLIB-SERVICE-0003",
@@ -56707,9 +57793,11 @@
         "R-SLIB-CBOR-0006",
         "R-SLIB-CMP-0001",
         "R-SLIB-CONFIG-0003",
+        "R-SLIB-CONFIG-0004",
         "R-SLIB-CONSOLE-0001",
         "R-SLIB-CONSOLE-0002",
         "R-SLIB-CRYPTO-0007",
+        "R-SLIB-CRYPTO-0012",
         "R-SLIB-DNS-0003",
         "R-SLIB-DNS-0005",
         "R-SLIB-DNS-0006",
@@ -56725,10 +57813,18 @@
         "R-SLIB-HTTP-0002",
         "R-SLIB-HTTP-0003",
         "R-SLIB-HTTP-0010",
+        "R-SLIB-HTTP-0015",
+        "R-SLIB-HTTP-0016",
+        "R-SLIB-HTTP-0017",
         "R-SLIB-JSON-0001",
+        "R-SLIB-JSON-0003",
         "R-SLIB-JSONRPC-0001",
         "R-SLIB-JSONRPC-0002",
         "R-SLIB-JSONRPC-0003",
+        "R-SLIB-JWT-0005",
+        "R-SLIB-JWT-0006",
+        "R-SLIB-LOG-0004",
+        "R-SLIB-LOG-0005",
         "R-SLIB-MCP-0001",
         "R-SLIB-MCP-0002",
         "R-SLIB-MCP-0003",
@@ -56746,11 +57842,19 @@
         "R-SLIB-METRICS-0004",
         "R-SLIB-MIME-0001",
         "R-SLIB-NET-0001",
+        "R-SLIB-OAUTH2-0001",
+        "R-SLIB-OAUTH2-0002",
+        "R-SLIB-OAUTH2-0003",
+        "R-SLIB-OAUTH2-0005",
+        "R-SLIB-OAUTH2-0006",
         "R-SLIB-PG-0002",
         "R-SLIB-PG-0003",
         "R-SLIB-PG-0004",
         "R-SLIB-PG-0005",
         "R-SLIB-PG-0009",
+        "R-SLIB-PG-0013",
+        "R-SLIB-PG-0015",
+        "R-SLIB-PG-0016",
         "R-SLIB-REF-0003",
         "R-SLIB-REGEX-0005",
         "R-SLIB-SQLITE-0002",
@@ -56764,6 +57868,8 @@
         "R-SLIB-TEXT-0004",
         "R-SLIB-TIME-0006",
         "R-SLIB-TIME-0008",
+        "R-SLIB-TIME-0010",
+        "R-SLIB-TIME-0014",
         "R-SLIB-TRACE-0001",
         "R-SLIB-TRACE-0003",
         "R-SLIB-URL-0002",
@@ -58233,6 +59339,7 @@
         "R-LIB-0016",
         "R-SLIB-HTTP-0007",
         "R-SLIB-HTTP-0014",
+        "R-SLIB-HTTP-0015",
         "R-SLIB-MCP-0021",
         "R-SLIB-SERVICE-0003",
         "R-SLIB-SERVICE-0007"
@@ -60598,7 +61705,9 @@
       "item_kind": "public_type_schema",
       "normative_rules": [
         "R-LIB-0010",
-        "R-LIB-0013"
+        "R-LIB-0013",
+        "R-SLIB-API-A001",
+        "R-SLIB-ASYNC-0020"
       ],
       "implementation": {
         "kind": "header",
@@ -60661,7 +61770,9 @@
       "module": "std.thread",
       "item_kind": "public_type",
       "normative_rules": [
-        "R-LIB-0013"
+        "R-LIB-0013",
+        "R-SLIB-ASYNC-0020",
+        "R-SLIB-HTTP-0015"
       ],
       "implementation": {
         "kind": "header",
@@ -61089,6 +62200,24 @@
       "panics_on_allocation_failure": false,
       "discardable_result": false,
       "scoped": false
+    },
+    {
+      "record_id": "std.time::ambiguity#type",
+      "id": "std.time::ambiguity",
+      "facet": "type",
+      "module": "std.time",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-TIME-0012"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/time.r",
+        "r_symbol": "std.time::ambiguity",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
     },
     {
       "record_id": "std.time::as_error#operation",
@@ -61633,6 +62762,24 @@
       "checked_error": false
     },
     {
+      "record_id": "std.time::fixed_zone#operation",
+      "id": "std.time::fixed_zone",
+      "facet": "operation",
+      "module": "std.time",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-TIME-0010"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/time.r",
+        "r_symbol": "std.time::fixed_zone"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
       "record_id": "std.time::format_http_date#operation",
       "id": "std.time::format_http_date",
       "facet": "operation",
@@ -61645,6 +62792,24 @@
         "kind": "r_source",
         "source": "library/r/std/time.r",
         "r_symbol": "std.time::format_http_date"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "std.time::format_local#operation",
+      "id": "std.time::format_local",
+      "facet": "operation",
+      "module": "std.time",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-TIME-0014"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/time.r",
+        "r_symbol": "std.time::format_local"
       },
       "panics_on_allocation_failure": false,
       "discardable_result": false,
@@ -61921,6 +63086,62 @@
       "checked_error": false
     },
     {
+      "record_id": "std.time::load_zone#operation",
+      "id": "std.time::load_zone",
+      "facet": "operation",
+      "module": "std.time",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-TIME-0010"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/time.r",
+        "r_symbol": "std.time::load_zone"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "std.time::local_time#type",
+      "id": "std.time::local_time",
+      "facet": "type",
+      "module": "std.time",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-TIME-0011",
+        "R-SLIB-TIME-0012",
+        "R-SLIB-TIME-0014"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/time.r",
+        "r_symbol": "std.time::local_time",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.time::local_zone#operation",
+      "id": "std.time::local_zone",
+      "facet": "operation",
+      "module": "std.time",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-TIME-0010"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/time.r",
+        "r_symbol": "std.time::local_zone"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
       "record_id": "std.time::monotonic_now#operation",
       "id": "std.time::monotonic_now",
       "facet": "operation",
@@ -61999,6 +63220,24 @@
       "scoped": false
     },
     {
+      "record_id": "std.time::parse_local#operation",
+      "id": "std.time::parse_local",
+      "facet": "operation",
+      "module": "std.time",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-TIME-0014"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/time.r",
+        "r_symbol": "std.time::parse_local"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
       "record_id": "std.time::parse_rfc3339#operation",
       "id": "std.time::parse_rfc3339",
       "facet": "operation",
@@ -62011,6 +63250,42 @@
         "kind": "r_source",
         "source": "library/r/std/time.r",
         "r_symbol": "std.time::parse_rfc3339"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "std.time::parse_tzif#operation",
+      "id": "std.time::parse_tzif",
+      "facet": "operation",
+      "module": "std.time",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-TIME-0010"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/time.r",
+        "r_symbol": "std.time::parse_tzif"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "std.time::posix_zone#operation",
+      "id": "std.time::posix_zone",
+      "facet": "operation",
+      "module": "std.time",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-TIME-0010"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/time.r",
+        "r_symbol": "std.time::posix_zone"
       },
       "panics_on_allocation_failure": false,
       "discardable_result": false,
@@ -62304,11 +63579,20 @@
       "normative_rules": [
         "R-SLIB-FS-0006",
         "R-SLIB-GEN-0009",
+        "R-SLIB-JWT-0006",
+        "R-SLIB-OAUTH2-0002",
+        "R-SLIB-OAUTH2-0004",
+        "R-SLIB-OAUTH2-0005",
+        "R-SLIB-PG-0013",
+        "R-SLIB-PG-0014",
         "R-SLIB-TIME-0002",
         "R-SLIB-TIME-0003",
         "R-SLIB-TIME-0006",
         "R-SLIB-TIME-0007",
-        "R-SLIB-TIME-0008"
+        "R-SLIB-TIME-0008",
+        "R-SLIB-TIME-0011",
+        "R-SLIB-TIME-0012",
+        "R-SLIB-TIME-0013"
       ],
       "implementation": {
         "kind": "header",
@@ -62335,6 +63619,10 @@
         "R-SLIB-TIME-0006",
         "R-SLIB-TIME-0008",
         "R-SLIB-TIME-0009",
+        "R-SLIB-TIME-0011",
+        "R-SLIB-TIME-0012",
+        "R-SLIB-TIME-0013",
+        "R-SLIB-TIME-0014",
         "R-SLIB-TRACE-0002",
         "R-SLIB-UUID-0002"
       ],
@@ -62417,6 +63705,7 @@
       "item_kind": "public_type",
       "normative_rules": [
         "R-SLIB-GEN-0009",
+        "R-SLIB-PG-0013",
         "R-SLIB-TIME-0003"
       ],
       "implementation": {
@@ -62426,6 +63715,85 @@
       },
       "source_signature": "std.time::utc_datetime",
       "pod": true,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.time::utc_zone#operation",
+      "id": "std.time::utc_zone",
+      "facet": "operation",
+      "module": "std.time",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-TIME-0010"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/time.r",
+        "r_symbol": "std.time::utc_zone"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "std.time::zone#type",
+      "id": "std.time::zone",
+      "facet": "type",
+      "module": "std.time",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-TIME-0010",
+        "R-SLIB-TIME-0011",
+        "R-SLIB-TIME-0012",
+        "R-SLIB-TIME-0013"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/time.r",
+        "r_symbol": "std.time::zone",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.time::zone_error#type",
+      "id": "std.time::zone_error",
+      "facet": "type",
+      "module": "std.time",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-API-A001",
+        "R-SLIB-TIME-0010",
+        "R-SLIB-TIME-0012",
+        "R-SLIB-TIME-0013"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/time.r",
+        "r_symbol": "std.time::zone_error",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": true,
+      "checked_error_arity": 0
+    },
+    {
+      "record_id": "std.time::zone_error_code#type",
+      "id": "std.time::zone_error_code",
+      "facet": "type",
+      "module": "std.time",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-TIME-0010"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/time.r",
+        "r_symbol": "std.time::zone_error_code",
+        "generic_arity": 0
+      },
+      "pod": false,
       "checked_error": false
     },
     {
@@ -62477,7 +63845,8 @@
         "R-SLIB-PG-0005",
         "R-SLIB-SERVICE-0004",
         "R-SLIB-TLS-0003",
-        "R-SLIB-TLS-0004"
+        "R-SLIB-TLS-0004",
+        "R-SLIB-TLS-0007"
       ],
       "implementation": {
         "kind": "r_source",
@@ -62562,6 +63931,24 @@
       "checked_error": false
     },
     {
+      "record_id": "std.tls::system_client_config#operation",
+      "id": "std.tls::system_client_config",
+      "facet": "operation",
+      "module": "std.tls",
+      "item_kind": "operation",
+      "normative_rules": [
+        "R-SLIB-TLS-0007"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/tls.r",
+        "r_symbol": "std.tls::system_client_config"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
       "record_id": "std.tls::tls_error#type",
       "id": "std.tls::tls_error",
       "facet": "type",
@@ -62572,9 +63959,12 @@
         "R-SLIB-HTTP-0008",
         "R-SLIB-HTTP-0011",
         "R-SLIB-HTTP-0012",
+        "R-SLIB-OAUTH2-0004",
+        "R-SLIB-OAUTH2-0006",
         "R-SLIB-TLS-0002",
         "R-SLIB-TLS-0003",
         "R-SLIB-TLS-0004",
+        "R-SLIB-TLS-0007",
         "R-SLIB-WS-0002"
       ],
       "implementation": {
@@ -63073,6 +64463,8 @@
       "module": "std.uuid",
       "item_kind": "public_type",
       "normative_rules": [
+        "R-SLIB-PG-0013",
+        "R-SLIB-PG-0014",
         "R-SLIB-UUID-0001",
         "R-SLIB-UUID-0002",
         "R-SLIB-UUID-0003"

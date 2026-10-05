@@ -1,6 +1,7 @@
 #ifndef R_STD_SYNC_H
 #define R_STD_SYNC_H
 
+#include "r_runtime_0_1.h"
 #include "r_runtime_task.h"
 #include "r_runtime_type.h"
 #include "r_std_alloc.h"
@@ -576,7 +577,7 @@ static inline void r_std_sync_mutex_destroy(RStdSyncMutex *mutex) {
 }
 
 static inline void r_std_sync_mutex_guard_destroy(RStdSyncMutexGuard *guard) {
-    r_library_internal_sync_mutex_guard_destroy(guard, 0);
+    r_library_internal_sync_mutex_guard_destroy(guard, r_runtime_panicking());
 }
 
 static inline void r_std_sync_rw_lock_destroy(RStdSyncRwLock *lock) {
@@ -584,11 +585,11 @@ static inline void r_std_sync_rw_lock_destroy(RStdSyncRwLock *lock) {
 }
 
 static inline void r_std_sync_rw_read_guard_destroy(RStdSyncRwReadGuard *guard) {
-    r_library_internal_sync_rw_read_guard_destroy(guard, 0);
+    r_library_internal_sync_rw_read_guard_destroy(guard, r_runtime_panicking());
 }
 
 static inline void r_std_sync_rw_write_guard_destroy(RStdSyncRwWriteGuard *guard) {
-    r_library_internal_sync_rw_write_guard_destroy(guard, 0);
+    r_library_internal_sync_rw_write_guard_destroy(guard, r_runtime_panicking());
 }
 
 static inline void r_std_sync_condvar_destroy(RStdSyncCondvar *condition) {

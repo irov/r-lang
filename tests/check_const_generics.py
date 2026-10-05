@@ -45,7 +45,7 @@ i32 main() {
 
         interface = emit('interface', [api, app])
         assert interface == emit('interface', [app, api])
-        assert interface.endswith(')\n') and '(interface version=31 ' in interface
+        assert interface.endswith(')\n') and '(interface version=32 ' in interface
         assert '(name="N" constant_type=usize)' in interface
         assert '(constant usize 4)' in interface and '(constant usize 8)' in interface
         closed = [line for line in interface.splitlines()

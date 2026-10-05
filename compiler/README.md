@@ -1,7 +1,7 @@
 # R Frontend Parser 0.1
 
 This directory contains the bootstrap frontend for the normative English R Core
-Specification `0.1.0-draft.96`.
+Specification `0.1.0-draft.97`.
 
 ```text
 UTF-8 source
@@ -194,6 +194,85 @@ async-runtime/threading to 116 and all other portable domains to 117. Codes 118.
 remain reserved. An invalid user main result emits `invalid_main_status`, performs normal
 cleanup and exits with 124. Startup statuses 125..127 are unchanged. Large or negative
 main results are checked before native 8-bit status conversion.
+
+### Panic unwind
+
+The hosted profiles unwind a panic (Core R-ERR-0005; `panic.strategy` of the hosted target
+manifest is `unwind`), in every profile on the hosted runtime; a freestanding program forwards
+each panic to its environment, which does not return. The
+propagation is explicit, without setjmp/longjmp or native exceptions. `runtime/source/panic_abort.c`
+keeps the unwind state of each thread: no panic, a pending panic (category, span and up to 256
+bytes of message text, cut at a scalar boundary) that the frames carry to their callers, or the
+cleanup of one frame. `r_runtime_raise` (the length of `r_runtime_panic`, so a panic site keeps
+its layout) and `r_runtime_raise_text` begin a panic and return; the code then leaves through the
+panic exit of its node. A caller tests `r_runtime_unwinding()` after a call into R, after a
+standard operation that may run R code (`r_semantic_standard_call_runs_code`: one that handles a
+user aggregate, an interface, a function value or a generic parameter at any depth of its
+arguments and result, whose drop, clone, hash, equality, format and JSON glue calls R functions,
+or one that calls an initializer), after a drop and after `move value as void` of a value whose
+destruction may run R code: one relaxed load of `r_runtime_unwinding_threads`, the number of threads
+with a pending panic, and the phase of the thread only when that number is not zero. A panic that
+begins during cleanup, or while one is pending, is a second panic: both reports are written and
+the process aborts (R-ERR-0008). Panics inside runtime and library C abort as before (R-ERR-0006);
+apart from internal contract violations they are stack exhaustion, reference-count overflow and
+allocation failures inside the runtime.
+
+Semantic analysis gives each node that can panic (calls, checked arithmetic and conversions,
+bounds checks, slices, allocations, aggregate and variant construction, awaits, group waits,
+assignments that drop the old value) a `panic_cleanup` block: the drops of every live object,
+each deferred past the finally blocks it lies outside of, as for an uncaught checked error.
+Consecutive nodes with the same objects share one block (`r_body_panic_cleanup`). A drop at the
+end of a block or switch clause and a `drop` statement get a block when destroying the value may
+begin a panic (`r_semantic_type_drop_may_panic`: a user drop in the type, an owned interface, a
+scoped thread handle); at the end of a block the exit drops only the objects the block has not
+dropped yet. Drops on the paths of `return`, `break`, `continue` and checked errors have no exit
+of their own: a panic that begins there is noticed by the next test, after the transfer. A step
+of a task that ends with such a panic pending, or with one that began in a thread-local drop,
+ends its task with it and drops the result it wrote; a step that suspends with it keeps it in
+the task until it runs again (`panic_stray` in `task_execute`), so that the worker thread runs
+other tasks without it.
+
+The synchronous emitter writes `if (r_runtime_unwinding()) { ... }` after such a node: the frame
+enters cleanup, runs its pending aggregate drops, routes through its finally blocks with the
+pending completion `panic` (which replaces any other pending completion, R-ERR-0005), drops the
+live objects, leaves cleanup and returns a zero value that the caller never reads because it tests
+first. A user drop that runs while a panic is pending, as for the rest of a value whose earlier
+drop panicked, runs inside cleanup (`r_c17_emit_user_drop_call`). A function compiled for an
+unwinding profile is never `_Noreturn`: a `never` function returns with its panic pending.
+
+In an async function MIR requests a panic block for each instruction that can panic and builds
+the blocks after the body, so that the numbers of the other blocks stay as they were (C wrapper
+tests name states). A panic block runs the active finally blocks with a pending panic and ends in
+the terminator `panic`; the step returns `R_RUNTIME_TASK_STEP_PANICKED`, and the frame destructor
+drops what is still initialized, as after a cancellation. A finally block may suspend, so the step
+parks the panic in its task (`r_runtime_task_panic_park`) before it jumps to the panic block
+through the `r_async_dispatch` label of its loop and takes it back (`r_runtime_task_panic_unpark`)
+before it returns. The MIR dump writes the block as ` panic=bbN` (interface schema 32).
+
+At the boundaries the task runtime completes a panicked task with its report. An `await` makes the
+panic pending again in the awaiting task (`R_RUNTIME_TASK_EXECUTION_AWAIT_PANICKED`); a report that
+nobody observes, of a detached or cancelled task, is delivered once to the panic hook,
+`r_runtime_panic_deliver`, which writes `R panic: <category> at module M bytes [s,e)` and, for an
+explicit panic, `: <message>`. `await std.async::join(move task)` (R-SLIB-ASYNC-0020) is an await
+with `integer_value` 1 in HIR and MIR (dump ` join`) whose panicked case calls `r_std_async_join`
+to take the panic into the `panicked(std.thread::panic_report)` of a `std.thread::join_result<T>`;
+it admits only tasks without checked errors. A spawned thread's report becomes the `panicked`
+of its join result and a detached thread's goes to the hook. The scope of scoped threads joins
+each one when it drops its handle: the first panicked child, in reverse spawn order, begins
+`scoped_thread_panic` in the parent with the child's category and text, and the later ones, or
+all of them while the parent already unwinds, go to the hook (R-MEM-0016). A blocking call ends
+its task with the panic (`r_runtime_task_external_acknowledge_panic`). The synchronous `main`
+and the root task of an async `main` end the process with the report (R-ERR-0009); the wrapper
+of a C export aborts with it after the R frames ran their cleanup (R-ERR-0006). A `call_once`
+initializer that panics poisons its once, and a `std.sync` guard dropped while a panic is pending
+or in cleanup poisons its lock (`r_runtime_panicking`).
+
+Tests: `codegen_async_unwind_cleanup` (drops and finally blocks of three frames in the order of
+a normal exit, release of an `arc`, a poisoned lock), `codegen_async_unwind_drops` (panics that
+begin in user drops at the end of a block and in a `drop` statement, `scoped_thread_panic`),
+`codegen_unwind_second_panic_finally` and `codegen_unwind_second_panic_drop` (both reports, then
+abort), `codegen_ffi_callback_panic`, the join cases of `tests/semantic_tests.c` and the `fault`
+command of `examples/offload`.
 
 ### Conditional expressions are named before they leave
 
@@ -489,11 +568,23 @@ defaults, `@default` variants and fixed arrays build ordinary `aggregate_init`, 
 `array_init` nodes, so MIR and C17 need nothing new; omitted array elements and `core::take`
 (lowered as a replacement with the evaluated default) use the same builder. An optional JSON
 field without `default` maps a literal or `factory()` initializer to the existing JSON default
-(`r_json_default_from_initializer`). Interface schema 31 writes `initializer=true` on such fields
+(`r_json_default_from_initializer`). Interface schema 32 writes `initializer=true` on such fields
 and `default=true` on the default variant. See `tests/fixtures/codegen_field_defaults.r`,
 `codegen_async_field_defaults.r`, `codegen_json_field_defaults.r`,
 `codegen_field_defaults_failures.r` with its allocation-failure wrapper,
 `tests/l33_regression_tests.inc`, `examples/settings` and `std.service::options`.
+
+`std.json::schema::<T>()` (Library R-SLIB-JSON-0002) is a JSON operation whose schema text is
+written at translation and attached to the call symbol (`r_json_schema_attach`,
+`compiler/semantic/json_schema_text.inc`). For a concrete T `r_json_schema_lower` builds and
+attaches it at once. For a T that depends on a parameter of a generic body, the parameter must
+carry the `json_encode` or `json_decode` constraint, and the call is lowered without text;
+`r_generic_clone_node` attaches the text of the closed type when it clones the body for an
+instantiation, so a type without a schema, such as one with converters but no `json_schema`
+hook, is reported at that instantiation. `std.config::from_environment` and
+`std.postgres::rows::decode` read their struct through this schema. See
+`codegen_json_schema_generics.r`, `codegen_async_json_schema_generics.r` and the M38 cases of
+`tests/json_semantic_tests.inc`.
 
 ### Streams over standard and program types
 
@@ -537,7 +628,7 @@ directly or through a supertrait, declares `Name`) and adds the capabilities and
 holder to the projection parameter, so the body may compare, copy or add its values.
 `r_generic_validate_projections` substitutes the projection with the arguments of every
 instantiation, dependent ones included as for ordinary constraints, and validates the result
-against the holder. Interface schema 31 writes the entries as
+against the holder. Interface schema 32 writes the entries as
 `associated_constraints=((associated="P"::"Name" constraints=(...)))`. Defect M19-1: the first
 holders had no name, and `--emit=hir` of any program importing `std.iter` read the intern table
 at index -1; the source-surface audit found it.
@@ -669,9 +760,12 @@ E receives, and accepts `allocations` only on a synchronous function. `r-front -
 `r_frontend_set_test_mode` before any source is added; the entry module is the module of
 `--entry`, or else the first source. `compiler/parser/test_entry.inc` then works like the derive
 expansion: `r_test_scan_imports` adds the imports of `std.test` and `std.console` to the entry
-module, and `r_test_expand`, run by `r_parse_source` after `r_derive_expand`, appends an
-`async i32 main()` generated from the tokens of the test declarations, one region per test so
-that a diagnostic of the generated code is reported once at the test's attribute. Each test runs
+module, and `r_test_expand`, run by `r_parse_source` after `r_derive_expand`, appends code
+generated from the tokens of the test declarations, one region per test so that a diagnostic of
+the generated code is reported once at the test's attribute: an async function per test that
+takes the `std.test::runner` and gives it back, and an `async i32 main()` that passes the runner
+through them in declaration order (one main with every test made a step whose frame grew with
+the number of tests, 405 KB under ASan for the PostgreSQL tests, L39-11). Each test runs
 inside a `try` that catches `std.test::failure` and `std.error::fault`, nested in a `try` that
 catches the errors the test declares; catches of errors that the body cannot throw are allowed
 (R-ERR-0003), so no generated catch can clash with a declared one. An allocation test repeats
@@ -718,7 +812,7 @@ constants, folds body uses and layouts, and reuses the ordinary monomorphization
 No runtime arguments or metadata are added. Core draft.58 admits every integer type and `bool`
 as a constant-parameter type: a literal `CONSTANT_EXPR` keeps its type keyword in `flags` and
 its value bits in `length`, an argument of another type is rejected rather than converted,
-and the identity of an instance includes each constant's type. Interface schema 31 carries
+and the identity of an instance includes each constant's type. Interface schema 32 carries
 `constant_type=u32`, typed constant arguments such as `(constant u32 15)` and dependent
 formulas. The preflight `frame` example uses this for a bounded
 wire frame with checked `@noalloc @nonblocking` packing and checksum helpers.
@@ -781,7 +875,7 @@ available and injects them by AST node, repeating while new values appear. Docum
 (R-IDB-010): 4000000 steps and 64 MiB of values per evaluation, at most 32 discovery passes
 (a program whose module-scope values still grow after them gets `R-DIAG-LIMIT-001`),
 and at most 256 scalar elements substituted inside a function body (a module constant holds a
-larger value as one static initializer, wrapped before column 100). Interface schema 31 marks
+larger value as one static initializer, wrapped before column 100). Interface schema 32 marks
 evaluable exported functions `consteval=true` and records source dependencies whenever a
 translation-time value was computed. The [tables example](../examples/tables/README.md)
 builds a CRC-32 table, a frame size used by a module-scope struct, enumerator values and a
@@ -842,7 +936,7 @@ storage, destroys every built component on failure and reports `std.alloc::alloc
 the call's carrier; a clone that cannot fail (Copy, shared owners, hooks without errors) has no
 checked effect. The glue is spliced in after the function prototypes because it calls hooks. The
 static call graph adds an edge to every hook the copied structure reaches, so a hook that clones
-its own type through an owner is a recursive call chain. Interface schema 31 records the `clone`
+its own type through an owner is a recursive call chain. Interface schema 32 records the `clone`
 hook and the `clone` constraint. See `tests/fixtures/codegen_swap_clone.r`,
 `codegen_async_swap_clone.r`, the failure sweep `codegen_clone_failures.r` and
 `examples/tournament`.
@@ -869,11 +963,17 @@ After every body is built and closed, `r_function_value_resolve_targets` reads t
 the functions converted to its type or to a type that converts to it, with the span of the
 conversion, as dyn targets. The stack graph and the resource proofs therefore follow a call
 through a value to every target, and a cycle is reported at the conversion that closes it.
+The requirements on the parameter and result types (and, for `async fn`, Send and unborrowed
+parameters, result and errors) are checked where the type is spelled only for the parts that do
+not depend on a generic parameter: a field `async fn(arc S, flow<C>) -> flow<C>` of a generic
+struct names an instance that is not complete yet. The same pass checks every function address
+with its concrete type (`r_function_value_concrete`), so a conversion to the type of an instance,
+also in the clone of a generic body, is refused when that instance breaks them.
 `r_function_value_build_dispatcher` gives each dispatcher a HIR declaration with its receiver and
 parameters. C17 represents a function value as the `uint32_t` symbol number of its target
 (`r_c17_type` maps the kind to `u32`); a synchronous dispatcher switches on it with a direct call
 of each target, and an async start selects the target's frame initializer and launch like a dyn
-dispatcher, with the arguments after the receiver. Interface schema 31 writes the type as
+dispatcher, with the arguments after the receiver. Interface schema 32 writes the type as
 `(fn parameters=(...) return=R throws=(...))` with `async=true`, `noalloc=true` and
 `nonblocking=true` when they apply.
 
@@ -894,7 +994,7 @@ an implicit `import std.cmp;` during the interface scan. `clone` generates nothi
 `clone_derived`, which makes the structural clone glue of `compiler/codegen/clone.inc` apply.
 `compiler/semantic/derive.inc` records the capabilities, rejects unknown, repeated and misplaced
 derivations and errors with descendants, and checks that every field or payload proves the
-capability, naming the first that does not and silencing its region. Interface schema 31 writes
+capability, naming the first that does not and silencing its region. Interface schema 32 writes
 `derived=(...)` on the aggregate.
 
 The generated text relies on three general mechanisms. An implementation whose target is a
@@ -919,7 +1019,7 @@ addresses are evaluated once in argument order; overlapping outputs are rejected
 
 Outputs currently require synchronous R functions and complete unborrowed value types.
 The mode survives generics, traits, callable constraints (`fn(out i32) -> void`),
-function items, opaque and module interface schema 31 (`(out i32)`). Async/C boundaries
+function items, opaque and module interface schema 32 (`(out i32)`). Async/C boundaries
 and variadic outputs are rejected. The existing ban on errors escaping `finally` remains.
 
 Each output write to local storage must be used before an overlapping overwrite or normal
@@ -959,7 +1059,7 @@ to that method during monomorphization, keeping direct calls and the static call
 Creation and synchronous invocation add no heap allocation; async calls use normal task starts.
 Callable constraints may carry `@noalloc @nonblocking` after `fn` and an exact
 `throws(E1, E2)` suffix; async constraints start with `async fn`. Resource guarantees may
-be forgotten, never silently added. Interface schema 31 serializes mode, parameters, result,
+be forgotten, never silently added. Interface schema 32 serializes mode, parameters, result,
 resource promises, checked errors and async status and excludes synthetic traits.
 
 Stored non-void call and await results are significant by default. `@must_use` additionally
@@ -1245,7 +1345,7 @@ fields of the error are read through a shared borrow of the payload of variant z
 common initial sequence every member shares. `std.error::fault` names the family of the
 standard errors of the main boundary (`r_semantic_standard_fault_family`, built on first use),
 and `std.error::from_fault` is an erasure without a runtime symbol that C17 expands from the
-main-boundary table (`r_c17_emit_fault_portable`). Interface schema 31 writes `parent=` and
+main-boundary table (`r_c17_emit_fault_portable`). Interface schema 32 writes `parent=` and
 `(error_family T)`.
 
 Core draft.74 (L22) widens translation-time evaluation (`compiler/semantic/consteval.inc`,

@@ -5,12 +5,14 @@ import std.text;
 /* R-SLIB-CONFIG-0001: where the current value of a key came from; later layers win. */
 enum source { default_value, file, environment, arguments };
 
+@derive(format)
 enum error_code {
     invalid_key,
     duplicate_key,
     unknown_key,
     invalid_value,
     invalid_file,
+    missing_value,
 };
 
 /* R-SLIB-CONFIG-0001..0003: `index` is the declaration of the key, or the byte offset in the
@@ -312,4 +314,313 @@ std.string::string config::describe(const config* this) throws std.alloc::alloc_
         }
     }
     return move text;
+}
+
+/* ---- Typed settings (R-SLIB-CONFIG-0004) ---- */
+
+/* R-SLIB-CONFIG-0004: a setting that a typed read could not fill: the environment variable or
+   the key it names, and whether it was missing or did not convert. */
+error field_error { error_code code; std.string::string name; };
+
+protected field_error field_failure(error_code code, str name) throws std.alloc::alloc_error {
+    return field_error {.code = code, .name = std.string::from_str(name)};
+}
+
+/* The member `name` of a schema object, or none. */
+protected o<const std.json::value*> schema_member(const std.json::value* object, str name) {
+    const u8[] key = name;
+    return std.json::find(object, key);
+}
+
+protected bool text_member_is(const std.json::value* object, str name, str expected) {
+    switch (schema_member(object, name)) {
+    case variant o::some(found):
+        if (std.json::kind(*found) != std.json::value_kind::string) { return false; }
+        str text = std.json::text(*found);
+        const u8[] text_bytes = text;
+        const u8[] wanted = expected;
+        return same(text_bytes, wanted);
+    case variant o::none: return false;
+    }
+}
+
+/* Whether a property accepts null: anyOf with a null alternative, as o<T> writes. */
+protected bool nullable(const std.json::value* property) {
+    switch (schema_member(property, "anyOf")) {
+    case variant o::some(choices):
+        for (usize index = 0usize; index < std.json::len(*choices); index += 1usize) {
+            switch (std.json::get(*choices, index)) {
+            case variant o::some(choice):
+                if (text_member_is(*choice, "type", "null") == true) { return true; }
+            case variant o::none: break;
+            }
+        }
+        return false;
+    case variant o::none: return false;
+    }
+}
+
+/* The alternative of a nullable property that is not null, or the property itself. */
+protected const std.json::value* value_schema(const std.json::value* property) {
+    switch (schema_member(property, "anyOf")) {
+    case variant o::some(choices):
+        for (usize index = 0usize; index < std.json::len(*choices); index += 1usize) {
+            switch (std.json::get(*choices, index)) {
+            case variant o::some(choice):
+                if (text_member_is(*choice, "type", "null") == false) { return *choice; }
+            case variant o::none: break;
+            }
+        }
+        return property;
+    case variant o::none: return property;
+    }
+}
+
+protected std.string::string trimmed(str text) throws std.alloc::alloc_error {
+    return std.string::from_str(std.text::trim(text));
+}
+
+/* The JSON value of the text of a scalar for its schema: strings as they are, integers in
+   decimal within the bounds of the type, numbers, booleans as true/false/1/0/yes/no/on/off in any
+   case, the names of enums, and other types as JSON text. */
+protected std.json::value scalar_value(const std.json::value* described, str name, str text)
+    throws field_error, std.alloc::alloc_error {
+    try {
+        if (text_member_is(described, "type", "string") == true) {
+            const u8[] raw_text = text;
+            return std.json::from_string(raw_text);
+        }
+        if (text_member_is(described, "type", "boolean") == true) {
+            std.string::string lower = std.text::ascii_lowercase(std.text::trim(text));
+            str word = lower.as_str();
+            switch (word) {
+            case "true": return std.json::from_bool(true);
+            case "1": return std.json::from_bool(true);
+            case "yes": return std.json::from_bool(true);
+            case "on": return std.json::from_bool(true);
+            case "false": return std.json::from_bool(false);
+            case "0": return std.json::from_bool(false);
+            case "no": return std.json::from_bool(false);
+            case "off": return std.json::from_bool(false);
+            default: throw field_failure(error_code::invalid_value, name);
+            }
+        }
+        if (text_member_is(described, "type", "integer") == true) {
+            std.string::string digits = trimmed(text);
+            const u8[] digit_bytes = digits.as_bytes();
+            if (len(digit_bytes) > 0usize && digit_bytes[0usize] == 45u8) {
+                i64 parsed = std.convert::parse_i64(digits.as_str(), 10u32);
+                switch (schema_member(described, "minimum")) {
+                case variant o::some(minimum):
+                    i64 least = std.convert::parse_i64(std.json::text(*minimum), 10u32);
+                    throw (parsed < least) field_failure(error_code::invalid_value, name);
+                case variant o::none: parsed as void;
+                }
+            } else {
+                u64 parsed = std.convert::parse_u64(digits.as_str(), 10u32);
+                switch (schema_member(described, "maximum")) {
+                case variant o::some(maximum):
+                    u64 most = std.convert::parse_u64(std.json::text(*maximum), 10u32);
+                    throw (parsed > most) field_failure(error_code::invalid_value, name);
+                case variant o::none: parsed as void;
+                }
+            }
+            std.json::number number = std.json::parse_number(digits.as_bytes());
+            return std.json::from_number(&number);
+        }
+        if (text_member_is(described, "type", "number") == true) {
+            std.string::string digits = trimmed(text);
+            std.json::number number = std.json::parse_number(digits.as_bytes());
+            return std.json::from_number(&number);
+        }
+        const u8[] json_text = text;
+        switch (schema_member(described, "enum")) {
+        case variant o::some(_): return std.json::from_string(json_text);
+        case variant o::none: break;
+        }
+        return std.json::parse(json_text);
+    } catch (std.convert::parse_error rejected) {
+        rejected as void;
+    } catch (std.json::error rejected) {
+        (move rejected) as void;
+    }
+    throw field_failure(error_code::invalid_value, name);
+}
+
+/* The JSON value of a setting's text for the schema of its property: a scalar of scalar_value,
+   or an array of such items separated by commas. */
+protected std.json::value converted(const std.json::value* property, str name, str text)
+    throws field_error, std.alloc::alloc_error {
+    const std.json::value* described = value_schema(property);
+    if (text_member_is(described, "type", "array") == false) { return scalar_value(described, name, text); }
+    try {
+        std.json::value items = std.json::array();
+        std.string::string whole = trimmed(text);
+        const u8[] all = whole.as_bytes();
+        if (len(all) == 0usize) { return move items; }
+        switch (schema_member(described, "items")) {
+        case variant o::some(item_schema):
+            usize start = 0usize;
+            for (usize index = 0usize; index <= len(all); index += 1usize) {
+                if (index == len(all) || all[index] == 44u8) {
+                    str piece = core::validate_utf8(all[start..index]);
+                    std.string::string item = trimmed(piece);
+                    std.json::append(&items, scalar_value(*item_schema, name, item.as_str()));
+                    start = index + 1usize;
+                }
+            }
+            return move items;
+        case variant o::none: drop items;
+        }
+    } catch (std.json::error rejected) {
+        (move rejected) as void;
+    } catch (core::utf8_error rejected) {
+        rejected as void;
+    }
+    throw field_failure(error_code::invalid_value, name);
+}
+
+/* Whether the schema of T requires a property. */
+protected bool required_by(const std.json::value* described, str key) {
+    const u8[] wanted = key;
+    switch (schema_member(described, "required")) {
+    case variant o::some(names):
+        for (usize index = 0usize; index < std.json::len(*names); index += 1usize) {
+            switch (std.json::get(*names, index)) {
+            case variant o::some(found):
+                str text = std.json::text(*found);
+                const u8[] text_bytes = text;
+                if (same(text_bytes, wanted) == true) { return true; }
+            case variant o::none: break;
+            }
+        }
+        return false;
+    case variant o::none: return false;
+    }
+}
+
+/* Places the value of one property in the document: converted when it has a text, null when
+   it is absent and accepts null, missing_value when it is absent and required. */
+protected void place(std.json::value* document, const std.json::value* described, str key, const std.json::value* property,
+                     str name, o<std.string::string> text) throws field_error, std.alloc::alloc_error {
+    const u8[] key_bytes = key;
+    try {
+        switch (move text) {
+        case variant o::some(move value):
+            std.json::insert(document, key_bytes, converted(property, name, value.as_str()));
+        case variant o::none:
+            if (nullable(property) == true) {
+                std.json::insert(document, key_bytes, std.json::null());
+            } else {
+                throw (required_by(described, key) == true) field_failure(error_code::missing_value, name);
+            }
+        }
+    } catch (std.json::error rejected) {
+        (move rejected) as void;
+        throw field_failure(error_code::invalid_value, name);
+    }
+}
+
+/* The name of the environment variable of a property: the prefix and the property in upper
+   case, with every byte that is not an ASCII letter or digit written as `_`. */
+protected std.string::string environment_name(str prefix, str key) throws std.alloc::alloc_error {
+    std.string::string name = std.string::from_str(prefix);
+    const u8[] bytes_of_key = key;
+    for (usize index = 0usize; index < len(bytes_of_key); index += 1usize) {
+        u8 byte = bytes_of_key[index];
+        u8 upper = byte;
+        if (byte >= 97u8 && byte <= 122u8) { upper = (byte - 32u8) as u8; }
+        if ((upper < 65u8 || upper > 90u8) && (upper < 48u8 || upper > 57u8)) { upper = 95u8; }
+        std.string::push_scalar(&name, upper as char);
+    }
+    return move name;
+}
+
+protected o<std.string::string> environment_value(str name) throws std.alloc::alloc_error {
+    try {
+        return std.env::get(name);
+    } catch (std.env::env_error rejected) {
+        rejected as void;
+    }
+    return o::none;
+}
+
+protected std.json::value empty_object() throws field_error, std.alloc::alloc_error {
+    try {
+        return std.json::object();
+    } catch (std.json::error rejected) {
+        (move rejected) as void;
+    }
+    throw field_failure(error_code::invalid_value, "");
+}
+
+/* The value of T read with std.json::unmarshal from the document of its settings. */
+@generic<T: json_decode>
+protected T read_document(std.json::value document) throws field_error, std.alloc::alloc_error {
+    try {
+        std.string::string text = std.json::stringify(&document);
+        T result = std.json::unmarshal(text.as_bytes());
+        return move result;
+    } catch (std.json::error rejected) {
+        (move rejected) as void;
+    }
+    throw field_failure(error_code::invalid_value, "");
+}
+
+@generic<T: json_decode>
+protected std.json::value schema_of() throws field_error, std.alloc::alloc_error {
+    try {
+        return std.json::schema::<T>();
+    } catch (std.json::error rejected) {
+        (move rejected) as void;
+    }
+    throw field_failure(error_code::invalid_value, "");
+}
+
+/* R-SLIB-CONFIG-0004: a T whose fields come from the environment variables of their names. */
+@generic<T: json_decode>
+T from_environment(str prefix) throws field_error, std.alloc::alloc_error {
+    std.json::value described = schema_of::<T>();
+    std.json::value document = empty_object();
+    switch (schema_member(&described, "properties")) {
+    case variant o::some(properties):
+        for (usize index = 0usize; index < std.json::len(*properties); index += 1usize) {
+            str key = std.json::key_at(*properties, index);
+            switch (std.json::get(*properties, index)) {
+            case variant o::some(property):
+                std.string::string name = environment_name(prefix, key);
+                place(&document, &described, key, *property, name.as_str(), environment_value(name.as_str()));
+            case variant o::none: key as void;
+            }
+        }
+    case variant o::none: break;
+    }
+    return read_document::<T>(move document);
+}
+
+/* R-SLIB-CONFIG-0004: a T whose fields come from the keys of their names, after every layer. */
+@generic<T: json_decode>
+T config::decode(const config* this) throws field_error, std.alloc::alloc_error {
+    std.json::value described = schema_of::<T>();
+    std.json::value document = empty_object();
+    switch (schema_member(&described, "properties")) {
+    case variant o::some(properties):
+        for (usize index = 0usize; index < std.json::len(*properties); index += 1usize) {
+            str key = std.json::key_at(*properties, index);
+            switch (std.json::get(*properties, index)) {
+            case variant o::some(property):
+                const u8[] key_bytes = key;
+                o<std.string::string> value = o::none;
+                switch (this->find(key_bytes)) {
+                case variant o::some(at):
+                    value = o::some(std.string::from_str(this->entries[*at].value.as_str()));
+                case variant o::none: break;
+                }
+                place(&document, &described, key, *property, key, move value);
+            case variant o::none: key as void;
+            }
+        }
+    case variant o::none: break;
+    }
+    return read_document::<T>(move document);
 }

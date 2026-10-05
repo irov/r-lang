@@ -76,6 +76,15 @@ static void call_run(RRuntimeBlockingJob *job) {
 
     if (!r_runtime_task_external_cancel_requested(execution)) {
         call->entry(call_arguments(call), call->result);
+        if (r_runtime_unwinding()) {
+            /* L39 (R-ERR-0009): the panic of the entry ends the task; its result was not
+               written. */
+            RRuntimePanicReportData report;
+
+            (void)r_runtime_panic_take(&report);
+            r_runtime_task_external_acknowledge_panic(execution, &report);
+            return;
+        }
         if (r_runtime_task_external_try_select_completion(execution)) {
             r_runtime_task_external_acknowledge(execution);
             return;

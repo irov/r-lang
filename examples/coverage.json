@@ -1,9 +1,9 @@
 {
   "version": 4,
   "scope": "source references and resolved program operations and types; execution checked separately",
-  "total_records": 1497,
-  "covered_records": 1497,
-  "application_records": 1497,
+  "total_records": 1562,
+  "covered_records": 1562,
+  "application_records": 1562,
   "items": [
     {
       "record_id": "core::adopt#operation",
@@ -77,6 +77,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "jobs",
@@ -153,6 +154,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "jobs",
         "offload",
         "quotes",
@@ -289,6 +291,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "bytepipe",
         "c_bridge",
         "calculator",
@@ -488,6 +491,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "jobs",
@@ -497,6 +501,7 @@
         "workers"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "http",
         "jobs",
@@ -577,6 +582,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -790,6 +796,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -844,6 +851,7 @@
         "workspace"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -1037,6 +1045,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -1098,6 +1107,7 @@
         "zip"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -1274,6 +1284,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "jobs",
@@ -1538,9 +1549,11 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "bytepipe",
         "c_bridge",
+        "clock",
         "deflate",
         "dispatch",
         "fanout",
@@ -1638,6 +1651,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "generics",
         "http",
@@ -1730,6 +1744,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "dispatch",
         "fanout",
@@ -1771,6 +1786,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "dispatch",
         "fanout",
@@ -1803,6 +1819,7 @@
         "workers"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "dispatch",
         "fanout",
@@ -2010,6 +2027,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "ipc",
         "jobs"
       ],
@@ -2083,8 +2101,21 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "jobs",
         "preflight"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "std.async::join#operation",
+      "required": [
+        "std.async::join"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "offload"
       ],
       "resolved_type_examples": []
     },
@@ -2401,6 +2432,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -2460,6 +2492,7 @@
         "zip"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -2666,6 +2699,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -2721,6 +2755,7 @@
         "workspace"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -2834,6 +2869,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "binary",
         "bytepipe",
         "http",
@@ -2914,6 +2950,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -2968,6 +3005,7 @@
         "workspace"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -3097,6 +3135,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "calculator",
@@ -3112,6 +3151,7 @@
         "settings",
         "telemetry",
         "textkit",
+        "tls",
         "tokens",
         "workspace"
       ],
@@ -3362,6 +3402,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -3416,6 +3457,7 @@
         "workspace"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -3514,6 +3556,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -3568,6 +3611,7 @@
         "workspace"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -3916,9 +3960,11 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "service"
       ],
       "resolved_type_examples": [
+        "arena",
         "service"
       ]
     },
@@ -3930,9 +3976,11 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "service"
       ],
       "resolved_type_examples": [
+        "arena",
         "service"
       ]
     },
@@ -3944,11 +3992,39 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "service"
       ],
       "resolved_type_examples": [
+        "arena",
         "service"
       ]
+    },
+    {
+      "record_id": "std.config::field_error#type",
+      "required": [
+        "std.config::field_error"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
+      ]
+    },
+    {
+      "record_id": "std.config::from_environment#operation",
+      "required": [
+        "std.config::from_environment"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": []
     },
     {
       "record_id": "std.config::source#type",
@@ -3972,6 +4048,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "ingest",
@@ -3996,6 +4073,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "journal",
@@ -4029,6 +4107,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "binary",
         "buffer_compare",
         "bytepipe",
@@ -4088,6 +4167,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "ingest",
@@ -4217,6 +4297,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "calculator",
@@ -4312,6 +4393,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -4369,6 +4451,7 @@
         "xml"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -4482,6 +4565,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -4536,6 +4620,7 @@
         "workspace"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -4783,9 +4868,79 @@
       ]
     },
     {
+      "record_id": "std.crypto::cbc_decrypt#operation",
+      "required": [
+        "std.crypto::cbc_decrypt"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena",
+        "notary"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "std.crypto::cbc_encrypt#operation",
+      "required": [
+        "std.crypto::cbc_encrypt"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena",
+        "notary"
+      ],
+      "resolved_type_examples": []
+    },
+    {
       "record_id": "std.crypto::crypto_error#type",
       "required": [
         "std.crypto::crypto_error"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena",
+        "notary"
+      ],
+      "resolved_type_examples": [
+        "arena",
+        "notary"
+      ]
+    },
+    {
+      "record_id": "std.crypto::curve#type",
+      "required": [
+        "std.crypto::curve"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "notary"
+      ],
+      "resolved_type_examples": [
+        "notary"
+      ]
+    },
+    {
+      "record_id": "std.crypto::ecdsa_key#type",
+      "required": [
+        "std.crypto::ecdsa_key"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "notary"
+      ],
+      "resolved_type_examples": [
+        "notary"
+      ]
+    },
+    {
+      "record_id": "std.crypto::ecdsa_public_key#type",
+      "required": [
+        "std.crypto::ecdsa_public_key"
       ],
       "missing": [],
       "application_missing": [],
@@ -4804,9 +4959,11 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "notary"
       ],
       "resolved_type_examples": [
+        "arena",
         "notary"
       ]
     },
@@ -4899,6 +5056,38 @@
       "resolved_type_examples": []
     },
     {
+      "record_id": "std.crypto::private_key#type",
+      "required": [
+        "std.crypto::private_key"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena",
+        "notary"
+      ],
+      "resolved_type_examples": [
+        "arena",
+        "notary"
+      ]
+    },
+    {
+      "record_id": "std.crypto::public_key#type",
+      "required": [
+        "std.crypto::public_key"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena",
+        "notary"
+      ],
+      "resolved_type_examples": [
+        "arena",
+        "notary"
+      ]
+    },
+    {
       "record_id": "std.crypto::random#operation",
       "required": [
         "std.crypto::random"
@@ -4906,9 +5095,52 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "notary"
       ],
       "resolved_type_examples": []
+    },
+    {
+      "record_id": "std.crypto::rsa_key#type",
+      "required": [
+        "std.crypto::rsa_key"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "notary"
+      ],
+      "resolved_type_examples": [
+        "notary"
+      ]
+    },
+    {
+      "record_id": "std.crypto::rsa_public_key#type",
+      "required": [
+        "std.crypto::rsa_public_key"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "notary"
+      ],
+      "resolved_type_examples": [
+        "notary"
+      ]
+    },
+    {
+      "record_id": "std.crypto::rsa_scheme#type",
+      "required": [
+        "std.crypto::rsa_scheme"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "notary"
+      ],
+      "resolved_type_examples": [
+        "notary"
+      ]
     },
     {
       "record_id": "std.crypto::seal#operation",
@@ -5526,6 +5758,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "notary",
         "textkit",
         "tokens"
@@ -5605,6 +5838,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "environment",
         "http",
@@ -5644,6 +5878,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -5698,6 +5933,7 @@
         "workspace"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -5873,6 +6109,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -5929,6 +6166,7 @@
         "xml"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -5993,7 +6231,9 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
+        "clock",
         "http",
         "ingest",
         "ipc",
@@ -6014,6 +6254,7 @@
         "tokens"
       ],
       "resolved_type_examples": [
+        "arena",
         "ingest",
         "ipc",
         "journal",
@@ -6365,6 +6606,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "ingest",
         "receipt",
         "registry",
@@ -6392,6 +6634,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "ingest",
         "numbers",
         "receipt",
@@ -6399,6 +6642,7 @@
         "status"
       ],
       "resolved_type_examples": [
+        "arena",
         "ingest",
         "numbers",
         "receipt",
@@ -6466,6 +6710,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -6520,6 +6765,7 @@
         "workspace"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -6840,6 +7086,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -6896,6 +7143,7 @@
         "zip"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -7167,7 +7415,9 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
+        "clock",
         "http",
         "journal",
         "orders",
@@ -7184,7 +7434,9 @@
         "zip"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
+        "clock",
         "http",
         "journal",
         "orders",
@@ -7221,6 +7473,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -7277,6 +7530,7 @@
         "zip"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -7341,7 +7595,9 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
+        "clock",
         "http",
         "journal",
         "orders",
@@ -7452,6 +7708,8 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
+        "clock",
         "http",
         "orders",
         "realtime",
@@ -7956,6 +8214,20 @@
       ]
     },
     {
+      "record_id": "std.http::app#type",
+      "required": [
+        "std.http::app"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
+      ]
+    },
+    {
       "record_id": "std.http::body_state#type",
       "required": [
         "std.http::body_state"
@@ -7991,11 +8263,13 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "http",
         "realtime",
         "telemetry"
       ],
       "resolved_type_examples": [
+        "arena",
         "http",
         "realtime",
         "telemetry"
@@ -8009,14 +8283,44 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "http",
         "realtime",
         "telemetry"
       ],
       "resolved_type_examples": [
+        "arena",
         "http",
         "realtime",
         "telemetry"
+      ]
+    },
+    {
+      "record_id": "std.http::cookie#type",
+      "required": [
+        "std.http::cookie"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
+      ]
+    },
+    {
+      "record_id": "std.http::cors_policy#type",
+      "required": [
+        "std.http::cors_policy"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
       ]
     },
     {
@@ -8027,10 +8331,12 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "http",
         "realtime"
       ],
       "resolved_type_examples": [
+        "arena",
         "http",
         "realtime"
       ]
@@ -8046,6 +8352,20 @@
         "http"
       ],
       "resolved_type_examples": []
+    },
+    {
+      "record_id": "std.http::flow#type",
+      "required": [
+        "std.http::flow"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
+      ]
     },
     {
       "record_id": "std.http::handshake#type",
@@ -8083,11 +8403,13 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "http",
         "realtime",
         "telemetry"
       ],
       "resolved_type_examples": [
+        "arena",
         "http",
         "realtime",
         "telemetry"
@@ -8101,12 +8423,14 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "realtime",
         "telemetry"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "http",
         "realtime",
@@ -8121,12 +8445,14 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "realtime",
         "telemetry"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "http",
         "realtime",
@@ -8141,11 +8467,13 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "http",
         "realtime",
         "telemetry"
       ],
       "resolved_type_examples": [
+        "arena",
         "http",
         "realtime",
         "telemetry"
@@ -8159,9 +8487,24 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "http"
       ],
       "resolved_type_examples": []
+    },
+    {
+      "record_id": "std.http::notes#type",
+      "required": [
+        "std.http::notes"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
+      ]
     },
     {
       "record_id": "std.http::parse_method#operation",
@@ -8255,11 +8598,13 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "http",
         "realtime",
         "telemetry"
       ],
       "resolved_type_examples": [
+        "arena",
         "http",
         "realtime",
         "telemetry"
@@ -8273,11 +8618,13 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "http",
         "realtime",
         "telemetry"
       ],
       "resolved_type_examples": [
+        "arena",
         "http",
         "realtime",
         "telemetry"
@@ -8326,6 +8673,18 @@
       "application_missing": [],
       "examples": [
         "telemetry"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "std.http::serve_app#operation",
+      "required": [
+        "std.http::serve_app"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
       ],
       "resolved_type_examples": []
     },
@@ -8595,6 +8954,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -8654,6 +9014,7 @@
         "zip"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -9540,6 +9901,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "json_tool"
       ],
       "resolved_type_examples": []
@@ -9552,6 +9914,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "json_tool"
       ],
       "resolved_type_examples": []
@@ -9623,6 +9986,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "json",
@@ -9631,6 +9995,7 @@
         "registry"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "http",
         "json",
@@ -9652,6 +10017,18 @@
       "resolved_type_examples": [
         "json_tool"
       ]
+    },
+    {
+      "record_id": "std.json::escape_html#operation",
+      "required": [
+        "std.json::escape_html"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": []
     },
     {
       "record_id": "std.json::feed#operation",
@@ -9706,6 +10083,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "json",
         "json_tool"
@@ -9733,6 +10111,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "json_tool"
       ],
       "resolved_type_examples": []
@@ -9745,6 +10124,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "json_tool",
         "registry"
       ],
@@ -9770,6 +10150,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "json",
         "json_tool",
         "registry"
@@ -9784,6 +10165,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "json_tool"
       ],
       "resolved_type_examples": []
@@ -9808,6 +10190,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "json_tool"
       ],
       "resolved_type_examples": []
@@ -9820,6 +10203,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "json",
@@ -9914,9 +10298,11 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "json_tool"
       ],
       "resolved_type_examples": [
+        "arena",
         "json_tool"
       ]
     },
@@ -9952,6 +10338,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "json",
         "json_tool",
         "registry"
@@ -9982,6 +10369,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "json",
         "json_tool"
@@ -9996,6 +10384,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "json_tool"
       ],
       "resolved_type_examples": []
@@ -10061,6 +10450,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "json",
         "json_tool",
@@ -10152,6 +10542,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "json_tool"
       ],
       "resolved_type_examples": []
@@ -10164,6 +10555,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "json",
@@ -10192,12 +10584,14 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "json",
         "json_tool",
         "registry"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "json",
         "json_tool",
@@ -10421,6 +10815,176 @@
       "application_missing": [],
       "examples": [
         "assistant"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "std.jwt::algorithm#type",
+      "required": [
+        "std.jwt::algorithm"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
+      ]
+    },
+    {
+      "record_id": "std.jwt::error_code#type",
+      "required": [
+        "std.jwt::error_code"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
+      ]
+    },
+    {
+      "record_id": "std.jwt::header#operation",
+      "required": [
+        "std.jwt::header"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "std.jwt::jwk#operation",
+      "required": [
+        "std.jwt::jwk"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "std.jwt::jwt_error#type",
+      "required": [
+        "std.jwt::jwt_error"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
+      ]
+    },
+    {
+      "record_id": "std.jwt::key_set#type",
+      "required": [
+        "std.jwt::key_set"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
+      ]
+    },
+    {
+      "record_id": "std.jwt::sign#operation",
+      "required": [
+        "std.jwt::sign"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "std.jwt::sign_claims#operation",
+      "required": [
+        "std.jwt::sign_claims"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "std.jwt::signer#type",
+      "required": [
+        "std.jwt::signer"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
+      ]
+    },
+    {
+      "record_id": "std.jwt::validation#type",
+      "required": [
+        "std.jwt::validation"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
+      ]
+    },
+    {
+      "record_id": "std.jwt::verifier#type",
+      "required": [
+        "std.jwt::verifier"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
+      ]
+    },
+    {
+      "record_id": "std.jwt::verify#operation",
+      "required": [
+        "std.jwt::verify"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "std.jwt::verify_claims#operation",
+      "required": [
+        "std.jwt::verify_claims"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
       ],
       "resolved_type_examples": []
     },
@@ -10686,9 +11250,11 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "service"
       ],
       "resolved_type_examples": [
+        "arena",
         "service"
       ]
     },
@@ -10700,10 +11266,26 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "service"
       ],
       "resolved_type_examples": [
+        "arena",
         "service"
+      ]
+    },
+    {
+      "record_id": "std.log::layout#type",
+      "required": [
+        "std.log::layout"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
       ]
     },
     {
@@ -10714,9 +11296,11 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "service"
       ],
       "resolved_type_examples": [
+        "arena",
         "service"
       ]
     },
@@ -10728,10 +11312,54 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "service"
       ],
       "resolved_type_examples": [
+        "arena",
         "service"
+      ]
+    },
+    {
+      "record_id": "std.log::order#type",
+      "required": [
+        "std.log::order"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
+      ]
+    },
+    {
+      "record_id": "std.log::panic_record#type",
+      "required": [
+        "std.log::panic_record"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
+      ]
+    },
+    {
+      "record_id": "std.log::panic_reports#type",
+      "required": [
+        "std.log::panic_reports"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
       ]
     },
     {
@@ -10742,9 +11370,11 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "service"
       ],
       "resolved_type_examples": [
+        "arena",
         "service"
       ]
     },
@@ -13654,6 +14284,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -13708,6 +14339,7 @@
         "workspace"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -16371,6 +17003,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -16425,6 +17058,7 @@
         "workspace"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -16571,6 +17205,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "netlab",
@@ -16584,6 +17219,7 @@
         "tls"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "http",
         "netlab",
@@ -16617,6 +17253,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "netlab",
@@ -16628,6 +17265,7 @@
         "tls"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "http",
         "netlab",
@@ -16647,6 +17285,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -16701,6 +17340,7 @@
         "workspace"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -16763,6 +17403,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "netlab",
@@ -16831,6 +17472,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "netlab",
@@ -16843,6 +17485,7 @@
         "tls"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "http",
         "netlab",
@@ -16970,6 +17613,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "netlab",
@@ -16990,6 +17634,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "netlab",
@@ -17001,6 +17646,7 @@
         "tls"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "http",
         "netlab",
@@ -17036,6 +17682,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "netlab",
@@ -17700,6 +18347,130 @@
       "resolved_type_examples": []
     },
     {
+      "record_id": "std.oauth2::code_grant#type",
+      "required": [
+        "std.oauth2::code_grant"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
+      ]
+    },
+    {
+      "record_id": "std.oauth2::error_code#type",
+      "required": [
+        "std.oauth2::error_code"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
+      ]
+    },
+    {
+      "record_id": "std.oauth2::grant#type",
+      "required": [
+        "std.oauth2::grant"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
+      ]
+    },
+    {
+      "record_id": "std.oauth2::oauth2_error#type",
+      "required": [
+        "std.oauth2::oauth2_error"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
+      ]
+    },
+    {
+      "record_id": "std.oauth2::request_token#operation",
+      "required": [
+        "std.oauth2::request_token"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "std.oauth2::service_account#type",
+      "required": [
+        "std.oauth2::service_account"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
+      ]
+    },
+    {
+      "record_id": "std.oauth2::token#type",
+      "required": [
+        "std.oauth2::token"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
+      ]
+    },
+    {
+      "record_id": "std.oauth2::token_request#type",
+      "required": [
+        "std.oauth2::token_request"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
+      ]
+    },
+    {
+      "record_id": "std.oauth2::token_source#type",
+      "required": [
+        "std.oauth2::token_source"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
+      ]
+    },
+    {
       "record_id": "std.pool::lease#type",
       "required": [
         "std.pool::lease"
@@ -17707,10 +18478,12 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "ingest",
         "orders"
       ],
       "resolved_type_examples": [
+        "arena",
         "ingest",
         "orders"
       ]
@@ -17723,10 +18496,12 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "ingest",
         "orders"
       ],
       "resolved_type_examples": [
+        "arena",
         "ingest",
         "orders"
       ]
@@ -17779,6 +18554,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "orders"
       ],
       "resolved_type_examples": []
@@ -17815,9 +18591,11 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "orders"
       ],
       "resolved_type_examples": [
+        "arena",
         "orders"
       ]
     },
@@ -17829,10 +18607,50 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "orders"
       ],
       "resolved_type_examples": [
+        "arena",
         "orders"
+      ]
+    },
+    {
+      "record_id": "std.postgres::insert_statement#operation",
+      "required": [
+        "std.postgres::insert_statement"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "std.postgres::migrate#operation",
+      "required": [
+        "std.postgres::migrate"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "std.postgres::migration#type",
+      "required": [
+        "std.postgres::migration"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
       ]
     },
     {
@@ -17857,11 +18675,25 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "orders"
       ],
       "resolved_type_examples": [
+        "arena",
         "orders"
       ]
+    },
+    {
+      "record_id": "std.postgres::parameters_of#operation",
+      "required": [
+        "std.postgres::parameters_of"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": []
     },
     {
       "record_id": "std.postgres::pg_error#type",
@@ -17871,9 +18703,11 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "orders"
       ],
       "resolved_type_examples": [
+        "arena",
         "orders"
       ]
     },
@@ -17885,9 +18719,11 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "orders"
       ],
       "resolved_type_examples": [
+        "arena",
         "orders"
       ]
     },
@@ -17899,9 +18735,11 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "orders"
       ],
       "resolved_type_examples": [
+        "arena",
         "orders"
       ]
     },
@@ -17927,11 +18765,25 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "orders"
       ],
       "resolved_type_examples": [
+        "arena",
         "orders"
       ]
+    },
+    {
+      "record_id": "std.postgres::update_statement#operation",
+      "required": [
+        "std.postgres::update_statement"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": []
     },
     {
       "record_id": "std.postgres::value#type",
@@ -17941,9 +18793,11 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "orders"
       ],
       "resolved_type_examples": [
+        "arena",
         "orders"
       ]
     },
@@ -18139,6 +18993,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -18193,6 +19048,7 @@
         "workspace"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -19037,9 +19893,11 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "telemetry"
       ],
       "resolved_type_examples": [
+        "arena",
         "telemetry"
       ]
     },
@@ -19051,9 +19909,11 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "telemetry"
       ],
       "resolved_type_examples": [
+        "arena",
         "telemetry"
       ]
     },
@@ -19089,6 +19949,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "realtime",
@@ -19096,6 +19957,7 @@
         "telemetry"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "http",
         "realtime",
@@ -19111,6 +19973,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "realtime",
@@ -19118,6 +19981,7 @@
         "telemetry"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "http",
         "realtime",
@@ -19133,6 +19997,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "realtime",
@@ -19140,6 +20005,7 @@
         "telemetry"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "http",
         "realtime",
@@ -19191,6 +20057,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "realtime",
@@ -19198,6 +20065,7 @@
         "telemetry"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "http",
         "realtime",
@@ -19728,6 +20596,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -19795,6 +20664,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "format",
         "http",
@@ -19822,6 +20692,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "clock",
@@ -19876,6 +20747,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -19930,6 +20802,7 @@
         "workspace"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -20017,6 +20890,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -20102,6 +20976,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -20168,6 +21043,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "http",
         "ipc",
         "orders",
@@ -20220,6 +21096,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "ipc",
         "realtime",
@@ -20277,6 +21154,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -20338,6 +21216,7 @@
         "zip"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -20407,6 +21286,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -20461,6 +21341,7 @@
         "workspace"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -20564,6 +21445,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -20618,6 +21500,7 @@
         "workspace"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -20743,6 +21626,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "realtime",
@@ -20760,6 +21644,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "realtime",
@@ -20768,6 +21653,7 @@
         "workers"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "http",
         "realtime",
@@ -21086,6 +21972,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "realtime",
@@ -21103,6 +21990,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "realtime",
@@ -21111,6 +21999,7 @@
         "workers"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "http",
         "realtime",
@@ -21322,6 +22211,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "realtime",
@@ -21339,6 +22229,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "http",
         "realtime",
@@ -21347,6 +22238,7 @@
         "workers"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "http",
         "realtime",
@@ -22046,6 +22938,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "textkit"
       ],
@@ -22059,10 +22952,12 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "textkit"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "textkit"
       ]
@@ -22075,6 +22970,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "realtime",
         "text"
@@ -22220,6 +23116,7 @@
       "application_missing": [],
       "examples": [
         "ledger",
+        "offload",
         "preflight",
         "quotes",
         "registers",
@@ -22227,6 +23124,7 @@
       ],
       "resolved_type_examples": [
         "ledger",
+        "offload",
         "preflight",
         "quotes",
         "registers",
@@ -22241,6 +23139,8 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
+        "offload",
         "workers"
       ],
       "resolved_type_examples": []
@@ -22253,14 +23153,18 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "ledger",
+        "offload",
         "preflight",
         "quotes",
         "registers",
         "workers"
       ],
       "resolved_type_examples": [
+        "arena",
         "ledger",
+        "offload",
         "preflight",
         "quotes",
         "registers",
@@ -22275,6 +23179,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "workers"
       ],
       "resolved_type_examples": []
@@ -22373,6 +23278,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -22427,6 +23333,7 @@
         "workspace"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -22507,6 +23414,20 @@
       "resolved_type_examples": []
     },
     {
+      "record_id": "std.time::ambiguity#type",
+      "required": [
+        "std.time::ambiguity"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "clock"
+      ],
+      "resolved_type_examples": [
+        "clock"
+      ]
+    },
+    {
       "record_id": "std.time::as_error#operation",
       "required": [
         "std.time::as_error"
@@ -22526,6 +23447,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "clock",
         "fanout",
@@ -22542,6 +23464,7 @@
         "testing"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "clock",
         "fanout",
@@ -22591,6 +23514,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -22645,6 +23569,7 @@
         "workspace"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -22728,6 +23653,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "clock",
         "fanout",
@@ -22804,6 +23730,18 @@
       ]
     },
     {
+      "record_id": "std.time::fixed_zone#operation",
+      "required": [
+        "std.time::fixed_zone"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "clock"
+      ],
+      "resolved_type_examples": []
+    },
+    {
       "record_id": "std.time::format_http_date#operation",
       "required": [
         "std.time::format_http_date"
@@ -22816,6 +23754,18 @@
       "resolved_type_examples": []
     },
     {
+      "record_id": "std.time::format_local#operation",
+      "required": [
+        "std.time::format_local"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": []
+    },
+    {
       "record_id": "std.time::format_rfc3339#operation",
       "required": [
         "std.time::format_rfc3339"
@@ -22823,6 +23773,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "clock"
       ],
       "resolved_type_examples": []
@@ -22847,6 +23798,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "bytepipe",
         "clock",
@@ -22873,6 +23825,7 @@
         "zip"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "bytepipe",
         "clock",
@@ -22943,6 +23896,46 @@
       ]
     },
     {
+      "record_id": "std.time::load_zone#operation",
+      "required": [
+        "std.time::load_zone"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "clock"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "std.time::local_time#type",
+      "required": [
+        "std.time::local_time"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena",
+        "clock"
+      ],
+      "resolved_type_examples": [
+        "arena",
+        "clock"
+      ]
+    },
+    {
+      "record_id": "std.time::local_zone#operation",
+      "required": [
+        "std.time::local_zone"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "clock"
+      ],
+      "resolved_type_examples": []
+    },
+    {
       "record_id": "std.time::monotonic_now#operation",
       "required": [
         "std.time::monotonic_now"
@@ -22972,9 +23965,46 @@
       "resolved_type_examples": []
     },
     {
+      "record_id": "std.time::parse_local#operation",
+      "required": [
+        "std.time::parse_local"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": []
+    },
+    {
       "record_id": "std.time::parse_rfc3339#operation",
       "required": [
         "std.time::parse_rfc3339"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena",
+        "clock"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "std.time::parse_tzif#operation",
+      "required": [
+        "std.time::parse_tzif"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "clock"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "std.time::posix_zone#operation",
+      "required": [
+        "std.time::posix_zone"
       ],
       "missing": [],
       "application_missing": [],
@@ -23033,6 +24063,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "clock"
       ],
       "resolved_type_examples": []
@@ -23045,10 +24076,12 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "clock",
         "workspace"
       ],
       "resolved_type_examples": [
+        "arena",
         "clock",
         "workspace"
       ]
@@ -23061,6 +24094,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -23115,6 +24149,7 @@
         "workspace"
       ],
       "resolved_type_examples": [
+        "arena",
         "assistant",
         "binary",
         "buffer_compare",
@@ -23185,6 +24220,62 @@
       "record_id": "std.time::utc_datetime#type",
       "required": [
         "std.time::utc_datetime"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena",
+        "clock"
+      ],
+      "resolved_type_examples": [
+        "arena",
+        "clock"
+      ]
+    },
+    {
+      "record_id": "std.time::utc_zone#operation",
+      "required": [
+        "std.time::utc_zone"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "clock"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "std.time::zone#type",
+      "required": [
+        "std.time::zone"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "clock"
+      ],
+      "resolved_type_examples": [
+        "clock"
+      ]
+    },
+    {
+      "record_id": "std.time::zone_error#type",
+      "required": [
+        "std.time::zone_error"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "clock"
+      ],
+      "resolved_type_examples": [
+        "clock"
+      ]
+    },
+    {
+      "record_id": "std.time::zone_error_code#type",
+      "required": [
+        "std.time::zone_error_code"
       ],
       "missing": [],
       "application_missing": [],
@@ -23264,12 +24355,14 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "http",
         "orders",
         "realtime",
         "tls"
       ],
       "resolved_type_examples": [
+        "arena",
         "http",
         "orders",
         "realtime",
@@ -23305,6 +24398,18 @@
       ]
     },
     {
+      "record_id": "std.tls::system_client_config#operation",
+      "required": [
+        "std.tls::system_client_config"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "tls"
+      ],
+      "resolved_type_examples": []
+    },
+    {
       "record_id": "std.tls::tls_error#type",
       "required": [
         "std.tls::tls_error"
@@ -23312,6 +24417,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "http",
         "orders",
         "realtime",
@@ -23319,6 +24425,7 @@
         "tls"
       ],
       "resolved_type_examples": [
+        "arena",
         "http",
         "orders",
         "realtime",
@@ -23615,6 +24722,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "tokens"
       ],
       "resolved_type_examples": []
@@ -23627,9 +24735,11 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "tokens"
       ],
       "resolved_type_examples": [
+        "arena",
         "tokens"
       ]
     },
@@ -23641,6 +24751,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "tokens"
       ],
       "resolved_type_examples": []

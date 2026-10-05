@@ -4,7 +4,7 @@ import std.args;
 import std.config;
 import std.text;
 
-// The tests of std.config (Library R-SLIB-CONFIG-0001..0003), run in test mode (Core R-FUNC-0025).
+// The tests of std.config (Library R-SLIB-CONFIG-0001..0004), run in test mode (Core R-FUNC-0025).
 
 /* The keys of most tests, declared in this order. */
 protected std.config::config declared() throws std.config::config_error, std.alloc::alloc_error {
@@ -457,4 +457,111 @@ async void reads_at_most_one_mebibyte()
         std.test::equal_text(core::enum_name(failure.code), "file_too_large");
     }
     expect_key(&fresh, "port", "8080", std.config::source::default_value);
+}
+
+/* The settings of a server from its environment variables. */
+struct Server {
+    @json(name = "PG_HOST") std.string::string host;
+    @json(name = "PG_PORT", optional) u16 port = 5432u16;
+    @json(name = "PROD") bool production;
+    @json(name = "API_KEY") o<std.string::string> api_key;
+    @json(name = "ORIGINS", optional) array<std.string::string> origins;
+    @json(name = "RATIO", optional) f64 ratio = 0.5;
+};
+
+/* Checks the code and name of a field error. */
+protected void expect_field(std.config::field_error failure, std.config::error_code code, str name)
+    throws std.test::failure, std.alloc::alloc_error {
+    std.test::check(failure.code == code, "error code");
+    std.test::equal_text(failure.name.as_str(), name);
+}
+
+// R-SLIB-CONFIG-0004: variables convert by the type of their field; absent optional fields keep
+// their defaults, an absent o<T> is none, and a missing or invalid value names its variable.
+@test
+void reads_a_struct_from_the_environment() throws std.test::failure, std.error::fault {
+    std.env::set("ARENA_PG_HOST", "db.local");
+    std.env::set("ARENA_PROD", "Yes");
+    std.env::set("ARENA_ORIGINS", "a.test, b.test");
+    std.env::remove("ARENA_PG_PORT");
+    std.env::remove("ARENA_API_KEY");
+    std.env::remove("ARENA_RATIO");
+    try {
+        Server read = std.config::from_environment::<Server>("ARENA_");
+        std.test::equal_text(read.host.as_str(), "db.local");
+        std.test::equal(read.port, 5432u16);
+        std.test::check(read.production, "production");
+        std.test::equal(len(read.origins), 2usize);
+        std.test::equal_text(read.origins[1usize].as_str(), "b.test");
+        switch (read.api_key) {
+        case variant o::some(_): std.test::fail("no API key");
+        case variant o::none: break;
+        }
+        std.env::set("ARENA_PG_PORT", "6543");
+        std.env::set("ARENA_API_KEY", "k-1");
+        std.env::set("ARENA_RATIO", "0.25");
+        Server second = std.config::from_environment::<Server>("ARENA_");
+        std.test::equal(second.port, 6543u16);
+        std.test::check(second.ratio == 0.25, "ratio");
+        switch (second.api_key) {
+        case variant o::some(key): std.test::equal_text(key->as_str(), "k-1");
+        case variant o::none: std.test::fail("an API key");
+        }
+    } catch (std.config::field_error failure) {
+        std.test::fail(failure.name.as_str());
+    }
+    std.env::set("ARENA_PG_PORT", "70000");
+    try {
+        Server refused = std.config::from_environment::<Server>("ARENA_");
+        drop refused;
+        std.test::fail("a port beyond u16");
+    } catch (std.config::field_error failure) {
+        expect_field(move failure, std.config::error_code::invalid_value, "ARENA_PG_PORT");
+    }
+    std.env::set("ARENA_PG_PORT", "1");
+    std.env::set("ARENA_PROD", "maybe");
+    try {
+        Server refused = std.config::from_environment::<Server>("ARENA_");
+        drop refused;
+        std.test::fail("a boolean that is not one");
+    } catch (std.config::field_error failure) {
+        expect_field(move failure, std.config::error_code::invalid_value, "ARENA_PROD");
+    }
+    std.env::remove("ARENA_PG_HOST");
+    try {
+        Server refused = std.config::from_environment::<Server>("ARENA_");
+        drop refused;
+        std.test::fail("a missing host");
+    } catch (std.config::field_error failure) {
+        expect_field(move failure, std.config::error_code::missing_value, "ARENA_PG_HOST");
+    }
+}
+
+struct Limits {
+    u64 max_clients;
+    std.string::string level;
+};
+
+// R-SLIB-CONFIG-0004: a struct from the declared keys of a configuration after its layers.
+@test
+void decodes_a_configuration() throws std.test::failure, std.config::config_error, std.alloc::alloc_error {
+    std.config::config settings = std.config::config::create();
+    settings.define("max_clients", "16", "connections at once");
+    settings.define("level", "warn", "lowest level written");
+    settings.set("max_clients", "64", std.config::source::arguments);
+    try {
+        Limits read = settings.decode::<Limits>();
+        std.test::equal(read.max_clients, 64u64);
+        std.test::equal_text(read.level.as_str(), "warn");
+    } catch (std.config::field_error failure) {
+        std.test::fail(failure.name.as_str());
+    }
+    settings.set("max_clients", "many", std.config::source::environment);
+    try {
+        Limits refused = settings.decode::<Limits>();
+        drop refused;
+        std.test::fail("a count that is not a number");
+    } catch (std.config::field_error failure) {
+        expect_field(move failure, std.config::error_code::invalid_value, "max_clients");
+    }
 }

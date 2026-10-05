@@ -4,7 +4,7 @@
   "target": {
     "name": "arm64-apple-darwin-hosted-native-async",
     "manifest": "targets/arm64-apple-darwin.hosted-native-async.json",
-    "manifest_revision": 9,
+    "manifest_revision": 10,
     "compiler": "Apple clang",
     "compiler_version": "21.0.0",
     "compiler_build": "clang-2100.3.34.2"
@@ -145,6 +145,7 @@
       "r_std_thread"
     ],
     "header_static_inline_helpers": [
+      "runtime/include/r_runtime_0_1.h",
       "library/std/async/include/r_std_async.h",
       "library/std/c/include/r_std_c.h",
       "library/std/format/include/r_std_format.h",
@@ -1410,6 +1411,27 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_runtime_panicking",
+      "source": "runtime/source/panic_abort.c",
+      "category": "type-glue-downstream",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_raise",
+      "source": "runtime/source/panic_abort.c",
+      "category": "runtime-panic",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_raise_text",
+      "source": "runtime/source/panic_abort.c",
+      "category": "runtime-panic",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_runtime_rc_clone",
       "source": "runtime/source/rc.c",
       "category": "runtime-owner",
@@ -1557,6 +1579,20 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_runtime_task_panic_park",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_task_panic_unpark",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_runtime_task_resumable_start_prepare",
       "source": "runtime/darwin/source/task.c",
       "category": "runtime-task",
@@ -1679,6 +1715,34 @@
       "c_symbol": "r_runtime_thread_local_cleanup_install",
       "source": "runtime/source/thread_attachment.c",
       "category": "runtime-hosted",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_unwind_cleanup_enter",
+      "source": "runtime/source/panic_abort.c",
+      "category": "runtime-panic",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_unwind_cleanup_leave",
+      "source": "runtime/source/panic_abort.c",
+      "category": "runtime-panic",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_unwind_terminate",
+      "source": "runtime/source/panic_abort.c",
+      "category": "runtime-panic",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_unwinding_current_thread",
+      "source": "runtime/source/panic_abort.c",
+      "category": "type-glue-downstream",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
@@ -1951,6 +2015,13 @@
     {
       "c_symbol": "r_std_async_detach",
       "source": "library/std/async/source/detach.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_async_join",
+      "source": "library/std/async/source/join.c",
       "category": "stdlib-operation",
       "linkage": "external",
       "direct_frame_measurement_available": true
@@ -6283,6 +6354,13 @@
     }
   ],
   "header_static_inline_helpers": [
+    {
+      "c_symbol": "r_runtime_unwinding",
+      "source": "runtime/include/r_runtime_0_1.h",
+      "category": "runtime-panic-header-helper",
+      "linkage": "header-static-inline",
+      "direct_frame_measurement_available": true
+    },
     {
       "c_symbol": "r_std_async_broadcast_destroy",
       "source": "library/std/async/include/r_std_async.h",
