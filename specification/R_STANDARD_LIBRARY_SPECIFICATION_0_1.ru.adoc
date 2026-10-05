@@ -15,7 +15,7 @@
 |Поле |Значение
 |Документ |R Standard Library Specification
 |Версия языка |0.1
-|Редакция документа |0.1.0-draft.67
+|Редакция документа |0.1.0-draft.68
 |Статус |Перевод нормативного черновика; не является стабильным стандартом R 1.0
 |Язык документа |Русский перевод; ключевые нормативные термины приведены на английском
 |Требуемый стандарт языка |R Core Language Specification 0.1
@@ -299,7 +299,8 @@ value:
   для tagged union `+T+`;
 * `+core::type_name::<T>() -> constexpr str+`, `+core::field_count::<T>() -> usize+` и
   `+core::field_name::<T>(usize index) -> constexpr str+`;
-* `+core::target_name() -> constexpr str+` и `+core::profile_name() -> constexpr str+`.
+* `+core::target_name() -> constexpr str+`, `+core::profile_name() -> constexpr str+` и
+  `+core::location() -> constexpr str+`.
 
 Каждая constant форма сворачивается во время translation, а каждая selection понижается
 в прямые сравнения с таблицами времени translation; items ничего не выделяют, не паникуют
@@ -5452,24 +5453,28 @@ panic Core R-OBJ-0006. `+to_stderr+` пишет каждую строку в с�
 *R-SLIB-LOG-0004* — Copy, Send+Sync fieldless enum `+std.log::order+` имеет ровно `+time_first+`
 и `+level_first+`. `+std.log::layout+` — Move struct с открытыми полями
 `+std.string::string time_name+`, `+std.string::string level_name+`,
-`+std.string::string message_name+`, `+o<std.string::string> task_name+`, `+u32 time_digits+`,
-`+bool trim_time+`, `+bool omit_empty_message+` и `+std.log::order sequence+`:
+`+std.string::string message_name+`, `+o<std.string::string> task_name+`,
+`+o<std.string::string> caller_name+`, `+u32 time_digits+`, `+bool trim_time+`,
+`+bool omit_empty_message+` и `+std.log::order sequence+`:
 
 * `+std.log::layout::standard() -> std.log::layout throws std.alloc::alloc_error+`;
 * `+std.log::logger::set_layout(std.log::logger* this, std.log::layout value) -> void throws std.alloc::alloc_error+`;
-* `+std.log::logger::with(const std.log::logger* this, const std.log::fields* extra) -> std.log::logger throws std.alloc::alloc_error+`.
+* `+std.log::logger::with(const std.log::logger* this, const std.log::fields* extra) -> std.log::logger throws std.alloc::alloc_error+`;
+* `+std.log::logger::log_at(const std.log::logger* this, std.log::level value, str message, const std.log::fields* extra, str caller) -> void throws std.error::fault+`.
 
 `+standard+` — раскладка R-SLIB-LOG-0002, с которой начинает каждый logger `+writer::logger+`:
 `+time+` с тремя дробными цифрами, `+level+`, `+task+` и `+message+`, время первым, каждое
-сообщение пишется.
+сообщение пишется, места вызова нет.
 `+set_layout+` заставляет logger писать записи с этой раскладкой. Члены носят её имена,
 переписанные как имена полей (R-SLIB-LOG-0001); задача не пишется, если `+task_name+` — none;
 время, всегда в UTC, имеет `+time_digits+` дробных цифр, девять при большем запросе, лишние
 отбрасываются, а с `+trim_time+` не пишутся его конечные нули и точка, если все цифры нулевые; с
-`+omit_empty_message+` у записи с пустым сообщением нет члена сообщения. С
-`+time_first+` время, уровень, задача и сообщение идут перед привязанными полями и полями
+`+omit_empty_message+` у записи с пустым сообщением нет члена сообщения. `+log_at+` пишет запись как `+log+`, с местом вызова —
+членом с именем `+caller_name+`, если оно есть в раскладке и caller не пуст; `+log+` и методы
+уровней места не пишут. Программа передаёт в caller `+core::location()+` (Core R-REFL-0004). С
+`+time_first+` время, уровень, задача, место и сообщение идут перед привязанными полями и полями
 записи; с `+level_first+` первым идёт уровень, затем привязанные поля, поля записи, время,
-задача и сообщение. `+with+` возвращает другой logger той же очереди, как `+share+`, записи
+задача, место и сообщение. `+with+` возвращает другой logger той же очереди, как `+share+`, записи
 которого несут привязанные поля этого logger, а затем поля extra перед полями каждой записи;
 этот logger не меняется.
 

@@ -8,13 +8,13 @@
 #include <stdint.h>
 #include <wchar.h>
 
-#define R_RUNTIME_TARGET_MANIFEST_SHA256 "bdd006bbf11db03b6be1d40ede243f0c642fa20febc956d491ccb6bd5110b5b4"
+#define R_RUNTIME_TARGET_MANIFEST_SHA256 "fb90bb522e22239440d5e76a8390a2506fc54ffdbd28dd91d38b1ff0dbb31981"
 #define R_RUNTIME_TARGET_MANIFEST_SHA256_BYTES \
     { \
-        UINT8_C(0xbd), UINT8_C(0xd0), UINT8_C(0x06), UINT8_C(0xbb), UINT8_C(0xf1), UINT8_C(0x1d), UINT8_C(0xb0), UINT8_C(0x3b), \
-        UINT8_C(0x6b), UINT8_C(0xe1), UINT8_C(0xd4), UINT8_C(0x0e), UINT8_C(0xde), UINT8_C(0x24), UINT8_C(0x3f), UINT8_C(0x0c), \
-        UINT8_C(0x64), UINT8_C(0x2f), UINT8_C(0xa2), UINT8_C(0x0f), UINT8_C(0xeb), UINT8_C(0xc9), UINT8_C(0x56), UINT8_C(0xd4), \
-        UINT8_C(0x91), UINT8_C(0xcc), UINT8_C(0xb6), UINT8_C(0xbd), UINT8_C(0x51), UINT8_C(0x10), UINT8_C(0xb5), UINT8_C(0xb4) \
+        UINT8_C(0xfb), UINT8_C(0x90), UINT8_C(0xbb), UINT8_C(0x52), UINT8_C(0x2e), UINT8_C(0x22), UINT8_C(0x23), UINT8_C(0x94), \
+        UINT8_C(0x40), UINT8_C(0xd5), UINT8_C(0xe7), UINT8_C(0x6a), UINT8_C(0x83), UINT8_C(0x90), UINT8_C(0xa2), UINT8_C(0x50), \
+        UINT8_C(0x6f), UINT8_C(0xc5), UINT8_C(0x4f), UINT8_C(0xfd), UINT8_C(0xbd), UINT8_C(0x28), UINT8_C(0xdd), UINT8_C(0x91), \
+        UINT8_C(0xd3), UINT8_C(0x8b), UINT8_C(0x1f), UINT8_C(0xf0), UINT8_C(0xdb), UINT8_C(0xb3), UINT8_C(0x19), UINT8_C(0x81) \
     }
 
 _Static_assert(SIZE_MAX >= UINT64_C(2305843009213693951),

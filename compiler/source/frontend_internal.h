@@ -1897,7 +1897,10 @@ typedef enum RStandardCallOperation {
     /* R-SLIB-ASYNC-0020 (L39): std.async::join names the operand of an await only; that await
        (HIR integer_value 1, MIR integer_value 1) observes a panic of the task into a
        std.thread::join_result instead of continuing it. */
-    R_STANDARD_CALL_ASYNC_JOIN
+    R_STANDARD_CALL_ASYNC_JOIN,
+    /* R-REFL-0004 (M44.3): core::location(), folded to the program string `module.path:line` of
+       the call while lowering, like target_name and profile_name; never reaches HIR. */
+    R_STANDARD_CALL_CORE_LOCATION
 } RStandardCallOperation;
 
 typedef struct RStandardMathOperationDescriptor {

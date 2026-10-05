@@ -2,8 +2,8 @@
   "schema_version": 3,
   "generated_from": {
     "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-    "revision": "0.1.0-draft.67",
-    "sha256": "d3f8392f1e9bf22ead7b79ba3b88080b0e1ef57d4f6ccc57a4d8c2326fae1eba"
+    "revision": "0.1.0-draft.68",
+    "sha256": "9ea53ce9c84c09b9f86e43e7864bef3ed7689609daf107cddd188e0f0481fffc"
   },
   "extraction": {
     "qualified_item_pattern": "(?<![A-Za-z0-9_.])((?:core|std\\.[a-z][a-z0-9]*)::[A-Za-z_][A-Za-z0-9_]*)",
@@ -11,7 +11,7 @@
       "R-LIB-0001": 20,
       "R-LIB-0011": 10,
       "R-LIB-0012": 22,
-      "R-LIB-0024": 15,
+      "R-LIB-0024": 16,
       "R-LIB-0025": 4,
       "R-SLIB-C-0001": 1,
       "R-SLIB-CONV-0002": 1,
@@ -26,7 +26,7 @@
       "R-LIB-0001": "5375ba18932b66260e350206caa3bdd284a0d99ccb7365d6715ec86a82a256ac",
       "R-LIB-0011": "bad2e9acdb5d0e246e8b7ae30d39bd311a53a20b06d361b34b6558469c790062",
       "R-LIB-0012": "c2aa9b207f7297de2ab9c470dabf728f2fa1d92c2827b010ef7de32090bc1be1",
-      "R-LIB-0024": "62d97edd14420baaab3dd506cc5f9573708352273e0e8cc17d8fbe7fa236c7ca",
+      "R-LIB-0024": "243b8b9c6bc7f7090a3f685b84f1715f20dc581efbb2f615837ce3f7f8f602df",
       "R-LIB-0025": "536bb3dc8c2d40e442d578aad7199694ad01cb313c0e04996b4f439e582223b4",
       "R-SLIB-C-0001": "49e64346f93cce514fc3d6825645d536f78730d1219412c267f7aadb626baf83",
       "R-SLIB-CONV-0002": "467f4b66ef802d7b779b01c6c1a99a12cfdcef70d10129d56c97f6a672a12a17",
@@ -5011,6 +5011,52 @@
         },
         "completion": null,
         "descriptor_sha256": "ecc20395c476910e66f10375ad740dd52ca824bd3c7e7036d8e5eb66aea24cc9"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "core::location#operation",
+      "id": "core::location",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_family",
+      "normative_rules": [
+        "R-LIB-0024",
+        "R-SLIB-LOG-0004"
+      ],
+      "implementation": {
+        "kind": "intrinsic",
+        "compiler_contract": "The semantic pass folds the module path and line of the call into a program string."
+      },
+      "source_signature": "core::location() -> constexpr str",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "constexpr str",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "constexpr str"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "constexpr str",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "constexpr str"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "3f4e91d76ddda30b61a55a0dca91ad61b75b7a067ea406ff3503ddcbf43f26e8"
       },
       "panics_on_allocation_failure": false,
       "discardable_result": false,
@@ -15661,6 +15707,7 @@
         "R-SLIB-JSONRPC-0004",
         "R-SLIB-LOG-0002",
         "R-SLIB-LOG-0003",
+        "R-SLIB-LOG-0004",
         "R-SLIB-LOG-0005",
         "R-SLIB-MCP-0011",
         "R-SLIB-MCP-0014",
@@ -28118,7 +28165,8 @@
       "normative_rules": [
         "R-SLIB-LOG-0001",
         "R-SLIB-LOG-0002",
-        "R-SLIB-LOG-0003"
+        "R-SLIB-LOG-0003",
+        "R-SLIB-LOG-0004"
       ],
       "implementation": {
         "kind": "r_source",

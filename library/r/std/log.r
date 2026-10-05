@@ -13,13 +13,14 @@ enum order { time_first, level_first };
 
 /* R-SLIB-LOG-0004: the members every record of a logger carries: the names of the time, the
    level and the message, the name of the task or none, the fractional digits of the time and
-   whether its trailing zeros are left out, whether an empty message is left out, and their
-   order. */
+   whether its trailing zeros are left out, whether an empty message is left out, the name of
+   the place of the call or none, and their order. */
 struct layout {
     std.string::string time_name;
     std.string::string level_name;
     std.string::string message_name;
     o<std.string::string> task_name;
+    o<std.string::string> caller_name;
     u32 time_digits;
     bool trim_time;
     bool omit_empty_message;
@@ -170,19 +171,25 @@ protected array<field> copy_entries(const array<field>* entries) throws std.allo
 layout layout::standard() throws std.alloc::alloc_error {
     return layout {.time_name = std.string::from_str("time"), .level_name = std.string::from_str("level"),
                    .message_name = std.string::from_str("message"), .task_name = o::some(std.string::from_str("task")),
+                   .caller_name = o::none,
                    .time_digits = 3u32, .trim_time = false, .omit_empty_message = false,
                    .sequence = order::time_first};
 }
 
-protected layout copy_layout(const layout* source) throws std.alloc::alloc_error {
-    o<std.string::string> task_field = o::none;
-    switch (source->task_name) {
-    case variant o::some(name): task_field = o::some(std.string::from_str(name->as_str()));
+protected o<std.string::string> copy_name(const (o<std.string::string>)* name) throws std.alloc::alloc_error {
+    switch (*name) {
+    case variant o::some(text): return o::some(std.string::from_str(text->as_str()));
     case variant o::none: break;
     }
+    return o::none;
+}
+
+protected layout copy_layout(const layout* source) throws std.alloc::alloc_error {
+    o<std.string::string> task_field = copy_name(&source->task_name);
     return layout {.time_name = std.string::from_str(source->time_name.as_str()),
                    .level_name = std.string::from_str(source->level_name.as_str()),
                    .message_name = std.string::from_str(source->message_name.as_str()), .task_name = move task_field,
+                   .caller_name = copy_name(&source->caller_name),
                    .time_digits = source->time_digits, .trim_time = source->trim_time,
                    .omit_empty_message = source->omit_empty_message, .sequence = source->sequence};
 }
@@ -253,11 +260,17 @@ void logger::set_layout(logger* this, layout value) throws std.alloc::alloc_erro
     case variant o::some(name): task_field = o::some(field_name(name->as_str()));
     case variant o::none: break;
     }
+    o<std.string::string> caller_field = o::none;
+    switch (value.caller_name) {
+    case variant o::some(name): caller_field = o::some(field_name(name->as_str()));
+    case variant o::none: break;
+    }
     u32 digits = value.time_digits;
     if (digits > 9u32) { digits = 9u32; }
     layout written = layout {.time_name = field_name(value.time_name.as_str()),
                              .level_name = field_name(value.level_name.as_str()),
                              .message_name = field_name(value.message_name.as_str()), .task_name = move task_field,
+                             .caller_name = move caller_field,
                              .time_digits = digits, .trim_time = value.trim_time,
                              .omit_empty_message = value.omit_empty_message, .sequence = value.sequence};
     drop value;
@@ -393,7 +406,12 @@ protected bool logger::carries(const logger* this, str name) {
         return true;
     }
     switch (this->shape.task_name) {
-    case variant o::some(task_field): return same(name, task_field->as_str());
+    case variant o::some(task_field):
+        if (same(name, task_field->as_str()) == true) { return true; }
+    case variant o::none: break;
+    }
+    switch (this->shape.caller_name) {
+    case variant o::some(caller_field): return same(name, caller_field->as_str());
     case variant o::none: break;
     }
     return false;
@@ -451,6 +469,17 @@ protected void logger::put_member(const logger* this, std.string::string* line, 
     append_quoted(line, value, false);
 }
 
+/* The place of the call, when the layout names it and the record has one. */
+protected void logger::put_caller(const logger* this, std.string::string* line, str caller)
+    throws std.alloc::alloc_error {
+    const u8[] bytes = caller;
+    if (len(bytes) == 0usize) { return; }
+    switch (this->shape.caller_name) {
+    case variant o::some(name): this->put_member(line, false, name->as_str(), caller, true);
+    case variant o::none: break;
+    }
+}
+
 /* The message member, left out when it is empty and the layout says so. */
 protected void logger::put_message(const logger* this, std.string::string* line, str message)
     throws std.alloc::alloc_error {
@@ -461,7 +490,7 @@ protected void logger::put_message(const logger* this, std.string::string* line,
 
 /* R-SLIB-LOG-0002, R-SLIB-LOG-0004: the line of one record in the order of the layout. */
 protected std.string::string logger::render(const logger* this, level value, str message,
-                                             const fields* extra) throws std.error::fault {
+                                             const fields* extra, str caller) throws std.error::fault {
     std.string::string time = this->stamp(std.time::system_now());
     str name = core::enum_name(value);
     std.string::string line = std.string::create();
@@ -475,6 +504,7 @@ protected std.string::string logger::render(const logger* this, level value, str
             this->put_member(&line, false, task_field->as_str(), task_text.as_str(), false);
         case variant o::none: break;
         }
+        this->put_caller(&line, caller);
         this->put_message(&line, message);
         this->put_fields(&line, &this->bound);
         this->put_fields(&line, &extra->entries);
@@ -490,6 +520,7 @@ protected std.string::string logger::render(const logger* this, level value, str
             this->put_member(&line, false, task_field->as_str(), task_text.as_str(), false);
         case variant o::none: break;
         }
+        this->put_caller(&line, caller);
         this->put_message(&line, message);
     }
     if (this->style == format::json) { line.append("}"); }
@@ -497,13 +528,12 @@ protected std.string::string logger::render(const logger* this, level value, str
     return move line;
 }
 
-/* R-SLIB-LOG-0002: queues one record of `value` with its fields when the level reaches the
-   threshold; a record that finds the queue full or its writer gone is dropped and counted. It
-   never waits. */
-void logger::log(const logger* this, level value, str message, const fields* extra)
+/* R-SLIB-LOG-0002, R-SLIB-LOG-0004: log with the place of the call, `core::location()` at the
+   call site, which a layout with a caller name writes; an empty place writes none. */
+void logger::log_at(const logger* this, level value, str message, const fields* extra, str caller)
     throws std.error::fault {
     if (this->enabled(value) == false) { return; }
-    std.string::string line = this->render(value, message, extra);
+    std.string::string line = this->render(value, message, extra, caller);
     std.sync::try_send_result<std.string::string> sent = std.sync::try_send(&this->lines, move line);
     switch (move sent) {
     case variant std.sync::try_send_result::sent: return;
@@ -513,6 +543,14 @@ void logger::log(const logger* this, level value, str message, const fields* ext
         drop rejected;
     }
     core::atomic_fetch_add(&this->state->dropped, 1u64, core::memory_order::relaxed) as void;
+}
+
+/* R-SLIB-LOG-0002: queues one record of `value` with its fields when the level reaches the
+   threshold; a record that finds the queue full or its writer gone is dropped and counted. It
+   never waits. */
+void logger::log(const logger* this, level value, str message, const fields* extra)
+    throws std.error::fault {
+    this->log_at(value, message, extra, "");
 }
 
 protected void logger::plain(const logger* this, level value, str message)

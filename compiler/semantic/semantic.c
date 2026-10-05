@@ -24392,6 +24392,8 @@ static bool r_body_core_operation(const RFrontendContext *context,
         *operation = R_STANDARD_CALL_CORE_TARGET_NAME;
     } else if (r_semantic_token_text_equal_owned(context, &components[1], "profile_name")) {
         *operation = R_STANDARD_CALL_CORE_PROFILE_NAME;
+    } else if (r_semantic_token_text_equal_owned(context, &components[1], "location")) {
+        *operation = R_STANDARD_CALL_CORE_LOCATION;
     } else {
         return false;
     }

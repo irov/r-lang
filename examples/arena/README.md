@@ -227,7 +227,8 @@ stopped: accepted 1, failed 0, requests 22, panics 1, free connections 2, log li
 
 The server writes one JSON record per line to standard error through a `std.log` logger whose
 layout puts the level first, then the bound fields, the fields of the record, the time as
-`timestamp` in RFC 3339 with the digits the clock gives, and the message last:
+`timestamp` in RFC 3339 with the digits the clock gives, the place of the call as `caller`
+(`core::location()`, passed to `logger::log_at`), and the message last:
 
 ```r
 std.log::layout shape = std.log::layout::standard();
@@ -236,6 +237,7 @@ shape.task_name = o::none;
 shape.time_digits = 9u32;
 shape.trim_time = true;
 shape.omit_empty_message = true;
+shape.caller_name = o::some(std.string::from_str("caller"));
 shape.sequence = std.log::order::level_first;
 base.set_layout(move shape);
 ```
@@ -246,14 +248,14 @@ binds `usr.id` the same way, and `close_request` writes the record of the reques
 status calls for:
 
 ```text
-{"level":"info","service":"arena","component":"http","request_id":"req-2","usr.id":"42","http.method":"GET","http.route":"/api/me","http.status_code":200,"timestamp":"2026-10-05T14:12:03.512881Z","message":"http request completed"}
+{"level":"info","service":"arena","component":"http","request_id":"req-2","usr.id":"42","http.method":"GET","http.route":"/api/me","http.status_code":200,"timestamp":"2026-10-05T14:12:03.512881Z","caller":"example.arena.server:186","message":"http request completed"}
 ```
 
 A request whose handler panics loses its flow and its logger, so `report_panic` writes its
 record from the notes of the request (`std.http::notes`), which outlive the flow:
 
 ```text
-{"level":"error","service":"arena","component":"http","request_id":"req-17","usr.id":"42","http.method":"POST","http.route":"/api/commands/crash","http.status_code":500,"panic":"explicit: the crash command","severity":"critical","timestamp":"…","message":"panic recovered"}
+{"level":"error","service":"arena","component":"http","request_id":"req-17","usr.id":"42","http.method":"POST","http.route":"/api/commands/crash","http.status_code":500,"panic":"explicit: the crash command","severity":"critical","timestamp":"…","caller":"example.arena.server:96","message":"panic recovered"}
 ```
 
 `POST /api/background` answers 202 and leaves a detached task that panics. Nothing observes that

@@ -43,6 +43,9 @@ async i32 probe(Color color) {
     }
     bool ok_2 = same(shape_name, "square");
     if (ok_2 == false) { return 7; }
+    /* M44.3: the place of the call inside an async frame. */
+    bool ok_3 = same(core::location(), "test.codegen.async_reflection:47");
+    if (ok_3 == false) { return 8; }
     return 0;
 }
 

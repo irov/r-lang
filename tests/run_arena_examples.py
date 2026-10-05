@@ -303,14 +303,15 @@ def server_checks(database, environment):
     names = [[name for name, _ in record] for record in records]
     values = [dict(record) for record in records]
     assert names[0] == ['level', 'service', 'component', 'request_id', 'http.method', 'http.route',
-                        'http.status_code', 'timestamp', 'message'], names[0]
+                        'http.status_code', 'timestamp', 'caller', 'message'], names[0]
     assert values[0]['request_id'] == generated and values[0]['level'] == 'warn', values[0]
     assert names[1] == ['level', 'service', 'component', 'request_id', 'usr.id', 'http.method', 'http.route',
-                        'http.status_code', 'timestamp', 'message'], names[1]
+                        'http.status_code', 'timestamp', 'caller', 'message'], names[1]
     assert values[1] == dict(values[1], level='info', service='arena', component='http', request_id='req-2',
                              **{'usr.id': '42', 'http.method': 'GET', 'http.route': '/api/me',
                                 'http.status_code': 200, 'message': 'http request completed'}), values[1]
     for record in values:
+        assert re.fullmatch(r'example\.arena\.server:\d+', record['caller']), record
         stamp = record['timestamp']
         assert re.fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d{0,8}[1-9])?Z', stamp), stamp
         assert abs(datetime.datetime.fromisoformat(stamp.replace('Z', '+00:00')).timestamp() - time.time()) < 300
@@ -321,14 +322,14 @@ def server_checks(database, environment):
     unobserved = [dict(record) for record in records if dict(record)['message'] == 'panic recovered' and
                   'request_id' not in dict(record)]
     assert len(unobserved) == 1 and [name for name, _ in records[[dict(r) for r in records].index(unobserved[0])]] == [
-        'level', 'service', 'component', 'panic', 'place', 'severity', 'timestamp', 'message'], unobserved
+        'level', 'service', 'component', 'panic', 'place', 'severity', 'timestamp', 'caller', 'message'], unobserved
     assert unobserved[0]['panic'] == 'explicit: a background reward failed' and \
         re.fullmatch(r'module \d+ bytes \[\d+,\d+\)', unobserved[0]['place']), unobserved
     panicked = [record for record in records if dict(record)['message'] == 'panic recovered' and
                 'request_id' in dict(record)]
     assert len(panicked) == 1 and [name for name, _ in panicked[0]] == [
         'level', 'service', 'component', 'request_id', 'usr.id', 'http.method', 'http.route', 'http.status_code',
-        'panic', 'severity', 'timestamp', 'message'], panicked
+        'panic', 'severity', 'timestamp', 'caller', 'message'], panicked
     assert dict(panicked[0]) == dict(dict(panicked[0]), level='error', request_id='req-17', **{
         'usr.id': '42', 'http.method': 'POST', 'http.route': '/api/commands/crash', 'http.status_code': 500,
         'panic': 'explicit: the crash command', 'severity': 'critical'}), panicked

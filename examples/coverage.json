@@ -1,9 +1,9 @@
 {
   "version": 4,
   "scope": "source references and resolved program operations and types; execution checked separately",
-  "total_records": 1562,
-  "covered_records": 1562,
-  "application_records": 1562,
+  "total_records": 1563,
+  "covered_records": 1563,
+  "application_records": 1563,
   "items": [
     {
       "record_id": "core::adopt#operation",
@@ -459,6 +459,18 @@
       "examples": [
         "jobs",
         "tournament"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "core::location#operation",
+      "required": [
+        "core::location"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
       ],
       "resolved_type_examples": []
     },

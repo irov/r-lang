@@ -25,6 +25,7 @@ static const RStandardOperationRegistryEntry r_standard_operation_registry[] = {
     {"core", "", "field_name", false},
     {"core", "", "hash", false},
     {"core", "", "key_equal", false},
+    {"core", "", "location", false},
     {"core", "", "profile_name", false},
     {"core", "", "release", false},
     {"core", "", "replace", false},

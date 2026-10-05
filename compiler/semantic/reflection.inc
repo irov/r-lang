@@ -1147,7 +1147,8 @@ static bool r_reflection_lower_value_call(RBodyContext *body,
                                           RExpressionResult *result) {
     const char *rule_id = operation == R_STANDARD_CALL_CORE_VARIANT_NAME ? "R-REFL-0002"
                           : ((operation == R_STANDARD_CALL_CORE_TARGET_NAME) ||
-                             (operation == R_STANDARD_CALL_CORE_PROFILE_NAME))
+                             (operation == R_STANDARD_CALL_CORE_PROFILE_NAME) ||
+                             (operation == R_STANDARD_CALL_CORE_LOCATION))
                               ? "R-REFL-0004"
                               : "R-REFL-0001";
     RAstRef argument;
@@ -1161,6 +1162,33 @@ static bool r_reflection_lower_value_call(RBodyContext *body,
 
     (void)operation_span;
     r_body_expression_invalid(result);
+    if (operation == R_STANDARD_CALL_CORE_LOCATION) {
+        /* M44.3: the module of the source that holds the call and the line of the call. */
+        const char *module_name = r_frontend_source_module_name(body->frontend, call_span.source);
+        uint32_t line = UINT32_C(0);
+        uint32_t column = UINT32_C(0);
+        char text[512];
+        int length;
+
+        if (arguments_view->child_count != UINT32_C(0)) {
+            return r_body_diagnostic(body,
+                                     "R-DIAG-TYPE-001",
+                                     rule_id,
+                                     "core::location takes no arguments",
+                                     call_span);
+        }
+        r_frontend_source_position(body->frontend, call_span, &line, &column);
+        length = snprintf(text,
+                          sizeof(text),
+                          "%s:%u",
+                          module_name == NULL ? "" : module_name,
+                          (unsigned int)line);
+        if ((length < 0) || ((size_t)length >= sizeof(text))) {
+            body->frontend->resource_status = R_FRONTEND_INTERNAL_ERROR;
+            return false;
+        }
+        return r_reflection_append_text_node(body, call_span, text, (size_t)length, result);
+    }
     if ((operation == R_STANDARD_CALL_CORE_TARGET_NAME) ||
         (operation == R_STANDARD_CALL_CORE_PROFILE_NAME)) {
         const char *text = operation == R_STANDARD_CALL_CORE_TARGET_NAME
@@ -1286,8 +1314,9 @@ static bool r_reflection_lower_value_call(RBodyContext *body,
 /* ---- instantiation ---- */
 
 static bool r_reflection_is_operation(RStandardCallOperation operation) {
-    return (operation >= R_STANDARD_CALL_CORE_ENUM_NAME) &&
-           (operation <= R_STANDARD_CALL_CORE_REFLECT_FIELD_NAME);
+    return ((operation >= R_STANDARD_CALL_CORE_ENUM_NAME) &&
+            (operation <= R_STANDARD_CALL_CORE_REFLECT_FIELD_NAME)) ||
+           (operation == R_STANDARD_CALL_CORE_LOCATION);
 }
 
 /* R-REFL-0001..0003 at instantiation: a dependent form whose operand type became concrete

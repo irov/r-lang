@@ -3206,6 +3206,7 @@ static const char *r_c17_bytes_operation_c_name(RStandardCallOperation operation
     case R_STANDARD_CALL_CORE_VARIANT_NAME:
     case R_STANDARD_CALL_CORE_TARGET_NAME:
     case R_STANDARD_CALL_CORE_PROFILE_NAME:
+    case R_STANDARD_CALL_CORE_LOCATION:
     case R_STANDARD_CALL_CORE_REFLECT_ENUM_COUNT:
     case R_STANDARD_CALL_CORE_REFLECT_ENUM_MIN:
     case R_STANDARD_CALL_CORE_REFLECT_ENUM_MAX:
@@ -11541,8 +11542,9 @@ static bool r_c17_reflection_operation(RStandardCallOperation operation) {
 }
 
 static bool r_c17_reflection_unlowerable_operation(RStandardCallOperation operation) {
-    return (operation >= R_STANDARD_CALL_CORE_TARGET_NAME) &&
-           (operation <= R_STANDARD_CALL_CORE_REFLECT_FIELD_NAME);
+    return ((operation >= R_STANDARD_CALL_CORE_TARGET_NAME) &&
+            (operation <= R_STANDARD_CALL_CORE_REFLECT_FIELD_NAME)) ||
+           (operation == R_STANDARD_CALL_CORE_LOCATION);
 }
 
 /* The fieldless enum of enum_name/ordinal/at/from_name or the tagged union of variant_name. */

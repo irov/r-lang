@@ -103,6 +103,10 @@ i32 main() {
         if (ok_9 == false) { throw TestAssertionFailed {.code = 23}; }
         bool ok_10 = same(generic_label, "high");
         if (ok_10 == false) { throw TestAssertionFailed {.code = 24}; }
+        /* M44.3: the place of the call, module path and line. */
+        constexpr str place = core::location();
+        bool ok_11 = same(place, "test.codegen.reflection:107");
+        if (ok_11 == false) { throw TestAssertionFailed {.code = 25}; }
         return 0;
     } catch (TestAssertionFailed failure) { return failure.code; }
 }

@@ -114,10 +114,11 @@ static void r_runtime_arc_release_implicit_weak(RRuntimeArcControl *control) {
 
     atomic_store_explicit(
         &control->implicit_weak_state, R_RUNTIME_ARC_IMPLICIT_WEAK_RELEASING, memory_order_release);
-    previous = atomic_fetch_sub_explicit(&control->weak_count, 1U, memory_order_release);
+    /* acq_rel rather than a release decrement and an acquire fence: the same order, and one
+       that ThreadSanitizer, which models no standalone fence, sees (M44-1). */
+    previous = atomic_fetch_sub_explicit(&control->weak_count, 1U, memory_order_acq_rel);
 
     if (previous == 1U) {
-        atomic_thread_fence(memory_order_acquire);
         r_runtime_arc_free_control(control);
         return;
     }
@@ -323,9 +324,9 @@ void r_runtime_arc_release(RRuntimeArc *owner) {
     }
     control = owner->control;
     owner->control = NULL;
-    previous = atomic_fetch_sub_explicit(&control->strong_count, 1U, memory_order_release);
+    /* The last owner sees every access of the others before it drops the value (M44-1). */
+    previous = atomic_fetch_sub_explicit(&control->strong_count, 1U, memory_order_acq_rel);
     if (previous == 1U) {
-        atomic_thread_fence(memory_order_acquire);
         if (control->type.drop != NULL) {
             control->type.drop(r_runtime_arc_value(control));
         }
@@ -342,9 +343,8 @@ void r_runtime_weak_arc_release(RRuntimeWeakArc *owner) {
     }
     control = owner->control;
     owner->control = NULL;
-    previous = atomic_fetch_sub_explicit(&control->weak_count, 1U, memory_order_release);
+    previous = atomic_fetch_sub_explicit(&control->weak_count, 1U, memory_order_acq_rel);
     if (previous == 1U) {
-        atomic_thread_fence(memory_order_acquire);
         r_runtime_arc_free_control(control);
     }
 }
@@ -356,12 +356,11 @@ void *r_runtime_arc_destroy_begin(RRuntimeArc *owner) {
     if (control == NULL) {
         return NULL;
     }
-    previous = atomic_fetch_sub_explicit(&control->strong_count, 1U, memory_order_release);
+    previous = atomic_fetch_sub_explicit(&control->strong_count, 1U, memory_order_acq_rel);
     if (previous != 1U) {
         owner->control = NULL;
         return NULL;
     }
-    atomic_thread_fence(memory_order_acquire);
     return r_runtime_arc_value(control);
 }
 

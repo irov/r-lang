@@ -270,6 +270,9 @@ these rules are the ones that most often reject otherwise reasonable code:
   to a local first.
 - Importing an R-source module requires `import std.x;` even for the R part of a C module.
 - `constexpr str` converts to `const u8[]` through a `str` local (one conversion per expression).
+- `core::location()` is the translation-time `module.path:line` of the call; pass it explicitly
+  (`logger.log_at(level, message, &fields, core::location())`), since R has no implicit caller
+  parameters.
 - A panic ends its task and `await` continues it in the awaiting task; to survive the panic of a
   child (a request handler), await it as `await std.async::join(move t)`, which gives a
   `std.thread::join_result<T>` and admits only a task without checked errors (catch them inside).

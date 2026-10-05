@@ -622,6 +622,7 @@ async void writes_a_level_first_format() throws std.test::failure, std.error::fa
     shape.time_digits = 9u32;
     shape.trim_time = true;
     shape.omit_empty_message = true;
+    shape.caller_name = o::some(std.string::from_str("caller"));
     shape.sequence = std.log::order::level_first;
     plain.set_layout(move shape);
     std.log::fields statics = std.log::fields::create();
@@ -636,7 +637,7 @@ async void writes_a_level_first_format() throws std.test::failure, std.error::fa
     first.text("http.method", "GET");
     first.text("http.route", "/api/users/{id}");
     first.number("http.status_code", 200i64);
-    user.log(std.log::level::info, "http request completed", &first);
+    user.log_at(std.log::level::info, "http request completed", &first, "example.arena.server:42");
     std.log::fields second = std.log::fields::create();
     second.text("panic", "explicit: the crash command");
     second.text("severity", "critical");
@@ -661,7 +662,7 @@ async void writes_a_level_first_format() throws std.test::failure, std.error::fa
                    "{\"level\":\"info\",\"service\":\"arena\",\"component\":\"http\",\"request_id\":\"req-2\","
                    "\"usr.id\":\"42\",\"http.method\":\"GET\",\"http.route\":\"/api/users/{id}\","
                    "\"http.status_code\":200,\"timestamp\":\"",
-                   "\",\"message\":\"http request completed\"}");
+                   "\",\"caller\":\"example.arena.server:42\",\"message\":\"http request completed\"}");
     expect_trimmed(line_at(lines, 1usize),
                    "{\"level\":\"error\",\"service\":\"arena\",\"component\":\"http\",\"request_id\":\"req-2\","
                    "\"panic\":\"explicit: the crash command\",\"severity\":\"critical\",\"timestamp\":\"",

@@ -1,7 +1,7 @@
 # R Frontend Parser 0.1
 
 This directory contains the bootstrap frontend for the normative English R Core
-Specification `0.1.0-draft.97`.
+Specification `0.1.0-draft.98`.
 
 ```text
 UTF-8 source
@@ -1610,7 +1610,10 @@ program string), so neither MIR nor the emitter sees them. The canonical type sp
 `type_name` is `module.path::Name<arguments>` for aggregates and the source spelling for
 every other type (`const T*`, `T[]`, `array<T>`, `o<T>`, `raw fn(P) -> R`, ...).
 `core::target_name()` and `core::profile_name()` fold to program strings from the generated
-`target_identity.generated.inc` and the selected profile (R-REFL-0004). The five runtime
+`target_identity.generated.inc` and the selected profile, and `core::location()` to
+`module.path:line` of the call, from `r_frontend_source_module_name` and the line of the call
+span (R-REFL-0004); a call in a generic body folds where it is written, so every instance names
+the same place. The five runtime
 selections `core::enum_name(value)`, `core::enum_ordinal(value)`, `core::enum_at::<T>(index)`,
 `core::enum_from_name::<T>(name)` and `core::variant_name(const T* value)` stay
 `R_HIR_STANDARD_CALL` nodes; preflight records one helper per selection and enumeration,

@@ -6,7 +6,7 @@ Normative draft of the R programming language
 | --- | --- |
 | Document | R Core Language Specification |
 | Language version | 0.1 |
-| Document revision | 0.1.0-draft.97 |
+| Document revision | 0.1.0-draft.98 |
 | Status | Normative draft; not a stable R 1.0 standard |
 | Document language | English; normative original |
 | Target backend | ISO/IEC 9899:2018 (C17) |
@@ -1372,7 +1372,7 @@ Coverage is exhaustive over constructor combinations. Guards never establish cov
 
 <a id="R-REFL-0004"></a>
 
-**R-REFL-0004** — `core::target_name()` is the target triple of the selected target manifest and `core::profile_name()` the name of the selected library profile (R-CONF-G005), both `constexpr str` fixed at translation time; either form takes no argument. Every form of R-REFL-0001..R-REFL-0004 is available in every profile, allocates nothing, panics only through the Core checks of its operands and introduces no run-time type metadata (R-TYPE-0039): the selections are lowered to direct comparisons of the enumeration value, the active tag or the name bytes against translation-time tables.
+**R-REFL-0004** — `core::target_name()` is the target triple of the selected target manifest, `core::profile_name()` the name of the selected library profile (R-CONF-G005) and `core::location()` the place of the call: the path of the module whose source holds the call, a colon and the line of the call counted from 1, as `module.path:line`. All three are `constexpr str` fixed at translation time, and no form takes an argument; a call of `core::location()` in the body of a generic or in a default names its own place. Every form of R-REFL-0001..R-REFL-0004 is available in every profile, allocates nothing, panics only through the Core checks of its operands and introduces no run-time type metadata (R-TYPE-0039): the selections are lowered to direct comparisons of the enumeration value, the active tag or the name bytes against translation-time tables.
 
 <a id="static-conditions"></a>
 

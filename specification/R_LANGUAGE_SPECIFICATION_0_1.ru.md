@@ -6,7 +6,7 @@
 |----|----|
 | Документ | R Core Language Specification |
 | Версия языка | 0.1 |
-| Редакция документа | 0.1.0-draft.97 |
+| Редакция документа | 0.1.0-draft.98 |
 | Статус | Перевод нормативного черновика; не является стабильным стандартом R 1.0 |
 | Язык документа | Русский перевод; ключевые нормативные термины приведены на английском |
 | Целевой backend | ISO/IEC 9899:2018 (C17) |
@@ -1374,7 +1374,7 @@ constexpr str message = (exists == true)
 
 <a id="R-REFL-0004"></a>
 
-**R-REFL-0004** — `core::target_name()` — target triple выбранного target manifest, а `core::profile_name()` — имя выбранного library profile (R-CONF-G005); обе — `constexpr str`, фиксированные во время translation; ни одна форма не принимает argument. Каждая форма R-REFL-0001..R-REFL-0004 доступна в каждом profile, ничего не выделяет, паникует только через Core checks своих operands и не вводит run-time type metadata (R-TYPE-0039): selections понижаются в прямые сравнения значения enumeration, активного tag либо байтов имени с таблицами времени translation.
+**R-REFL-0004** — `core::target_name()` — target triple выбранного target manifest, `core::profile_name()` — имя выбранного library profile (R-CONF-G005), а `core::location()` — место вызова: путь module, в source которого стоит вызов, двоеточие и номер строки вызова, считая с 1, в виде `module.path:line`. Все три — `constexpr str`, фиксированные во время translation, и ни одна форма не принимает argument; вызов `core::location()` в теле generic или в default называет своё собственное место. Каждая форма R-REFL-0001..R-REFL-0004 доступна в каждом profile, ничего не выделяет, паникует только через Core checks своих operands и не вводит run-time type metadata (R-TYPE-0039): selections понижаются в прямые сравнения значения enumeration, активного tag либо байтов имени с таблицами времени translation.
 
 <a id="static-conditions"></a>
 

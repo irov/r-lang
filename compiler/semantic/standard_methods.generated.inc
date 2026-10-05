@@ -346,6 +346,7 @@ static const RStandardResultDescriptor r_standard_results[] = {
     {"core::field_name", "constexpr str"},
     {"core::hash", "u64"},
     {"core::key_equal", "bool"},
+    {"core::location", "constexpr str"},
     {"core::profile_name", "constexpr str"},
     {"core::release", "raw T*"},
     {"core::replace", "T"},

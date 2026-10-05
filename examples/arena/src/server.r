@@ -53,12 +53,13 @@ protected Call open_call(const Server* shared, const std.http::request* incoming
                  .transaction = o::none};
 }
 
-/* A record of the logger of a request; before the request has one, of the server. */
-protected void note(const Server* shared, const Call* call, std.log::level value, str message, const std.log::fields* extra)
-    throws std.error::fault {
+/* A record of the logger of a request, or before the request has one of the server, with the
+   place of the code that writes it. */
+protected void note(const Server* shared, const Call* call, std.log::level value, str message, const std.log::fields* extra,
+                    str caller) throws std.error::fault {
     switch (call->log) {
-    case variant o::some(logger): logger->log(value, message, extra);
-    case variant o::none: shared->log.log(value, message, extra);
+    case variant o::some(logger): logger->log_at(value, message, extra, caller);
+    case variant o::none: shared->log.log_at(value, message, extra, caller);
     }
 }
 
@@ -92,7 +93,7 @@ protected void report_panic(const Server* shared, std.http::method sent, str tar
         std.string::string panic_value = f"{category}: {text}";
         record.text("panic", panic_value.as_str());
         record.text("severity", "critical");
-        shared->log.log(std.log::level::error, "panic recovered", &record);
+        shared->log.log_at(std.log::level::error, "panic recovered", &record, core::location());
     } catch (std.error::fault failure) {
         /* A record that cannot be made is lost; the request has its answer. */
         failure as void;
@@ -182,7 +183,7 @@ protected async std.http::flow<Call> close_request(arc Server shared, std.http::
     std.log::level value = std.log::level::info;
     if (status >= 400u16) { value = std.log::level::warn; }
     if (status >= 500u16) { value = std.log::level::error; }
-    note(&*shared, &current.context, value, "http request completed", &record);
+    note(&*shared, &current.context, value, "http request completed", &record, core::location());
     drop shared;
     return move current;
 }
@@ -554,7 +555,7 @@ protected void log_panic(const Server* shared, std.log::panic_record record) thr
     fields.text("panic", panic_value.as_str());
     fields.text("place", record.place.as_str());
     fields.text("severity", "critical");
-    shared->log.log(std.log::level::error, "panic recovered", &fields);
+    shared->log.log_at(std.log::level::error, "panic recovered", &fields, core::location());
 }
 
 /* The panics that nothing observed, as records of the log, until the server stops or a record
@@ -632,6 +633,7 @@ protected std.log::logger server_log(const std.log::writer* journal) throws std.
     shape.time_digits = 9u32;
     shape.trim_time = true;
     shape.omit_empty_message = true;
+    shape.caller_name = o::some(std.string::from_str("caller"));
     shape.sequence = std.log::order::level_first;
     base.set_layout(move shape);
     std.log::fields statics = std.log::fields::create();

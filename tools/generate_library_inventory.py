@@ -913,6 +913,12 @@ EXPLICIT_RULE_ITEMS: dict[str, tuple[ExplicitPublicItem, ...]] = {
             evidence="core::profile_name",
             item_kind="intrinsic_family",
         ),
+        explicit_operation(
+            "core::location",
+            "core::location() -> constexpr str",
+            evidence="core::location",
+            item_kind="intrinsic_family",
+        ),
     ),
     "R-LIB-0011": tuple(
         explicit_operation(
@@ -1143,7 +1149,7 @@ EXPLICIT_RULE_BLOCK_SHA256 = {
     "R-LIB-0025": "536bb3dc8c2d40e442d578aad7199694ad01cb313c0e04996b4f439e582223b4",
     "R-LIB-0001": "5375ba18932b66260e350206caa3bdd284a0d99ccb7365d6715ec86a82a256ac",
     "R-LIB-0011": "bad2e9acdb5d0e246e8b7ae30d39bd311a53a20b06d361b34b6558469c790062",
-    "R-LIB-0024": "62d97edd14420baaab3dd506cc5f9573708352273e0e8cc17d8fbe7fa236c7ca",
+    "R-LIB-0024": "243b8b9c6bc7f7090a3f685b84f1715f20dc581efbb2f615837ce3f7f8f602df",
     "R-LIB-0012": "c2aa9b207f7297de2ab9c470dabf728f2fa1d92c2827b010ef7de32090bc1be1",
     "R-SLIB-C-0001": "49e64346f93cce514fc3d6825645d536f78730d1219412c267f7aadb626baf83",
     "R-SLIB-CONV-0002": "467f4b66ef802d7b779b01c6c1a99a12cfdcef70d10129d56c97f6a672a12a17",
@@ -1475,6 +1481,16 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
             "kind": "intrinsic",
             "compiler_contract": (
                 "The semantic pass folds the name of the selected library profile into a program string."
+            ),
+        },
+    },
+    "core::location": {
+        "item_kind": "intrinsic_family",
+        "source_signature": "core::location() -> constexpr str",
+        "implementation": {
+            "kind": "intrinsic",
+            "compiler_contract": (
+                "The semantic pass folds the module path and line of the call into a program string."
             ),
         },
     },
