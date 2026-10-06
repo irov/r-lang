@@ -20,20 +20,56 @@ import std.time;
 /* arena is the back end of a mobile game: session tokens signed with ES256, administrator
    tokens with HS256, access tokens for the APIs it calls, its settings, its users in PostgreSQL
    and its HTTP API. */
-enum Command { token, check, jwks, admin, admin_check, google, client, login, config, migrate, register, ban, sync, users, user, server };
+/* The form of a command in the usage text; the last command of a line ends it (Core R-AGG-0013). */
+@attribute(variant) struct help { str form; bool ends_line = false; };
+
+enum Command {
+    @help("token KEY ACCOUNT NICK EMAIL PLATFORM PROVIDER AVATAR") token,
+    @help("check KEY TOKEN") check,
+    @help("jwks KEY", true) jwks,
+    @help("admin SECRET SUBJECT SECONDS") admin,
+    @help("admin_check SECRET TOKEN", true) admin_check,
+    @help("google KEY_FILE SCOPE") google,
+    @help("client ENDPOINT CLIENT SECRET") client,
+    @help("login ENDPOINT CODE VERIFIER", true) login,
+    @help("config", true) config,
+    @help("migrate") migrate,
+    @help("register ACCOUNT NICK EMAIL CREATED") register,
+    @help("ban ID TYPE AT") ban,
+    @help("sync ID AT SESSION BADGES STATS", true) sync,
+    @help("users") users,
+    @help("user ID") user,
+    @help("server KEY CIPHER", true) server
+};
 
 error Usage { u32 code; };
 
-protected const str usage_text =
-    "arena token KEY ACCOUNT NICK EMAIL PLATFORM PROVIDER AVATAR | check KEY TOKEN | jwks KEY\n"
-    "arena admin SECRET SUBJECT SECONDS | admin_check SECRET TOKEN\n"
-    "arena google KEY_FILE SCOPE | client ENDPOINT CLIENT SECRET | login ENDPOINT CODE VERIFIER\n"
-    "arena config\n"
-    "arena migrate | register ACCOUNT NICK EMAIL CREATED | ban ID TYPE AT | sync ID AT SESSION BADGES STATS\n"
-    "arena users | user ID | server KEY CIPHER\n";
+/* The usage text from the help of every command, in declaration order (R-REFL-0005). */
+protected std.string::string usage_text() throws std.alloc::alloc_error {
+    std.string::string text = std.string::create();
+    bool line_start = true;
+    for (usize index = 0usize; index < core::enum_count::<Command>(); index += 1usize) {
+        o<Command> command = core::enum_at::<Command>(index);
+        switch (command) {
+        case variant o::some(found):
+            o<help> shown = core::variant_attribute::<help, Command>(*found);
+            switch (shown) {
+            case variant o::some(entry):
+                str separator = line_start == true ? "arena " : " | ";
+                text.append(separator);
+                text.append(entry->form);
+                line_start = entry->ends_line;
+                if (line_start == true) { text.append("\n"); }
+            case variant o::none: break;
+            }
+        case variant o::none: break;
+        }
+    }
+    return move text;
+}
 
 protected str word(const array<std.string::string>* arguments, usize index) {
-    return (*arguments)[index].as_str();
+    return (*arguments)[index];
 }
 
 protected std.string::string take(array<std.string::string>* arguments, usize index) {
@@ -41,7 +77,7 @@ protected std.string::string take(array<std.string::string>* arguments, usize in
 }
 
 protected async bytes read_text(std.string::string name) throws std.error::fault {
-    std.fs::path path = std.fs::path_from_utf8(name.as_str());
+    std.fs::path path = std.fs::path_from_utf8(name);
     return await path.read_file(1048576usize);
 }
 
@@ -126,11 +162,11 @@ protected async i32 database(Command selected, array<std.string::string> argumen
         return 0;
     } catch (Usage failure) {
         failure as void;
-        await std.console::eprint(std.string::from_str(usage_text));
+        await std.console::eprint(usage_text());
         return 64;
     } catch (std.convert::parse_error failure) {
         failure as void;
-        await std.console::eprint(std.string::from_str(usage_text));
+        await std.console::eprint(usage_text());
         return 64;
     } catch (std.json::error failure) {
         (move failure) as void;
@@ -153,17 +189,17 @@ protected async i32 database(Command selected, array<std.string::string> argumen
             return 69;
         }
         if (code == std.postgres::error_code::server) {
-            str state = failure.sqlstate.as_str();
+            str state = failure.sqlstate;
             await std.console::eprintln(f"database: server {state}");
             return 65;
         }
         const u8[] detail_bytes = failure.detail.as_bytes();
         if (len(detail_bytes) == 0usize) {
-            str message = failure.message.as_str();
+            str message = failure.message;
             await std.console::eprintln(f"database: {code}: {message}");
             return 65;
         }
-        str detail = failure.detail.as_str();
+        str detail = failure.detail;
         await std.console::eprintln(f"database: {code} {detail}");
         return 65;
     }
@@ -173,10 +209,10 @@ async i32 main() {
     array<std.string::string> arguments = std.env::arguments();
     usize given = len(arguments);
     o<Command> command = o::none;
-    if (given >= 2usize) { command = core::enum_from_name::<Command>(arguments[1].as_str()); }
+    if (given >= 2usize) { command = core::enum_from_name::<Command>(arguments[1]); }
     switch (command) {
     case variant o::none:
-        await std.console::eprint(std.string::from_str(usage_text));
+        await std.console::eprint(usage_text());
         if (given == 1usize) { return 0; }
         return 64;
     case variant o::some(selected):
@@ -200,10 +236,10 @@ async i32 main() {
                     example.arena.sessions::Session session =
                         example.arena.sessions::check(key.as_slice(), word(&arguments, 3usize));
                     std.string::string head = example.arena.sessions::describe(word(&arguments, 3usize));
-                    str account = session.account.as_str();
-                    str nick = session.nick.as_str();
-                    str platform = session.platform.as_str();
-                    str provider = session.provider.as_str();
+                    str account = session.account;
+                    str nick = session.nick;
+                    str platform = session.platform;
+                    str provider = session.provider;
                     await say(f"{head}\naccount {account} nick {nick} platform {platform} provider {provider}\n");
                 } catch (std.jwt::jwt_error failure) {
                     std.jwt::error_code code = failure.code;
@@ -250,7 +286,7 @@ async i32 main() {
                     await say(example.arena.settings::describe());
                 } catch (std.config::field_error failure) {
                     std.config::error_code code = failure.code;
-                    str name = failure.name.as_str();
+                    str name = failure.name;
                     await std.console::eprintln(f"config: {code} {name}");
                     return 78;
                 }
@@ -263,7 +299,7 @@ async i32 main() {
             return 0;
         } catch (Usage failure) {
             failure as void;
-            await std.console::eprint(std.string::from_str(usage_text));
+            await std.console::eprint(usage_text());
             return 64;
         } catch (std.config::config_error failure) {
             std.config::error_code code = failure.code;
@@ -271,7 +307,7 @@ async i32 main() {
             return 78;
         } catch (std.convert::parse_error failure) {
             failure as void;
-            await std.console::eprint(std.string::from_str(usage_text));
+            await std.console::eprint(usage_text());
             return 64;
         } catch (std.string::string_error failure) {
             failure as void;

@@ -52,13 +52,13 @@ async i32 main(const str[] arguments) {
                         constexpr str name = core::enum_name(level);
                         str message = arguments[index + 1usize];
                         std.string::string row = f"[{name}] {message}\n";
-                        str text = row.as_str();
+                        str text = row;
                         response.output.append(text);
                         accepted += 1usize;
                     }
                 }
                 std.string::string row = f"accepted={accepted}\n";
-                str text = row.as_str();
+                str text = row;
                 response.output.append(text); break;
             case Command::event:
                 throw (count != 4usize) Usage { .message = "event needs a threshold and JSON event" };

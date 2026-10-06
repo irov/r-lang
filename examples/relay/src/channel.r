@@ -64,13 +64,13 @@ async std.string::string echo_words(array<std.string::string> words) throws std.
         task_scope(1) io {
             while (await replies.read_line(&reply) == true) {
                 std.string::append_str(&output, "echo: ");
-                std.string::append_str(&output, reply.as_str());
+                std.string::append_str(&output, reply);
                 std.string::append_str(&output, "\n");
             }
         }
         u32 served = await move server;
         std.string::string summary = f"{served} lines served\n";
-        std.string::append_str(&output, summary.as_str());
+        std.string::append_str(&output, summary);
     }
     return move output;
 }
@@ -121,7 +121,7 @@ async std.string::string pipe_words(array<std.string::string> words) throws std.
                     for (usize index = 0usize; index < len(words); index += 1usize) {
                         if (await lines.read_line(&line) == false) { break; }
                         std.string::append_str(&output, "cat: ");
-                        std.string::append_str(&output, line.as_str());
+                        std.string::append_str(&output, line);
                         std.string::append_str(&output, "\n");
                     }
                 }
@@ -132,7 +132,7 @@ async std.string::string pipe_words(array<std.string::string> words) throws std.
         switch (move finished) {
         case variant std.process::wait_result::exited(move status):
             std.string::string ending = f"cat exited with {status.code}\n";
-            std.string::append_str(&output, ending.as_str());
+            std.string::append_str(&output, ending);
         case variant std.process::wait_result::failed(move failure):
             throw failure.error;
         }

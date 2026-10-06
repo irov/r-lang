@@ -422,6 +422,83 @@ static bool r_mir_write_derived(uint32_t derived, RFrontendWriteFn writer, void 
     return r_write_text(writer, user_data, ")");
 }
 
+/* R-AGG-0013 (L42): ` attribute_targets=(type field variant)` of an attribute type. */
+static bool r_mir_write_attribute_targets(uint32_t targets, RFrontendWriteFn writer, void *user_data) {
+    static const char *const names[3] = {"type", "field", "variant"};
+    bool first = true;
+    if (targets == 0U) {
+        return true;
+    }
+    if (!r_write_text(writer, user_data, " attribute_targets=(")) {
+        return false;
+    }
+    for (uint32_t bit = 0U; bit < 3U; ++bit) {
+        if ((targets & (1U << bit)) == 0U) {
+            continue;
+        }
+        if ((!first && !r_write_text(writer, user_data, " ")) ||
+            !r_write_text(writer, user_data, names[bit])) {
+            return false;
+        }
+        first = false;
+    }
+    return r_write_text(writer, user_data, ")");
+}
+
+/* ` attributes=((type=T values=(v ...)) ...)`: the attributes of the program on one type (member
+   0), field or enumerator; a str value is quoted, every other value is its bits. */
+static bool r_mir_write_attributes(const RFrontendContext *context,
+                                   uint32_t target,
+                                   RTypeId owner,
+                                   uint32_t member,
+                                   RFrontendWriteFn writer,
+                                   void *user_data) {
+    bool first = true;
+    for (size_t index = 0U; index < context->attribute_use_count; ++index) {
+        const RSemanticAttributeUse *use = &context->attribute_uses[index];
+        const RSemanticType *type = r_semantic_type(context, use->attribute_type);
+        const RSemanticAggregate *attribute;
+        if (!use->valid || (use->target != target) || (use->owner != owner) ||
+            (use->member != member)) {
+            continue;
+        }
+        attribute = ((type != NULL) && (type->kind == R_SEMANTIC_TYPE_STRUCT) && (type->base != 0U) &&
+                     ((size_t)type->base <= context->semantic_aggregate_count))
+                        ? &context->semantic_aggregates[(size_t)type->base - 1U]
+                        : NULL;
+        if ((attribute == NULL) ||
+            !r_write_text(writer, user_data, first ? " attributes=((type=" : " (type=") ||
+            !r_mir_write_type(context, use->attribute_type, writer, user_data) ||
+            !r_write_text(writer, user_data, " values=(")) {
+            return false;
+        }
+        for (uint32_t field = 0U; field < attribute->field_count; ++field) {
+            const RSemanticAttributeValue *value =
+                &context->attribute_values[(size_t)use->first_value + field];
+            const RSemanticType *value_type = r_semantic_type(context, value->type);
+            if ((field != 0U) && !r_write_text(writer, user_data, " ")) {
+                return false;
+            }
+            if (value->text_intern_id != 0U) {
+                const RInternEntry *text = &context->intern_entries[value->text_intern_id - 1U];
+                if (!r_write_escaped(
+                        writer, user_data, (const uint8_t *)text->bytes, text->length)) {
+                    return false;
+                }
+            } else if (((value_type != NULL) && (value_type->kind == R_SEMANTIC_TYPE_STR))
+                           ? !r_write_text(writer, user_data, "\"\"")
+                           : !r_mir_write_uint64(writer, user_data, value->bits)) {
+                return false;
+            }
+        }
+        if (!r_write_text(writer, user_data, "))")) {
+            return false;
+        }
+        first = false;
+    }
+    return first || r_write_text(writer, user_data, ")");
+}
+
 static bool r_mir_write_payload_schema(const RFrontendContext *context,
                                        const RSemanticVariant *variant,
                                        RFrontendWriteFn writer,

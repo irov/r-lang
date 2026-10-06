@@ -919,6 +919,24 @@ EXPLICIT_RULE_ITEMS: dict[str, tuple[ExplicitPublicItem, ...]] = {
             evidence="core::location",
             item_kind="intrinsic_family",
         ),
+        explicit_operation(
+            "core::type_attribute",
+            "core::type_attribute::<A, T>() -> o<A>",
+            evidence="core::type_attribute",
+            item_kind="intrinsic_family",
+        ),
+        explicit_operation(
+            "core::field_attribute",
+            "core::field_attribute::<A, T>(usize index) -> o<A>",
+            evidence="core::field_attribute",
+            item_kind="intrinsic_family",
+        ),
+        explicit_operation(
+            "core::variant_attribute",
+            "core::variant_attribute::<A, T>(T value) -> o<A>",
+            evidence="core::variant_attribute",
+            item_kind="intrinsic_family",
+        ),
     ),
     "R-LIB-0011": tuple(
         explicit_operation(
@@ -1149,7 +1167,7 @@ EXPLICIT_RULE_BLOCK_SHA256 = {
     "R-LIB-0025": "536bb3dc8c2d40e442d578aad7199694ad01cb313c0e04996b4f439e582223b4",
     "R-LIB-0001": "5375ba18932b66260e350206caa3bdd284a0d99ccb7365d6715ec86a82a256ac",
     "R-LIB-0011": "bad2e9acdb5d0e246e8b7ae30d39bd311a53a20b06d361b34b6558469c790062",
-    "R-LIB-0024": "243b8b9c6bc7f7090a3f685b84f1715f20dc581efbb2f615837ce3f7f8f602df",
+    "R-LIB-0024": "0dcd6683ac922b193d1ccee1e32e808107f67421046def17b8831661b5bb8977",
     "R-LIB-0012": "c2aa9b207f7297de2ab9c470dabf728f2fa1d92c2827b010ef7de32090bc1be1",
     "R-SLIB-C-0001": "49e64346f93cce514fc3d6825645d536f78730d1219412c267f7aadb626baf83",
     "R-SLIB-CONV-0002": "467f4b66ef802d7b779b01c6c1a99a12cfdcef70d10129d56c97f6a672a12a17",
@@ -1491,6 +1509,39 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
             "kind": "intrinsic",
             "compiler_contract": (
                 "The semantic pass folds the module path and line of the call into a program string."
+            ),
+        },
+    },
+    "core::type_attribute": {
+        "item_kind": "intrinsic_family",
+        "source_signature": "core::type_attribute::<A, T>() -> o<A>",
+        "implementation": {
+            "kind": "intrinsic",
+            "compiler_contract": (
+                "The semantic pass checks the attribute type and the C17 emitter writes the "
+                "arguments of the attribute on the type as a translation-time constant."
+            ),
+        },
+    },
+    "core::field_attribute": {
+        "item_kind": "intrinsic_family",
+        "source_signature": "core::field_attribute::<A, T>(usize index) -> o<A>",
+        "implementation": {
+            "kind": "intrinsic",
+            "compiler_contract": (
+                "The semantic pass checks the attribute type and the C17 emitter selects the "
+                "arguments of the attribute on the indexed field from a translation-time table."
+            ),
+        },
+    },
+    "core::variant_attribute": {
+        "item_kind": "intrinsic_family",
+        "source_signature": "core::variant_attribute::<A, T>(T value) -> o<A>",
+        "implementation": {
+            "kind": "intrinsic",
+            "compiler_contract": (
+                "The semantic pass checks the attribute type and the C17 emitter selects the "
+                "arguments of the attribute on the enumerator from a translation-time table."
             ),
         },
     },

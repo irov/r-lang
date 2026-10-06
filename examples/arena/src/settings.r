@@ -58,14 +58,14 @@ std.string::string describe() throws std.config::field_error, std.config::config
     layers.define("season_end", "31.12.2026 23:59", "end of the season in the zone of the rewards");
     layers.load_environment("ARENA");
     Tuning tuning = layers.decode::<Tuning>();
-    str user = found.user.as_str();
-    str host = found.pg_host.as_str();
+    str user = found.user;
+    str host = found.pg_host;
     u16 port = found.pg_port;
-    str database = found.database.as_str();
-    str environment = found.environment.as_str();
-    str service = found.datadog_service.as_str();
-    str datadog_environment = found.datadog_environment.as_str();
-    str zone = tuning.time_zone.as_str();
-    std.string::string season = season_end(tuning.season_end.as_str());
+    str database = found.database;
+    str environment = found.environment;
+    str service = found.datadog_service;
+    str datadog_environment = found.datadog_environment;
+    str zone = tuning.time_zone;
+    std.string::string season = season_end(tuning.season_end);
     return f"database {user}@{host}:{port}/{database}\nenvironment {environment} production={found.production}\nlisten on :{found.host_port}\ndatadog service={service} env={datadog_environment} project={project}\npool {tuning.pool_size} connections, requests up to {tuning.request_limit} bytes, rewards in {zone}\nseason ends {season}\n";
 }

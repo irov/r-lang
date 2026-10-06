@@ -24,7 +24,7 @@ async void echo(std.net::tcp_connection connection) throws std.error::fault {
 // The decimal amount of a request.
 u64 amount_of(const u8[] request) throws std.error::fault {
     std.string::string text = std.string::from_utf8(request);
-    return std.convert::parse_u64(text.as_str(), 10u32);
+    return std.convert::parse_u64(text, 10u32);
 }
 
 /* Add the amount to the total and report it while the guard is still held, so the auditor sees
@@ -125,14 +125,14 @@ async void repeat(arc Repeat settings, std.net::tcp_connection connection) throw
     case variant o::some(total):
         usize pieces = *total;
         std.string::string text = f"{size} bytes in {pieces} lines";
-        reply.append(text.as_str());
+        reply.append(text);
     case variant o::none: break;
     }
     switch (refused) {
     case variant o::some(failure):
         str name = core::enum_name(*failure);
         std.string::string text = f"refused {name}";
-        reply.append(text.as_str());
+        reply.append(text);
     case variant o::none: break;
     }
     task_scope(1) io {

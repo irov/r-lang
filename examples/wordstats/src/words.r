@@ -67,7 +67,7 @@ void append_repeated(std.string::string* output, const list<const Entry*>* repea
         str word = (*item)->word;
         u32 count = (*item)->count;
         std.string::string piece = f"{word}:{count}";
-        str piece_text = piece.as_str();
+        str piece_text = piece;
         output->append(piece_text);
     }
 }
@@ -142,7 +142,7 @@ void append_ranking(std.string::string* output, const array<Entry>* entries)
         str word = entry->word;
         u32 count = entry->count;
         std.string::string piece = f"{word}:{count}";
-        str piece_text = piece.as_str();
+        str piece_text = piece;
         output->append(piece_text);
         shown += 1usize;
     }
@@ -235,10 +235,10 @@ std.string::string summarize(const str[] input) throws NotAWord, std.array::push
     usize unique = len(positions);
     std.string::string report = f"words={total} distinct={unique} top={top}:{top_count} ";
     std.string::string longest_text = f"longest={longest_word}:{longest_size} short={short_words} ";
-    str longest_view = longest_text.as_str();
+    str longest_view = longest_text;
     report.append(longest_view);
     std.string::string sizes_text = f"sizes={short_size}/{medium_size}/{long_size} repeated=";
-    str sizes_view = sizes_text.as_str();
+    str sizes_view = sizes_text;
     report.append(sizes_view);
     append_repeated(&report, &repeated);
     sort_by_count(&entries);

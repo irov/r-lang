@@ -39,7 +39,7 @@ protected void announce(const Room* hall, std.string::string line) throws std.al
 @scoped
 protected async void send_line(const std.websocket::websocket* socket, std.string::string line)
     throws std.error::fault, std.websocket::websocket_error {
-    task_scope(1) io { await socket->send_text(line.as_str()); }
+    task_scope(1) io { await socket->send_text(line); }
 }
 
 /* Sends every line of the room to the member until the room closes or the member is gone. */
@@ -122,7 +122,7 @@ protected async void member(arc Room state, std.http::request incoming, std.http
         announce(hall, f"* {name} joined");
         task_scope(2) session {
             auto sending = forward(&socket, move updates);
-            await listen(&socket, hall, name.as_str());
+            await listen(&socket, hall, name);
             session.cancel_all();
             await session.all();
         }

@@ -9,7 +9,7 @@ protected void append_match(std.string::string* output, str source, std.regex::s
     const u8[] selected = data[match.start..match.end];
     str selected_text = std.utf8::validate(selected);
     std.string::string row = f"{match.start}:{match.end}\t{selected_text}\n";
-    str row_text = row.as_str();
+    str row_text = row;
     output->append(row_text);
 }
 

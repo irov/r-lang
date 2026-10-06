@@ -18,7 +18,7 @@ impl core::AsyncIterator for NumberedLines {
         }
         this->number += 1u32;
         u32 number = this->number;
-        str text = this->line.as_str();
+        str text = this->line;
         std.string::string numbered = f"{number:4}  {text}\n";
         return o::some(move numbered);
     }
@@ -73,7 +73,7 @@ async o<std.string::string> read_fields(std.fs::file file) throws std.error::fau
             if (field[size - 1usize] == 59u8) { field.pop() as void; }
             std.string::string value = std.string::from_utf8(field.as_slice());
             std.string::string entry = f"field {index}: {value}\n";
-            std.string::append_str(&text, entry.as_str());
+            std.string::append_str(&text, entry);
             field.clear();
         }
     }

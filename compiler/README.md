@@ -1,7 +1,7 @@
 # R Frontend Parser 0.1
 
 This directory contains the bootstrap frontend for the normative English R Core
-Specification `0.1.0-draft.98`.
+Specification `0.1.0-draft.100`.
 
 ```text
 UTF-8 source
@@ -247,7 +247,7 @@ the terminator `panic`; the step returns `R_RUNTIME_TASK_STEP_PANICKED`, and the
 drops what is still initialized, as after a cancellation. A finally block may suspend, so the step
 parks the panic in its task (`r_runtime_task_panic_park`) before it jumps to the panic block
 through the `r_async_dispatch` label of its loop and takes it back (`r_runtime_task_panic_unpark`)
-before it returns. The MIR dump writes the block as ` panic=bbN` (interface schema 32).
+before it returns. The MIR dump writes the block as ` panic=bbN` (interface schema 33).
 
 At the boundaries the task runtime completes a panicked task with its report. An `await` makes the
 panic pending again in the awaiting task (`R_RUNTIME_TASK_EXECUTION_AWAIT_PANICKED`); a report that
@@ -347,6 +347,21 @@ values, below.
 capabilities, static traits or a callable signature. Associated types are fixed explicitly,
 for example `opaque(core::Iterator & Item = i32)`. Callers use `auto` or generic inference;
 closed code uses the concrete representation and normal cleanup, without boxing.
+
+### String views of owned strings
+
+A place of type `std.string::string` where `str` is expected, as an argument, an initializer,
+a field initializer or a returned value, lowers to the standard call
+`std.string::as_str(&place)` (R-EXPR-0015): `r_body_finish_value_impl` forms the shared borrow
+with the ordinary borrow checks and appends the call, so the view and its region are those of an
+explicit `.as_str()` and the place stays usable after the last use of the view. A string that is
+not a place (a call result, an f-string) is rejected with a request to name it, because a view of
+a temporary would have to outlive the full expression, across an `await` in an async body; a
+string where a byte slice is expected is rejected, since the string edges do not chain. Overload
+selection counts the edge among the existing conversions (`r_overload_compatible`,
+R-FUNC-0004), and `append` of a string or a `std.format` builder takes a string argument
+through its `str` overload. A pointer to a string is not viewed; its dereference `*text` is a
+place and is.
 
 ### Dyn interfaces
 
@@ -568,7 +583,7 @@ defaults, `@default` variants and fixed arrays build ordinary `aggregate_init`, 
 `array_init` nodes, so MIR and C17 need nothing new; omitted array elements and `core::take`
 (lowered as a replacement with the evaluated default) use the same builder. An optional JSON
 field without `default` maps a literal or `factory()` initializer to the existing JSON default
-(`r_json_default_from_initializer`). Interface schema 32 writes `initializer=true` on such fields
+(`r_json_default_from_initializer`). Interface schema 33 writes `initializer=true` on such fields
 and `default=true` on the default variant. See `tests/fixtures/codegen_field_defaults.r`,
 `codegen_async_field_defaults.r`, `codegen_json_field_defaults.r`,
 `codegen_field_defaults_failures.r` with its allocation-failure wrapper,
@@ -628,7 +643,7 @@ directly or through a supertrait, declares `Name`) and adds the capabilities and
 holder to the projection parameter, so the body may compare, copy or add its values.
 `r_generic_validate_projections` substitutes the projection with the arguments of every
 instantiation, dependent ones included as for ordinary constraints, and validates the result
-against the holder. Interface schema 32 writes the entries as
+against the holder. Interface schema 33 writes the entries as
 `associated_constraints=((associated="P"::"Name" constraints=(...)))`. Defect M19-1: the first
 holders had no name, and `--emit=hir` of any program importing `std.iter` read the intern table
 at index -1; the source-surface audit found it.
@@ -812,7 +827,7 @@ constants, folds body uses and layouts, and reuses the ordinary monomorphization
 No runtime arguments or metadata are added. Core draft.58 admits every integer type and `bool`
 as a constant-parameter type: a literal `CONSTANT_EXPR` keeps its type keyword in `flags` and
 its value bits in `length`, an argument of another type is rejected rather than converted,
-and the identity of an instance includes each constant's type. Interface schema 32 carries
+and the identity of an instance includes each constant's type. Interface schema 33 carries
 `constant_type=u32`, typed constant arguments such as `(constant u32 15)` and dependent
 formulas. The preflight `frame` example uses this for a bounded
 wire frame with checked `@noalloc @nonblocking` packing and checksum helpers.
@@ -875,7 +890,7 @@ available and injects them by AST node, repeating while new values appear. Docum
 (R-IDB-010): 4000000 steps and 64 MiB of values per evaluation, at most 32 discovery passes
 (a program whose module-scope values still grow after them gets `R-DIAG-LIMIT-001`),
 and at most 256 scalar elements substituted inside a function body (a module constant holds a
-larger value as one static initializer, wrapped before column 100). Interface schema 32 marks
+larger value as one static initializer, wrapped before column 100). Interface schema 33 marks
 evaluable exported functions `consteval=true` and records source dependencies whenever a
 translation-time value was computed. The [tables example](../examples/tables/README.md)
 builds a CRC-32 table, a frame size used by a module-scope struct, enumerator values and a
@@ -936,7 +951,7 @@ storage, destroys every built component on failure and reports `std.alloc::alloc
 the call's carrier; a clone that cannot fail (Copy, shared owners, hooks without errors) has no
 checked effect. The glue is spliced in after the function prototypes because it calls hooks. The
 static call graph adds an edge to every hook the copied structure reaches, so a hook that clones
-its own type through an owner is a recursive call chain. Interface schema 32 records the `clone`
+its own type through an owner is a recursive call chain. Interface schema 33 records the `clone`
 hook and the `clone` constraint. See `tests/fixtures/codegen_swap_clone.r`,
 `codegen_async_swap_clone.r`, the failure sweep `codegen_clone_failures.r` and
 `examples/tournament`.
@@ -973,7 +988,7 @@ also in the clone of a generic body, is refused when that instance breaks them.
 parameters. C17 represents a function value as the `uint32_t` symbol number of its target
 (`r_c17_type` maps the kind to `u32`); a synchronous dispatcher switches on it with a direct call
 of each target, and an async start selects the target's frame initializer and launch like a dyn
-dispatcher, with the arguments after the receiver. Interface schema 32 writes the type as
+dispatcher, with the arguments after the receiver. Interface schema 33 writes the type as
 `(fn parameters=(...) return=R throws=(...))` with `async=true`, `noalloc=true` and
 `nonblocking=true` when they apply.
 
@@ -994,7 +1009,7 @@ an implicit `import std.cmp;` during the interface scan. `clone` generates nothi
 `clone_derived`, which makes the structural clone glue of `compiler/codegen/clone.inc` apply.
 `compiler/semantic/derive.inc` records the capabilities, rejects unknown, repeated and misplaced
 derivations and errors with descendants, and checks that every field or payload proves the
-capability, naming the first that does not and silencing its region. Interface schema 32 writes
+capability, naming the first that does not and silencing its region. Interface schema 33 writes
 `derived=(...)` on the aggregate.
 
 The generated text relies on three general mechanisms. An implementation whose target is a
@@ -1019,7 +1034,7 @@ addresses are evaluated once in argument order; overlapping outputs are rejected
 
 Outputs currently require synchronous R functions and complete unborrowed value types.
 The mode survives generics, traits, callable constraints (`fn(out i32) -> void`),
-function items, opaque and module interface schema 32 (`(out i32)`). Async/C boundaries
+function items, opaque and module interface schema 33 (`(out i32)`). Async/C boundaries
 and variadic outputs are rejected. The existing ban on errors escaping `finally` remains.
 
 Each output write to local storage must be used before an overlapping overwrite or normal
@@ -1059,7 +1074,7 @@ to that method during monomorphization, keeping direct calls and the static call
 Creation and synchronous invocation add no heap allocation; async calls use normal task starts.
 Callable constraints may carry `@noalloc @nonblocking` after `fn` and an exact
 `throws(E1, E2)` suffix; async constraints start with `async fn`. Resource guarantees may
-be forgotten, never silently added. Interface schema 32 serializes mode, parameters, result,
+be forgotten, never silently added. Interface schema 33 serializes mode, parameters, result,
 resource promises, checked errors and async status and excludes synthetic traits.
 
 Stored non-void call and await results are significant by default. `@must_use` additionally
@@ -1345,7 +1360,7 @@ fields of the error are read through a shared borrow of the payload of variant z
 common initial sequence every member shares. `std.error::fault` names the family of the
 standard errors of the main boundary (`r_semantic_standard_fault_family`, built on first use),
 and `std.error::from_fault` is an erasure without a runtime symbol that C17 expands from the
-main-boundary table (`r_c17_emit_fault_portable`). Interface schema 32 writes `parent=` and
+main-boundary table (`r_c17_emit_fault_portable`). Interface schema 33 writes `parent=` and
 `(error_family T)`.
 
 Core draft.74 (L22) widens translation-time evaluation (`compiler/semantic/consteval.inc`,
@@ -1631,6 +1646,32 @@ inside a generic body spells the instantiated type; `enum_variants` requires a c
 enumeration. Wrong operand kinds are `R-DIAG-TYPE-001`, a field index beyond the field
 count is `R-DIAG-CONST-001`. `examples/reflection` is the executable walk-through of every
 form (CTest case `reflection_example`).
+
+### Attributes of the program
+
+A struct marked `@attribute(type, field, variant)` is an attribute type (R-AGG-0013); its
+fields are the arguments and their initializers the defaults. The parser keeps a built-in
+attribute name as a token and writes any other or qualified name (`@key`, `@orm::key`) as a
+type, so the semantic pass resolves it like a type name, through the imports of its module.
+`compiler/semantic/attributes.inc` holds the rest: the collectors of aggregate headers, struct
+fields (beside `@json`) and enumerators record each use with the type that declares the marked
+item, since aggregates are renumbered after collection and types are not (a type use keeps its
+declaration node until the aggregates are sorted). `r_attributes_resolve` runs after the members
+of every type are known: it checks the field types of each attribute type, resolves each use,
+checks its target and repetition, binds the arguments (all positional or all named; a literal,
+`-` and a number, `true`/`false` or `Enum::name`) and keeps them as
+`RSemanticAttributeValue` constants; a use no collector recorded stands on a function, a
+module or another place without attributes of the program and is reported last, so no position
+accepts one silently. `core::type_attribute::<A, T>()`, `core::field_attribute::<A, T>(i)` and
+`core::variant_attribute::<A, T>(v)` (R-REFL-0005) and `core::field_name::<T>(i)` with an index
+that is not a constant stay `R_HIR_STANDARD_CALL` selections with one operand
+(`type_attribute` takes the index 0), proven at instantiation by `r_reflection_fold_clone`; the
+C17 emitter prints one helper per (form, subject, attribute),
+`r_reflection_<form>_a<subject>_a<attribute>`, whose `switch` assigns the `o::some` payload
+field by field from the constants, and gives none or the empty string to any other operand.
+Interface schema 33 writes `attribute_targets=(...)` on an attribute type and
+`attributes=((type=A values=(...)) ...)` on each marked type, field and enumerator.
+`examples/arena` reads the table and key of its rows and the help of its commands this way.
 
 Valid constructs outside the implemented semantic or code-generation slices receive
 `R-DIAG-SLICE-001` or make `r_frontend_emit_c17` return

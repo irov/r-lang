@@ -32,7 +32,7 @@ async std.string::string execute(std.process::command command, bool capture, boo
             throw ((stdout_text.failure != 0) || (stderr_text.failure != 0))
                 Usage { .message = "cannot capture child output (UTF-8, I/O or size limit)" };
             std.string::string captured = f"stdout:\n{stdout_text.text}\nstderr:\n{stderr_text.text}\n";
-            str captured_view = captured.as_str();
+            str captured_view = captured;
             output.append(captured_view);
         }
         if (stop == true) { await child.terminate(); }
@@ -40,7 +40,7 @@ async std.string::string execute(std.process::command command, bool capture, boo
         switch (move finished) {
         case variant std.process::wait_result::exited(move status):
             std.string::string details = describe(status);
-            str view = details.as_str();
+            str view = details;
             output.append(view); break;
         case variant std.process::wait_result::failed(move failure):
             throw failure.error;

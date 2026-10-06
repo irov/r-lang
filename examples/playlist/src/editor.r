@@ -16,7 +16,7 @@ usize arity(Command command) {
 
 protected void append_number(std.string::string* output, str label, i32 number) throws std.alloc::alloc_error {
     std.string::string row = f"{label}={number}\n";
-    str row_text = row.as_str();
+    str row_text = row;
     output->append(row_text);
 }
 
@@ -106,7 +106,7 @@ void apply(list<i32>* tracks, Command command, usize index, i32 value, std.strin
             case variant o::some(pointer):
                 i32 number = **pointer;
                 std.string::string cell = f" {number}";
-                str cell_text = cell.as_str();
+                str cell_text = cell;
                 output->append(cell_text); break;
             case variant o::none: output->append("\n"); return;
             }

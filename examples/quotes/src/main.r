@@ -59,7 +59,7 @@ async i32 main(const str[] arguments) {
                 u64 previous = example.quotes.book::try_write(&book, gross);
                 Quote current = example.quotes.book::try_read(&book);
                 std.string::string row = f"revision={current.revision} net={price} gross={current.minor} previous={previous}\n";
-                str text = row.as_str();
+                str text = row;
                 response.output.append(text);
             }
                 }
@@ -73,7 +73,7 @@ async i32 main(const str[] arguments) {
             case variant o::some(value):
                 u32 rate = **value;
                 std.string::string row = f"tax_basis_points={rate}\n";
-                str text = row.as_str();
+                str text = row;
                 response.output.append(text); break;
             case variant o::none: response.output.append("no prices\n"); break;
             }

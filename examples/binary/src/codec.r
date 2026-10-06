@@ -16,7 +16,7 @@ std.string::string checksums(str source) throws std.alloc::alloc_error {
     std.string::string output = std.string::create();
     u32 checksum = std.hash::crc32(source);
     std.string::string crc = f"crc32 {checksum}\nmd5 ";
-    str crc_text = crc.as_str();
+    str crc_text = crc;
     output.append(crc_text);
     std.hash::md5_digest md5 = std.hash::md5(source);
     append_hex(&output, md5.bytes);
@@ -87,7 +87,7 @@ std.string::string compare(str source, str pattern) throws std.alloc::alloc_erro
     case variant o::some(position):
         usize offset = *position;
         std.string::string line = f"pattern={offset}\n";
-        str text = line.as_str();
+        str text = line;
         output.append(text);
         break;
     case variant o::none: output.append("pattern=none\n"); break;
@@ -97,7 +97,7 @@ std.string::string compare(str source, str pattern) throws std.alloc::alloc_erro
     case variant o::some(position):
         usize offset = *position;
         std.string::string line = f"newline={offset}\n";
-        str text = line.as_str();
+        str text = line;
         output.append(text);
         break;
     case variant o::none: output.append("newline=none\n"); break;

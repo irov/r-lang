@@ -26,7 +26,7 @@ std.string::string route(const i32[] stops, bool returning, usize omit, bool can
     case variant o::some(value):
         i32 stop = **value;
         std.string::string row = f"first={stop}\n";
-        str view = row.as_str();
+        str view = row;
         output.append(view); break;
     case variant o::none: break;
     }
@@ -35,7 +35,7 @@ std.string::string route(const i32[] stops, bool returning, usize omit, bool can
     case variant o::some(value):
         i32 stop = **value;
         std.string::string row = f"last={stop}\n";
-        str view = row.as_str();
+        str view = row;
         output.append(view); break;
     case variant o::none: break;
     }
@@ -46,7 +46,7 @@ std.string::string route(const i32[] stops, bool returning, usize omit, bool can
         case variant o::some(value):
             i32 stop = *value;
             std.string::string row = f" {stop}";
-            str view = row.as_str();
+            str view = row;
             output.append(view); break;
         case variant o::none:
             output.append("\n");

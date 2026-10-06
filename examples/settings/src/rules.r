@@ -161,10 +161,10 @@ std.string::string describe(setting_error failure) throws std.alloc::alloc_error
     } catch (setting_error other) {
         return f"argument {argument}: invalid setting\n";
     } catch (missing_value e) {
-        str key = e.key.as_str();
+        str key = e.key;
         return f"argument {argument}: {key} has no value\n";
     } catch (unknown_key e) {
-        str key = e.key.as_str();
+        str key = e.key;
         return f"argument {argument}: unknown key {key}\n";
     } catch (number_error e) {
         return f"argument {argument}: {e.key} shall be a decimal integer\n";

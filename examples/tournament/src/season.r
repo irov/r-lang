@@ -76,17 +76,17 @@ std.string::string schedule(u32 players) throws Usage, std.alloc::alloc_error,
             }
         }
         std.string::string line = f"{home}-{away}\n";
-        output.append(line.as_str());
+        output.append(line);
     }
     usize matches = len(fixtures);
     usize rules = len(awards);
     std.string::string summary = f"matches={matches} scoring_rules={rules}\n";
-    output.append(summary.as_str());
+    output.append(summary);
     for (auto entry in &appearances) {
         u32 number = *entry.key;
         u32 count = *entry.value;
         std.string::string line = f"player={number} matches={count}\n";
-        output.append(line.as_str());
+        output.append(line);
     }
     return move output;
 }
@@ -125,7 +125,7 @@ std.string::string ranking(array<i32>* scores, i32 bonus) throws std.alloc::allo
             i32 score = heap[0usize];
             i32 points = adjusted(&award, score);
             std.string::string line = f"score={score} adjusted={points}\n";
-            output.append(line.as_str());
+            output.append(line);
             end -= 1usize;
             if (end > 0usize) {
                 std.slice::swap(heap, 0usize, end);
@@ -136,7 +136,7 @@ std.string::string ranking(array<i32>* scores, i32 bonus) throws std.alloc::allo
     const i32[] sorted = scores->as_slice();
     i64 sum = total(...sorted);
     std.string::string summary = f"count={count} total={sum}\n";
-    output.append(summary.as_str());
+    output.append(summary);
     // Retire one completed entry explicitly, then reuse the remaining allocation next round.
     if (count > 0usize) { o<i32> retired = scores->remove(0usize); retired as void; }
     scores->clear();
@@ -144,7 +144,7 @@ std.string::string ranking(array<i32>* scores, i32 bonus) throws std.alloc::allo
     usize retained = scores->capacity();
     bool reused = retained == capacity;
     std.string::string reset = f"remaining={remaining} capacity_retained={reused}\n";
-    output.append(reset.as_str());
+    output.append(reset);
     return move output;
 }
 
@@ -176,7 +176,7 @@ std.string::string rounds(u32 players, u32 first) throws Usage, std.alloc::alloc
             if (seat == 0usize && round % 2usize == 0usize) { core::swap(&home, &away); }
             if (home != 0u32 && away != 0u32) {
                 std.string::string pair = f" {home}-{away}";
-                line.append(pair.as_str());
+                line.append(pair);
                 hosted[home as usize] += 1u32;
                 Pairing pairing = Pairing { .low = home, .high = away };
                 if (away < home) { pairing = Pairing { .low = away, .high = home }; }
@@ -185,7 +185,7 @@ std.string::string rounds(u32 players, u32 first) throws Usage, std.alloc::alloc
             }
         }
         line.append("\n");
-        output.append(line.as_str());
+        output.append(line);
         u32[] circle = seats.as_slice_mut();
         std.slice::rotate_right(circle[1usize..size], 1usize);
     }
@@ -201,7 +201,7 @@ std.string::string rounds(u32 players, u32 first) throws Usage, std.alloc::alloc
     }
     std.string::string summary =
         f"pairings={pairings} repeated={repeated} highest={low}-{high} home={fewest}-{most}\n";
-    output.append(summary.as_str());
+    output.append(summary);
     return move output;
 }
 
@@ -268,12 +268,12 @@ std.string::string table(const str[] entries) throws Usage, std.alloc::alloc_err
     for (const Standing* row in &rows) {
         place += 1usize;
         usize entered = position_of(registration, row);
-        str name = row->name.as_str();
+        str name = row->name;
         i32 points = row->points;
         std.string::string line = f"{place}. {name} {points} (entry {entered})\n";
-        output.append(line.as_str());
+        output.append(line);
     }
     std.string::string summary = f"entries={registrations}\n";
-    output.append(summary.as_str());
+    output.append(summary);
     return move output;
 }

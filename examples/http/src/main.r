@@ -8,7 +8,7 @@ import example.http.texts;
 import example.http.wire;
 
 protected async bytes read_pem(std.string::string name) throws std.error::fault {
-    std.fs::path path = std.fs::path_from_utf8(name.as_str());
+    std.fs::path path = std.fs::path_from_utf8(name);
     return await path.read_file(65536usize);
 }
 
@@ -31,11 +31,11 @@ protected async void show(std.http::client* web, str scheme, const std.string::s
                           std.http::request message)
     throws std.error::fault, std.http::http_error, std.tls::tls_error {
     std.string::string address = std.string::from_str(base->as_str());
-    std.string::append_str(&address, message.target.as_str());
+    std.string::append_str(&address, message.target);
     str sent = std.http::method_name(message.method);
-    std.string::string path = std.string::from_str(message.target.as_str());
+    std.string::string path = std.string::from_str(message.target);
     task_scope(1) io {
-        std.http::response result = await web->send(move message, address.as_str());
+        std.http::response result = await web->send(move message, address);
         u16 status = result.status;
         std.string::string body = std.string::from_utf8(result.body.as_slice());
         await std.console::println(f"{scheme} {sent} {path} -> {status} {body}");
@@ -62,7 +62,7 @@ protected std.string::string event_lines(std.http::sse_parser* parser, str schem
     // A pattern test as the loop condition: the loop ends at the first o::none (R-STMT-0002).
     while (parser->next() is variant o::some(move message)) {
         std.string::string line = f"{scheme} event {message.event} id={message.id} {message.data}\n";
-        std.string::append_str(&lines, line.as_str());
+        std.string::append_str(&lines, line);
     }
     return move lines;
 }
@@ -75,7 +75,7 @@ protected async void show_events(std.http::client* web, str scheme, const std.st
     std.string::append_str(&address, "/prices");
     o<std.http::streamed> opened = o::none;
     task_scope(1) io {
-        std.http::streamed received = await web->open(get("/prices"), address.as_str());
+        std.http::streamed received = await web->open(get("/prices"), address);
         o<std.http::streamed> old = core::replace(&opened, o::some(move received));
         drop old;
     }
@@ -205,7 +205,7 @@ async i32 main() {
     array<std.string::string> arguments = std.env::arguments();
     usize given = len(arguments);
     str command = "";
-    if (given >= 2usize) { command = arguments[1].as_str(); }
+    if (given >= 2usize) { command = arguments[1]; }
     bool demo_call = std.bytes::equal(command, "demo") == true && given == 5usize;
     bool url_call = std.bytes::equal(command, "url") == true && (given == 3usize || given == 4usize);
     bool mime_call = std.bytes::equal(command, "mime") == true && given == 3usize;

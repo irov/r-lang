@@ -22,7 +22,10 @@ typedef enum RReflectionTypeOperation {
     R_REFLECTION_TYPE_VARIANT_COUNT,
     R_REFLECTION_TYPE_TYPE_NAME,
     R_REFLECTION_TYPE_FIELD_COUNT,
-    R_REFLECTION_TYPE_FIELD_NAME
+    R_REFLECTION_TYPE_FIELD_NAME,
+    R_REFLECTION_TYPE_TYPE_ATTRIBUTE,
+    R_REFLECTION_TYPE_FIELD_ATTRIBUTE,
+    R_REFLECTION_TYPE_VARIANT_ATTRIBUTE
 } RReflectionTypeOperation;
 
 typedef struct RReflectionTypeForm {
@@ -42,6 +45,9 @@ static const RReflectionTypeForm r_reflection_type_forms[] = {
     {"type_name", R_REFLECTION_TYPE_TYPE_NAME, "R-REFL-0003"},
     {"field_count", R_REFLECTION_TYPE_FIELD_COUNT, "R-REFL-0003"},
     {"field_name", R_REFLECTION_TYPE_FIELD_NAME, "R-REFL-0003"},
+    {"type_attribute", R_REFLECTION_TYPE_TYPE_ATTRIBUTE, "R-REFL-0005"},
+    {"field_attribute", R_REFLECTION_TYPE_FIELD_ATTRIBUTE, "R-REFL-0005"},
+    {"variant_attribute", R_REFLECTION_TYPE_VARIANT_ATTRIBUTE, "R-REFL-0005"},
 };
 
 /* RReflectionText (semantic.c) is growable NUL-terminated text owned by the frontend context. */
@@ -785,36 +791,175 @@ cleanup:
     return success;
 }
 
-/* `core::field_name::<T>(index)`: the index is an integer literal or a module constant. */
-static bool r_reflection_constant_index(RBodyContext *body,
-                                        RAstRef value_ref,
-                                        RSourceSpan span,
-                                        const char *rule_id,
-                                        uint64_t *index,
-                                        bool *valid) {
-    RExpressionResult operand;
-    RBodyConstantValue constant;
+/* The index of field_name and field_attribute (R-REFL-0003, R-REFL-0005): an integer constant
+   expression folds, and any other usize index selects at run time. */
+static bool r_reflection_index_operand(RBodyContext *body,
+                                       RAstRef value_ref,
+                                       RSourceSpan span,
+                                       const char *rule_id,
+                                       RExpressionResult *operand,
+                                       bool *constant,
+                                       uint64_t *index) {
+    RBodyConstantValue value;
     RTypeId usize_type;
 
-    *valid = false;
+    *constant = false;
+    *index = UINT64_C(0);
     if (!r_semantic_type_from_token(body->frontend, R_TOKEN_KW_USIZE, &usize_type) ||
-        !r_body_lower_value(body, value_ref, usize_type, &operand)) {
+        !r_body_lower_value(body, value_ref, usize_type, operand)) {
         return false;
     }
-    if (!operand.valid) {
+    if (!operand->valid) {
         return true;
     }
-    if (!r_body_constant_scalar(body, operand.node, &constant) || !constant.valid ||
-        !r_semantic_type_is_integer(body->frontend, operand.type)) {
+    if (r_semantic_value_type(body->frontend, operand->type) != usize_type) {
+        operand->valid = false;
+        return r_body_diagnostic(
+            body, "R-DIAG-TYPE-001", rule_id, "a reflection field index is a usize", span);
+    }
+    if (r_body_constant_scalar(body, operand->node, &value) && value.valid) {
+        *constant = true;
+        *index = value.bits;
+    }
+    return true;
+}
+
+/* R-REFL-0005 (L42): `core::type_attribute::<A, T>()`, `core::field_attribute::<A, T>(index)` and
+ * `core::variant_attribute::<A, T>(value)`. Each stays a standard call with one operand, which
+ * the C17 emitter lowers to a selection over the translation-time arguments; type_attribute
+ * takes the index 0 so that every form shares that shape. */
+static bool r_reflection_lower_attribute_call(RBodyContext *body,
+                                              const RAstNodeView *view,
+                                              RReflectionTypeOperation operation,
+                                              RAstRef attribute_ref,
+                                              RAstRef type_ref,
+                                              RAstRef value_ref,
+                                              RExpressionResult *result) {
+    const char *rule_id = "R-REFL-0005";
+    const uint32_t target = operation == R_REFLECTION_TYPE_TYPE_ATTRIBUTE ? R_ATTRIBUTE_TARGET_TYPE
+                            : operation == R_REFLECTION_TYPE_FIELD_ATTRIBUTE
+                                ? R_ATTRIBUTE_TARGET_FIELD
+                                : R_ATTRIBUTE_TARGET_VARIANT;
+    const RStandardCallOperation call = operation == R_REFLECTION_TYPE_TYPE_ATTRIBUTE
+                                            ? R_STANDARD_CALL_CORE_TYPE_ATTRIBUTE
+                                        : operation == R_REFLECTION_TYPE_FIELD_ATTRIBUTE
+                                            ? R_STANDARD_CALL_CORE_FIELD_ATTRIBUTE
+                                            : R_STANDARD_CALL_CORE_VARIANT_ATTRIBUTE;
+    const RSemanticAggregate *attribute;
+    const RSemanticAggregate *aggregate = NULL;
+    RExpressionResult operand;
+    RHirNodeId child_storage[1];
+    RHirVector children;
+    RTypeId attribute_type;
+    RTypeId queried;
+    RTypeId option_type;
+    size_t diagnostics_before = body->frontend->diagnostic_count;
+    bool dependent;
+
+    r_body_expression_invalid(result);
+    if ((attribute_ref.node == R_AST_NODE_ID_INVALID) || (type_ref.node == R_AST_NODE_ID_INVALID) ||
+        ((operation != R_REFLECTION_TYPE_TYPE_ATTRIBUTE) &&
+         (value_ref.node == R_AST_NODE_ID_INVALID))) {
         return r_body_diagnostic(body,
                                  "R-DIAG-TYPE-001",
                                  rule_id,
-                                 "reflection field index shall be an integer constant expression",
-                                 span);
+                                 "attribute reflection takes an attribute type, the type it reads "
+                                 "and, for a field or an enumerator, its operand",
+                                 view->span);
     }
-    *index = constant.bits;
-    *valid = true;
-    return true;
+    if (!r_semantic_type_from_ast(body->frontend, attribute_ref, &attribute_type)) {
+        if (body->frontend->resource_status != R_FRONTEND_OK) {
+            return false;
+        }
+        return r_body_report_type_failure(
+            body, attribute_ref, view->span, diagnostics_before, "reflection attribute operand");
+    }
+    attribute = r_semantic_aggregate_for_type(
+        body->frontend, r_semantic_value_type(body->frontend, attribute_type));
+    if ((attribute == NULL) || ((attribute->attribute_targets & target) == 0U)) {
+        return r_body_diagnostic(body,
+                                 "R-DIAG-TYPE-001",
+                                 rule_id,
+                                 "the first operand of attribute reflection is an attribute type "
+                                 "with the target the form reads",
+                                 view->span);
+    }
+    diagnostics_before = body->frontend->diagnostic_count;
+    if (!r_semantic_type_from_ast(body->frontend, type_ref, &queried)) {
+        if (body->frontend->resource_status != R_FRONTEND_OK) {
+            return false;
+        }
+        return r_body_report_type_failure(
+            body, type_ref, view->span, diagnostics_before, "reflection type operand");
+    }
+    dependent = r_reflection_type_is_dependent(body->frontend, queried, 0U);
+    if (!dependent) {
+        aggregate = operation == R_REFLECTION_TYPE_TYPE_ATTRIBUTE
+                        ? r_semantic_aggregate_for_type(
+                              body->frontend, r_semantic_value_type(body->frontend, queried))
+                    : operation == R_REFLECTION_TYPE_FIELD_ATTRIBUTE
+                        ? r_reflection_struct(body->frontend, queried)
+                        : r_reflection_fieldless_enum(body->frontend, queried);
+        if (aggregate == NULL) {
+            return r_body_diagnostic(body,
+                                     "R-DIAG-TYPE-001",
+                                     rule_id,
+                                     operation == R_REFLECTION_TYPE_TYPE_ATTRIBUTE
+                                         ? "type_attribute reads a struct, enum or error type"
+                                     : operation == R_REFLECTION_TYPE_FIELD_ATTRIBUTE
+                                         ? "field_attribute reads a complete struct type"
+                                         : "variant_attribute reads a fieldless enum type",
+                                     view->span);
+        }
+    }
+    if (operation == R_REFLECTION_TYPE_TYPE_ATTRIBUTE) {
+        if (!r_reflection_append_usize(body, view->span, UINT64_C(0), &operand)) {
+            return false;
+        }
+    } else if (operation == R_REFLECTION_TYPE_FIELD_ATTRIBUTE) {
+        bool constant = false;
+        uint64_t index = UINT64_C(0);
+
+        if (!r_reflection_index_operand(
+                body, value_ref, view->span, rule_id, &operand, &constant, &index)) {
+            return false;
+        }
+        if (!operand.valid) {
+            return true;
+        }
+        if (constant && (aggregate != NULL) && (index >= (uint64_t)aggregate->field_count)) {
+            return r_body_diagnostic(body,
+                                     "R-DIAG-CONST-001",
+                                     rule_id,
+                                     "reflection field index is outside the field count",
+                                     view->span);
+        }
+    } else {
+        if (!r_body_lower_value(body, value_ref, queried, &operand)) {
+            return false;
+        }
+        if (!operand.valid) {
+            return true;
+        }
+        if (r_semantic_value_type(body->frontend, operand.type) !=
+            r_semantic_value_type(body->frontend, queried)) {
+            return r_body_diagnostic(body,
+                                     "R-DIAG-TYPE-001",
+                                     rule_id,
+                                     "variant_attribute takes a value of the enum it reads",
+                                     view->span);
+        }
+    }
+    if (!r_semantic_intern_type(
+            body->frontend, R_SEMANTIC_TYPE_OPTION, attribute->type, &option_type)) {
+        return false;
+    }
+    child_storage[0] = operand.node;
+    children.items = child_storage;
+    children.count = UINT32_C(1);
+    children.capacity = UINT32_C(1);
+    return r_reflection_append_call(
+        body, view->span, call, option_type, queried, UINT64_C(0), &children, result);
 }
 
 static bool r_reflection_lower_type_call(RBodyContext *body,
@@ -824,6 +969,7 @@ static bool r_reflection_lower_type_call(RBodyContext *body,
     RAstNodeView view;
     RAstRef qualified = {0};
     RAstRef type_ref = {0};
+    RAstRef second_type_ref = {0};
     RAstRef value_ref = {0};
     RReflectionTypeOperation operation = R_REFLECTION_TYPE_INVALID;
     const char *rule_id = "R-REFL-0001";
@@ -852,9 +998,27 @@ static bool r_reflection_lower_type_call(RBodyContext *body,
             qualified = child;
         } else if ((child_view.kind == R_SYNTAX_TYPE) && (type_ref.node == R_AST_NODE_ID_INVALID)) {
             type_ref = child;
+        } else if ((child_view.kind == R_SYNTAX_TYPE) &&
+                   (second_type_ref.node == R_AST_NODE_ID_INVALID)) {
+            second_type_ref = child;
         } else {
             value_ref = child;
         }
+    }
+    if ((qualified.node != R_AST_NODE_ID_INVALID) &&
+        r_reflection_type_operation(body->frontend, qualified, &operation, &rule_id) &&
+        ((operation == R_REFLECTION_TYPE_TYPE_ATTRIBUTE) ||
+         (operation == R_REFLECTION_TYPE_FIELD_ATTRIBUTE) ||
+         (operation == R_REFLECTION_TYPE_VARIANT_ATTRIBUTE))) {
+        return r_reflection_lower_attribute_call(
+            body, &view, operation, type_ref, second_type_ref, value_ref, result);
+    }
+    if (second_type_ref.node != R_AST_NODE_ID_INVALID) {
+        return r_body_diagnostic(body,
+                                 "R-DIAG-TYPE-001",
+                                 "R-REFL-0001",
+                                 "this reflection form takes one type operand",
+                                 view.span);
     }
     if ((qualified.node == R_AST_NODE_ID_INVALID) ||
         !r_reflection_type_operation(body->frontend, qualified, &operation, &rule_id) ||
@@ -1038,21 +1202,53 @@ static bool r_reflection_lower_type_call(RBodyContext *body,
     case R_REFLECTION_TYPE_FIELD_NAME: {
         const bool count = operation == R_REFLECTION_TYPE_FIELD_COUNT;
         uint64_t index = UINT64_C(0);
-        bool index_valid = true;
         const RSemanticField *field;
 
         aggregate = r_reflection_struct(body->frontend, queried);
         if (!count) {
+            RExpressionResult index_operand;
+            bool constant = false;
+
             if (value_ref.node == R_AST_NODE_ID_INVALID) {
                 body->frontend->resource_status = R_FRONTEND_INTERNAL_ERROR;
                 return false;
             }
-            if (!r_reflection_constant_index(
-                    body, value_ref, view.span, rule_id, &index, &index_valid)) {
+            if (!r_reflection_index_operand(
+                    body, value_ref, view.span, rule_id, &index_operand, &constant, &index)) {
                 return false;
             }
-            if (!index_valid) {
+            if (!index_operand.valid) {
                 return true;
+            }
+            if (!constant) {
+                /* R-REFL-0003 (L42): selected at run time, the empty string beyond the fields. */
+                RHirNodeId index_storage[1];
+                RHirVector index_children;
+                RTypeId text_type;
+
+                if ((aggregate == NULL) && !dependent) {
+                    return r_body_diagnostic(body,
+                                             "R-DIAG-TYPE-001",
+                                             rule_id,
+                                             "field reflection requires a complete struct type",
+                                             view.span);
+                }
+                index_storage[0] = index_operand.node;
+                index_children.items = index_storage;
+                index_children.count = UINT32_C(1);
+                index_children.capacity = UINT32_C(1);
+                return r_semantic_intern_type(body->frontend,
+                                              R_SEMANTIC_TYPE_CONSTEXPR_STR,
+                                              R_TYPE_ID_INVALID,
+                                              &text_type) &&
+                       r_reflection_append_call(body,
+                                                view.span,
+                                                R_STANDARD_CALL_CORE_FIELD_NAME_AT,
+                                                text_type,
+                                                queried,
+                                                UINT64_C(0),
+                                                &index_children,
+                                                result);
             }
         }
         if ((aggregate == NULL) && dependent) {
@@ -1316,7 +1512,9 @@ static bool r_reflection_lower_value_call(RBodyContext *body,
 static bool r_reflection_is_operation(RStandardCallOperation operation) {
     return ((operation >= R_STANDARD_CALL_CORE_ENUM_NAME) &&
             (operation <= R_STANDARD_CALL_CORE_REFLECT_FIELD_NAME)) ||
-           (operation == R_STANDARD_CALL_CORE_LOCATION);
+           (operation == R_STANDARD_CALL_CORE_LOCATION) ||
+           ((operation >= R_STANDARD_CALL_CORE_TYPE_ATTRIBUTE) &&
+            (operation <= R_STANDARD_CALL_CORE_FIELD_NAME_AT));
 }
 
 /* R-REFL-0001..0003 at instantiation: a dependent form whose operand type became concrete
@@ -1445,6 +1643,43 @@ static bool r_reflection_fold_clone(RFrontendContext *context, RHirNode *node) {
         node->aggregate_member = intern_id;
         break;
     }
+    case R_STANDARD_CALL_CORE_FIELD_NAME_AT:
+        rule_id = "R-REFL-0003";
+        if (r_reflection_struct(context, operand_type) == NULL) {
+            message = "field reflection requires a complete struct type";
+        }
+        break;
+    case R_STANDARD_CALL_CORE_TYPE_ATTRIBUTE:
+        rule_id = "R-REFL-0005";
+        if (r_semantic_aggregate_for_type(context, operand_type) == NULL) {
+            message = "type_attribute reads a struct, enum or error type";
+        }
+        break;
+    case R_STANDARD_CALL_CORE_FIELD_ATTRIBUTE: {
+        const RHirNode *index = (node->child_count == 1U)
+                                    ? &context->hir_nodes[context->hir_children[node->first_child] - 1U]
+                                    : NULL;
+
+        rule_id = "R-REFL-0005";
+        aggregate = r_reflection_struct(context, operand_type);
+        if (aggregate == NULL) {
+            message = "field_attribute reads a complete struct type";
+        } else if ((index != NULL) && (index->kind == R_HIR_LITERAL) &&
+                   (index->integer_value >= (uint64_t)aggregate->field_count)) {
+            return r_semantic_add_diagnostic(context,
+                                             "R-DIAG-CONST-001",
+                                             rule_id,
+                                             "reflection field index is outside the field count",
+                                             node->span);
+        }
+        break;
+    }
+    case R_STANDARD_CALL_CORE_VARIANT_ATTRIBUTE:
+        rule_id = "R-REFL-0005";
+        if (r_reflection_fieldless_enum(context, operand_type) == NULL) {
+            message = "variant_attribute reads a fieldless enum type";
+        }
+        break;
     default:
         return true;
     }

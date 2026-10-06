@@ -8329,6 +8329,18 @@ static bool r_mir_dump_instruction(const RFrontendContext *context,
         case R_STANDARD_CALL_CORE_VARIANT_NAME:
             operation_name = "core::variant_name";
             break;
+        case R_STANDARD_CALL_CORE_TYPE_ATTRIBUTE:
+            operation_name = "core::type_attribute";
+            break;
+        case R_STANDARD_CALL_CORE_FIELD_ATTRIBUTE:
+            operation_name = "core::field_attribute";
+            break;
+        case R_STANDARD_CALL_CORE_VARIANT_ATTRIBUTE:
+            operation_name = "core::variant_attribute";
+            break;
+        case R_STANDARD_CALL_CORE_FIELD_NAME_AT:
+            operation_name = "core::field_name";
+            break;
         case R_STANDARD_CALL_ARC_CLONE:
             operation_name = "std.arc::clone";
             break;
@@ -9774,8 +9786,10 @@ static bool r_mir_dump_instruction(const RFrontendContext *context,
                 !r_mir_write_type(context, instruction->auxiliary_type, writer, user_data)) {
                 return false;
             }
-        } else if ((instruction->standard_operation >= R_STANDARD_CALL_CORE_ENUM_NAME) &&
-                   (instruction->standard_operation <= R_STANDARD_CALL_CORE_VARIANT_NAME)) {
+        } else if (((instruction->standard_operation >= R_STANDARD_CALL_CORE_ENUM_NAME) &&
+                    (instruction->standard_operation <= R_STANDARD_CALL_CORE_VARIANT_NAME)) ||
+                   ((instruction->standard_operation >= R_STANDARD_CALL_CORE_TYPE_ATTRIBUTE) &&
+                    (instruction->standard_operation <= R_STANDARD_CALL_CORE_FIELD_NAME_AT))) {
             if (!r_write_text(writer, user_data, " subject=") ||
                 !r_mir_write_type(context, instruction->auxiliary_type, writer, user_data)) {
                 return false;
@@ -10345,7 +10359,7 @@ RFrontendStatus r_frontend_dump_interface(const RFrontendContext *context,
     }
     if (!r_write_text(writer,
                       user_data,
-                      "(interface version=32 core_revision=\"" R_FRONTEND_CORE_REVISION "\"\n") ||
+                      "(interface version=33 core_revision=\"" R_FRONTEND_CORE_REVISION "\"\n") ||
         !r_mir_write_indent(writer, user_data, UINT32_C(1)) ||
         !r_write_text(writer, user_data, "(profile ") ||
         !r_write_escaped(
@@ -10393,6 +10407,10 @@ RFrontendStatus r_frontend_dump_interface(const RFrontendContext *context,
             (aggregate->is_must_use && !r_write_text(writer, user_data, " must_use=true")) ||
             /* R-AGG-0012 (L27): the derived capabilities; a derived clone is structural. */
             !r_mir_write_derived(aggregate->derived, writer, user_data) ||
+            /* R-AGG-0013 (L42): the targets of an attribute type and the attributes of a type. */
+            !r_mir_write_attribute_targets(aggregate->attribute_targets, writer, user_data) ||
+            !r_mir_write_attributes(
+                context, R_ATTRIBUTE_TARGET_TYPE, aggregate->type, 0U, writer, user_data) ||
             !r_write_text(writer, user_data, " repr_c=") ||
             !r_mir_write_bool(writer, user_data, aggregate->is_repr_c) ||
             !r_write_text(writer, user_data, " default=") ||
@@ -10421,6 +10439,12 @@ RFrontendStatus r_frontend_dump_interface(const RFrontendContext *context,
                     !r_write_text(writer, user_data, " type=") ||
                     !r_mir_write_type(context, field->type, writer, user_data) ||
                     !r_mir_write_json_field(context, field, writer, user_data) ||
+                    !r_mir_write_attributes(context,
+                                            R_ATTRIBUTE_TARGET_FIELD,
+                                            aggregate->type,
+                                            field->layout_index,
+                                            writer,
+                                            user_data) ||
                     /* R-INIT-0004 (L33): an initialization may omit the field. */
                     ((field->initializer.node != 0U) &&
                      !r_write_text(writer, user_data, " initializer=true")) ||
@@ -10455,6 +10479,12 @@ RFrontendStatus r_frontend_dump_interface(const RFrontendContext *context,
                     !r_write_text(writer, user_data, " value=") ||
                     !r_mir_write_uint64(writer, user_data, variant->value) ||
                     !r_mir_write_payload_schema(context, variant, writer, user_data) ||
+                    !r_mir_write_attributes(context,
+                                            R_ATTRIBUTE_TARGET_VARIANT,
+                                            aggregate->type,
+                                            variant->declaration_index,
+                                            writer,
+                                            user_data) ||
                     /* R-INIT-0005 (L33): the default variant of the enum. */
                     ((aggregate->default_variant == member_index + 1U) &&
                      !r_write_text(writer, user_data, " default=true")) ||

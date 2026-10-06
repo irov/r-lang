@@ -16,7 +16,7 @@ protected void add(array<std.dns::record>* answers, std.dns::record entry) throw
    127.0.0.1. Other questions have no answer (NXDOMAIN). */
 protected u8 zone(const std.dns::question* asked, u16 port, array<std.dns::record>* answers)
     throws std.dns::dns_error, std.alloc::alloc_error {
-    str name = asked->name.as_str();
+    str name = asked->name;
     bool service = std.text::equal_ignore_ascii_case(name, "_chat._tcp.realtime.test");
     if (service == true && asked->kind == std.dns::type_code(std.dns::record_type::srv)) {
         add(answers, std.dns::record::srv(name, 60u32, 10u16, 5u16, port, "localhost."));

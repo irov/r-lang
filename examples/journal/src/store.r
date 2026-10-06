@@ -103,13 +103,13 @@ std.fs::open_file_options reading() {
 std.fs::path data_path(const std.string::string* directory) throws std.fs::path_error, std.alloc::alloc_error {
     str base = directory->as_str();
     std.string::string name = f"{base}/store.dat";
-    return std.fs::path_from_utf8(name.as_str());
+    return std.fs::path_from_utf8(name);
 }
 
 std.fs::path journal_path(const std.string::string* directory) throws std.fs::path_error, std.alloc::alloc_error {
     str base = directory->as_str();
     std.string::string name = f"{base}/store.journal";
-    return std.fs::path_from_utf8(name.as_str());
+    return std.fs::path_from_utf8(name);
 }
 
 std.time::instant after_milliseconds(u32 ms) throws std.time::time_error, std.time::duration_error {
@@ -173,7 +173,7 @@ async void update(std.string::string directory, u32 slot, std.string::string tex
     deadline (after_milliseconds(wait_ms)) {
         await data.lock(std.fs::lock_kind::exclusive, 0u64, 0u64);
     }
-    bytes record = record_of(text.as_str());
+    bytes record = record_of(text);
     bytes entry = journal_entry(slot, record.as_slice());
     task_scope(1) io {
         await log.write_all_at_from(0u64, entry.as_slice());
@@ -244,7 +244,7 @@ async std.string::string scan(std.string::string directory) throws std.error::fa
                 usize slot = at / record_size;
                 std.string::string text = text_of(record);
                 std.string::string line = f"slot {slot}: {text}\n";
-                listing.append(line.as_str());
+                listing.append(line);
                 found = true;
             }
         }

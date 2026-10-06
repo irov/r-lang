@@ -62,7 +62,7 @@ parsed parse_lines(std.arena::arena* place, const array<std.string::string>* lin
     array<rejection> rejected = [];
     for (usize index = 0usize; index < len(*lines); index += 1usize) {
         try {
-            example.ingest.parse::message item = example.ingest.parse::parse(place, (*lines)[index].as_str());
+            example.ingest.parse::message item = example.ingest.parse::parse(place, (*lines)[index]);
             push_message(&messages, move item);
             *done += 1usize;
         } catch (example.ingest.parse::parse_error failure) {

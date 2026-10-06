@@ -16,7 +16,7 @@ import example.telemetry.service;
 const usize max_pem = 65536usize;
 
 protected async bytes read_pem(std.string::string name) throws std.error::fault {
-    std.fs::path path = std.fs::path_from_utf8(name.as_str());
+    std.fs::path path = std.fs::path_from_utf8(name);
     return await path.read_file(max_pem);
 }
 
@@ -85,7 +85,7 @@ protected async i32 serve(u16 http_port, u16 tls_port, std.string::string socket
     arc std.tls::config shared_tls = new arc std.tls::config(move tls);
     std.net::tcp_listener plain = await listen_on(http_port);
     std.net::tcp_listener secure = await listen_on(tls_port);
-    std.net::unix_listener local = await std.net::unix_listen(socket.as_str(), 16u32, true, o::none);
+    std.net::unix_listener local = await std.net::unix_listen(socket, 16u32, true, o::none);
     array<std.service::listener> listeners = [];
     add_listener(&listeners, std.service::listener::tcp(move plain));
     add_listener(&listeners, std.service::listener::tls {.socket = move secure, .settings = move shared_tls});
@@ -110,7 +110,7 @@ protected async i32 serve(u16 http_port, u16 tls_port, std.string::string socket
 
 /* One request over the Unix-domain socket, written by hand: the status line of its answer. */
 protected async std.string::string unix_get(std.string::string socket, std.string::string target) throws std.error::fault {
-    std.net::unix_stream stream = await std.net::unix_connect(socket.as_str(), o::none);
+    std.net::unix_stream stream = await std.net::unix_connect(socket, o::none);
     std.string::string request = f"GET {target} HTTP/1.1\r\nHost: local\r\nConnection: close\r\n\r\n";
     task_scope(1) sending { await std.net::unix_write_all_from(&stream, request.as_bytes(), o::none); }
     bytes received = {};
@@ -179,27 +179,27 @@ protected async void conversation(u16 http_port, u16 tls_port, std.string::strin
     std.string::string metrics_url = f"http://localhost:{http_port}/metrics";
     std.string::string traces_url = f"http://localhost:{http_port}/traces";
     task_scope(1) first {
-        std.http::response hello = await web.get(hello_url.as_str());
+        std.http::response hello = await web.get(hello_url);
         u16 hello_status = hello.status;
         std.string::string hello_body = body_text(&hello);
         await std.console::print(f"http GET /hello -> {hello_status} {hello_body}");
     }
     task_scope(1) second {
-        std.http::response item = await web.get(item_url.as_str());
+        std.http::response item = await web.get(item_url);
         u16 item_status = item.status;
         std.string::string item_body = body_text(&item);
         await std.console::println(f"https GET /items/7 -> {item_status} {item_body}");
     }
-    std.string::string unix_line = await unix_get(std.string::from_str(socket.as_str()), std.string::from_str("/hello"));
+    std.string::string unix_line = await unix_get(std.string::from_str(socket), std.string::from_str("/hello"));
     await std.console::println(f"unix GET /hello -> {unix_line}");
     task_scope(1) third {
-        std.http::response health = await web.get(health_url.as_str());
+        std.http::response health = await web.get(health_url);
         u16 health_status = health.status;
         std.string::string health_body = body_text(&health);
         await std.console::print(f"http GET /health -> {health_status} {health_body}");
     }
     task_scope(1) fourth {
-        std.http::response metrics = await web.get(metrics_url.as_str());
+        std.http::response metrics = await web.get(metrics_url);
         bool exposition = false;
         switch (metrics.headers.get("Content-Type")) {
         case variant o::some(kind): exposition = std.bytes::equal(*kind, std.metrics::content_type);
@@ -207,11 +207,11 @@ protected async void conversation(u16 http_port, u16 tls_port, std.string::strin
         }
         await std.console::println(f"metrics in the exposition format: {exposition}");
         std.string::string metrics_body = body_text(&metrics);
-        await std.console::print(lines_with(metrics_body.as_str(), "telemetry_requests_total"));
-        await std.console::print(lines_with(metrics_body.as_str(), "telemetry_request_seconds_count"));
+        await std.console::print(lines_with(metrics_body, "telemetry_requests_total"));
+        await std.console::print(lines_with(metrics_body, "telemetry_request_seconds_count"));
     }
     task_scope(1) fifth {
-        std.http::response spans = await web.get(traces_url.as_str());
+        std.http::response spans = await web.get(traces_url);
         usize span_count = count_lines(spans.body.as_slice());
         await std.console::println(f"spans: {span_count}");
     }
@@ -235,7 +235,7 @@ protected async i32 demo(std.string::string ca, std.string::string cert, std.str
     std.net::tcp_listener secure = await listen_on(0u16);
     u16 http_port = (plain.local_address()).port;
     u16 tls_port = (secure.local_address()).port;
-    std.net::unix_listener local = await std.net::unix_listen(socket.as_str(), 16u32, true, o::none);
+    std.net::unix_listener local = await std.net::unix_listen(socket, 16u32, true, o::none);
     array<std.service::listener> listeners = [];
     add_listener(&listeners, std.service::listener::tcp(move plain));
     add_listener(&listeners, std.service::listener::tls {.socket = move secure, .settings = move shared_tls});
@@ -280,7 +280,7 @@ protected async void answer_source(arc Quiet state, std.service::connection conn
 protected async std.string::string probe_client(std.string::string socket,
                                                 std.sync::sender<std.service::stop> stopper)
     throws std.error::fault {
-    std.net::unix_stream stream = await std.net::unix_connect(socket.as_str(), o::none);
+    std.net::unix_stream stream = await std.net::unix_connect(socket, o::none);
     bytes received = {};
     u8[64] buffer = {};
     bool open = true;
@@ -300,7 +300,7 @@ protected async std.string::string probe_client(std.string::string socket,
 /* probe SOCKET: a plain service over a Unix-domain socket with std.service::serve_all, asked
    once by a client of the same program, which then stops it through its stop channel. */
 protected async i32 probe(std.string::string socket) throws std.error::fault {
-    std.net::unix_listener local = await std.net::unix_listen(socket.as_str(), 4u32, true, o::none);
+    std.net::unix_listener local = await std.net::unix_listen(socket, 4u32, true, o::none);
     array<std.service::listener> listeners = [];
     add_listener(&listeners, std.service::listener::unix(move local));
     std.sync::channel<std.service::stop> channel = std.sync::channel::<std.service::stop>();
@@ -328,25 +328,25 @@ async i32 main() {
     array<std.string::string> arguments = std.env::arguments();
     usize given = len(arguments);
     str command = "";
-    if (given >= 2usize) { command = arguments[1].as_str(); }
+    if (given >= 2usize) { command = arguments[1]; }
     try {
         if (std.bytes::equal(command, "serve") == true && given == 7usize) {
-            u16 http_port = std.convert::parse_u16(arguments[2].as_str(), 10u32);
-            u16 tls_port = std.convert::parse_u16(arguments[3].as_str(), 10u32);
-            std.string::string socket = std.string::from_str(arguments[4].as_str());
-            std.string::string cert = std.string::from_str(arguments[5].as_str());
-            std.string::string key = std.string::from_str(arguments[6].as_str());
+            u16 http_port = std.convert::parse_u16(arguments[2], 10u32);
+            u16 tls_port = std.convert::parse_u16(arguments[3], 10u32);
+            std.string::string socket = std.string::from_str(arguments[4]);
+            std.string::string cert = std.string::from_str(arguments[5]);
+            std.string::string key = std.string::from_str(arguments[6]);
             return await serve(http_port, tls_port, move socket, move cert, move key);
         }
         if (std.bytes::equal(command, "probe") == true && given == 3usize) {
-            std.string::string path = std.string::from_str(arguments[2].as_str());
+            std.string::string path = std.string::from_str(arguments[2]);
             return await probe(move path);
         }
         if (std.bytes::equal(command, "demo") == true && given == 6usize) {
-            std.string::string ca = std.string::from_str(arguments[2].as_str());
-            std.string::string cert = std.string::from_str(arguments[3].as_str());
-            std.string::string key = std.string::from_str(arguments[4].as_str());
-            std.string::string socket = std.string::from_str(arguments[5].as_str());
+            std.string::string ca = std.string::from_str(arguments[2]);
+            std.string::string cert = std.string::from_str(arguments[3]);
+            std.string::string key = std.string::from_str(arguments[4]);
+            std.string::string socket = std.string::from_str(arguments[5]);
             return await demo(move ca, move cert, move key, move socket);
         }
     } catch (std.convert::parse_error failure) {

@@ -1,9 +1,9 @@
 {
   "version": 4,
   "scope": "source references and resolved program operations and types; execution checked separately",
-  "total_records": 1563,
-  "covered_records": 1563,
-  "application_records": 1563,
+  "total_records": 1566,
+  "covered_records": 1566,
+  "application_records": 1566,
   "items": [
     {
       "record_id": "core::adopt#operation",
@@ -265,6 +265,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "logbook",
         "reflection"
       ],
@@ -278,6 +279,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "logbook",
         "reflection"
       ],
@@ -411,6 +413,18 @@
       "resolved_type_examples": []
     },
     {
+      "record_id": "core::field_attribute#operation",
+      "required": [
+        "core::field_attribute"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": []
+    },
+    {
       "record_id": "core::field_count#operation",
       "required": [
         "core::field_count"
@@ -418,6 +432,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "logbook",
         "reflection"
       ],
@@ -431,6 +446,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "logbook",
         "reflection"
       ],
@@ -788,6 +804,18 @@
       "resolved_type_examples": []
     },
     {
+      "record_id": "core::type_attribute#operation",
+      "required": [
+        "core::type_attribute"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": []
+    },
+    {
       "record_id": "core::type_name#operation",
       "required": [
         "core::type_name"
@@ -795,6 +823,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "logbook",
         "reflection"
       ],
@@ -933,6 +962,18 @@
         "notary",
         "textkit",
         "tournament"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "core::variant_attribute#operation",
+      "required": [
+        "core::variant_attribute"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
       ],
       "resolved_type_examples": []
     },

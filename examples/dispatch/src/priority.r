@@ -40,7 +40,7 @@ std.string::string assign(const i32[] urgencies, usize limit)
         bool varied = std.cmp::is_less(&minimum, &maximum);
         bool uniform = std.cmp::is_equal(&minimum, &maximum);
         std.string::string row = f"min={minimum} max={maximum} varied={varied} uniform={uniform}\n";
-        str view = row.as_str();
+        str view = row;
         output.append(view);
     }
     o<const Job*> next = pending.peek();
@@ -48,7 +48,7 @@ std.string::string assign(const i32[] urgencies, usize limit)
     case variant o::some(pointer):
         const Job* job = *pointer;
         std.string::string row = f"next={job->id}:{job->urgency}\n";
-        str view = row.as_str();
+        str view = row;
         output.append(view); break;
     case variant o::none: break;
     }
@@ -59,7 +59,7 @@ std.string::string assign(const i32[] urgencies, usize limit)
         switch (work) {
         case variant o::some(job):
             std.string::string row = f" {job->id}:{job->urgency}";
-            str view = row.as_str();
+            str view = row;
             output.append(view);
             completed += 1usize; break;
         case variant o::none: completed = limit; break;
@@ -68,7 +68,7 @@ std.string::string assign(const i32[] urgencies, usize limit)
     usize remaining = pending.count();
     bool empty = pending.is_empty();
     std.string::string footer = f"\nremaining={remaining} empty={empty}\n";
-    str footer_view = footer.as_str();
+    str footer_view = footer;
     output.append(footer_view);
     return move output;
 }

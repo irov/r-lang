@@ -60,7 +60,7 @@ async std.http::response hello(arc Telemetry state, std.http::request incoming) 
     shared->in_flight.add(1i64);
     std.time::instant started = std.time::monotonic_now();
     std.trace::span span = shared->tracer.start("GET /hello");
-    span.attribute("target", incoming.target.as_str());
+    span.attribute("target", incoming.target);
     shared->hello.increment();
     std.http::response answer = std.http::response::text(200u16, "hello\n");
     measured(shared, move span, started);
@@ -79,12 +79,12 @@ async std.http::response item(arc Telemetry state, std.http::request incoming) t
     case variant o::none: break;
     }
     std.trace::span lookup = span.child("lookup");
-    lookup.attribute("id", id.as_str());
+    lookup.attribute("id", id);
     std.trace::record found = (move lookup).finish();
     drop found;
     shared->items.increment();
     std.string::string body = f"{{\"id\":\"{id}\"}}";
-    std.http::response answer = std.http::response::json(200u16, body.as_str());
+    std.http::response answer = std.http::response::json(200u16, body);
     measured(shared, move span, started);
     return move answer;
 }
@@ -97,23 +97,23 @@ async std.http::response traces(arc Telemetry state, std.http::request incoming)
     usize attributes = 0usize;
     for (usize index = 0usize; index < len(kept); index += 1usize) {
         std.string::string line = kept[index].json();
-        std.string::append_str(&text, line.as_str());
+        std.string::append_str(&text, line);
         std.string::append_str(&text, "\n");
         const std.trace::attribute[] listed = std.array::as_slice(&kept[index].attributes);
         attributes += len(listed);
     }
     u64 dropped = state->tracer.dropped();
-    std.http::response answer = std.http::response::text(200u16, text.as_str());
+    std.http::response answer = std.http::response::text(200u16, text);
     std.string::string count = f"{dropped}";
     std.string::string described = f"{attributes}";
     // Decimal numbers are valid field values.
     try {
-        answer.headers.add("X-Dropped-Spans", count.as_str());
+        answer.headers.add("X-Dropped-Spans", count);
     } catch (std.http::http_error rejected) {
         rejected as void;
     }
     try {
-        answer.headers.add("X-Span-Attributes", described.as_str());
+        answer.headers.add("X-Span-Attributes", described);
     } catch (std.http::http_error rejected) {
         rejected as void;
     }

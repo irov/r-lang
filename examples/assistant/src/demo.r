@@ -14,7 +14,7 @@ struct voice { u32 unused; };
 /* Prints the question of a form and confirms it. */
 protected async std.mcp::answer confirm_form(std.mcp::form_request asked) throws std.error::fault {
     std.string::string line = std.string::from_str("  asks: ");
-    std.string::append_str(&line, asked.message.as_str());
+    std.string::append_str(&line, asked.message);
     drop asked;
     await std.console::println(move line);
     try {
@@ -29,7 +29,7 @@ protected async std.mcp::answer confirm_form(std.mcp::form_request asked) throws
 /* Prints the URL that a server asks the user to open and declines it: the demo has no browser. */
 protected async std.mcp::answer decline_url(std.mcp::url_request asked) throws std.error::fault {
     std.string::string line = std.string::from_str("  opens: ");
-    std.string::append_str(&line, asked.url.as_str());
+    std.string::append_str(&line, asked.url);
     drop asked;
     await std.console::println(move line);
     return std.mcp::answer {.action = std.mcp::answer_action::decline, .content = o::none};
@@ -53,10 +53,10 @@ protected std.string::string media_text(str kind, const std.mcp::media* item) th
     std.string::string text = std.string::from_str("<");
     std.string::append_str(&text, kind);
     std.string::append_str(&text, " ");
-    std.string::append_str(&text, item->mime_type.as_str());
+    std.string::append_str(&text, item->mime_type);
     usize size = len(item->data);
     std.string::string rest = f" {size} bytes>";
-    std.string::append_str(&text, rest.as_str());
+    std.string::append_str(&text, rest);
     return move text;
 }
 
@@ -76,8 +76,8 @@ protected std.string::string shown(const std.mcp::tool_result* result) throws st
         case variant std.mcp::content::text(text): return std.string::from_str(text->as_str());
         case variant std.mcp::content::image(picture): return media_text("image", picture);
         case variant std.mcp::content::audio(sound): return media_text("audio", sound);
-        case variant std.mcp::content::link(linked): return std.string::from_str(linked->uri.as_str());
-        case variant std.mcp::content::embedded(inner): return std.string::from_str(inner->uri.as_str());
+        case variant std.mcp::content::link(linked): return std.string::from_str(linked->uri);
+        case variant std.mcp::content::embedded(inner): return std.string::from_str(inner->uri);
         }
     }
     return std.string::from_str("<nothing>");
@@ -98,8 +98,8 @@ protected async void call_and_show(const std.mcp::client* link, str label, str t
         std.mcp::tool_result result = await link->call_tool(tool, arguments(given));
         std.string::string text = line_of(tool, "");
         std.string::string value = shown(&result);
-        std.string::append_str(&text, value.as_str());
-        await std.console::println(line_of(label, text.as_str()));
+        std.string::append_str(&text, value);
+        await std.console::println(line_of(label, text));
     }
 }
 
@@ -107,7 +107,7 @@ protected std.string::string joined(const array<std.string::string>* items) thro
     std.string::string text = std.string::create();
     for (usize index = 0usize; index < len(*items); index += 1usize) {
         if (index != 0usize) { std.string::append_str(&text, " "); }
-        std.string::append_str(&text, (*items)[index].as_str());
+        std.string::append_str(&text, (*items)[index]);
     }
     return move text;
 }
@@ -135,10 +135,10 @@ protected async void watch_changes(const std.mcp::client* link, str label)
         if (watched.granted.resources == true) { std.string::append_str(&granted, " resources"); }
         for (usize index = 0usize; index < len(watched.granted.uris); index += 1usize) {
             std.string::append_str(&granted, " ");
-            std.string::append_str(&granted, watched.granted.uris[index].as_str());
+            std.string::append_str(&granted, watched.granted.uris[index]);
         }
         task_scope(1) io {
-            await std.console::println(line_of(label, granted.as_str()));
+            await std.console::println(line_of(label, granted));
             await call_and_show(link, label, "remember", "{\"text\":\"call Bob about the trip\"}");
             for (u32 round = 0u32; round < 2u32; round += 1u32) {
                 o<std.mcp::change> next = await watched.next();
@@ -148,8 +148,8 @@ protected async void watch_changes(const std.mcp::client* link, str label)
                     case variant std.mcp::change::resources: await std.console::println(line_of(label, "change resources"));
                     case variant std.mcp::change::updated(move uri):
                         std.string::string text = std.string::from_str("change updated ");
-                        std.string::append_str(&text, uri.as_str());
-                        await std.console::println(line_of(label, text.as_str()));
+                        std.string::append_str(&text, uri);
+                        await std.console::println(line_of(label, text));
                     default: await std.console::println(line_of(label, "change other"));
                     }
                 case variant o::none: await std.console::println(line_of(label, "change none"));
@@ -171,16 +171,16 @@ protected async void read_and_show(const std.mcp::client* link, str label, str u
         task_scope(1) io {
             array<std.mcp::contents> items = await link->read_resource(uri);
             for (usize index = 0usize; index < len(items); index += 1usize) {
-                std.string::append_str(&text, items[index].text.as_str());
+                std.string::append_str(&text, items[index].text);
             }
         }
     } catch (std.mcp::mcp_error failure) {
         i64 code = failure.code;
         std.string::string reason = f"{code} ";
-        std.string::append_str(&reason, failure.message.as_str());
-        std.string::append_str(&text, reason.as_str());
+        std.string::append_str(&reason, failure.message);
+        std.string::append_str(&text, reason);
     }
-    task_scope(1) io { await std.console::println(line_of(label, text.as_str())); }
+    task_scope(1) io { await std.console::println(line_of(label, text)); }
 }
 
 /* Whether the capabilities of discover offer the Tasks extension. */
@@ -220,14 +220,14 @@ protected async std.string::string start_forget(const std.mcp::client* link, str
         switch (move started) {
         case variant std.mcp::tool_start::running(move state):
             std.string::string line = line_of("task forget", status_word(state.status));
-            await std.console::println(line_of(label, line.as_str()));
+            await std.console::println(line_of(label, line));
             std.string::string found = core::replace(&state.id, std.string::create());
             std.string::string old = core::replace(&id, move found);
             drop old;
         case variant std.mcp::tool_start::finished(move result):
             std.string::string value = shown(&result);
-            std.string::string line = line_of("forget", value.as_str());
-            await std.console::println(line_of(label, line.as_str()));
+            std.string::string line = line_of("forget", value);
+            await std.console::println(line_of(label, line));
         }
     }
     return move id;
@@ -255,13 +255,13 @@ protected async o<std.mcp::task_state> asking_state(const std.mcp::client* link,
                 switch (state.requests[0usize]) {
                 case variant std.mcp::elicitation::form(form):
                     std.string::append_str(&line, " ");
-                    std.string::append_str(&line, form->message.as_str());
+                    std.string::append_str(&line, form->message);
                 case variant std.mcp::elicitation::url(page):
                     std.string::append_str(&line, " ");
-                    std.string::append_str(&line, page->message.as_str());
+                    std.string::append_str(&line, page->message);
                 }
             }
-            task_scope(1) io { await std.console::println(line_of(label, line.as_str())); }
+            task_scope(1) io { await std.console::println(line_of(label, line)); }
             return o::some(move state);
         case variant o::none: break;
         }
@@ -292,10 +292,10 @@ protected async void await_completion(std.mcp::subscription* watched, str label)
                     switch (state.result) {
                     case variant o::some(result):
                         std.string::string value = shown(result);
-                        std.string::append_str(&line, value.as_str());
+                        std.string::append_str(&line, value);
                     case variant o::none: break;
                     }
-                    task_scope(1) io { await std.console::println(line_of(label, line.as_str())); }
+                    task_scope(1) io { await std.console::println(line_of(label, line)); }
                 }
             default: break;
             }
@@ -316,7 +316,7 @@ protected async void forget_in_task(const std.mcp::client* link, str label, cons
         std.string::string old = core::replace(&id, move started);
         drop old;
         if (std.string::len(&id) != 0usize) {
-            o<std.mcp::task_state> found = await asking_state(link, label, id.as_str());
+            o<std.mcp::task_state> found = await asking_state(link, label, id);
             o<std.mcp::task_state> previous = core::replace(&asking, move found);
             drop previous;
         }
@@ -324,13 +324,13 @@ protected async void forget_in_task(const std.mcp::client* link, str label, cons
     std.string::string key = std.string::create();
     switch (move asking) {
     case variant o::some(move state):
-        if (len(state.keys) != 0usize) { std.string::append_str(&key, state.keys[0usize].as_str()); }
+        if (len(state.keys) != 0usize) { std.string::append_str(&key, state.keys[0usize]); }
     case variant o::none: break;
     }
     if (std.string::len(&key) == 0usize) { return; }
     std.mcp::interests wanted = std.mcp::interests::create();
     try {
-        wanted.tasks.push(std.string::from_str(id.as_str()));
+        wanted.tasks.push(std.string::from_str(id));
     } catch (std.array::push_error<std.string::string> rejected) {
         (move rejected) as void;
     }
@@ -346,8 +346,8 @@ protected async void forget_in_task(const std.mcp::client* link, str label, cons
         u64 granted = len(watched.granted.tasks) as u64;
         std.string::string line = f"listen tasks {granted}";
         task_scope(1) io {
-            await std.console::println(line_of(label, line.as_str()));
-            await link->answer_task(id.as_str(), key.as_str(), &yes);
+            await std.console::println(line_of(label, line));
+            await link->answer_task(id, key, &yes);
             await await_completion(&watched, label);
             await link->unlisten(move watched);
         }
@@ -370,12 +370,12 @@ protected async void cancel_forget(const std.mcp::client* link, str label, const
     std.string::string text = std.string::from_str("task ");
     try {
         task_scope(1) io {
-            o<std.mcp::task_state> asking = await asking_state(link, label, id.as_str());
+            o<std.mcp::task_state> asking = await asking_state(link, label, id);
             drop asking;
-            await link->cancel_task(id.as_str());
-            std.mcp::tool_result result = await link->finish_task(id.as_str(), answers);
+            await link->cancel_task(id);
+            std.mcp::tool_result result = await link->finish_task(id, answers);
             std.string::string value = shown(&result);
-            std.string::append_str(&text, value.as_str());
+            std.string::append_str(&text, value);
         }
     } catch (std.mcp::mcp_error failure) {
         if (failure.code == std.mcp::task_cancelled) {
@@ -384,7 +384,7 @@ protected async void cancel_forget(const std.mcp::client* link, str label, const
             std.string::append_str(&text, example.assistant.frames::code_name(failure.code));
         }
     }
-    task_scope(1) io { await std.console::println(line_of(label, text.as_str())); }
+    task_scope(1) io { await std.console::println(line_of(label, text)); }
 }
 
 /* R: one conversation with the memory server over a client of any transport. */
@@ -393,21 +393,21 @@ async void converse(const std.mcp::client* link, str label) throws std.error::fa
     std.mcp::elicitor<voice> answers = {.state = new arc voice {.unused = 0u32}, .handler = approve};
     task_scope(1) io {
         std.mcp::discovery found = await link->discover();
-        std.string::string text = line_of("discover", found.server.name.as_str());
+        std.string::string text = line_of("discover", found.server.name);
         std.string::append_str(&text, " ");
-        std.string::append_str(&text, found.server.version.as_str());
+        std.string::append_str(&text, found.server.version);
         std.string::append_str(&text, " ");
         std.string::string versions = joined(&found.versions);
-        std.string::append_str(&text, versions.as_str());
+        std.string::append_str(&text, versions);
         if (offers_tasks(&found.capabilities) == true) { std.string::append_str(&text, " tasks"); }
-        await std.console::println(line_of(label, text.as_str()));
+        await std.console::println(line_of(label, text));
         array<std.mcp::tool> tools = await link->list_tools();
         std.string::string names = std.string::from_str("tools");
         for (usize index = 0usize; index < len(tools); index += 1usize) {
             std.string::append_str(&names, " ");
-            std.string::append_str(&names, tools[index].name.as_str());
+            std.string::append_str(&names, tools[index].name);
         }
-        await std.console::println(line_of(label, names.as_str()));
+        await std.console::println(line_of(label, names));
         await call_and_show(link, label, "remember", "{\"text\":\"tea with Ann on Friday\"}");
         await call_and_show(link, label, "remember", "{\"text\":\"green tea\"}");
         await watch_changes(link, label);
@@ -415,17 +415,17 @@ async void converse(const std.mcp::client* link, str label) throws std.error::fa
         std.mcp::tool_result forgotten = await link->call_tool_with("forget", arguments("{\"id\":2}"), &answers);
         std.string::string forget_line = line_of("forget", "");
         std.string::string result = shown(&forgotten);
-        std.string::append_str(&forget_line, result.as_str());
-        await std.console::println(line_of(label, forget_line.as_str()));
+        std.string::append_str(&forget_line, result);
+        await std.console::println(line_of(label, forget_line));
         await read_and_show(link, label, "memory://notes/1");
         await read_and_show(link, label, "memory://notes/2");
         array<std.mcp::resource> resources = await link->list_resources();
         std.string::string uris = std.string::from_str("resources");
         for (usize index = 0usize; index < len(resources); index += 1usize) {
             std.string::append_str(&uris, " ");
-            std.string::append_str(&uris, resources[index].uri.as_str());
+            std.string::append_str(&uris, resources[index].uri);
         }
-        await std.console::println(line_of(label, uris.as_str()));
+        await std.console::println(line_of(label, uris));
         std.mcp::prompt_result reflected = await link->get_prompt("reflect", arguments("{\"topic\":\"tea\"}"));
         std.string::string prompt_line = std.string::from_str("prompt");
         for (usize index = 0usize; index < len(reflected.messages); index += 1usize) {
@@ -437,11 +437,11 @@ async void converse(const std.mcp::client* link, str label) throws std.error::fa
             default: break;
             }
         }
-        await std.console::println(line_of(label, prompt_line.as_str()));
+        await std.console::println(line_of(label, prompt_line));
         std.mcp::completion completed = await link->complete(true, "reflect", "topic", "t");
         std.string::string values = joined(&completed.values);
-        std.string::string complete_line = line_of("complete t ->", values.as_str());
-        await std.console::println(line_of(label, complete_line.as_str()));
+        std.string::string complete_line = line_of("complete t ->", values);
+        await std.console::println(line_of(label, complete_line));
         await call_and_show(link, label, "count", "{}");
         await forget_in_task(link, label, &answers);
         await cancel_forget(link, label, &answers);
@@ -481,7 +481,7 @@ protected async void try_refused(const std.mcp::client* link, str label, bool ca
         std.string::append_str(&text, "refused: ");
         std.string::append_str(&text, example.assistant.frames::code_name(failure.code));
     }
-    task_scope(1) io { await std.console::println(line_of(label, text.as_str())); }
+    task_scope(1) io { await std.console::println(line_of(label, text)); }
 }
 
 /* R: the conversation over Streamable HTTP with a server of this process on a free port, whose
@@ -499,7 +499,7 @@ async void over_http() throws std.error::fault, std.mcp::mcp_error, std.json::er
     u16 port = endpoint.port;
     std.string::string address = f"http://127.0.0.1:{port}/mcp";
     std.mcp::server<example.assistant.memory::memory> built = example.assistant.memory::build();
-    std.mcp::protection guard = std.mcp::protection::create(address.as_str(), "https://auth.example");
+    std.mcp::protection guard = std.mcp::protection::create(address, "https://auth.example");
     guard.scope("notes.write");
     built.protect(move guard, example.assistant.memory::check_token);
     arc std.mcp::server<example.assistant.memory::memory> host =
@@ -512,7 +512,7 @@ async void over_http() throws std.error::fault, std.mcp::mcp_error, std.json::er
         rejected as void;
     }
     std.mcp::client_options settings = {.tasks = true};
-    std.mcp::client link = std.mcp::client::over_http(address.as_str(), client_info(), settings, o::none);
+    std.mcp::client link = std.mcp::client::over_http(address, client_info(), settings, o::none);
     std.service::options service_settings = {};
     std.http::limits bounds = {};
     task_scope(3) group {
@@ -538,7 +538,7 @@ async void over_http() throws std.error::fault, std.mcp::mcp_error, std.json::er
 /* R: the conversation over stdio with this program started as `serve`; the client declares the
    Tasks extension. */
 async i32 over_stdio(std.string::string program) throws std.error::fault, std.mcp::mcp_error, std.json::error {
-    std.fs::path path = std.fs::path_from_utf8(program.as_str());
+    std.fs::path path = std.fs::path_from_utf8(program);
     std.process::command command = std.process::command_create(&path);
     command.arg("serve");
     std.mcp::client_options settings = {.tasks = true};
@@ -561,7 +561,7 @@ async i32 over_stdio(std.string::string program) throws std.error::fault, std.mc
         case variant std.process::wait_result::failed(failure): throw failure->error;
         }
         std.string::string text = f"server exited {status}";
-        await std.console::println(line_of("stdio", text.as_str()));
+        await std.console::println(line_of("stdio", text));
     case variant o::none: break;
     }
     return status;
@@ -574,16 +574,16 @@ protected async void show_tools(const std.mcp::client* link, str label) throws s
         task_scope(1) io {
             array<std.mcp::tool> tools = await link->list_tools();
             for (usize index = 0usize; index < len(tools); index += 1usize) {
-                std.string::string text = line_of("tool", tools[index].name.as_str());
+                std.string::string text = line_of("tool", tools[index].name);
                 std.string::append_str(&text, ": ");
-                std.string::append_str(&text, tools[index].description.as_str());
-                await std.console::println(line_of(label, text.as_str()));
+                std.string::append_str(&text, tools[index].description);
+                await std.console::println(line_of(label, text));
             }
         }
     } catch (std.mcp::mcp_error failure) {
         i64 code = failure.code;
         std.string::string problem = f"tools: error {code}";
-        await std.console::println(line_of(label, problem.as_str()));
+        await std.console::println(line_of(label, problem));
     }
 }
 
@@ -593,14 +593,14 @@ protected async void show_resources(const std.mcp::client* link, str label) thro
         task_scope(1) io {
             array<std.mcp::resource> resources = await link->list_resources();
             for (usize index = 0usize; index < len(resources); index += 1usize) {
-                std.string::string text = line_of("resource", resources[index].uri.as_str());
-                await std.console::println(line_of(label, text.as_str()));
+                std.string::string text = line_of("resource", resources[index].uri);
+                await std.console::println(line_of(label, text));
             }
         }
     } catch (std.mcp::mcp_error failure) {
         i64 code = failure.code;
         std.string::string problem = f"resources: error {code}";
-        await std.console::println(line_of(label, problem.as_str()));
+        await std.console::println(line_of(label, problem));
     }
 }
 
@@ -610,20 +610,20 @@ protected async void show_prompts(const std.mcp::client* link, str label) throws
         task_scope(1) io {
             array<std.mcp::prompt> prompts = await link->list_prompts();
             for (usize index = 0usize; index < len(prompts); index += 1usize) {
-                std.string::string text = line_of("prompt", prompts[index].name.as_str());
+                std.string::string text = line_of("prompt", prompts[index].name);
                 for (usize at = 0usize; at < len(prompts[index].arguments); at += 1usize) {
                     const std.mcp::prompt_argument* argument = &prompts[index].arguments[at];
                     std.string::append_str(&text, " ");
-                    std.string::append_str(&text, argument->name.as_str());
+                    std.string::append_str(&text, argument->name);
                     if (argument->required == true) { std.string::append_str(&text, "*"); }
                 }
-                await std.console::println(line_of(label, text.as_str()));
+                await std.console::println(line_of(label, text));
             }
         }
     } catch (std.mcp::mcp_error failure) {
         i64 code = failure.code;
         std.string::string problem = f"prompts: error {code}";
-        await std.console::println(line_of(label, problem.as_str()));
+        await std.console::println(line_of(label, problem));
     }
 }
 
@@ -634,13 +634,13 @@ async void inspect(const std.mcp::client* link, str label, str tool, str given)
     throws std.error::fault, std.mcp::mcp_error, std.json::error {
     task_scope(1) io {
         std.mcp::discovery found = await link->discover();
-        std.string::string text = line_of("server", found.server.name.as_str());
+        std.string::string text = line_of("server", found.server.name);
         std.string::append_str(&text, " ");
-        std.string::append_str(&text, found.server.version.as_str());
+        std.string::append_str(&text, found.server.version);
         std.string::append_str(&text, " speaks ");
         std.string::string versions = joined(&found.versions);
-        std.string::append_str(&text, versions.as_str());
-        await std.console::println(line_of(label, text.as_str()));
+        std.string::append_str(&text, versions);
+        await std.console::println(line_of(label, text));
         await show_tools(link, label);
         await show_resources(link, label);
         await show_prompts(link, label);
@@ -653,24 +653,24 @@ async void inspect(const std.mcp::client* link, str label, str tool, str given)
 async void inspect_http(std.string::string address, std.string::string tool, std.string::string given)
     throws std.error::fault, std.mcp::mcp_error, std.json::error {
     std.mcp::client_options settings = {};
-    std.mcp::client link = std.mcp::client::over_http(address.as_str(), client_info(), settings, o::none);
-    task_scope(1) io { await inspect(&link, "http", tool.as_str(), given.as_str()); }
+    std.mcp::client link = std.mcp::client::over_http(address, client_info(), settings, o::none);
+    task_scope(1) io { await inspect(&link, "http", tool, given); }
 }
 
 /* R: inspect a program started as a stdio server with its arguments. */
 async void inspect_stdio(array<std.string::string> command_line, std.string::string tool, std.string::string given)
     throws std.error::fault, std.mcp::mcp_error, std.json::error {
-    std.fs::path path = std.fs::path_from_utf8(command_line[0usize].as_str());
+    std.fs::path path = std.fs::path_from_utf8(command_line[0usize]);
     std.process::command command = std.process::command_create(&path);
     for (usize index = 1usize; index < len(command_line); index += 1usize) {
-        command.arg(command_line[index].as_str());
+        command.arg(command_line[index]);
     }
     std.mcp::client_options settings = {};
     std.mcp::launched started = await std.mcp::launch(move command, client_info(), settings);
     o<std.process::child> child = core::replace(&started.child, o::none);
     task_scope(2) session {
         auto pump = started.link.run();
-        await inspect(&started.link, "stdio", tool.as_str(), given.as_str());
+        await inspect(&started.link, "stdio", tool, given);
         await started.link.close();
         await move pump;
     }

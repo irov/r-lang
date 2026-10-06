@@ -15,7 +15,7 @@ protected const str usage_text =
     "tokens noise COUNT | pick LOW HIGH | dice SEED COUNT | shuffle SEED ITEM...\n";
 
 str word(const array<std.string::string>* arguments, usize index) {
-    return (*arguments)[index].as_str();
+    return (*arguments)[index];
 }
 
 u64 number(const array<std.string::string>* arguments, usize index) throws Usage {
@@ -98,7 +98,7 @@ async i32 main() {
     array<std.string::string> arguments = std.env::arguments();
     usize given = len(arguments);
     o<Command> command = o::none;
-    if (given >= 2usize) { command = core::enum_from_name::<Command>(arguments[1].as_str()); }
+    if (given >= 2usize) { command = core::enum_from_name::<Command>(arguments[1]); }
     switch (command) {
     case variant o::none:
         await std.console::eprint(std.string::from_str(usage_text));

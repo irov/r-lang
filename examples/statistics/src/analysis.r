@@ -6,7 +6,7 @@ protected void append_optional(std.string::string* output, str label, o<usize> v
     case variant o::some(index):
         usize found = *index;
         std.string::string row = f"{label}={found}\n";
-        str row_text = row.as_str();
+        str row_text = row;
         output->append(row_text);
         break;
     case variant o::none:
@@ -48,7 +48,7 @@ std.string::string summary(const i32[] readings) throws std.alloc::alloc_error {
     case variant o::some(value):
         i32 found = *value;
         std.string::string row = f"first_negative={found}\n";
-        str row_text = row.as_str();
+        str row_text = row;
         output.append(row_text);
         break;
     case variant o::none: output.append("first_negative=none\n"); break;
@@ -60,7 +60,7 @@ std.string::string summary(const i32[] readings) throws std.alloc::alloc_error {
     case variant o::some(value):
         i32 found = **value;
         std.string::string row = f"middle_input={found}\n";
-        str row_text = row.as_str();
+        str row_text = row;
         output.append(row_text);
         break;
     case variant o::none: break;
@@ -71,7 +71,7 @@ std.string::string summary(const i32[] readings) throws std.alloc::alloc_error {
     case variant o::some(value):
         i32 found = **value;
         std.string::string row = f"last_input={found}\n";
-        str row_text = row.as_str();
+        str row_text = row;
         output.append(row_text);
         break;
     case variant o::none: break;
@@ -95,7 +95,7 @@ std.string::string page(const i32[] readings, usize offset, usize limit)
         usize index = offset + row.index;
         i64 squared = *row.value;
         std.string::string line = f"{index} {squared}\n";
-        str row_text = line.as_str();
+        str row_text = line;
         output.append(row_text);
     }
     // A separate lazy filter produces a reusable collection of rejected readings.
@@ -110,7 +110,7 @@ std.string::string page(const i32[] readings, usize offset, usize limit)
     for (const i32* value in &rejected_list) {
         i32 reading = *value;
         std.string::string cell = f" {reading}";
-        str cell_text = cell.as_str();
+        str cell_text = cell;
         output.append(cell_text);
     }
     output.append("\n");
@@ -129,7 +129,7 @@ std.string::string schedule(i32 low, i32 high) throws std.alloc::alloc_error {
     std.string::string output = std.string::from_str("slot hour\n");
     for (std.iter::pair<usize, i32> row in &slots) {
         std.string::string line = f"{row.left} {row.right}\n";
-        str row_text = line.as_str();
+        str row_text = line;
         output.append(row_text);
     }
     return move output;

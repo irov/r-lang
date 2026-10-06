@@ -12,7 +12,7 @@ std.string::string run(u32 initial, const u32[] writes) throws std.alloc::alloc_
             core::volatile_store(address, *value);
             u32 after = core::volatile_load(input);
             std.string::string row = f"before={before} after={after}\n";
-            str text = row.as_str();
+            str text = row;
             output.append(text);
         }
     }

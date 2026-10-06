@@ -14,18 +14,18 @@ std.string::string dispatch(const u32[] ids) throws std.alloc::alloc_error,
         bool duplicate = accepted.contains(&key);
         if (duplicate == true) {
             std.string::string row = f"duplicate={id}\n";
-            output.append(row.as_str());
+            output.append(row);
         } else {
             u64 hash = core::hash(&key);
             u32 shard = (hash % 4u64) as u32;
             o<u32> previous = accepted.insert(key, shard); previous as void;
             std.string::string row = f"accepted={id} shard={shard}\n";
-            output.append(row.as_str());
+            output.append(row);
         }
     }
     usize count = len(accepted);
     std.string::string summary = f"jobs={count}\n";
-    output.append(summary.as_str());
+    output.append(summary);
     return move output;
 }
 

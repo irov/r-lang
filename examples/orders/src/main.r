@@ -20,7 +20,7 @@ protected const str usage_text =
     "orders watch COUNT | demo\n";
 
 str word(const array<std.string::string>* arguments, usize index) {
-    return (*arguments)[index].as_str();
+    return (*arguments)[index];
 }
 
 protected std.string::string owned(const array<std.string::string>* arguments, usize index)
@@ -64,7 +64,7 @@ protected async bool sleep_on(std.postgres::connection db) throws std.postgres::
         std.postgres::rows slept = await db.query("SELECT pg_sleep(30)", move none);
         drop slept;
     } catch (std.postgres::pg_error failure) {
-        return std.text::equal_ignore_ascii_case(failure.sqlstate.as_str(), "57014");
+        return std.text::equal_ignore_ascii_case(failure.sqlstate, "57014");
     }
     return false;
 }
@@ -95,7 +95,7 @@ async void demo() throws std.postgres::pg_error, std.tls::tls_error, std.error::
     u32 announced = 0u32;
     for (u32 heard = 0u32; heard < 2u32; heard += 1u32) {
         std.postgres::notification message = await listener.wait_notification();
-        if (std.text::ends_with(message.payload.as_str(), " tea 2") == true) { announced += 1u32; }
+        if (std.text::ends_with(message.payload, " tea 2") == true) { announced += 1u32; }
     }
     await say(f"announced on channel orders: {announced}");
     std.postgres::canceller key = db.canceller();
@@ -118,7 +118,7 @@ async void demo() throws std.postgres::pg_error, std.tls::tls_error, std.error::
 
 /* A server error is named by its SQLSTATE, any other failure by its error code. */
 protected str label_of(const std.postgres::pg_error* failure) {
-    if (failure->code == std.postgres::error_code::server) { return failure->sqlstate.as_str(); }
+    if (failure->code == std.postgres::error_code::server) { return failure->sqlstate; }
     return core::enum_name(failure->code);
 }
 
@@ -126,7 +126,7 @@ async i32 main() {
     array<std.string::string> arguments = std.env::arguments();
     usize given = len(arguments);
     o<Command> command = o::none;
-    if (given >= 2usize) { command = core::enum_from_name::<Command>(arguments[1].as_str()); }
+    if (given >= 2usize) { command = core::enum_from_name::<Command>(arguments[1]); }
     switch (command) {
     case variant o::none:
         await std.console::eprint(std.string::from_str(usage_text));
@@ -204,7 +204,7 @@ async i32 main() {
             return 64;
         } catch (std.postgres::pg_error failure) {
             str state = label_of(&failure);
-            str text = failure.message.as_str();
+            str text = failure.message;
             await std.console::eprintln(f"postgres: {state} {text}");
             return 69;
         } catch (std.tls::tls_error failure) {

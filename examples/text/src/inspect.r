@@ -21,7 +21,7 @@ std.string::string inspect(str source, str needle) throws std.alloc::alloc_error
     case variant o::some(value):
         usize offset = *value;
         std.string::string row = f"first={offset}\n";
-        str row_text = row.as_str();
+        str row_text = row;
         output.append(row_text);
         break;
     case variant o::none: output.append("first=none\n"); break;
@@ -48,7 +48,7 @@ std.string::string message(str prefix, str body, usize limit)
     usize size = output.len();
     usize capacity = buffer.capacity();
     std.string::string stats = f"\nbytes={size} scratch_capacity={capacity}\n";
-    str stats_text = stats.as_str();
+    str stats_text = stats;
     output.append(stats_text);
     return move output;
 }

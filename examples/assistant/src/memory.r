@@ -81,8 +81,8 @@ protected recalled find_notes(const memory* state, str query, u32 limit) throws 
         const array<note>* notes = std.sync::mutex_guard_ref(&guard);
         for (usize index = 0usize; index < len(*notes); index += 1usize) {
             if (limit != 0u32 && (len(result.notes) as u32) >= limit) { break; }
-            if (matches((*notes)[index].text.as_str(), query) == true) {
-                keep_found(&result.notes, (*notes)[index].id, (*notes)[index].text.as_str());
+            if (matches((*notes)[index].text, query) == true) {
+                keep_found(&result.notes, (*notes)[index].id, (*notes)[index].text);
             }
         }
     case variant std.sync::lock_result::poisoned(move guard): drop guard;
@@ -98,7 +98,7 @@ protected o<std.string::string> note_text(const memory* state, u64 id) throws st
     case variant std.sync::lock_result::locked(move guard):
         const array<note>* notes = std.sync::mutex_guard_ref(&guard);
         for (usize index = 0usize; index < len(*notes); index += 1usize) {
-            if ((*notes)[index].id == id) { return o::some(std.string::from_str((*notes)[index].text.as_str())); }
+            if ((*notes)[index].id == id) { return o::some(std.string::from_str((*notes)[index].text)); }
         }
     case variant std.sync::lock_result::poisoned(move guard): drop guard;
     case variant std.sync::lock_result::would_deadlock: break;
@@ -136,7 +136,7 @@ protected array<std.mcp::resource> note_resources(const memory* state) throws st
             std.string::string uri = f"memory://notes/{id}";
             std.string::string name = f"note {id}";
             try {
-                result.push(std.mcp::resource::create(uri.as_str(), name.as_str(), "text/plain"));
+                result.push(std.mcp::resource::create(uri, name, "text/plain"));
             } catch (std.array::push_error<std.mcp::resource> rejected) {
                 (move rejected) as void;
                 throw std.alloc::alloc_error::out_of_memory;
@@ -166,7 +166,7 @@ async std.mcp::tool_outcome remember(arc memory state, std.mcp::call request) th
     std.string::string text = arguments_of(&request);
     try {
         remember_args args = std.json::unmarshal(text.as_bytes());
-        u64 id = add_note(&*state, args.text.as_str());
+        u64 id = add_note(&*state, args.text);
         state->changes.resources_changed();
         state->changes.resource_updated("memory://notes");
         remembered result = {.id = id};
@@ -181,7 +181,7 @@ async std.mcp::tool_outcome recall(arc memory state, std.mcp::call request) thro
     std.string::string text = arguments_of(&request);
     try {
         recall_args args = std.json::unmarshal(text.as_bytes());
-        recalled result = find_notes(&*state, args.query.as_str(), args.limit);
+        recalled result = find_notes(&*state, args.query, args.limit);
         return std.mcp::tool_outcome::complete(std.mcp::tool_result::of_structured(&result));
     } catch (std.json::error rejected) {
         (move rejected) as void;
@@ -222,11 +222,11 @@ protected std.mcp::tool_outcome ask_to_forget(const memory* state, u64 id, str e
     o<std.string::string> known = note_text(state, id);
     switch (move known) {
     case variant o::some(move text):
-        str shown = text.as_str();
+        str shown = text;
         std.string::string question = f"Forget note {id}: {shown}?";
         std.mcp::input_required asked = std.mcp::input_required::create();
         try {
-            asked.ask_form("confirm", question.as_str(), std.json::schema::<confirm_form>());
+            asked.ask_form("confirm", question, std.json::schema::<confirm_form>());
         } catch (std.json::error rejected) {
             (move rejected) as void;
         }
@@ -241,27 +241,27 @@ protected std.mcp::tool_outcome ask_to_forget(const memory* state, u64 id, str e
    the note, so a retry for another note asks again. */
 async std.mcp::tool_outcome forget(arc memory state, std.mcp::call request) throws std.error::fault {
     std.string::string text = arguments_of(&request);
-    o<u64> wanted = forget_id(text.as_str());
+    o<u64> wanted = forget_id(text);
     u64 id = 0u64;
     switch (wanted) {
     case variant o::some(value): id = *value;
     case variant o::none: return failed("forget needs the id of a note");
     }
     std.string::string expected = f"forget:{id}";
-    u32 decision = decision_of(&request.input, expected.as_str());
+    u32 decision = decision_of(&request.input, expected);
     if (decision == 1u32) {
         bool removed = remove_note(&*state, id);
         removed as void;
         state->changes.resources_changed();
         state->changes.resource_updated("memory://notes");
         std.string::string done = f"forgot note {id}";
-        return std.mcp::tool_outcome::complete(std.mcp::tool_result::of_text(done.as_str()));
+        return std.mcp::tool_outcome::complete(std.mcp::tool_result::of_text(done));
     }
     if (decision == 2u32) {
         std.string::string kept = f"kept note {id}";
-        return std.mcp::tool_outcome::complete(std.mcp::tool_result::of_text(kept.as_str()));
+        return std.mcp::tool_outcome::complete(std.mcp::tool_result::of_text(kept));
     }
-    return ask_to_forget(&*state, id, expected.as_str());
+    return ask_to_forget(&*state, id, expected);
 }
 
 /* Counts the words of the notes, reporting its progress note by note when the client asked for
@@ -272,7 +272,7 @@ async std.mcp::tool_outcome count(arc memory state, std.mcp::call request) throw
     o<f64> total = o::some(len(all.notes) as f64);
     std.mcp::progress* reporter = &request.progress;
     for (usize index = 0usize; index < len(all.notes); index += 1usize) {
-        for (str word in std.text::split(all.notes[index].text.as_str(), " ")) {
+        for (str word in std.text::split(all.notes[index].text, " ")) {
             const u8[] bytes = word;
             if (len(bytes) != 0usize) { words += 1u64; }
         }
@@ -282,7 +282,7 @@ async std.mcp::tool_outcome count(arc memory state, std.mcp::call request) throw
         }
     }
     std.string::string text = f"{words} words";
-    return std.mcp::tool_outcome::complete(std.mcp::tool_result::of_text(text.as_str()));
+    return std.mcp::tool_outcome::complete(std.mcp::tool_result::of_text(text));
 }
 
 /* memory://notes: every note as JSON. */
@@ -291,7 +291,7 @@ async std.mcp::read_outcome all_notes(arc memory state, std.mcp::read request) t
     array<std.mcp::contents> items = std.array::create::<std.mcp::contents>();
     try {
         std.string::string text = std.json::marshal(&all);
-        items.push(std.mcp::contents::of_text(request.uri.as_str(), "application/json", text.as_str()));
+        items.push(std.mcp::contents::of_text(request.uri, "application/json", text));
     } catch (std.json::error rejected) {
         (move rejected) as void;
     } catch (std.array::push_error<std.mcp::contents> rejected) {
@@ -318,7 +318,7 @@ async std.mcp::read_outcome one_note(arc memory state, std.mcp::read request) th
     case variant o::some(move text):
         array<std.mcp::contents> items = std.array::create::<std.mcp::contents>();
         try {
-            items.push(std.mcp::contents::of_text(request.uri.as_str(), "text/plain", text.as_str()));
+            items.push(std.mcp::contents::of_text(request.uri, "text/plain", text));
         } catch (std.array::push_error<std.mcp::contents> rejected) {
             (move rejected) as void;
         }
@@ -343,11 +343,11 @@ async std.mcp::prompt_outcome reflect(arc memory state, std.mcp::prompt_call req
     std.string::string text = f"What do I know about {topic}?";
     for (usize index = 0usize; index < len(found.notes); index += 1usize) {
         std.string::append_str(&text, " Note: ");
-        std.string::append_str(&text, found.notes[index].text.as_str());
+        std.string::append_str(&text, found.notes[index].text);
         std.string::append_str(&text, ".");
     }
     std.mcp::prompt_result result = std.mcp::prompt_result::create("Reflects on the notes about a topic");
-    result.say(std.mcp::role::user, text.as_str());
+    result.say(std.mcp::role::user, text);
     return std.mcp::prompt_outcome::complete(move result);
 }
 
@@ -356,9 +356,9 @@ async std.mcp::completion topics(arc memory state, std.mcp::completion_request r
     std.mcp::completion found = std.mcp::completion::create();
     recalled all = find_notes(&*state, "", 0u32);
     for (usize index = 0usize; index < len(all.notes); index += 1usize) {
-        for (str word in std.text::split(all.notes[index].text.as_str(), " ")) {
+        for (str word in std.text::split(all.notes[index].text, " ")) {
             const u8[] bytes = word;
-            if (len(bytes) == 0usize || std.text::starts_with(word, request.value.as_str()) == false) { continue; }
+            if (len(bytes) == 0usize || std.text::starts_with(word, request.value) == false) { continue; }
             bool known = false;
             for (usize other = 0usize; other < len(found.values); other += 1usize) {
                 if (std.bytes::equal(found.values[other].as_bytes(), word) == true) { known = true; }

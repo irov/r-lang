@@ -26,13 +26,13 @@ std.string::string describe(std.net::socket_address value) throws std.alloc::all
 
 async std.string::string resolve(std.string::string host, u16 port, std.net::family family)
     throws std.net::net_error, std.async::start_error, std.alloc::alloc_error, std.time::time_error {
-    str text = host.as_str();
+    str text = host;
     deadline (five_seconds()) {
         array<std.net::socket_address> addresses = await std.net::resolve(text, port, family);
         std.string::string output = std.string::create();
         for (const std.net::socket_address* entry in &addresses) {
             std.string::string line = describe(*entry);
-            str content = line.as_str();
+            str content = line;
             output.append(content);
             output.append("\n");
         }

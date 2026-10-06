@@ -78,6 +78,17 @@ static bool r_json_collect_field_attributes(RFrontendContext *context,
             return false;
         if (view.kind != R_SYNTAX_ATTRIBUTE)
             continue;
+        if (r_semantic_attribute_is_user(context, attribute)) {
+            /* R-AGG-0013 (L42): an attribute of a struct field, resolved with every type. */
+            if (!aggregate->is_error && (aggregate->generic_origin == 0U) &&
+                !r_attribute_record_use(context,
+                                        attribute,
+                                        R_ATTRIBUTE_TARGET_FIELD,
+                                        aggregate->type,
+                                        field->layout_index))
+                return false;
+            continue;
+        }
         if (!r_ast_direct_token(context, attribute, 1U, NULL, &name) ||
             !r_semantic_token_text_equal_owned(context, &name, "json")) {
             /* A field takes only @json; an FFI attribute has its closed scopes (R-FFI-0050). */

@@ -565,6 +565,12 @@ static int r_test_fs_position_repeated_cancel_and_queue_progress(void) {
     return 0;
 }
 
+static _Bool r_test_fs_instant_before(RStdTimeInstant left, RStdTimeInstant right) {
+    return (left.storage_seconds < right.storage_seconds) ||
+           ((left.storage_seconds == right.storage_seconds) &&
+            (left.storage_nanoseconds < right.storage_nanoseconds));
+}
+
 static int r_test_fs_path_equals(const RStdFsPath *path, const char *expected) {
     RStdFsStringResult converted = r_std_fs_path_to_utf8(path);
     RStdStringView view;
@@ -1791,12 +1797,22 @@ static int r_test_fs_async_open_lifecycle(void) {
     r_runtime_darwin_fs_service_testing_pause_before_native(0);
     r_std_fs_path_destroy(&relative.value);
 
+    /* L41-1: the open holds the root until its native call ends, so the worker waits before
+       that call while the last handle of the root goes away; without the pause a fast worker
+       finished first and the root closed with its handle. */
     relative = r_test_fs_path(&allocator, "existing");
     R_TEST_CHECK(relative.status == R_STD_FS_CALL_SUCCESS);
+    entry_sequence = r_runtime_darwin_fs_service_testing_entry_sequence();
+    r_runtime_darwin_fs_service_testing_pause_before_native(1);
     started = r_std_fs_open_file_beneath(&root, &relative.value, read_existing, no_deadline);
+    R_TEST_CHECK(started.is_ok && started.task != NULL);
+    while (r_runtime_darwin_fs_service_testing_entry_sequence() == entry_sequence) {
+        (void)sched_yield();
+    }
     r_std_fs_directory_destroy(&root);
     r_std_fs_path_destroy(&relative.value);
     R_TEST_CHECK(fcntl(root_descriptor, F_GETFD) >= 0);
+    r_runtime_darwin_fs_service_testing_pause_before_native(0);
     R_TEST_CHECK(r_test_fs_await_file(started, &file_result) == 0);
     R_TEST_CHECK(file_result.r_tag == UINT32_C(0));
     for (index = 0U; index < 1000000U; ++index) {
@@ -2575,6 +2591,8 @@ static int r_test_fs_control_close_and_iteration(void) {
     size_t cached_offset;
     int64_t cached_index;
     size_t spin;
+    uint32_t attempt;
+    _Bool early;
     unsigned int seen_entries;
     int root_descriptor;
     int file_descriptor;
@@ -2807,42 +2825,65 @@ static int r_test_fs_control_close_and_iteration(void) {
     R_TEST_CHECK(seen_entries == 7U);
     R_TEST_CHECK(iterator.storage == NULL);
 
-    operation = r_std_fs_iterate(&root, no_deadline);
-    R_TEST_CHECK(r_test_fs_await_iterator(operation, &iterator_result) == 0);
-    R_TEST_CHECK((iterator_result.r_tag == UINT32_C(0)));
-    iterator = iterator_result.r_payload.r_ok;
-    iterator_result.r_payload.r_ok.storage = NULL;
-    short_delay = r_std_time_duration_from_parts(INT64_C(0), UINT32_C(1000000));
-    R_TEST_CHECK(short_delay.is_ok);
-    now = r_std_time_monotonic_now();
-    R_TEST_CHECK(now.is_ok);
-    deadline = r_std_time_instant_add(now.value, short_delay.value);
-    R_TEST_CHECK(deadline.is_ok);
-    native_sequence = r_runtime_darwin_fs_service_testing_native_sequence();
-    signal_count = r_runtime_darwin_fs_service_testing_signal_count();
-    r_runtime_darwin_fs_service_testing_pause_after_native(1);
-    operation = r_std_fs_next(&iterator, (RStdFsDeadline){1, deadline.value});
-    R_TEST_CHECK(operation.is_ok && iterator.storage == NULL);
-    for (spin = 0U; spin < 1000000U; ++spin) {
-        if (r_runtime_darwin_fs_service_testing_native_sequence() != native_sequence) {
+    /* L41-2: a read that ends before its deadline expires wins over the expiry the worker sees
+       while it waits after the read (R-SLIB-ASYNC-0007). The read is late when the worker starts
+       it after the deadline, which a loaded machine may do; such a round proves nothing and is
+       retried with a fresh iterator and a longer deadline. */
+    for (attempt = 0U;; ++attempt) {
+        RStdTimeInstantResult read_done;
+
+        R_TEST_CHECK(attempt < 10U);
+        operation = r_std_fs_iterate(&root, no_deadline);
+        R_TEST_CHECK(r_test_fs_await_iterator(operation, &iterator_result) == 0);
+        R_TEST_CHECK((iterator_result.r_tag == UINT32_C(0)));
+        iterator = iterator_result.r_payload.r_ok;
+        iterator_result.r_payload.r_ok.storage = NULL;
+        short_delay = r_std_time_duration_from_parts(INT64_C(0), UINT32_C(1000000) << attempt);
+        R_TEST_CHECK(short_delay.is_ok);
+        now = r_std_time_monotonic_now();
+        R_TEST_CHECK(now.is_ok);
+        deadline = r_std_time_instant_add(now.value, short_delay.value);
+        R_TEST_CHECK(deadline.is_ok);
+        native_sequence = r_runtime_darwin_fs_service_testing_native_sequence();
+        signal_count = r_runtime_darwin_fs_service_testing_signal_count();
+        r_runtime_darwin_fs_service_testing_pause_after_native(1);
+        operation = r_std_fs_next(&iterator, (RStdFsDeadline){1, deadline.value});
+        R_TEST_CHECK(operation.is_ok && iterator.storage == NULL);
+        for (spin = 0U; spin < 1000000U; ++spin) {
+            if (r_runtime_darwin_fs_service_testing_native_sequence() != native_sequence) {
+                break;
+            }
+            (void)sched_yield();
+        }
+        read_done = r_std_time_monotonic_now();
+        R_TEST_CHECK(read_done.is_ok);
+        early = (spin < 1000000U) && r_test_fs_instant_before(read_done.value, deadline.value);
+        for (spin = 0U; early && (spin < 1000000U); ++spin) {
+            if (r_runtime_darwin_fs_service_testing_signal_count() != signal_count) {
+                break;
+            }
+            (void)sched_yield();
+        }
+        r_runtime_darwin_fs_service_testing_pause_after_native(0);
+        R_TEST_CHECK(!early || (spin < 1000000U));
+        R_TEST_CHECK(r_test_fs_await_next(operation, &next_result) == 0);
+        if (early) {
+            R_TEST_CHECK(next_result.kind == R_STD_FS_DIRECTORY_NEXT_ENTRY &&
+                         next_result.iterator.storage != NULL);
+            r_library_internal_fs_directory_iter_move(&iterator, &next_result.iterator);
+            r_std_fs_directory_entry_destroy(&next_result.entry);
             break;
         }
-        (void)sched_yield();
-    }
-    R_TEST_CHECK(spin < 1000000U);
-    for (spin = 0U; spin < 1000000U; ++spin) {
-        if (r_runtime_darwin_fs_service_testing_signal_count() != signal_count) {
-            break;
+        /* A late or withdrawn read: either outcome is linearizable. */
+        R_TEST_CHECK((next_result.kind == R_STD_FS_DIRECTORY_NEXT_ENTRY) ||
+                     ((next_result.kind == R_STD_FS_DIRECTORY_NEXT_FAILED) &&
+                      (next_result.error.code == R_STD_FS_ERROR_TIMED_OUT)));
+        if (next_result.kind == R_STD_FS_DIRECTORY_NEXT_ENTRY) {
+            r_std_fs_directory_entry_destroy(&next_result.entry);
         }
-        (void)sched_yield();
+        r_library_internal_fs_directory_iter_move(&iterator, &next_result.iterator);
+        r_std_fs_directory_iter_destroy(&iterator);
     }
-    r_runtime_darwin_fs_service_testing_pause_after_native(0);
-    R_TEST_CHECK(spin < 1000000U);
-    R_TEST_CHECK(r_test_fs_await_next(operation, &next_result) == 0);
-    R_TEST_CHECK(next_result.kind == R_STD_FS_DIRECTORY_NEXT_ENTRY &&
-                 next_result.iterator.storage != NULL);
-    r_library_internal_fs_directory_iter_move(&iterator, &next_result.iterator);
-    r_std_fs_directory_entry_destroy(&next_result.entry);
     R_TEST_CHECK(iterator.storage->cache.data != NULL);
     cached_offset = iterator.storage->cache_offset;
     cached_index = iterator.storage->cache_index;

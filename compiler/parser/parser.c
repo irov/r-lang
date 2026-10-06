@@ -2429,7 +2429,10 @@ typedef enum RStandardTypeCallKind {
        expressions are; the type-and-value forms of enum_at and enum_from_name are calls. */
     R_STANDARD_TYPE_CALL_REFLECTION_TYPE,
     R_STANDARD_TYPE_CALL_REFLECTION_TYPE_CONSTANT,
-    R_STANDARD_TYPE_CALL_REFLECTION_TYPE_VALUE
+    R_STANDARD_TYPE_CALL_REFLECTION_TYPE_VALUE,
+    /* R-REFL-0005 (L42): an attribute type and the type it reads, without or with a value. */
+    R_STANDARD_TYPE_CALL_REFLECTION_TWO_TYPES,
+    R_STANDARD_TYPE_CALL_REFLECTION_TWO_TYPES_VALUE
 } RStandardTypeCallKind;
 
 static bool r_reflection_type_call_kind(const RParser *parser,
@@ -2457,6 +2460,15 @@ static bool r_reflection_type_call_kind(const RParser *parser,
     if (r_parser_token_text_is(parser, operation, "enum_at") ||
         r_parser_token_text_is(parser, operation, "enum_from_name")) {
         *kind = R_STANDARD_TYPE_CALL_REFLECTION_TYPE_VALUE;
+        return true;
+    }
+    if (r_parser_token_text_is(parser, operation, "type_attribute")) {
+        *kind = R_STANDARD_TYPE_CALL_REFLECTION_TWO_TYPES;
+        return true;
+    }
+    if (r_parser_token_text_is(parser, operation, "field_attribute") ||
+        r_parser_token_text_is(parser, operation, "variant_attribute")) {
+        *kind = R_STANDARD_TYPE_CALL_REFLECTION_TWO_TYPES_VALUE;
         return true;
     }
     return false;
@@ -2652,17 +2664,22 @@ static bool r_parse_standard_type_call(RParser *parser, RStandardTypeCallKind ca
     const bool has_value = (call_kind == R_STANDARD_TYPE_CALL_ONE_TYPE_ONE_VALUE) ||
                            (call_kind == R_STANDARD_TYPE_CALL_TWO_TYPES_ONE_VALUE) ||
                            (call_kind == R_STANDARD_TYPE_CALL_REFLECTION_TYPE_CONSTANT) ||
-                           (call_kind == R_STANDARD_TYPE_CALL_REFLECTION_TYPE_VALUE);
+                           (call_kind == R_STANDARD_TYPE_CALL_REFLECTION_TYPE_VALUE) ||
+                           (call_kind == R_STANDARD_TYPE_CALL_REFLECTION_TWO_TYPES_VALUE);
 
     (void)r_parse_qualified_name(parser);
     if ((call_kind == R_STANDARD_TYPE_CALL_TWO_TYPES) ||
-        (call_kind == R_STANDARD_TYPE_CALL_TWO_TYPES_ONE_VALUE)) {
+        (call_kind == R_STANDARD_TYPE_CALL_TWO_TYPES_ONE_VALUE) ||
+        (call_kind == R_STANDARD_TYPE_CALL_REFLECTION_TWO_TYPES) ||
+        (call_kind == R_STANDARD_TYPE_CALL_REFLECTION_TWO_TYPES_VALUE)) {
         type_count = UINT32_C(2);
     }
     if (!r_parser_at(parser, R_TOKEN_COLON_COLON) &&
         (call_kind != R_STANDARD_TYPE_CALL_REFLECTION_TYPE) &&
         (call_kind != R_STANDARD_TYPE_CALL_REFLECTION_TYPE_CONSTANT) &&
-        (call_kind != R_STANDARD_TYPE_CALL_REFLECTION_TYPE_VALUE)) {
+        (call_kind != R_STANDARD_TYPE_CALL_REFLECTION_TYPE_VALUE) &&
+        (call_kind != R_STANDARD_TYPE_CALL_REFLECTION_TWO_TYPES) &&
+        (call_kind != R_STANDARD_TYPE_CALL_REFLECTION_TWO_TYPES_VALUE)) {
         /* R-TYPE-0036 (L17.2): a constructor written with only its value operands takes its
            type operands from the expected type of its result. */
         RParser trial = *parser;
@@ -3719,6 +3736,7 @@ static bool r_attribute_name_is_known(const RParser *parser, const RToken *name)
         "derive",
         "test",
         "recursion",
+        "attribute",
     };
     size_t index;
     for (index = 0U; index < (sizeof(known_names) / sizeof(known_names[0])); ++index) {
@@ -3788,8 +3806,17 @@ static bool r_parenthesized_tuple_ahead(const RParser *parser) {
 
 static bool r_parse_attribute_value(RParser *parser) {
     RTokenKind kind = r_parser_peek_kind(parser);
-    if ((kind == R_TOKEN_INTEGER_LITERAL) || (kind == R_TOKEN_STRING_LITERAL)) {
+    if ((kind == R_TOKEN_INTEGER_LITERAL) || (kind == R_TOKEN_STRING_LITERAL) ||
+        (kind == R_TOKEN_FLOAT_LITERAL) || (kind == R_TOKEN_CHARACTER_LITERAL) ||
+        (kind == R_TOKEN_KW_TRUE) || (kind == R_TOKEN_KW_FALSE) || (kind == R_TOKEN_KW_VARIANT)) {
+        /* `variant` is a keyword and a target of `@attribute` (R-AGG-0013). */
         return r_parser_bump(parser);
+    }
+    if (kind == R_TOKEN_MINUS) {
+        /* R-AGG-0013 (L42): a negative number argument of a user attribute. */
+        const RTokenKind next = r_parser_peek_n_kind(parser, 1U);
+        return ((next == R_TOKEN_INTEGER_LITERAL) || (next == R_TOKEN_FLOAT_LITERAL)) &&
+               r_parser_bump(parser) && r_parser_bump(parser);
     }
     return r_parse_type(parser, true);
 }
@@ -3799,24 +3826,24 @@ static bool r_parse_attribute(RParser *parser) {
     const RToken *name;
     bool json;
     bool argument_free;
+    bool user;
 
     (void)r_parser_expect(parser, R_TOKEN_AT, "expected '@' before attribute");
     name = r_parser_peek_token(parser);
-    json = name != NULL && r_parser_token_text_is(parser, name, "json");
-    argument_free = (name != NULL) && (name->kind == R_TOKEN_IDENTIFIER) &&
+    /* R-AGG-0013 (L42): any other name, or a qualified one, names an attribute type as a type is
+       named; the semantic pass resolves it and rejects a name that is no attribute type. */
+    user = (name != NULL) && (name->kind == R_TOKEN_IDENTIFIER) &&
+           (!r_attribute_name_is_known(parser, name) ||
+            (r_parser_peek_n_kind(parser, 1U) == R_TOKEN_DOT) ||
+            (r_parser_peek_n_kind(parser, 1U) == R_TOKEN_COLON_COLON));
+    json = !user && (name != NULL) && r_parser_token_text_is(parser, name, "json");
+    argument_free = !user && (name != NULL) && (name->kind == R_TOKEN_IDENTIFIER) &&
                     r_attribute_is_argument_free(parser, name);
-    if ((name != NULL) && (name->kind == R_TOKEN_IDENTIFIER) &&
-        !r_attribute_name_is_known(parser, name)) {
-        (void)r_add_diagnostic(parser->context,
-                               "R-DIAG-SYN-002",
-                               "R-GRAM-0007",
-                               "unknown R 0.1 attribute",
-                               R_DIAGNOSTIC_ERROR,
-                               name->span);
-    }
     if ((name != NULL) && (name->kind == R_TOKEN_KW_DEFAULT)) {
         /* R-INIT-0005 (L33): the keyword names the attribute `@default` of an enum variant. */
         (void)r_parser_bump(parser);
+    } else if (user) {
+        (void)r_parse_type(parser, true);
     } else {
         (void)r_parser_expect(parser, R_TOKEN_IDENTIFIER, "expected attribute name");
     }

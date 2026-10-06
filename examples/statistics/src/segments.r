@@ -33,7 +33,7 @@ std.string::string describe_runs(const i32[] readings)
         for (usize index = 0usize; index < len(*run); index += 1usize) {
             i32 value = (*run)[index];
             std.string::string cell = f" {value}";
-            output.append(cell.as_str());
+            output.append(cell);
         }
         output.append("\n");
         if (len(*run) > longest_length) {
@@ -45,7 +45,7 @@ std.string::string describe_runs(const i32[] readings)
         output.append("runs=0 longest=none\n");
     } else {
         std.string::string total = f"runs={number} longest={longest}\n";
-        output.append(total.as_str());
+        output.append(total);
     }
     return move output;
 }

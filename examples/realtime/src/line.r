@@ -108,7 +108,7 @@ async std.string::string ask(std.http::client* web, str address, str text)
         std.http::handshake answered = await web->upgrade(move asking, address);
         u16 status = answered.answer.status;
         std.string::string shown = f"{status}";
-        std.string::append_str(&report, shown.as_str());
+        std.string::append_str(&report, shown);
         o<std.http::upgraded> received = core::replace(&answered.connection, o::none);
         o<std.http::upgraded> old = core::replace(&taken, move received);
         drop old;
@@ -118,7 +118,7 @@ async std.string::string ask(std.http::client* web, str address, str text)
         task_scope(1) io {
             std.string::string back = await exchange(&switched, text);
             std.string::append_str(&report, " ");
-            std.string::append_str(&report, std.text::trim(back.as_str()));
+            std.string::append_str(&report, std.text::trim(back));
         }
     case variant o::none: break;
     }

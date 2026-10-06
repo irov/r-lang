@@ -19,9 +19,9 @@ protected std.http::client web() throws std.alloc::alloc_error {
 async std.string::string service_tokens(std.string::string key_file, std.string::string scope)
     throws std.oauth2::oauth2_error, std.http::http_error, std.tls::tls_error, std.error::fault {
     std.oauth2::service_account account = std.oauth2::service_account::from_json(key_file.as_bytes());
-    std.string::string email = std.string::from_str(account.client_email.as_str());
+    std.string::string email = std.string::from_str(account.client_email);
     std.oauth2::token_source tokens = std.oauth2::token_source::from_service_account(web(), move account,
-                                                                                    scope.as_str(), "");
+                                                                                    scope, "");
     std.string::string first = await tokens.access_token();
     std.string::string second = await tokens.access_token();
     std.string::string renewed = await tokens.renew();
@@ -32,9 +32,9 @@ async std.string::string service_tokens(std.string::string key_file, std.string:
 async std.string::string client_token(std.string::string endpoint, std.string::string client, std.string::string secret)
     throws std.http::http_error, std.tls::tls_error, std.error::fault {
     std.http::client http = web();
-    std.oauth2::token_request request = std.oauth2::token_request::create(endpoint.as_str(),
+    std.oauth2::token_request request = std.oauth2::token_request::create(endpoint,
                                                                          std.oauth2::grant::client_credentials);
-    request.set_client(client.as_str(), secret.as_bytes());
+    request.set_client(client, secret.as_bytes());
     request.set_scope("admin");
     std.time::system_time now = std.time::system_now();
     std.string::string out = std.string::create();
@@ -46,17 +46,17 @@ async std.string::string client_token(std.string::string endpoint, std.string::s
             case variant o::some(expires): lifetime += expires->unix_seconds - now.unix_seconds;
             case variant o::none: break;
             }
-            str access = received.access_token.as_str();
-            str kind = received.token_type.as_str();
+            str access = received.access_token;
+            str kind = received.token_type;
             std.string::string line = f"token {access} type {kind} expires in {lifetime}\n";
-            out.append(line.as_str());
+            out.append(line);
         }
     } catch (std.oauth2::oauth2_error failure) {
         std.oauth2::error_code code = failure.code;
         u16 status = failure.status;
-        str reason = failure.error.as_str();
+        str reason = failure.error;
         std.string::string line = f"refused: {code} {status} {reason}\n";
-        out.append(line.as_str());
+        out.append(line);
     }
     return move out;
 }
@@ -66,7 +66,7 @@ async std.string::string login(std.string::string endpoint, std.string::string c
     throws std.oauth2::oauth2_error, std.http::http_error, std.tls::tls_error, std.error::fault {
     std.oauth2::code_grant grant = {.code = move code, .redirect_uri = std.string::from_str("arena://login"),
                                     .verifier = move verifier};
-    std.oauth2::token_request request = std.oauth2::token_request::create(endpoint.as_str(),
+    std.oauth2::token_request request = std.oauth2::token_request::create(endpoint,
                                                                          std.oauth2::grant::authorization_code(move grant));
     request.set_client("arena-app", "");
     std.oauth2::token_source tokens = std.oauth2::token_source::from_request(web(), move request);

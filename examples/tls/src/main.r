@@ -12,7 +12,7 @@ std.string::string message(const array<std.string::string>* arguments) throws st
     usize count = len(*arguments);
     for (usize index = 6usize; index < count; index += 1usize) {
         if (index > 6usize) { joined.append(" "); }
-        joined.append((*arguments)[index].as_str());
+        joined.append((*arguments)[index]);
     }
     return move joined;
 }
@@ -56,7 +56,7 @@ async i32 run(Command command, array<std.string::string> arguments)
             example.tls.peers::serve(move incoming, &server);
         try {
             std.tls::stream<std.net::tcp_stream> session =
-                await std.tls::connect(move outgoing, &client, arguments[5].as_str());
+                await std.tls::connect(move outgoing, &client, arguments[5]);
             await talk(move session, command, message(&arguments));
         } catch (std.tls::tls_error failure) {
             status = 65;
@@ -71,7 +71,7 @@ async i32 main() {
     array<std.string::string> arguments = std.env::arguments();
     usize given = len(arguments);
     o<Command> command = o::none;
-    if (given >= 6usize) { command = core::enum_from_name::<Command>(arguments[1].as_str()); }
+    if (given >= 6usize) { command = core::enum_from_name::<Command>(arguments[1]); }
     switch (command) {
     case variant o::none:
         drop arguments;

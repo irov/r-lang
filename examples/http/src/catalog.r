@@ -33,7 +33,7 @@ protected std.http::response error_json(u16 status, str message) throws std.allo
     std.string::string body = std.string::from_str("{\"error\":\"");
     std.string::append_str(&body, message);
     std.string::append_str(&body, "\"}");
-    return std.http::response::json(status, body.as_str());
+    return std.http::response::json(status, body);
 }
 
 async std.http::response health(arc Catalog state, std.http::request incoming)
@@ -48,7 +48,7 @@ async std.http::response list_items(arc Catalog state, std.http::request incomin
     drop incoming;
     try {
         std.string::string body = std.json::marshal(&state->items);
-        return std.http::response::json(200u16, body.as_str());
+        return std.http::response::json(200u16, body);
     } catch (std.json::error rejected) {
         drop rejected;
     }
@@ -72,7 +72,7 @@ async std.http::response item(arc Catalog state, std.http::request incoming)
         if (state->items[index].id == wanted) {
             try {
                 std.string::string body = std.json::marshal(&state->items[index]);
-                return std.http::response::json(200u16, body.as_str());
+                return std.http::response::json(200u16, body);
             } catch (std.json::error rejected) {
                 drop rejected;
                 return error_json(500u16, "encoding failed");
@@ -80,7 +80,7 @@ async std.http::response item(arc Catalog state, std.http::request incoming)
         }
     }
     std.string::string message = f"no item {wanted}";
-    return error_json(404u16, message.as_str());
+    return error_json(404u16, message);
 }
 
 async std.http::response add(arc Catalog state, std.http::request incoming)
@@ -94,7 +94,7 @@ async std.http::response add(arc Catalog state, std.http::request incoming)
         Item made = {.id = (len(shared->items) as u32) + created + 1u32, .name = move name,
                      .price = given.price};
         std.string::string body = std.json::marshal(&made);
-        std.http::response result = std.http::response::json(201u16, body.as_str());
+        std.http::response result = std.http::response::json(201u16, body);
         return move result;
     } catch (std.json::error rejected) {
         drop rejected;
@@ -135,12 +135,12 @@ async void prices(arc Catalog state, std.http::request incoming, std.http::body_
     for (usize index = 0usize; index < len(state->items); index += 1usize) {
         u32 id = state->items[index].id;
         u32 price = state->items[index].price;
-        std.string::string name = std.string::from_str(state->items[index].name.as_str());
+        std.string::string name = std.string::from_str(state->items[index].name);
         std.string::string event_id = f"{id}";
         std.string::string data = f"{name}={price}";
-        std.string::string text = std.http::sse_event("price", event_id.as_str(), data.as_str());
+        std.string::string text = std.http::sse_event("price", event_id, data);
         task_scope(1) io {
-            bool sent = await writer.send_text(text.as_str());
+            bool sent = await writer.send_text(text);
             if (sent == false) { return; }
         }
     }

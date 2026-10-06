@@ -6,7 +6,7 @@ struct Seen { std.net::unix_message value; };
 /* One datagram to the socket at the path, from an unnamed socket connected to it. */
 async std.string::string notify(std.string::string path, std.string::string message)
     throws std.error::fault {
-    str where = path.as_str();
+    str where = path;
     std.net::unix_datagram socket = await std.net::unix_datagram_connect(where);
     const u8[] payload = message.as_bytes();
     usize length = len(payload);
@@ -19,7 +19,7 @@ async std.string::string notify(std.string::string path, std.string::string mess
    the prefix length, whether the datagram was cut and the CRC-32 of the prefix. */
 async std.string::string collect(std.string::string path, u32 count, usize capacity)
     throws std.error::fault {
-    str where = path.as_str();
+    str where = path;
     std.net::unix_datagram socket = await std.net::unix_datagram_bind(where, true);
     await std.console::print(f"collecting {path}\n");
     std.string::string output = std.string::create();
@@ -33,7 +33,7 @@ async std.string::string collect(std.string::string path, u32 count, usize capac
         u32 checksum = std.hash::crc32(contents[0usize..seen.value.count]);
         std.string::string line =
             f"count={seen.value.count} truncated={seen.value.truncated} crc32={checksum}\n";
-        output.append(line.as_str());
+        output.append(line);
     }
     await std.net::unix_datagram_close(move socket);
     return move output;

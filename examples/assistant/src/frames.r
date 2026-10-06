@@ -28,7 +28,7 @@ std.string::string problem_line(const std.mcp::mcp_error* failure) throws std.al
     std.string::string text = f"mcp error {code} (";
     std.string::append_str(&text, code_name(code));
     std.string::append_str(&text, "): ");
-    std.string::append_str(&text, failure->message.as_str());
+    std.string::append_str(&text, failure->message);
     return move text;
 }
 
@@ -44,22 +44,22 @@ protected std.string::string id_text(const std.jsonrpc::request_id* id) throws s
 protected std.string::string request_text(const std.jsonrpc::request* asked) throws std.alloc::alloc_error {
     std.string::string text = std.string::from_str("request ");
     std.string::string id = id_text(&asked->id);
-    std.string::append_str(&text, id.as_str());
+    std.string::append_str(&text, id);
     std.string::append_str(&text, " ");
-    std.string::append_str(&text, asked->method.as_str());
+    std.string::append_str(&text, asked->method);
     return move text;
 }
 
 protected std.string::string notification_text(const std.jsonrpc::notification* told) throws std.alloc::alloc_error {
     std.string::string text = std.string::from_str("notification ");
-    std.string::append_str(&text, told->method.as_str());
+    std.string::append_str(&text, told->method);
     return move text;
 }
 
 protected std.string::string result_text(const std.jsonrpc::result_response* answered) throws std.alloc::alloc_error {
     std.string::string text = std.string::from_str("result ");
     std.string::string id = id_text(&answered->id);
-    std.string::append_str(&text, id.as_str());
+    std.string::append_str(&text, id);
     return move text;
 }
 
@@ -68,15 +68,15 @@ protected std.string::string error_text(const std.jsonrpc::error_response* faile
     switch (failed->id) {
     case variant o::some(id):
         std.string::string spelled = id_text(id);
-        std.string::append_str(&text, spelled.as_str());
+        std.string::append_str(&text, spelled);
     case variant o::none: std.string::append_str(&text, "-");
     }
     i64 code = failed->code;
     std.string::string rest = f" {code} ";
-    std.string::append_str(&text, rest.as_str());
+    std.string::append_str(&text, rest);
     std.string::append_str(&text, code_name(code));
     std.string::append_str(&text, ": ");
-    std.string::append_str(&text, failed->message.as_str());
+    std.string::append_str(&text, failed->message);
     return move text;
 }
 
@@ -135,7 +135,7 @@ async i32 frames() throws std.error::fault {
                 std.jsonrpc::message refused = refusal_of(&problem);
                 std.string::string text = std.string::from_str("invalid, answered with ");
                 std.string::string reply = described(&refused);
-                std.string::append_str(&text, reply.as_str());
+                std.string::append_str(&text, reply);
                 std.string::string old = core::replace(&note, move text);
                 drop old;
                 o<std.jsonrpc::message> none = core::replace(&written, o::some(move refused));

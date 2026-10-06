@@ -95,7 +95,7 @@ async u64 write_records(std.log::writer sink, std.string::string file) throws st
     if (std.string::len(&file) == 0usize) {
         return await std.log::writer::to_stderr(move sink);
     }
-    std.fs::path path = std.fs::path_from_utf8(file.as_str());
+    std.fs::path path = std.fs::path_from_utf8(file);
     Written written = {.value = 0u64};
     task_scope(1) writing { written.value = await std.log::writer::to_file(move sink, &path); }
     return written.value;
@@ -158,12 +158,12 @@ async i32 send_all(std.net::socket_address endpoint, array<std.string::string> r
                    std.sync::sender<std.service::stop> stopper) throws std.error::fault {
     i32 status = 0;
     for (usize index = 0usize; index < len(requests); index += 1usize) {
-        std.string::string request = std.string::from_str(requests[index].as_str());
-        std.string::string line = std.string::from_str(requests[index].as_str());
+        std.string::string request = std.string::from_str(requests[index]);
+        std.string::string line = std.string::from_str(requests[index]);
         line.append(" -> ");
         o<std.string::string> reply = await example.service.client::exchange(endpoint, move request);
         switch (move reply) {
-        case variant o::some(move text): line.append(text.as_str());
+        case variant o::some(move text): line.append(text);
         case variant o::none: line.append("no reply");
         }
         line.append("\n");
@@ -351,7 +351,7 @@ async i32 launch(Mode mode, std.args::matches found)
     o<std.string::string> file = found.value("config");
     switch (move file) {
     case variant o::some(move name):
-        std.fs::path path = std.fs::path_from_utf8(name.as_str());
+        std.fs::path path = std.fs::path_from_utf8(name);
         task_scope(1) loading { await settings.load_file(&path); }
     case variant o::none: break;
     }
@@ -410,7 +410,7 @@ async i32 main(const str[] arguments) {
         o<Mode> mode = o::none;
         switch (move named) {
         case variant o::some(move text):
-            o<Mode> parsed = core::enum_from_name::<Mode>(text.as_str());
+            o<Mode> parsed = core::enum_from_name::<Mode>(text);
             switch (parsed) {
             case variant o::some(chosen): mode = o::some(*chosen);
             case variant o::none: throw Usage {.message = "unknown mode"};

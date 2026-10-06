@@ -18,7 +18,7 @@ std.string::string arguments() throws std.env::env_error, std.alloc::alloc_error
     for (const std.string::string* argument in &snapshot) {
         str view = argument->as_str();
         std.string::string row = f"{index}: {view}\n";
-        str row_view = row.as_str();
+        str row_view = row;
         output.append(row_view);
         index += 1usize;
     }

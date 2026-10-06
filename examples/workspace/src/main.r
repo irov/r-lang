@@ -48,7 +48,7 @@ async i32 main(const str[] arguments) {
                     response.output = example.workspace.report::describe(info);
                 } else {
                     if (command == Command::tail) {
-                        u32 count = std.convert::parse_u32(state_name_text.value.as_str(), 10u32);
+                        u32 count = std.convert::parse_u32(state_name_text.value, 10u32);
                         throw (count > 1048576u32) Usage { .message = "tail is limited to 1 MiB" };
                         std.fs::path selected_path = root_path.clone();
                         std.string::string summary = await example.workspace.files::tail(move selected_path, count);
@@ -60,7 +60,7 @@ async i32 main(const str[] arguments) {
                             std.string::string summary = await example.workspace.report::first(move iterator);
                             response.output = move summary;
                         } else {
-                            std.fs::path name = std.fs::path_from_utf8(state_name_text.value.as_str());
+                            std.fs::path name = std.fs::path_from_utf8(state_name_text.value);
                             throw (name.is_absolute() == true) Usage { .message = "name must be relative to root" };
                             switch (command) {
                             case Command::stat:
@@ -69,7 +69,7 @@ async i32 main(const str[] arguments) {
                             case Command::record:
                                 std.fs::open_file_options options = example.workspace.files::settings(std.fs::access::read_write, std.fs::create_mode::create_new);
                                 std.fs::file file = await root.open_file_beneath(&name, options);
-                                std.string::string message = std.string::from_str(state_extra_text.value.as_str());
+                                std.string::string message = std.string::from_str(state_extra_text.value);
                                 std.string::string summary = await example.workspace.files::record(move file, move message);
                                 response.output = move summary; break;
                             case Command::read:
@@ -79,7 +79,7 @@ async i32 main(const str[] arguments) {
                                 response.output = f"bytes={length} crc32={checksum}\n"; break;
                             case Command::publish:
                                 bytes data = await root.read_file_beneath(&name, 1048576usize);
-                                str leaf = state_extra_text.value.as_str();
+                                str leaf = state_extra_text.value;
                                 throw (len(leaf) == 0usize || std.text::contains(leaf, "/") == true || std.text::contains(leaf, "\\") == true || std.bytes::equal(leaf, ".") == true || std.bytes::equal(leaf, "..") == true) Usage { .message = "publication destination must be a file name" };
                                 std.fs::path target_name = std.fs::path_from_utf8(leaf);
                                 throw (target_name.is_absolute() == true) Usage { .message = "destination must be relative" };
@@ -87,7 +87,7 @@ async i32 main(const str[] arguments) {
                                 await example.workspace.files::publish(move target, move data);
                                 response.output = std.string::from_str("published\n"); break;
                             case Command::rename:
-                                std.fs::path target = std.fs::path_from_utf8(state_extra_text.value.as_str());
+                                std.fs::path target = std.fs::path_from_utf8(state_extra_text.value);
                                 await root.rename_beneath(&name, &root, &target);
                                 response.output = std.string::from_str("renamed\n"); break;
                             case Command::remove:

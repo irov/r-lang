@@ -58,7 +58,7 @@ protected array<std.string::string> slice_of(const array<std.string::string>* li
     throws std.alloc::alloc_error {
     array<std.string::string> part = [];
     for (usize index = start; index < len(*lines) && index < start + count; index += 1usize) {
-        push_line(&part, std.string::from_str((*lines)[index].as_str()));
+        push_line(&part, std.string::from_str((*lines)[index]));
     }
     return move part;
 }
@@ -90,9 +90,9 @@ protected std.string::string describe(const example.ingest.batch::report* item) 
     usize rejected = len(item->rejected);
     std.string::string text = f"lines {first}-{last}: {messages} messages, {fields} fields, {rejected} rejected\n";
     if (messages > 0usize) {
-        std.string::string sample = std.string::from_str(item->first.as_str());
+        std.string::string sample = std.string::from_str(item->first);
         std.string::string first_line = f"  first message: {sample}\n";
-        text.append(first_line.as_str());
+        text.append(first_line);
     }
     for (usize index = 0usize; index < len(item->rejected); index += 1usize) {
         example.ingest.batch::rejection failed = item->rejected[index];
@@ -100,18 +100,18 @@ protected std.string::string describe(const example.ingest.batch::report* item) 
         example.ingest.parse::problem reason = failed.reason;
         usize position = failed.position;
         std.string::string rejected_line = f"  line {line} rejected: {reason} at byte {position}\n";
-        text.append(rejected_line.as_str());
+        text.append(rejected_line);
     }
     usize stored = item->stored;
     usize reserved = item->reserved;
     std.string::string arena_line = f"  arena: {stored} bytes stored in {reserved} reserved\n";
-    text.append(arena_line.as_str());
+    text.append(arena_line);
     switch (item->charged) {
     case variant o::some(seen):
         usize bytes = seen->bytes;
         std.string::string room = amount(seen->bytes_available);
         std.string::string budget_line = f"  budget of {budget_bytes} bytes: {bytes} charged, {room} left\n";
-        text.append(budget_line.as_str());
+        text.append(budget_line);
     case variant o::none: break;
     }
     return move text;
@@ -266,7 +266,7 @@ async i32 main() {
     array<std.string::string> arguments = std.env::arguments();
     usize given = len(arguments);
     o<Command> command = o::none;
-    if (given >= 2usize) { command = core::enum_from_name::<Command>(arguments[1].as_str()); }
+    if (given >= 2usize) { command = core::enum_from_name::<Command>(arguments[1]); }
     switch (command) {
     case variant o::none:
         await std.console::eprint(std.string::from_str(usage_text));
@@ -280,8 +280,8 @@ async i32 main() {
                 await demo();
             case Command::run:
                 throw (given != 4usize) Usage {.code = 2u32};
-                u64 batch_lines = std.convert::parse_u64(arguments[2].as_str(), 10u32);
-                u64 budget_bytes = std.convert::parse_u64(arguments[3].as_str(), 10u32);
+                u64 batch_lines = std.convert::parse_u64(arguments[2], 10u32);
+                u64 budget_bytes = std.convert::parse_u64(arguments[3], 10u32);
                 throw (batch_lines == 0u64) Usage {.code = 2u32};
                 await run(batch_lines as usize, budget_bytes as usize);
             }

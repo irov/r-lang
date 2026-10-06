@@ -43,9 +43,9 @@ protected async Service discover(std.net::socket_address name_server)
     task_scope(1) service {
         array<std.dns::srv_record> services = await resolving.lookup_srv("_chat._tcp.realtime.test");
         throw (len(services) == 0usize) std.dns::dns_error {.code = std.dns::error_code::name_error};
-        std.string::append_str(&found.host, services[0usize].target.as_str());
+        std.string::append_str(&found.host, services[0usize].target);
         found.port = services[0usize].port;
-        str host = found.host.as_str();
+        str host = found.host;
         u16 priority = services[0usize].priority;
         u16 weight = services[0usize].weight;
         await std.console::println(f"srv _chat._tcp.realtime.test -> {host} priority {priority} weight {weight}");
@@ -54,7 +54,7 @@ protected async Service discover(std.net::socket_address name_server)
         array<std.dns::txt_record> texts = await resolving.lookup_txt("_chat._tcp.realtime.test");
         for (usize index = 0usize; index < len(texts); index += 1usize) {
             std.string::string line = texts[index].text();
-            if (std.text::starts_with(line.as_str(), "path=") == true) {
+            if (std.text::starts_with(line, "path=") == true) {
                 const u8[] bytes_of = line.as_bytes();
                 std.string::string path = std.string::create();
                 std.string::append_utf8(&path, bytes_of[5usize..len(bytes_of)]);
@@ -67,7 +67,7 @@ protected async Service discover(std.net::socket_address name_server)
     task_scope(1) reverse {
         array<std.string::string> names = await resolving.reverse(std.net::parse_ip("127.0.0.1"));
         for (usize index = 0usize; index < len(names); index += 1usize) {
-            str name = names[index].as_str();
+            str name = names[index];
             await std.console::println(f"ptr 127.0.0.1 -> {name}");
         }
     }
@@ -117,15 +117,15 @@ protected async void show_next(const std.websocket::websocket* socket, str who)
 @scoped
 protected async void chat(std.http::client* web, const Service* found)
     throws std.error::fault, std.websocket::websocket_error, std.http::http_error, std.tls::tls_error {
-    str host = found->host.as_str();
+    str host = found->host;
     u16 port = found->port;
-    str path = found->path.as_str();
+    str path = found->path;
     std.string::string alice_url = f"ws://{host}:{port}{path}?name=alice";
     std.string::string bob_url = f"ws://{host}:{port}{path}?name=bob";
     task_scope(1) first {
-        std.websocket::websocket alice = await open_socket(web, alice_url.as_str());
+        std.websocket::websocket alice = await open_socket(web, alice_url);
         task_scope(1) joined { await show_next(&alice, "alice"); }
-        std.websocket::websocket bob = await open_socket(web, bob_url.as_str());
+        std.websocket::websocket bob = await open_socket(web, bob_url);
         task_scope(1) talk {
             await show_next(&alice, "alice");
             await show_next(&bob, "bob");
@@ -158,14 +158,14 @@ protected std.http::router<example.realtime.room::Room> routes()
 @scoped
 protected async void lines(std.http::client* web, const Service* found)
     throws std.error::fault, std.http::http_error, std.tls::tls_error {
-    str host = found->host.as_str();
+    str host = found->host;
     u16 port = found->port;
     std.string::string line_url = f"http://{host}:{port}/line";
     std.string::string chat_url = f"http://{host}:{port}/chat";
     task_scope(1) io {
-        std.string::string accepted = await example.realtime.line::ask(web, line_url.as_str(), "quiet words\n");
+        std.string::string accepted = await example.realtime.line::ask(web, line_url, "quiet words\n");
         await std.console::println(f"upgrade /line -> {accepted}");
-        std.string::string refused = await example.realtime.line::ask(web, chat_url.as_str(), "quiet words\n");
+        std.string::string refused = await example.realtime.line::ask(web, chat_url, "quiet words\n");
         await std.console::println(f"upgrade /chat -> {refused}");
     }
 }
@@ -217,7 +217,7 @@ protected async i32 demo()
 
 /* Prints the accept value of a Sec-WebSocket-Key. */
 protected async i32 accept(std.string::string key) throws std.error::fault {
-    std.string::string value = std.websocket::accept_key(key.as_str());
+    std.string::string value = std.websocket::accept_key(key);
     await std.console::println(move value);
     return 0;
 }
@@ -242,12 +242,12 @@ protected u16 type_of(str name) {
 /* The record type the fourth argument names, 0 for none. */
 protected u16 requested_type(const array<std.string::string>* arguments) {
     if (len(*arguments) != 4usize) { return 0u16; }
-    return type_of((*arguments)[3usize].as_str());
+    return type_of((*arguments)[3usize]);
 }
 
 /* Prints the query with id 4660 for the name and type in hexadecimal. */
 protected async i32 query(std.string::string name, u16 kind) throws std.error::fault, std.dns::dns_error {
-    bytes encoded = std.dns::encode_query(4660u16, name.as_str(), kind);
+    bytes encoded = std.dns::encode_query(4660u16, name, kind);
     await std.console::println(std.encoding::encode_hex(encoded.as_slice()));
     return 0;
 }
@@ -255,7 +255,7 @@ protected async i32 query(std.string::string name, u16 kind) throws std.error::f
 /* Prints the reverse name and the octets of an address. */
 protected async i32 reverse(std.string::string text) throws std.error::fault {
     try {
-        std.net::ip_address address = std.net::parse_ip(text.as_str());
+        std.net::ip_address address = std.net::parse_ip(text);
         std.string::string name = std.dns::reverse_name(address);
         bytes octets = std.net::ip_octets(address);
         std.string::string digits = std.encoding::encode_hex(octets.as_slice());
@@ -270,7 +270,7 @@ protected async i32 reverse(std.string::string text) throws std.error::fault {
 
 /* Prints the name servers of a resolv.conf file. */
 protected async i32 resolv(std.string::string file) throws std.error::fault {
-    std.fs::path path = std.fs::path_from_utf8(file.as_str());
+    std.fs::path path = std.fs::path_from_utf8(file);
     bytes content = await path.read_file(65536usize);
     std.string::string text = std.string::from_str("");
     try {
@@ -278,7 +278,7 @@ protected async i32 resolv(std.string::string file) throws std.error::fault {
     } catch (std.string::string_error rejected) {
         rejected as void;
     }
-    array<std.net::socket_address> servers = std.dns::parse_resolv_conf(text.as_str());
+    array<std.net::socket_address> servers = std.dns::parse_resolv_conf(text);
     for (usize index = 0usize; index < len(servers); index += 1usize) {
         std.string::string shown = std.net::format_ip(servers[index].address);
         u16 port = servers[index].port;
@@ -289,10 +289,10 @@ protected async i32 resolv(std.string::string file) throws std.error::fault {
 
 /* Answers an SRV question for the name with one record on the port and reads the answer back. */
 protected async i32 answer(std.string::string name, u16 port) throws std.error::fault, std.dns::dns_error {
-    bytes asking = std.dns::encode_query(7u16, name.as_str(), 33u16);
+    bytes asking = std.dns::encode_query(7u16, name, 33u16);
     std.dns::question asked = std.dns::parse_query(asking.as_slice());
     array<std.dns::record> records = std.array::create::<std.dns::record>();
-    std.dns::record entry = std.dns::record::srv(asked.name.as_str(), 60u32, 10u16, 5u16, port, "localhost.");
+    std.dns::record entry = std.dns::record::srv(asked.name, 60u32, 10u16, 5u16, port, "localhost.");
     try {
         records.push(move entry);
     } catch (std.array::push_error<std.dns::record> rejected) {
@@ -300,14 +300,14 @@ protected async i32 answer(std.string::string name, u16 port) throws std.error::
         return 70;
     }
     bytes response = std.dns::encode_answer(&asked, &records, 0u8, false);
-    array<std.dns::record> found = std.dns::parse_response(response.as_slice(), 7u16, name.as_str(), 33u16);
+    array<std.dns::record> found = std.dns::parse_response(response.as_slice(), 7u16, name, 33u16);
     for (usize index = 0usize; index < len(found); index += 1usize) {
-        str owner = found[index].name.as_str();
+        str owner = found[index].name;
         u32 ttl = found[index].ttl;
         u16 priority = found[index].priority;
         u16 weight = found[index].weight;
         u16 target_port = found[index].port;
-        str target = found[index].target.as_str();
+        str target = found[index].target;
         usize size = len(response);
         await std.console::println(
             f"{owner} ttl {ttl} srv {priority} {weight} {target_port} {target} ({size} bytes)");
@@ -325,7 +325,7 @@ async i32 main() {
     array<std.string::string> arguments = std.env::arguments();
     usize given = len(arguments);
     str command = "";
-    if (given >= 2usize) { command = arguments[1].as_str(); }
+    if (given >= 2usize) { command = arguments[1]; }
     u16 kind = requested_type(&arguments);
     bool demo_call = std.bytes::equal(command, "demo") == true && given == 2usize;
     bool accept_call = std.bytes::equal(command, "accept") == true && given == 3usize;
@@ -369,7 +369,7 @@ async i32 main() {
         }
         if (answer_call == true) {
             std.string::string name = core::replace(&arguments[2], std.string::create());
-            u16 port = std.convert::parse_u16(arguments[3].as_str(), 10u32);
+            u16 port = std.convert::parse_u16(arguments[3], 10u32);
             drop arguments;
             return await answer(move name, port);
         }

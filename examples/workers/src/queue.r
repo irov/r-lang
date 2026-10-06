@@ -52,7 +52,7 @@ void produce_bounded(array<std.string::string> messages, std.sync::sync_sender<R
 
 void append(std.string::string* output, Record record) throws std.alloc::alloc_error {
     std.string::string line = f"{record.index}: bytes={record.bytes} crc32={record.checksum}\n";
-    str text = line.as_str();
+    str text = line;
     output->append(text);
 }
 

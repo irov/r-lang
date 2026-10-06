@@ -170,10 +170,10 @@ async std.string::string watch_totals(std.async::broadcast<u64> totals, std.asyn
         switch (move next) {
         case variant std.async::broadcast_result::received(move total):
             std.string::string piece = f" {total}";
-            line.append(piece.as_str());
+            line.append(piece);
         case variant std.async::broadcast_result::lagged(move missed):
             std.string::string piece = f" lagged={missed}";
-            line.append(piece.as_str());
+            line.append(piece);
         case variant std.async::broadcast_result::closed: open = false;
         }
     }

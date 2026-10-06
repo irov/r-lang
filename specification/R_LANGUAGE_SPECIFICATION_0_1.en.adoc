@@ -15,7 +15,7 @@ Normative draft of the R programming language
 |Field |Value
 |Document|R Core Language Specification
 |Language version|0.1
-|Document revision|0.1.0-draft.98
+|Document revision|0.1.0-draft.100
 |Status|Normative draft; not a stable R 1.0 standard
 |Document language|English; normative original
 |Target backend|ISO/IEC 9899:2018 (C17)
@@ -561,7 +561,7 @@ belong to type rather than identifier. One `+object-declaration+` binds exactly 
 objects are written in separate declarations.
 
 [[R-GRAM-0007]]
-*R-GRAM-0007* — Attribute set R 0.1 is closed: `+@repr(C)+` on struct/fieldless enum,
+*R-GRAM-0007* — The built-in attribute set of R 0.1 is closed: `+@repr(C)+` on struct/fieldless enum,
 `+@safety+` on unsafe or C-boundary function, `+@json+` on fields (R-JSON-0001),
 `+@deny_panic_alloc+` on a module declaration (R-OBJ-0012), and FFI attributes/scopes from
 R-FFI-0050. Unknown argument, unknown attribute or attribute outside its allowed
@@ -570,8 +570,9 @@ function attributes `+@noalloc+` and `+@nonblocking+` are specified by R-FUNC-00
 `+@must_use+` is specified by R-FUNC-0020, `+@discardable+` by R-FUNC-0021, `+@lending+`
 on trait methods by R-TYPE-0045, `+@chain+` on methods by R-FUNC-0024, `+@test+` on
 functions by R-FUNC-0025, `+@recursion+` on synchronous functions by R-FUNC-0026, `+@derive+`
-on struct, enum and error declarations by R-AGG-0012
-and `+@default+` on an enum variant by R-INIT-0005. After an argument-free attribute, a
+on struct, enum and error declarations by R-AGG-0012, `+@attribute+` on struct declarations
+by R-AGG-0013 and `+@default+` on an enum variant by R-INIT-0005. A program adds attributes
+only as the attribute types of R-AGG-0013. After an argument-free attribute, a
 parenthesized group with a comma or `+...+` at its top level is not an argument list: it
 begins the tuple type of the declaration (R-TYPE-0052).
 
@@ -595,7 +596,7 @@ its checked errors are limited to `+std.json::error+` and `+std.alloc::alloc_err
 type (R-SLIB-JSON-0002) and changes no conversion. The complete conversion contract belongs
 to R-SLIB-JSON-0001 and the schema to R-SLIB-JSON-0002. Interface schema 5
 exports normalized field contracts and definition fingerprints; these do not alter
-physical aggregate representation. Interface schema 32 adds the description to the exported
+physical aggregate representation. Interface schema 33 adds the description to the exported
 field contract and the `+json_schema+` hook to the exported hooks of a type.
 
 The associated names `+json_marshal+`, `+json_unmarshal+`, `+json_is_zero+`, and
@@ -1253,7 +1254,7 @@ callable constraint requires `+R-DIAG-TRAIT-001+`. Such an entry in another head
 `+R-DIAG-TYPE-001+`. The entry adds no parameter to the schema. The body may apply to values
 of `+P::Name+` the operations its constraints justify, and every instantiation shall bind to
 `+P::Name+` a type that proves them; one that does not requires `+R-DIAG-TYPE-001+`.
-Interface schema 32 writes these entries as
+Interface schema 33 writes these entries as
 `+associated_constraints=((associated=P::Name constraints=(...)))+`.
 
 [[R-TYPE-0044]]
@@ -1319,7 +1320,7 @@ designates, and a call of it, directly or through a generic parameter, a dyn int
 an opaque result, depends on the whole receiver as on a borrowed argument its result is
 formed from (R-BORROW-0009), so the receiver stays borrowed while the result is live. An
 implementation inherits the attribute and may repeat it; writing it on a method that
-implements a prototype without it requires `+R-DIAG-TRAIT-001+`. Interface schema 32
+implements a prototype without it requires `+R-DIAG-TRAIT-001+`. Interface schema 33
 records `+lending=true+`.
 
 An associated type may declare type parameters, as in `+type Name<T: copy, U>: bounds;+`,
@@ -1338,7 +1339,7 @@ requires `+R-DIAG-TRAIT-001+`, and constraints written on its parameters require
 associated type's constraints provide; after instantiation it is the selected binding with
 the arguments substituted for its parameters. A generic parameter is not inferred from an
 application. An associated type with parameters cannot be fixed by an equality of an
-opaque result or a dyn interface (R-TYPE-0048, R-TYPE-0051). Interface schema 32 records
+opaque result or a dyn interface (R-TYPE-0048, R-TYPE-0051). Interface schema 33 records
 the parameters of an associated type, and a binding with parameters as
 `+(type_function parameters=(...) body=...)+`.
 
@@ -1442,7 +1443,7 @@ parameter that is not inferred is named in an explicit list such as `+fill::<u8,
 (R-TYPE-0036). Expected results do not participate. Copy/Move, borrowing, checked errors,
 async startup and cleanup retain their ordinary rules.
 
-Interface schema 32 records constant parameters with `+constant_type=usize+`, closed
+Interface schema 33 records constant parameters with `+constant_type=usize+`, closed
 arguments with their type and value, dependent expressions and definition fingerprints.
 Callable constraints from schema 11 remain structural. Importing definitions still requires
 their source; serialized generic bodies are not introduced.
@@ -1508,7 +1509,7 @@ instantiation every matching named catch selects its normal cleanup path, and ev
 unhandled member propagates. Named catches, bare rethrow and finally retain their ordinary
 rules. Borrow provenance is conservatively preserved through abstract calls and named
 catches; set substitution cannot extend a payload's lifetime. Async startup errors remain
-separate from the inferred completion set. Interface schema 32 records the `+errors+`
+separate from the inferred completion set. Interface schema 33 records the `+errors+`
 parameter kind, structural callable effects and canonical set arguments. Definitions are
 still imported from source.
 
@@ -1542,7 +1543,7 @@ implementation. A closed associated constant is a translation-time value of its 
 module-scope declaration that uses one before implementations are checked receives the value
 computed by the discovery pass (R-EXPR-0032).
 
-Interface schema 32 lists the constants of each trait with their type and whether they have
+Interface schema 33 lists the constants of each trait with their type and whether they have
 a default, and writes a dependent constant as its trait, name and owner; the definition
 fingerprint of an implementation covers its values. Importing definitions still requires
 their source.
@@ -1599,7 +1600,7 @@ with a direct call of each implementation. A member of an interface over `+core:
 may be a type with standard formatting (R-TYPE-0046), whose selection formats it by that
 formatting. Loading further implementations when the
 program runs, recovering a member's type and an interface itself as a generic argument are
-not part of this revision; owners of interfaces follow R-TYPE-0055. Interface schema 32
+not part of this revision; owners of interfaces follow R-TYPE-0055. Interface schema 33
 writes the type as `+(dyn "dyn(...)")+` with the canonical contract of the interface.
 
 [[R-TYPE-0052]]
@@ -1619,7 +1620,7 @@ otherwise the tuple type is formed from the element values. `+value.N+` selects 
 `+N+` as a field (R-AGG-0002), and a match pattern destructures a tuple with fields
 `+.0+`, `+.1+`, ... (R-EXPR-0031). Elements hold views like fields; a later use of
 `+value.N+` keeps the views of that element live. `+core::type_name+` spells a tuple
-`+(A, B)+`, and interface schema 32 writes it as `+(tuple A B)+`.
+`+(A, B)+`, and interface schema 33 writes it as `+(tuple A B)+`.
 
 [[R-TYPE-0053]]
 *R-TYPE-0053* — In the header of a generic function, `+T...+` declares a pack: a parameter
@@ -1667,7 +1668,7 @@ Recursion over a pack, as in `+show(...move tail)+` under `+@if (len(T...) != 0u
 instantiates one function per length and ends where the branch is not selected.
 
 Instantiation replaces each pack by its tuple, so an instance has only ordinary parameters
-and direct calls. Interface schema 32 records `+pack=true+` with the constraints of each
+and direct calls. Interface schema 33 records `+pack=true+` with the constraints of each
 element, a pack built from a prefix and the elements of another pack as
 `+(pack prefix=(...) base=... from=k)+` and an expansion in a callable signature as
 `+(expand P)+`.
@@ -1721,7 +1722,7 @@ type proved it.
 
 A function value is represented by the number of the function it designates; a call is a
 selection over the targets of its type with a direct call of each, or the async start of
-the selected function. Interface schema 32 writes a function type as
+the selected function. Interface schema 33 writes a function type as
 `+(fn parameters=(...) return=R throws=(...))+`, adding `+async=true+`, `+noalloc=true+`
 and `+nonblocking=true+` for the form and the guarantees it has. Function values that
 capture state, ordering of function values and function types in C declarations are not
@@ -1774,7 +1775,7 @@ and `+ptr_eq+` apply as to other shared owners, and `+==+` and `+!=+` compare
 
 An owner of an interface is represented by the owner of its member and the tag of the
 member; its destruction selects the destruction of the member by the tag, and narrowing
-renumbers the tag through a table of the two interfaces. Interface schema 32 writes it as
+renumbers the tag through a table of the two interfaces. Interface schema 33 writes it as
 the owner of the interface type, for example `+(own (dyn "dyn(...)"))+` or
 `+(weak_rc (dyn "dyn(...)"))+`. Exclusive access to the member of a shared owner,
 recovering the member's type, an interface itself as a generic argument and owners of
@@ -1972,7 +1973,7 @@ field or array element, `+core::take+` (R-OWN-0019) and an optional JSON field (
 use it; evaluating it may throw the checked errors of the initializers it evaluates. The
 attribute `+@default+` precedes one variant of an enum or error enum; a second `+@default+`
 in one enum requires `+R-DIAG-NAME-002+`, and another attribute on a variant
-`+R-DIAG-SYN-002+`. Interface schema 32 records `+initializer=true+` on a field that declares
+`+R-DIAG-SYN-002+`. Interface schema 33 records `+initializer=true+` on a field that declares
 an initializer and `+default=true+` on the `+@default+` variant.
 
 [[R-INIT-0006]]
@@ -2295,7 +2296,7 @@ is unchanged. A structural clone of a self-nesting type would recurse with the d
 requires `+R-DIAG-STACK-001+`; the static call graph (R-FUNC-0004) and the resource
 contracts (R-FUNC-0019) include every clone hook that the copied structure calls. A clone
 of a value that is not Copy allocates and has no `+@noalloc+` or `+@nonblocking+` proof.
-Interface schema 32 records the `+clone+` hook of a type and the `+clone+` constraint of a
+Interface schema 33 records the `+clone+` hook of a type and the `+clone+` constraint of a
 generic parameter.
 
 [[borrowing-lifetimes]]
@@ -2406,7 +2407,7 @@ usize both(const u8[] data) {
 }
 ----
 
-Interface schema 32 exports a `+borrow_contract+` for the normal result and each nominal
+Interface schema 33 exports a `+borrow_contract+` for the normal result and each nominal
 checked error, including generic definitions and closed instances. Its origins are
 `+none+` (no borrow), `+static+`, an exact zero-based set of input parameters, whose
 `+held=(...)+` lists the inputs it depends on only through what their designated storage
@@ -2744,16 +2745,23 @@ widening without sign change; `+f32+` to `+f64+`; mutable-to-shared borrow;
 non-null-to-nullable; `+never+` to any; exact array-to-slice borrow at explicit `+&+`;
 `+constexpr str+` to ordinary `+str+` carrying the program region; `+str+` to
 `+const u8[]+` while preserving the inferred region and forgetting the UTF-8 invariant;
-and an exact error, or a value of an error with descendants, to an ancestor error, as a
-value of the ancestor's family (R-AGG-0011). The conversion set into `+constexpr str+`
+a place of type `+std.string::string+` to `+str+`, as the view
+`+std.string::as_str(&place)+` (Library R-SLIB-STRING-0002) whose region is a shared borrow
+of that place; and an exact error, or a value of an error with descendants, to an ancestor
+error, as a value of the ancestor's family (R-AGG-0011). The conversion set into `+constexpr str+`
 contains only identity; ordinary `+str+`, byte-slice, allocated-text and foreign-storage
 values therefore retain their own types. Reverse byte-slice-to-str conversion follows
-checked R-ARRAY-0007 and is not implicit. The two string conversion edges in this rule
+checked R-ARRAY-0007 and is not implicit. The string conversion edges in this rule
 shall not be chained in any implicit conversion sequence or common-type determination;
 each operand may traverse at most one edge. Thus both `+const u8[] bytes = "abc";+` and
 selecting a common byte-slice type between a literal and a byte slice require
 `+R-DIAG-TYPE-001+`. Source shall first initialize a named ordinary string, then
-initialize the byte slice from that name.
+initialize the byte slice from that name. Only a place takes the `+std.string::string+` edge:
+a string value that is not a place, such as a call result or an f-string, requires
+`+R-DIAG-TYPE-001+` and shall first be bound to a name. The edge borrows the place and does
+not move it (R-OWN-0003), so the place stays usable and cannot be mutated or moved while the
+view is live; it applies wherever an implicit conversion applies, including arguments,
+initializers, field initializers and returned values.
 
 [[R-EXPR-0016]]
 *R-EXPR-0016* — For the numeric and character cases admitted by this section,
@@ -3105,10 +3113,12 @@ its qualified name followed by its type arguments; a raw function type as
 `+raw fn(P, ...) -> R+`. A type that cannot be spelled in source is spelled by its
 implementation-defined name. `+core::field_count::<T>()+` is the reflection constant number
 of the fields of a struct `+T+` as `+usize+`, and `+core::field_name::<T>(index)+` the
-declared name of the field at the zero-based declaration `+index+`, an integer constant
-expression, as `+constexpr str+`; an operand that is not a complete struct requires
-`+R-DIAG-TYPE-001+`, and an index at or beyond the field count requires
-`+R-DIAG-CONST-001+`. A generic parameter is checked at instantiation as in R-REFL-0001.
+declared name of the field at the zero-based declaration `+index+` as `+constexpr str+`. An index
+that is an integer constant expression folds, and one at or beyond the field count requires
+`+R-DIAG-CONST-001+`; any other `+usize+` index selects the name at run time, the empty string at
+or beyond the field count. An operand that is not a complete struct
+requires `+R-DIAG-TYPE-001+`. A generic parameter is checked at instantiation as in
+R-REFL-0001.
 
 [[R-REFL-0004]]
 *R-REFL-0004* — `+core::target_name()+` is the target triple of the selected target
@@ -3116,10 +3126,25 @@ manifest, `+core::profile_name()+` the name of the selected library profile (R-C
 and `+core::location()+` the place of the call: the path of the module whose source holds the
 call, a colon and the line of the call counted from 1, as `+module.path:line+`. All three are
 `+constexpr str+` fixed at translation time, and no form takes an argument; a call of
-`+core::location()+` in the body of a generic or in a default names its own place. Every form of R-REFL-0001..R-REFL-0004 is available in every profile, allocates
+`+core::location()+` in the body of a generic or in a default names its own place. Every form of R-REFL-0001..R-REFL-0005 is available in every profile, allocates
 nothing, panics only through the Core checks of its operands and introduces no run-time
 type metadata (R-TYPE-0039): the selections are lowered to direct comparisons of the
 enumeration value, the active tag or the name bytes against translation-time tables.
+
+[[R-REFL-0005]]
+*R-REFL-0005* — For an attribute type `+A+` (R-AGG-0013), `+core::type_attribute::<A, T>()+`
+is `+o<A>+`: the arguments of `+A+` on the declaration of the struct, enum or error `+T+`, with
+the field initializers for omitted arguments, or none when the declaration does not carry
+`+A+`. `+core::field_attribute::<A, T>(index)+` is the same for the field of struct `+T+` at the
+zero-based declaration `+index+`, and `+core::variant_attribute::<A, E>(value)+` for the
+enumerator of fieldless enum `+E+` that `+value+` holds, none for a value that is no
+enumerator. An index that is an integer constant expression folds, and one at or beyond the
+field count requires `+R-DIAG-CONST-001+`; any other `+usize+` index selects at run time, none at or
+beyond the field count. An `+A+` that is not an attribute
+type with the target `+type+`, `+field+` or `+variant+` respectively, and a `+T+` or `+E+` of
+another kind, require `+R-DIAG-TYPE-001+`; a generic parameter is checked at instantiation as
+in R-REFL-0001. The forms allocate nothing and introduce no run-time type metadata: a run-time
+selection compares its operand against a translation-time table.
 
 [[static-conditions]]
 === 14.3 Static conditions
@@ -3635,7 +3660,7 @@ borrows or checked effects; only the selected call is lowered, once, and only it
 apply. Generic bodies resolve calls at definition time from their constraints;
 instantiation preserves that selected declaration. Names imported from different modules
 remain ambiguous. Overload members have deterministic canonical identities in interface
-schema 32 and in the ordering of generated function symbols.
+schema 33 and in the ordering of generated function symbols.
 
 The static call graph of the program's R functions, including drop hooks reached through
 owned storage, `+std.sync::call_once+`/`+get_or_init+` initializers and asynchronous
@@ -3993,7 +4018,7 @@ inference rules. Task and thread startup reserve named Move arguments and commit
 transfer only after successful start under R-FUNC-0010. The call is direct under
 R-FUNC-0014 and its arguments compose under R-EXPR-0020. Closure creation and synchronous invocation introduce no indirect call, function pointer
 or heap allocation; captures and body operations retain their own effects. Async
-invocation has the ordinary task-start allocation and cleanup effects. Interface schema 32 writes
+invocation has the ordinary task-start allocation and cleanup effects. Interface schema 33 writes
 callable constraints structurally, including mode, parameter types and result, and omits
 synthetic callable traits and implementations from exported trait records.
 
@@ -4066,7 +4091,7 @@ execution; possible thread-local cleanup is included in the allocation proof.
 
 A failed proof requires `+R-DIAG-RESOURCE-001+` for `+@noalloc+` or
 `+R-DIAG-RESOURCE-002+` for `+@nonblocking+`, with the violating call or cleanup
-chain. Interface schema 32 exports `+noalloc=true/false+` and
+chain. Interface schema 33 exports `+noalloc=true/false+` and
 `+nonblocking=true/false+` for functions and generic schemas and includes them in
 fingerprints. These flags describe declared contracts, not inferred promises for
 unannotated code. Binary ABI and standard-library C symbols are unchanged.
@@ -4114,7 +4139,7 @@ result selection; it is not an application-level handling protocol or a linear o
 propagated through arbitrary copies and wrappers. The attribute does not follow erased
 raw function signatures. Copy/Move, borrow checking and task-resolution rules remain
 mandatory. R-INIT-0014 independently forbids unconditional local replacement.
-Interface schema 32 records `+must_use=true+`; omission means false.
+Interface schema 33 records `+must_use=true+`; omission means false.
 
 [[R-FUNC-0021]]
 *R-FUNC-0021* — The argument-free `+@discardable+` attribute marks a named function's result
@@ -4137,7 +4162,7 @@ effectful-task resolution keep their obligations, and no task is discarded by th
 The permission does not follow the value into a local, an operator operand, a conditional,
 a callable constraint or a raw function signature; those remain subject to R-STMT-0001 and
 R-EXPR-0023, and a local initialized from a `+@discardable+` call is an ordinary local.
-Interface schema 32 records `+discardable=true+`; omission means false.
+Interface schema 33 records `+discardable=true+`; omission means false.
 
 [[R-FUNC-0022]]
 *R-FUNC-0022* — `+out T name+` declares an output parameter of a synchronous R
@@ -4176,7 +4201,7 @@ creates no new obligation and does not erase an earlier one.
 
 At a named call, `+@discardable+` permits ignoring the outputs; this permission is not
 carried by a function item, opaque callable or callable constraint. It cannot override
-an output type's `+@must_use+`. Interface schema 32 represents the mode as `+(out T)+`.
+an output type's `+@must_use+`. Interface schema 33 represents the mode as `+(out T)+`.
 An ordinary mutable pointer has no out contract. R-ERR-0003 continues to prohibit an
 error escaping finally.
 
@@ -4226,7 +4251,7 @@ threads, I/O and other standard operations; a call of a run-time function has th
 effect. Allocation does not fail during translation, where the limits of R-IDB-010 bound
 it instead, so a clause for an allocation error is not taken there, and the capacity of an
 owner, which follows the run-time growth policy, is not observed. Evaluability is a
-property of the whole call chain; interface schema 32 exports it as `+consteval=true+`
+property of the whole call chain; interface schema 33 exports it as `+consteval=true+`
 (R-MOD-0006).
 
 [[R-FUNC-0024]]
@@ -4251,7 +4276,7 @@ the prototype applies. The attribute changes neither the signature, checked erro
 contract and ownership of the method nor the obligations of R-FUNC-0020. In an
 asynchronous frame a temporary consuming receiver is evaluated into a hidden object of the
 frame like any argument, and the last call of a chain may be awaited (R-STMT-0012).
-Interface schema 32 records `+chain=true+`; omission means false.
+Interface schema 33 records `+chain=true+`; omission means false.
 
 [[R-FUNC-0025]]
 *R-FUNC-0025* — The attribute `+@test+` marks a test function: a module-scope function without
@@ -4457,7 +4482,7 @@ read through such a value; they are not assigned or moved through it. The member
 family hold no borrow, slice, runtime `+str+` or type containing one; such a member
 requires `+R-DIAG-TYPE-001+`. The library error `+std.error::fault+` is the root of the
 standard errors (Library R-SLIB-ERR-0004): its family has no member of its own and it has
-no fields. Interface schema 32 records `+parent=+` for an error with a parent and writes
+no fields. Interface schema 33 records `+parent=+` for an error with a parent and writes
 the type of such a value as `+(error_family T)+`.
 
 [[R-AGG-0012]]
@@ -4480,7 +4505,7 @@ declaration adds the listed capabilities from the closed set `+clone+`, `+equal+
   by its own formatting.
 
 The implementations and hooks are declarations of the defining module: they are checked
-and translated as written ones and recorded in its interface, and interface schema 32 also
+and translated as written ones and recorded in its interface, and interface schema 33 also
 lists the capabilities as `+derived=+`. A generic type adds the capability to each of its
 type parameters, as a constraint of the implementation (R-TYPE-0042) or of the hooks
 (R-FUNC-0009), so that an instance has it exactly when its arguments prove it. An error
@@ -4498,6 +4523,36 @@ type that derives clone requires `+R-DIAG-NAME-002+`. An error with descendants 
 member of its family and does not derive, which requires `+R-DIAG-TYPE-001+`; its members
 may derive. A diagnostic inside a derived implementation or hook is reported at the
 capability name, at most once per capability.
+
+[[R-AGG-0013]]
+*R-AGG-0013* — `+@attribute(target, ...)+` before a module-scope struct declaration makes the
+struct an attribute type. Its targets come from the closed set `+type+`, `+field+` and
+`+variant+`, each named once. The struct shall not be generic, an error or a C aggregate, and
+each of its fields has an integer, `+bool+`, `+char+`, `+f32+`, `+f64+`, `+str+` or fieldless
+enum type; a field initializer (R-INIT-0004) is a value admitted below and makes its argument
+optional. An attribute type is otherwise an ordinary struct.
+
+An attribute is used as `+@Name+` or `+@Name(arguments)+`, where `+Name+` names an attribute
+type as a type is named: unqualified when the module declares it or imports it selectively
+(R-MOD-0002), or as `+module.path::Name+`. It is admitted before a struct, enum or error
+declaration when its targets contain `+type+`, before a struct field when they contain
+`+field+`, and before an enumerator of a fieldless enum when they contain `+variant+`; a
+declaration carries each attribute type at most once. The arguments are all positional, in
+the declaration order of the fields, or all written `+field = value+`; each field takes at most
+one, and a field without initializer requires one. A value is an integer or floating literal,
+optionally preceded by `+-+`, a character or string literal, `+true+`, `+false+` or an
+enumerator `+Enum::name+`, and has the type of its field, an integer within its range. The
+values are translation-time constants that R-REFL-0005 reads: an attribute changes no layout,
+conversion or behaviour of the declaration it marks and creates no run-time metadata.
+Interface schema 33 exports the targets of an attribute type and the attributes of each type,
+field and enumerator.
+
+The name of a built-in attribute (R-GRAM-0007) always denotes it, and an attribute type of such
+a name requires `+R-DIAG-SYN-002+`; so do a name that resolves to no attribute type, an
+attribute outside its targets, a repeated attribute, arguments that mix both forms, an unknown,
+repeated or missing argument, and an `+@attribute+` with no, an unknown or a repeated target.
+A value of another type, an integer outside the range of its field, and a field of a type not
+admitted above require `+R-DIAG-TYPE-001+`.
 
 [[arrays-slices-strings]]
 == 18. Arrays, slices and strings
@@ -5937,7 +5992,7 @@ the R-IDB-021 native asynchronous backend record.
 
 The reference compiler lowers checked and async closures, closures inside generic
 functions, and synchronous generic borrowed representations through its ordinary HIR,
-MIR and C17 paths. Interface schema 32 records resource, significant-result,
+MIR and C17 paths. Interface schema 33 records resource, significant-result,
 discardable-result and borrow-origin contracts. Normal results and each checked error have separate region
 bounds; nested projections conservatively share the corresponding union.
 
@@ -5964,7 +6019,7 @@ constants that module-scope declarations use before implementations are checked
 program whose module-scope values still grow after 32 passes requires
 `+R-DIAG-LIMIT-001+`. A `+long double+` of the target whose format is not binary64 stays a
 run-time value, and a dictionary with floating or `+std.string::string+` keys is not
-frozen into the program image. Interface schema 32 records the value of an exported object
+frozen into the program image. Interface schema 33 records the value of an exported object
 as a canonical term of its checked initializer, so that a changed exported const value
 (R-MOD-0005) changes the interface.
 
@@ -6116,10 +6171,12 @@ callable-resource-attribute = "@", ( "noalloc" | "nonblocking" ) ;
 callable-throws     = "throws", "(", type, { ",", type }, ")" ;
 callable-mode       = "shared" | "mut" | "once" ;
 
-attribute           = "@", identifier, [ "(", [ attribute-argument,
+attribute           = "@", attribute-name, [ "(", [ attribute-argument,
                       { ",", attribute-argument } ], ")" ] | json-attribute ;
+attribute-name      = identifier | module-path, "::", identifier ;
 attribute-argument  = [ identifier, "=" ], attribute-value ;
-attribute-value     = identifier | integer-literal | string-literal | type ;
+attribute-value     = identifier | [ "-" ], ( integer-literal | floating-literal )
+                    | character-literal | string-literal | "true" | "false" | type ;
 
 json-attribute      = "@", "json", "(", [ json-argument,
                       { ",", json-argument } ], ")" ;

@@ -4,7 +4,7 @@ import std.url;
 import std.mime;
 
 protected void line(std.string::string* out, std.string::string text) throws std.alloc::alloc_error {
-    std.string::append_str(out, text.as_str());
+    std.string::append_str(out, text);
     std.string::append_str(out, "\n");
 }
 
@@ -28,8 +28,8 @@ protected std.string::string url_report(str text, o<str> reference)
     case variant o::some(query):
         array<std.url::query_pair> pairs = std.url::parse_query(*query);
         for (usize index = 0usize; index < len(pairs); index += 1usize) {
-            str name = pairs[index].name.as_str();
-            str given = pairs[index].value.as_str();
+            str name = pairs[index].name;
+            str given = pairs[index].value;
             line(&out, f"query {name}={given}");
         }
     case variant o::none: break;
@@ -43,7 +43,7 @@ protected std.string::string url_report(str text, o<str> reference)
     std.string::string rebuilt = std.string::create();
     std.url::append_query(&rebuilt, "path", path);
     std.string::string encoded = std.url::percent_encode(path);
-    std.string::string decoded = std.url::percent_decode(encoded.as_str());
+    std.string::string decoded = std.url::percent_decode(encoded);
     bool has_default = false;
     switch (std.url::default_port(scheme)) {
     case variant o::some(number):
@@ -77,7 +77,7 @@ async i32 show_url(std.string::string text, o<std.string::string> reference)
     case variant o::some(given): relative = o::some(std.string::as_str(given));
     case variant o::none: break;
     }
-    std.string::string report = url_output(text.as_str(), relative, &status);
+    std.string::string report = url_output(text, relative, &status);
     await std.console::print(move report);
     return status;
 }
@@ -148,7 +148,7 @@ protected std.string::string mime_output(str text, i32* status) throws std.alloc
 /* Prints the report of a media type, or where it is invalid. */
 async i32 show_mime(std.string::string text) throws std.error::fault {
     i32 status = 0;
-    std.string::string report = mime_output(text.as_str(), &status);
+    std.string::string report = mime_output(text, &status);
     await std.console::print(move report);
     return status;
 }

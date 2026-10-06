@@ -29,7 +29,7 @@ std.string::string rolled(u64 seed, u32 count) throws std.alloc::alloc_error {
     for (u32 index = 0u32; index < count; index += 1u32) {
         u64 roll = dice.range(1u64, 7u64);
         std.string::string item = f" {roll}";
-        std.string::append_str(&out, item.as_str());
+        std.string::append_str(&out, item);
     }
     u64 word = dice.next_u64();
     u32 half = dice.next_u32();
@@ -38,7 +38,7 @@ std.string::string rolled(u64 seed, u32 count) throws std.alloc::alloc_error {
     dice.fill(&noise);
     std.string::string hex = std.encoding::encode_hex(noise);
     std.string::string tail = f"\nnext {word} {half} {tenth} {hex}\n";
-    std.string::append_str(&out, tail.as_str());
+    std.string::append_str(&out, tail);
     return move out;
 }
 
@@ -69,6 +69,6 @@ std.string::string shuffled(u64 seed, const str[] items) throws std.alloc::alloc
     }
     usize kept = len(other);
     std.string::string tail = f"\nkept {kept}\n";
-    std.string::append_str(&out, tail.as_str());
+    std.string::append_str(&out, tail);
     return move out;
 }

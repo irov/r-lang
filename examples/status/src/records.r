@@ -14,7 +14,7 @@ struct Celsius { f64 degrees; };
 impl core::Format for Celsius {
     void format(const Celsius* this, std.format::builder* out) throws std.alloc::alloc_error {
         std.string::string text = f"{this->degrees} C";
-        std.format::append_str(out, text.as_str());
+        std.format::append_str(out, text);
     }
 };
 

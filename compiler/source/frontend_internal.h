@@ -739,7 +739,53 @@ typedef struct RSemanticAggregate {
     RCTypeKind c_type_kind;
     /* Interned C tag or typedef spelling selected by @c_type; zero when the R name is used. */
     uint32_t c_name_intern_id;
+    /* R-AGG-0013 (L42): the R_ATTRIBUTE_TARGET_* bits of an attribute type, zero otherwise. */
+    uint32_t attribute_targets;
+    /* The external declaration node, whose attributes mark the type. */
+    RAstNodeId external_ast;
 } RSemanticAggregate;
+
+/* R-AGG-0013 (L42): what an attribute type may mark. */
+enum {
+    R_ATTRIBUTE_TARGET_TYPE = UINT32_C(1),
+    R_ATTRIBUTE_TARGET_FIELD = UINT32_C(2),
+    R_ATTRIBUTE_TARGET_VARIANT = UINT32_C(4)
+};
+
+/* One argument of a user attribute: a translation-time constant of the type of its field. */
+typedef struct RSemanticAttributeValue {
+    RTypeId type;
+    /* An integer, a char, a bool, the bits of an f32 or f64, or the value of an enumerator. */
+    uint64_t bits;
+    /* A str argument: its interned bytes and length. */
+    uint32_t text_intern_id;
+    uint32_t text_length;
+} RSemanticAttributeValue;
+
+/* One use of a user attribute on a type, a struct field or an enumerator; its values follow the
+   fields of the attribute type, starting at first_value. */
+typedef struct RSemanticAttributeUse {
+    RAstRef attribute;
+    uint32_t target;
+    /* The type of the aggregate that declares the marked type, field or enumerator; aggregates are
+       renumbered after collection, types are not. A type use is recorded before its aggregate is
+       complete, with its declaration node, and takes the type when resolved. */
+    RTypeId owner;
+    RAstNodeId declaration;
+    /* The declaration index of the field or enumerator; zero for a type. */
+    uint32_t member;
+    RTypeId attribute_type;
+    uint32_t first_value;
+    bool valid;
+} RSemanticAttributeUse;
+
+/* R-REFL-0005: the valid use of an attribute type on a type (member 0), a struct field or an
+   enumerator of the aggregate type `owner`; a generic instance answers for its origin. */
+const RSemanticAttributeUse *r_semantic_attribute_use(const RFrontendContext *context,
+                                                      RTypeId attribute_type,
+                                                      uint32_t target,
+                                                      RTypeId owner,
+                                                      uint32_t member);
 
 enum {
     R_JSON_FIELD_NAME = UINT32_C(1) << 0U,
@@ -1900,7 +1946,14 @@ typedef enum RStandardCallOperation {
     R_STANDARD_CALL_ASYNC_JOIN,
     /* R-REFL-0004 (M44.3): core::location(), folded to the program string `module.path:line` of
        the call while lowering, like target_name and profile_name; never reaches HIR. */
-    R_STANDARD_CALL_CORE_LOCATION
+    R_STANDARD_CALL_CORE_LOCATION,
+    /* R-REFL-0005 (L42): the arguments of a user attribute on a type, a field or an enumerator as
+       o<A>, and R-REFL-0003 core::field_name with an index known only at run time. They stay
+       standard calls to the C17 emitter, which selects from translation-time tables. */
+    R_STANDARD_CALL_CORE_TYPE_ATTRIBUTE,
+    R_STANDARD_CALL_CORE_FIELD_ATTRIBUTE,
+    R_STANDARD_CALL_CORE_VARIANT_ATTRIBUTE,
+    R_STANDARD_CALL_CORE_FIELD_NAME_AT
 } RStandardCallOperation;
 
 typedef struct RStandardMathOperationDescriptor {
@@ -2526,6 +2579,13 @@ struct RFrontendContext {
     RSemanticVariant *semantic_variants;
     size_t semantic_variant_count;
     size_t semantic_variant_capacity;
+    /* R-AGG-0013 (L42): the uses of user attributes and their arguments. */
+    RSemanticAttributeUse *attribute_uses;
+    size_t attribute_use_count;
+    size_t attribute_use_capacity;
+    RSemanticAttributeValue *attribute_values;
+    size_t attribute_value_count;
+    size_t attribute_value_capacity;
     RSemanticSymbol *semantic_symbols;
     size_t semantic_symbol_count;
     size_t semantic_symbol_capacity;

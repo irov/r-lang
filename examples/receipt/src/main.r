@@ -26,18 +26,18 @@ protected std.string::string receipt(str customer, i32 quantity, f64 unit_price)
     std.string::string output = std.string::from_str(heading);
     // The copied heading remains valid while this allocation is reused for the body.
     builder.clear();
-    str sale_view = sale.as_str();
+    str sale_view = sale;
     builder.append(sale_view);
     builder.append('\n');
     builder.append("Empty-order preview: ");
-    str refund_view = refund.as_str();
+    str refund_view = refund;
     builder.append(refund_view);
     builder.append('\n');
     builder.append("Raw total: ");
     builder.append(total);
     builder.append('\n');
     std.string::string body = (move builder).finish();
-    str body_view = body.as_str();
+    str body_view = body;
     output.append(body_view);
     return move output;
 }

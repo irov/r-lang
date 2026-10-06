@@ -15,7 +15,7 @@
 |Поле |Значение
 |Документ |R Core Language Specification
 |Версия языка |0.1
-|Редакция документа |0.1.0-draft.98
+|Редакция документа |0.1.0-draft.100
 |Статус |Перевод нормативного черновика; не является стабильным стандартом R 1.0
 |Язык документа |Русский перевод; ключевые нормативные термины приведены на английском
 |Целевой backend |ISO/IEC 9899:2018 (C17)
@@ -574,7 +574,7 @@ belong to type rather than identifier. One `+object-declaration+` binds exactly 
 identifier; несколько objects записываются отдельными declarations.
 
 [[R-GRAM-0007]]
-*R-GRAM-0007* — Attribute set R 0.1 is closed: `+@repr(C)+` on struct/fieldless enum,
+*R-GRAM-0007* — Встроенный attribute set R 0.1 is closed: `+@repr(C)+` on struct/fieldless enum,
 `+@safety+` on unsafe or C-boundary function, `+@deny_panic_alloc+` on a module
 declaration (R-OBJ-0012), and FFI attributes/scopes from R-FFI-0050. Unknown argument,
 unknown attribute or attribute outside its allowed declaration requires `+R-DIAG-SYN-002+`
@@ -585,8 +585,9 @@ R-TYPE-0045.
 `+@nonblocking+` определены в R-FUNC-0019; `+@must_use+` — в R-FUNC-0020, `+@discardable+`
 — в R-FUNC-0021, `+@chain+` у методов — в R-FUNC-0024, `+@test+` у функций — в
 R-FUNC-0025, `+@recursion+` у синхронных функций — в R-FUNC-0026, `+@derive+` у объявлений
-struct, enum и error — в R-AGG-0012, `+@default+` у
-варианта enum — в R-INIT-0005. После атрибута без аргументов группа в скобках с запятой или
+struct, enum и error — в R-AGG-0012, `+@attribute+` у объявлений struct — в R-AGG-0013,
+`+@default+` у варианта enum — в R-INIT-0005. Программа добавляет атрибуты только как типы
+атрибутов R-AGG-0013. После атрибута без аргументов группа в скобках с запятой или
 `+...+` на верхнем уровне не является списком аргументов: она начинает кортежный тип
 объявления (R-TYPE-0052).
 
@@ -611,7 +612,7 @@ layout, Copy/Move и инициализацию. `+optional+` разрешает
 преобразования. Полный контракт преобразования задаёт R-SLIB-JSON-0001, а схему —
 R-SLIB-JSON-0002. Interface schema 5 экспортирует нормализованные контракты
 полей и fingerprints определений без изменения физического представления aggregate.
-Interface schema 32 добавляет description к экспортируемому контракту поля, а hook
+Interface schema 33 добавляет description к экспортируемому контракту поля, а hook
 `+json_schema+` — к экспортируемым hooks типа.
 
 Associated-имена `+json_marshal+`, `+json_unmarshal+`, `+json_is_zero+` и `+json_schema+`
@@ -1262,7 +1263,7 @@ trait либо модулю целевого типа. Для пары кано�
 требует `+R-DIAG-TRAIT-001+`. Такая запись в другом заголовке требует `+R-DIAG-TYPE-001+`.
 Запись не добавляет параметра в схему. Тело может применять к значениям `+P::Name+`
 операции, которые обосновывают её ограничения, а каждая инстанциация shall связывать с
-`+P::Name+` тип, доказывающий их; иначе требуется `+R-DIAG-TYPE-001+`. Interface schema 32
+`+P::Name+` тип, доказывающий их; иначе требуется `+R-DIAG-TYPE-001+`. Interface schema 33
 записывает такие записи как
 `+associated_constraints=((associated=P::Name constraints=(...)))+`.
 
@@ -1329,7 +1330,7 @@ receiver удерживает (R-BORROW-0009): пока результат жи�
 opaque-результат — зависит от всего receiver, как от заимствованного аргумента, из
 которого сформирован результат (R-BORROW-0009), поэтому receiver остаётся заимствованным,
 пока результат жив. Реализация наследует атрибут и может его повторить; атрибут на методе,
-реализующем prototype без него, требует `+R-DIAG-TRAIT-001+`. Interface schema 32
+реализующем prototype без него, требует `+R-DIAG-TRAIT-001+`. Interface schema 33
 записывает `+lending=true+`.
 
 Связанный тип может объявлять типовые параметры, например
@@ -1348,7 +1349,7 @@ generic trait или реализации; иначе требуется `+R-DIA
 которые дают ограничения его связанного типа; после неё это выбранное связывание с
 аргументами, подставленными вместо параметров. Generic-параметр не выводится из
 применения. Связанный тип с параметрами не фиксируется равенством opaque-результата или
-dyn-интерфейса (R-TYPE-0048, R-TYPE-0051). Interface schema 32 записывает параметры
+dyn-интерфейса (R-TYPE-0048, R-TYPE-0051). Interface schema 33 записывает параметры
 связанного типа, а связывание с параметрами — как
 `+(type_function parameters=(...) body=...)+`.
 
@@ -1451,7 +1452,7 @@ generic argument, рекурсивно по поддерживаемым фор�
 (R-TYPE-0036). Ожидаемый результат не участвует. Copy/Move, заимствования, checked errors,
 запуск async и cleanup сохраняют обычные правила.
 
-Interface schema 32 записывает константные параметры с `+constant_type=usize+`, закрытые
+Interface schema 33 записывает константные параметры с `+constant_type=usize+`, закрытые
 аргументы с типом и значением, зависимые выражения и fingerprints определений. Callable
 constraints schema 11 остаются структурными. Импорт определений по-прежнему требует
 исходники; сериализация generic bodies не вводится.
@@ -1517,8 +1518,7 @@ Generic-тело проверяется до инстанцирования. В�
 необработанный член передаётся наружу. Именованные catch, bare rethrow и finally сохраняют
 обычные правила. Происхождение заимствований консервативно сохраняется через абстрактные
 вызовы и именованные catch; подстановка набора не продлевает жизнь payload. Ошибки
-async-start остаются отдельными от выводимого набора completion-errors. Interface schema
-32 записывает вид параметра `+errors+`, структурные callable-эффекты и канонические
+async-start остаются отдельными от выводимого набора completion-errors. Interface schema 33 записывает вид параметра `+errors+`, структурные callable-эффекты и канонические
 аргументы наборов. Определения по-прежнему импортируются из исходников.
 
 [[R-TYPE-0050]]
@@ -1552,7 +1552,7 @@ async-start остаются отдельными от выводимого на
 объявление уровня модуля, использующее её до проверки реализаций, получает значение,
 вычисленное разведочным проходом (R-EXPR-0032).
 
-Interface schema 32 перечисляет константы каждого trait с их типом и признаком значения по
+Interface schema 33 перечисляет константы каждого trait с их типом и признаком значения по
 умолчанию и записывает зависимую константу как её trait, имя и владельца; fingerprint
 определения реализации покрывает её значения. Импорт определений по-прежнему требует
 исходники.
@@ -1608,7 +1608,7 @@ borrow-контракт, must-use и ресурсные атрибуты — а�
 форматированием (R-TYPE-0046); его выбор форматирует значение этим форматированием.
 Загрузка новых реализаций во время работы программы, восстановление типа члена
 и сам интерфейс как generic-аргумент в эту редакцию не входят; владельцы интерфейсов
-следуют R-TYPE-0055. Interface schema 32 записывает тип как `+(dyn "dyn(...)")+` с
+следуют R-TYPE-0055. Interface schema 33 записывает тип как `+(dyn "dyn(...)")+` с
 каноническим контрактом интерфейса.
 
 [[R-TYPE-0052]]
@@ -1626,7 +1626,7 @@ layout, классификацию Copy и Move, порядок очистки �
 значений элементов. `+value.N+` выбирает элемент `+N+` как поле (R-AGG-0002), а шаблон
 match разбирает кортеж полями `+.0+`, `+.1+`, ... (R-EXPR-0031). Элементы держат views как
 поля; последующее использование `+value.N+` сохраняет живыми views этого элемента.
-`+core::type_name+` записывает кортеж как `+(A, B)+`, а interface schema 32 — как
+`+core::type_name+` записывает кортеж как `+(A, B)+`, а interface schema 33 — как
 `+(tuple A B)+`.
 
 [[R-TYPE-0053]]
@@ -1673,7 +1673,7 @@ spread значения типа `+P+`. Spread не последним аргу�
 каждую длину и завершается там, где ветвь не выбрана.
 
 Инстанциация заменяет каждый пакет его кортежем, поэтому у инстанса только обычные
-параметры и прямые вызовы. Interface schema 32 записывает `+pack=true+` с ограничениями
+параметры и прямые вызовы. Interface schema 33 записывает `+pack=true+` с ограничениями
 каждого элемента, пакет из префикса и элементов другого пакета — как
 `+(pack prefix=(...) base=... from=k)+`, а раскрытие в callable-сигнатуре — как
 `+(expand P)+`.
@@ -1726,7 +1726,7 @@ generic-функции; это множество конечно и извест
 каждое преобразование к типу её доказало.
 
 Значение-функция представлено номером обозначаемой функции; вызов — выбор по целям его
-типа с прямым вызовом каждой либо async-запуск выбранной функции. Interface schema 32
+типа с прямым вызовом каждой либо async-запуск выбранной функции. Interface schema 33
 записывает тип функции как `+(fn parameters=(...) return=R throws=(...))+`, добавляя
 `+async=true+`, `+noalloc=true+` и `+nonblocking=true+` для имеющихся формы и гарантий.
 Значения-функции, захватывающие состояние, упорядочение значений-функций и типы функций в
@@ -1781,7 +1781,7 @@ capability и равенство связанных типов контракт�
 
 Владелец интерфейса представлен владельцем своего члена и тегом члена; его уничтожение
 выбирает уничтожение члена по тегу, а сужение перенумеровывает тег по таблице двух
-интерфейсов. Interface schema 32 записывает его как владельца типа интерфейса, например
+интерфейсов. Interface schema 33 записывает его как владельца типа интерфейса, например
 `+(own (dyn "dyn(...)"))+` или `+(weak_rc (dyn "dyn(...)"))+`. Исключительный доступ к
 члену разделяемого владельца, восстановление типа члена, сам интерфейс как
 generic-аргумент и владельцы интерфейсов в C-объявлениях в эту редакцию не входят.
@@ -1977,7 +1977,7 @@ struct — значение `+Type {}+`: инициализаторы и зна�
 `+core::take+` (R-OWN-0019) и необязательное поле JSON (R-JSON-0001); его вычисление может
 бросать checked errors вычисляемых им инициализаторов. Атрибут `+@default+` стоит перед
 одним вариантом enum или error enum; второй `+@default+` в одном enum требует
-`+R-DIAG-NAME-002+`, а иной атрибут у варианта — `+R-DIAG-SYN-002+`. Interface schema 32
+`+R-DIAG-NAME-002+`, а иной атрибут у варианта — `+R-DIAG-SYN-002+`. Interface schema 33
 записывает `+initializer=true+` у поля с инициализатором и `+default=true+` у варианта
 `+@default+`.
 
@@ -2308,7 +2308,7 @@ Copy, может бросить только `+std.alloc::alloc_error+`: при 
 требует `+R-DIAG-STACK-001+`; статический граф вызовов (R-FUNC-0004) и ресурсные контракты
 (R-FUNC-0019) включают каждый хук клонирования, который вызывает копируемая структура.
 Клонирование значения, которое не Copy, выделяет память и не имеет доказательства
-`+@noalloc+` и `+@nonblocking+`. Interface schema 32 записывает хук `+clone+` типа и
+`+@noalloc+` и `+@nonblocking+`. Interface schema 33 записывает хук `+clone+` типа и
 ограничение `+clone+` generic-параметра.
 
 [[borrowing-lifetimes]]
@@ -2420,7 +2420,7 @@ usize both(const u8[] data) {
 }
 ----
 
-Interface schema 32 экспортирует `+borrow_contract+` для обычного результата и каждой
+Interface schema 33 экспортирует `+borrow_contract+` для обычного результата и каждой
 номинальной checked error, включая generic-определения и закрытые инстанциации.
 Происхождение — `+none+` (заимствований нет), `+static+`, точный набор нулевых индексов
 входных параметров, где `+held=(...)+` перечисляет входы, от которых оно зависит только
@@ -2765,16 +2765,23 @@ constexpr str message = (exists == true)
 без sign change; `+f32+` to `+f64+`; mutable-to-shared borrow; non-null-to-nullable;
 `+never+` to any; exact array-to-slice borrow при явном `+&+`; `+constexpr str+` to
 ordinary `+str+`, carrying program region; `+str+` to `+const u8[]+` с сохранением
-inferred region и забыванием UTF-8 invariant; и exact error либо значение error с
-потомками to ancestor error как значение family ancestor (R-AGG-0011). Conversion set в
+inferred region и забыванием UTF-8 invariant; place типа `+std.string::string+` to `+str+`
+как view `+std.string::as_str(&place)+` (Library R-SLIB-STRING-0002), region которого —
+shared borrow этого place; и exact error либо значение error с потомками to ancestor error
+как значение family ancestor (R-AGG-0011). Conversion set в
 `+constexpr str+` содержит только identity; поэтому ordinary `+str+`, byte-slice,
 allocated-text и foreign-storage values сохраняют собственные types. Reverse
-byte-slice-to-str conversion follows checked R-ARRAY-0007 and is not implicit. Два string
+byte-slice-to-str conversion follows checked R-ARRAY-0007 and is not implicit. String
 conversion edges этого rule shall not быть chained в любой implicit conversion sequence
 или common-type determination; каждый operand may traverse не более одного edge. Поэтому и
 `+const u8[] bytes = "abc";+`, и selection common byte-slice type между literal и byte
 slice требуют `+R-DIAG-TYPE-001+`. Source shall сначала initialize named ordinary string,
-затем initialize byte slice из этого name.
+затем initialize byte slice из этого name. Edge `+std.string::string+` проходит только place:
+string value, не являющееся place (результат call, f-string и другие temporaries), требует
+`+R-DIAG-TYPE-001+` и shall сначала быть bound к name. Edge borrows place и не moves его
+(R-OWN-0003), поэтому place остаётся usable и не может быть mutated или moved, пока view live;
+edge применяется везде, где применяется implicit conversion, включая arguments, initializers,
+field initializers и returned values.
 
 [[R-EXPR-0016]]
 *R-EXPR-0016* — Для numeric и character cases, разрешённых этим разделом,
@@ -3127,10 +3134,12 @@ generic instance как `+module.path::Name<arguments>+` с arguments, запи�
 arguments; raw function type как `+raw fn(P, ...) -> R+`. Type, который нельзя записать
 в source, записывается его implementation-defined именем. `+core::field_count::<T>()+` —
 reflection constant число fields struct `+T+` как `+usize+`, а
-`+core::field_name::<T>(index)+` — объявленное имя field с declaration `+index+` от нуля,
-integer constant expression, как `+constexpr str+`; operand, не являющийся complete
-struct, требует `+R-DIAG-TYPE-001+`, а index на field count и далее требует
-`+R-DIAG-CONST-001+`. Generic parameter проверяется при инстанциации, как в R-REFL-0001.
+`+core::field_name::<T>(index)+` — объявленное имя field с declaration `+index+` от нуля
+как `+constexpr str+`. Index, являющийся integer constant expression, сворачивается, а index на
+field count и далее требует `+R-DIAG-CONST-001+`; любой другой index типа `+usize+` выбирает имя
+во время выполнения, пустую строку на field count и далее. Operand, не
+являющийся complete struct, требует `+R-DIAG-TYPE-001+`. Generic parameter проверяется при
+инстанциации, как в R-REFL-0001.
 
 [[R-REFL-0004]]
 *R-REFL-0004* — `+core::target_name()+` — target triple выбранного target manifest,
@@ -3138,10 +3147,25 @@ struct, требует `+R-DIAG-TYPE-001+`, а index на field count и дал�
 `+core::location()+` — место вызова: путь module, в source которого стоит вызов, двоеточие и
 номер строки вызова, считая с 1, в виде `+module.path:line+`. Все три — `+constexpr str+`,
 фиксированные во время translation, и ни одна форма не принимает argument; вызов
-`+core::location()+` в теле generic или в default называет своё собственное место. Каждая форма R-REFL-0001..R-REFL-0004 доступна в каждом profile, ничего не
+`+core::location()+` в теле generic или в default называет своё собственное место. Каждая форма R-REFL-0001..R-REFL-0005 доступна в каждом profile, ничего не
 выделяет, паникует только через Core checks своих operands и не вводит run-time type
 metadata (R-TYPE-0039): selections понижаются в прямые сравнения значения enumeration,
 активного tag либо байтов имени с таблицами времени translation.
+
+[[R-REFL-0005]]
+*R-REFL-0005* — Для типа атрибута `+A+` (R-AGG-0013) `+core::type_attribute::<A, T>()+` — это
+`+o<A>+`: аргументы `+A+` на объявлении struct, enum или error `+T+`, с инициализаторами полей
+вместо опущенных аргументов, или none, когда объявление не несёт `+A+`.
+`+core::field_attribute::<A, T>(index)+` — то же для поля struct `+T+` с номером объявления
+`+index+` от нуля, а `+core::variant_attribute::<A, E>(value)+` — для перечислителя enum без
+полей `+E+`, который хранит `+value+`, и none для значения, не являющегося перечислителем.
+Index, являющийся integer constant expression, сворачивается, и index на числе полей и дальше
+требует `+R-DIAG-CONST-001+`; любой другой index типа `+usize+` выбирает во время выполнения, none на
+числе полей и дальше. `+A+`, не являющийся типом атрибута с
+целью соответственно `+type+`, `+field+` или `+variant+`, и `+T+` или `+E+` другого вида
+требуют `+R-DIAG-TYPE-001+`; generic parameter проверяется при инстанциации, как в
+R-REFL-0001. Формы ничего не выделяют и не вводят run-time type metadata: выбор во время
+выполнения сравнивает свой operand с таблицей времени трансляции.
 
 [[static-conditions]]
 === 14.3 Статические условия
@@ -3654,7 +3678,7 @@ Receiver метода следует R-FUNC-0014. Выбор не вычисля
 borrows или checked effects: понижается только выбранный вызов, один раз, с его ошибками.
 Generic-тела выбирают объявление при проверке определения по constraints; инстанциация
 сохраняет этот выбор. Имена из разных импортируемых модулей остаются неоднозначными. Члены
-перегрузки имеют детерминированную каноническую идентичность в interface schema 32 и в
+перегрузки имеют детерминированную каноническую идентичность в interface schema 33 и в
 порядке генерируемых символов функций. Static call graph функций R программы, включая drop
 hooks, достижимые через owned storage, initializers
 `+std.sync::call_once+`/`+get_or_init+` и asynchronous starts, shall быть acyclic, кроме
@@ -4010,7 +4034,7 @@ Generic thread entry выводится структурно из value argument
 по R-EXPR-0020. Создание и синхронный вызов closure не вводят indirect call, function pointer или heap
 allocation; captures и body сохраняют собственные эффекты. Async-вызов имеет обычные
 эффекты выделения task и cleanup.
-Interface schema 32 записывает callable constraints структурно: режим, типы параметров
+Interface schema 33 записывает callable constraints структурно: режим, типы параметров
 и результат; synthetic callable traits и implementations не экспортируются как trait records.
 
 [[R-FUNC-0018]]
@@ -4081,7 +4105,7 @@ thread-local cleanup включается в доказательство отс
 
 Неудачное доказательство требует `+R-DIAG-RESOURCE-001+` для `+@noalloc+` либо
 `+R-DIAG-RESOURCE-002+` для `+@nonblocking+` с цепочкой вызова или cleanup.
-Interface schema 32 экспортирует `+noalloc=true/false+` и
+Interface schema 33 экспортирует `+noalloc=true/false+` и
 `+nonblocking=true/false+` у функций и generic-схем и включает их в fingerprints.
 Флаги описывают объявленные контракты, а не выведенные обещания неаннотированного
 кода. Бинарный ABI и C-символы стандартной библиотеки не меняются.
@@ -4132,7 +4156,7 @@ Await подтверждает использование task и создаёт
 обёртки. Атрибут не переносится через стёртую raw function signature. Copy/Move,
 проверка borrow и правила разрешения task остаются обязательными. R-INIT-0014
 независимо запрещает безусловную замену локального значения.
-Interface schema 32 записывает `+must_use=true+`; отсутствие означает false.
+Interface schema 33 записывает `+must_use=true+`; отсутствие означает false.
 
 [[R-FUNC-0021]]
 *R-FUNC-0021* — Атрибут без аргументов `+@discardable+` помечает результат именованной функции
@@ -4155,7 +4179,7 @@ checking, Copy/Move и разрешение effectful task сохраняют с
 отбрасывает ни одной task. Разрешение не следует за значением в local, операнд оператора,
 условное выражение, callable-ограничение или raw function signature; они остаются под
 R-STMT-0001 и R-EXPR-0023, а local, инициализированный из `+@discardable+`-вызова, —
-обычный local. Interface schema 32 записывает `+discardable=true+`; отсутствие означает false.
+обычный local. Interface schema 33 записывает `+discardable=true+`; отсутствие означает false.
 
 [[R-FUNC-0022]]
 *R-FUNC-0022* — `+out T name+` объявляет выходной параметр синхронной функции R.
@@ -4194,7 +4218,7 @@ runtime-индексов; чтение или явное отбрасывани�
 
 При именованном вызове `+@discardable+` разрешает игнорировать выходы; это разрешение
 не переносится через function item, opaque callable или callable constraint. Оно не
-может отменить `+@must_use+` типа выхода. Interface schema 32 представляет режим как
+может отменить `+@must_use+` типа выхода. Interface schema 33 представляет режим как
 `+(out T)+`. Обычный изменяемый указатель не имеет контракта out. R-ERR-0003 по-прежнему
 запрещает ошибку, покидающую finally.
 
@@ -4242,8 +4266,7 @@ pointers, atomic и volatile access, callable values, tasks, `+await+`, threads,
 другие стандартные операции; вызов run-time функции действует так же. При трансляции
 allocation не отказывает: её ограничивают лимиты R-IDB-010, поэтому ветвь catch ошибки
 allocation там не выполняется, а capacity owner, которая следует политике роста во время
-выполнения, не наблюдается. Evaluability — свойство всей цепочки вызовов; interface schema
-32 экспортирует его как `+consteval=true+` (R-MOD-0006).
+выполнения, не наблюдается. Evaluability — свойство всей цепочки вызовов; interface schema 33 экспортирует его как `+consteval=true+` (R-MOD-0006).
 
 [[R-FUNC-0024]]
 *R-FUNC-0024* — Атрибут без аргументов `+@chain+` помечает метод, вызов которого может
@@ -4265,7 +4288,7 @@ function item, требует `+R-DIAG-SYN-001+`; receiver в скобках `+(
 prototype. Атрибут не меняет ни сигнатуру, checked errors, borrow contract и владение
 метода, ни обязательства R-FUNC-0020. В асинхронном кадре временный consuming receiver
 вычисляется в скрытый объект кадра, как любой argument, а последний вызов цепочки может
-быть awaited (R-STMT-0012). Interface schema 32 записывает `+chain=true+`; отсутствие
+быть awaited (R-STMT-0012). Interface schema 33 записывает `+chain=true+`; отсутствие
 означает false.
 
 [[R-FUNC-0025]]
@@ -4469,7 +4492,7 @@ error читаются через такое значение; через нег
 Members family не содержат borrow, slice, runtime `+str+` или type, содержащий их; такой
 member требует `+R-DIAG-TYPE-001+`. Library error `+std.error::fault+` — корень
 стандартных ошибок (Library R-SLIB-ERR-0004): её family не имеет собственного member, и у
-неё нет полей. Interface schema 32 записывает `+parent=+` для error с parent и пишет type
+неё нет полей. Interface schema 33 записывает `+parent=+` для error с parent и пишет type
 такого значения как `+(error_family T)+`.
 
 [[R-AGG-0012]]
@@ -4492,7 +4515,7 @@ member требует `+R-DIAG-TYPE-001+`. Library error `+std.error::fault+` �
   собственным форматированием.
 
 Реализации и хуки — объявления модуля, объявившего тип: они проверяются и транслируются
-как написанные и записываются в его интерфейс, а interface schema 32 дополнительно
+как написанные и записываются в его интерфейс, а interface schema 33 дополнительно
 перечисляет способности как `+derived=+`. Generic-тип добавляет способность к каждому
 своему параметру-типу — как ограничение реализации (R-TYPE-0042) или хуков (R-FUNC-0009),
 поэтому инстанс обладает ею ровно тогда, когда её доказывают его аргументы. Error с parent
@@ -4509,6 +4532,36 @@ Copy, unborrowed; иначе
 потомками хранит любого member своей family и не выводит реализации, что требует
 `+R-DIAG-TYPE-001+`; её members могут выводить. Диагностика внутри выведенной реализации
 или хука сообщается у имени способности, не более одной на способность.
+
+[[R-AGG-0013]]
+*R-AGG-0013* — `+@attribute(target, ...)+` перед объявлением struct уровня модуля делает struct
+типом атрибута. Его цели берутся из закрытого набора `+type+`, `+field+` и `+variant+`, каждая
+называется один раз. Struct не shall быть generic, error или C-агрегатом, и каждое его поле
+имеет целый тип, `+bool+`, `+char+`, `+f32+`, `+f64+`, `+str+` или тип enum без полей;
+инициализатор поля (R-INIT-0004) — значение из допустимых ниже и делает его аргумент
+необязательным. В остальном тип атрибута — обычный struct.
+
+Атрибут записывается как `+@Name+` или `+@Name(arguments)+`, где `+Name+` называет тип атрибута
+так же, как называется тип: без квалификации, когда модуль его объявляет или выборочно
+импортирует (R-MOD-0002), или как `+module.path::Name+`. Он допустим перед объявлением struct,
+enum или error, когда его цели содержат `+type+`, перед полем struct — когда содержат
+`+field+`, и перед перечислителем enum без полей — когда содержат `+variant+`; объявление несёт
+каждый тип атрибута не более одного раза. Аргументы либо все позиционные, в порядке объявления
+полей, либо все записаны как `+field = value+`; каждое поле получает не более одного, а поле
+без инициализатора требует аргумента. Значение — целый или вещественный литерал, возможно с
+`+-+` впереди, символьный или строковый литерал, `+true+`, `+false+` или перечислитель
+`+Enum::name+`, и оно имеет тип своего поля, целое — в его диапазоне. Значения — константы
+времени трансляции, которые читает R-REFL-0005: атрибут не меняет размещения, преобразований
+и поведения объявления, которое он помечает, и не создаёт метаданных времени выполнения.
+Interface schema 33 экспортирует цели типа атрибута и атрибуты каждого типа, поля и
+перечислителя.
+
+Имя встроенного атрибута (R-GRAM-0007) всегда обозначает его, и тип атрибута с таким именем
+требует `+R-DIAG-SYN-002+`; того же требуют имя, не разрешающееся в тип атрибута, атрибут вне
+своих целей, повтор атрибута, аргументы, смешивающие обе формы, неизвестный, повторный или
+недостающий аргумент и `+@attribute+` без целей, с неизвестной или повторной целью. Значение
+другого типа, целое вне диапазона своего поля и поле типа, не допустимого выше, требуют
+`+R-DIAG-TYPE-001+`.
 
 [[arrays-slices-strings]]
 == 18. Arrays, slices and strings
@@ -5998,7 +6051,7 @@ strategy, atomic lock-free properties, C compiler/ABI identity, selected profile
 
 Эталонный компилятор понижает checked и async closures, замыкания внутри generic-функций
 и синхронные generic-представления с заимствованиями через обычные HIR, MIR и C17.
-Interface schema 32 записывает ресурсные контракты, значимость и отбрасываемость результата
+Interface schema 33 записывает ресурсные контракты, значимость и отбрасываемость результата
 и происхождение заимствований. Обычный результат и каждая checked error имеют отдельные границы регионов;
 вложенные projections консервативно используют соответствующее объединение.
 
@@ -6025,7 +6078,7 @@ mutex-based executor свободными от аллокаций и блоки�
 уровня модуля продолжают прибавляться после 32 проходов, требует `+R-DIAG-LIMIT-001+`.
 `+long double+` цели, формат которого не binary64, остаётся run-time значением, а
 dictionary с ключами с плавающей точкой или `+std.string::string+` не замораживается в
-образ программы. Interface schema 32 записывает значение экспортируемого объекта
+образ программы. Interface schema 33 записывает значение экспортируемого объекта
 каноническим термом его проверенного инициализатора, поэтому изменение экспортируемого
 const-значения (R-MOD-0005) меняет интерфейс.
 
@@ -6178,10 +6231,12 @@ callable-resource-attribute = "@", ( "noalloc" | "nonblocking" ) ;
 callable-throws     = "throws", "(", type, { ",", type }, ")" ;
 callable-mode       = "shared" | "mut" | "once" ;
 
-attribute           = "@", identifier, [ "(", [ attribute-argument,
+attribute           = "@", attribute-name, [ "(", [ attribute-argument,
                       { ",", attribute-argument } ], ")" ] | json-attribute ;
+attribute-name      = identifier | module-path, "::", identifier ;
 attribute-argument  = [ identifier, "=" ], attribute-value ;
-attribute-value     = identifier | integer-literal | string-literal | type ;
+attribute-value     = identifier | [ "-" ], ( integer-literal | floating-literal )
+                    | character-literal | string-literal | "true" | "false" | type ;
 
 json-attribute      = "@", "json", "(", [ json-argument,
                       { ",", json-argument } ], ")" ;

@@ -51,7 +51,7 @@ def main():
 
         interface = emit('interface', [api, app])
         assert interface == emit('interface', [app, api])
-        assert interface.startswith('(interface version=32 ')
+        assert interface.startswith('(interface version=33 ')
         frame_bytes = next(line for line in interface.splitlines()
                            if '(function name="consteval.api::frame_bytes"' in line)
         adjusted = next(line for line in interface.splitlines()

@@ -37,10 +37,10 @@ std.string::string captured(str pattern, str text, usize offset)
                     usize end = place->end;
                     str piece = span_text(text, *place);
                     std.string::string row = f"{index}: {start}..{end} [{piece}]\n";
-                    std.string::append_str(&out, row.as_str());
+                    std.string::append_str(&out, row);
                 case variant o::none:
                     std.string::string row = f"{index}: none\n";
-                    std.string::append_str(&out, row.as_str());
+                    std.string::append_str(&out, row);
                 }
             case variant o::none:
                 break;

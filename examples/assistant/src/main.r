@@ -48,7 +48,7 @@ protected async i32 replay(std.string::string file) throws std.error::fault {
     try {
         arc std.mcp::server<example.assistant.memory::memory> host =
             new arc std.mcp::server<example.assistant.memory::memory>(example.assistant.memory::build());
-        std.fs::path path = std.fs::path_from_utf8(file.as_str());
+        std.fs::path path = std.fs::path_from_utf8(file);
         std.fs::file recorded = await path.open_file(reading);
         await std.mcp::serve_streams(move host, move recorded, std.io::stdout());
         return 0;
@@ -83,7 +83,7 @@ protected async i32 serve_http(u16 port) throws std.error::fault {
         std.string::string announced = std.string::from_str("serving MCP ");
         std.string::append_str(&announced, std.mcp::protocol_version);
         std.string::string where = f" at http://127.0.0.1:{port}/mcp";
-        std.string::append_str(&announced, where.as_str());
+        std.string::append_str(&announced, where);
         await std.console::eprintln(move announced);
         task_scope(2) group {
             auto runner = std.mcp::run_tasks(std.arc::clone(&host), move task_stop);
@@ -158,17 +158,17 @@ protected inspection inspection_of(const array<std.string::string>* arguments) t
         end = 3usize;
         tool_at = 3usize;
     }
-    inspection plan = {.over_http = over_http, .address = std.string::from_str((*arguments)[2usize].as_str()),
+    inspection plan = {.over_http = over_http, .address = std.string::from_str((*arguments)[2usize]),
                        .command_line = std.array::create::<std.string::string>(), .tool = std.string::create(),
                        .given = std.string::from_str("{}")};
     if (tool_at != 0usize) {
-        std.string::append_str(&plan.tool, (*arguments)[tool_at].as_str());
+        std.string::append_str(&plan.tool, (*arguments)[tool_at]);
         std.string::clear(&plan.given);
-        std.string::append_str(&plan.given, (*arguments)[tool_at + 1usize].as_str());
+        std.string::append_str(&plan.given, (*arguments)[tool_at + 1usize]);
     }
     for (usize index = 2usize; index < end; index += 1usize) {
         try {
-            plan.command_line.push(std.string::from_str((*arguments)[index].as_str()));
+            plan.command_line.push(std.string::from_str((*arguments)[index]));
         } catch (std.array::push_error<std.string::string> rejected) {
             (move rejected) as void;
             throw std.alloc::alloc_error::out_of_memory;
@@ -235,7 +235,7 @@ async i32 main() {
     array<std.string::string> arguments = std.env::arguments();
     usize given = len(arguments);
     str command = "";
-    if (given >= 2usize) { command = arguments[1].as_str(); }
+    if (given >= 2usize) { command = arguments[1]; }
     bool demo_call = std.bytes::equal(command, "demo") == true && given == 2usize;
     bool serve_call = std.bytes::equal(command, "serve") == true && given == 2usize;
     bool http_call = std.bytes::equal(command, "serve-http") == true && given == 3usize;
@@ -246,13 +246,13 @@ async i32 main() {
     bool inspect_stdio_call = std.bytes::equal(command, "inspect-stdio") == true && given >= 3usize;
     u16 port = 0u16;
     if (http_call == true) {
-        switch (port_of(arguments[2].as_str())) {
+        switch (port_of(arguments[2])) {
         case variant o::some(value): port = *value;
         case variant o::none: http_call = false;
         }
     }
     if (schema_call == true) {
-        str tool = arguments[2].as_str();
+        str tool = arguments[2];
         schema_call = std.bytes::equal(tool, "remember") == true || std.bytes::equal(tool, "recall") == true ||
                       std.bytes::equal(tool, "forget") == true;
     }

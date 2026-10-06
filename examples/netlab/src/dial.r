@@ -36,7 +36,7 @@ async std.string::string dial(str host) throws std.error::fault {
             std.net::tcp_connection accepted = await listener.accept();
             bool matched = (first.local_address()).port == accepted.peer.port;
             std.string::string line = f"named connected matched={matched}\n";
-            output.append(line.as_str());
+            output.append(line);
             drop accepted;
             await (move first).close();
         }
@@ -45,7 +45,7 @@ async std.string::string dial(str host) throws std.error::fault {
         std.net::tcp_connection accepted = await listener.accept();
         bool matched = (second.local_address()).port == accepted.peer.port;
         std.string::string line = f"listed connected matched={matched} after_refusal=true\n";
-        output.append(line.as_str());
+        output.append(line);
         drop accepted;
         await (move second).close();
         await (move listener).close();

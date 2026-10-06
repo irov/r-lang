@@ -3207,6 +3207,10 @@ static const char *r_c17_bytes_operation_c_name(RStandardCallOperation operation
     case R_STANDARD_CALL_CORE_TARGET_NAME:
     case R_STANDARD_CALL_CORE_PROFILE_NAME:
     case R_STANDARD_CALL_CORE_LOCATION:
+    case R_STANDARD_CALL_CORE_TYPE_ATTRIBUTE:
+    case R_STANDARD_CALL_CORE_FIELD_ATTRIBUTE:
+    case R_STANDARD_CALL_CORE_VARIANT_ATTRIBUTE:
+    case R_STANDARD_CALL_CORE_FIELD_NAME_AT:
     case R_STANDARD_CALL_CORE_REFLECT_ENUM_COUNT:
     case R_STANDARD_CALL_CORE_REFLECT_ENUM_MIN:
     case R_STANDARD_CALL_CORE_REFLECT_ENUM_MAX:
@@ -11535,10 +11539,19 @@ static bool r_c17_preflight_async_sync_call(RC17Emitter *emitter,
 
 /* ---- static reflection (R-REFL-0001..0002): preflight shared by both emission paths ---- */
 
-/* The five selections that stay standard calls; the dependent constants never reach C17. */
+/* The selections that stay standard calls: the five of R-REFL-0001..0002, a field name at a
+ * run-time index and the three attribute forms of R-REFL-0005; the dependent constants never
+ * reach C17. */
 static bool r_c17_reflection_operation(RStandardCallOperation operation) {
-    return (operation >= R_STANDARD_CALL_CORE_ENUM_NAME) &&
-           (operation <= R_STANDARD_CALL_CORE_VARIANT_NAME);
+    return ((operation >= R_STANDARD_CALL_CORE_ENUM_NAME) &&
+            (operation <= R_STANDARD_CALL_CORE_VARIANT_NAME)) ||
+           ((operation >= R_STANDARD_CALL_CORE_TYPE_ATTRIBUTE) &&
+            (operation <= R_STANDARD_CALL_CORE_FIELD_NAME_AT));
+}
+
+static bool r_c17_attribute_operation(RStandardCallOperation operation) {
+    return (operation >= R_STANDARD_CALL_CORE_TYPE_ATTRIBUTE) &&
+           (operation <= R_STANDARD_CALL_CORE_VARIANT_ATTRIBUTE);
 }
 
 static bool r_c17_reflection_unlowerable_operation(RStandardCallOperation operation) {
@@ -11554,12 +11567,41 @@ static const RSemanticAggregate *r_c17_reflection_subject(const RC17Emitter *emi
     const RSemanticAggregate *aggregate =
         r_c17_aggregate_for_type(emitter, r_c17_value_type(emitter, subject_type), NULL);
 
-    if ((aggregate == NULL) || (aggregate->kind != R_SEMANTIC_AGGREGATE_ENUM) ||
-        (aggregate->variant_count == 0U) ||
+    if (aggregate == NULL) {
+        return NULL;
+    }
+    switch (operation) {
+    case R_STANDARD_CALL_CORE_TYPE_ATTRIBUTE:
+        return aggregate;
+    case R_STANDARD_CALL_CORE_FIELD_ATTRIBUTE:
+    case R_STANDARD_CALL_CORE_FIELD_NAME_AT:
+        return (aggregate->kind == R_SEMANTIC_AGGREGATE_STRUCT) ? aggregate : NULL;
+    case R_STANDARD_CALL_CORE_VARIANT_ATTRIBUTE:
+        return ((aggregate->kind == R_SEMANTIC_AGGREGATE_ENUM) && !aggregate->is_tagged) ? aggregate
+                                                                                         : NULL;
+    default:
+        break;
+    }
+    if ((aggregate->kind != R_SEMANTIC_AGGREGATE_ENUM) || (aggregate->variant_count == 0U) ||
         ((operation == R_STANDARD_CALL_CORE_VARIANT_NAME) != aggregate->is_tagged)) {
         return NULL;
     }
     return aggregate;
+}
+
+/* The attribute type of the o<A> result of an R-REFL-0005 form. */
+static const RSemanticAggregate *r_c17_reflection_attribute(const RC17Emitter *emitter,
+                                                            RTypeId result_type,
+                                                            uint32_t *aggregate_id) {
+    const RSemanticType *result = r_c17_type(emitter, r_c17_value_type(emitter, result_type));
+    const RSemanticAggregate *attribute;
+
+    if ((result == NULL) || (result->kind != R_SEMANTIC_TYPE_OPTION)) {
+        return NULL;
+    }
+    attribute =
+        r_c17_aggregate_for_type(emitter, r_c17_value_type(emitter, result->base), aggregate_id);
+    return ((attribute != NULL) && (attribute->attribute_targets != 0U)) ? attribute : NULL;
 }
 
 static const RSemanticVariant *r_c17_reflection_variant(const RC17Emitter *emitter,
@@ -11603,6 +11645,16 @@ static bool r_c17_reflection_shapes_valid(const RC17Emitter *emitter,
         return (operand->kind == R_SEMANTIC_TYPE_BORROW) &&
                (r_c17_value_type(emitter, operand->base) == subject) &&
                (result->kind == R_SEMANTIC_TYPE_CONSTEXPR_STR);
+    case R_STANDARD_CALL_CORE_TYPE_ATTRIBUTE:
+    case R_STANDARD_CALL_CORE_FIELD_ATTRIBUTE:
+        return (operand->kind == R_SEMANTIC_TYPE_USIZE) &&
+               (r_c17_reflection_attribute(emitter, result_type, NULL) != NULL);
+    case R_STANDARD_CALL_CORE_VARIANT_ATTRIBUTE:
+        return (r_c17_value_type(emitter, operand_type) == subject) &&
+               (r_c17_reflection_attribute(emitter, result_type, NULL) != NULL);
+    case R_STANDARD_CALL_CORE_FIELD_NAME_AT:
+        return (operand->kind == R_SEMANTIC_TYPE_USIZE) &&
+               (result->kind == R_SEMANTIC_TYPE_CONSTEXPR_STR);
     default:
         return false;
     }
@@ -11623,7 +11675,8 @@ static bool r_c17_register_reflection_helper(RC17Emitter *emitter,
     }
     for (index = 0U; index < emitter->reflection_helper_count; ++index) {
         entry = &emitter->reflection_helpers[index];
-        if ((entry->operation == operation) && (entry->subject == subject)) {
+        if ((entry->operation == operation) && (entry->subject == subject) &&
+            (entry->result == r_c17_value_type(emitter, result_type))) {
             return true;
         }
     }
@@ -11659,6 +11712,87 @@ static bool r_c17_register_reflection_helper(RC17Emitter *emitter,
     return true;
 }
 
+/* R-REFL-0005 (L42): the use of the attribute of an attribute form on one member of its subject
+ * (member 0 for a type), or NULL when the member does not carry it. */
+static const RSemanticAttributeUse *r_c17_attribute_use(const RC17Emitter *emitter,
+                                                        RStandardCallOperation operation,
+                                                        RTypeId subject,
+                                                        const RSemanticAggregate *attribute,
+                                                        uint32_t member) {
+    const uint32_t target =
+        operation == R_STANDARD_CALL_CORE_TYPE_ATTRIBUTE    ? R_ATTRIBUTE_TARGET_TYPE
+        : operation == R_STANDARD_CALL_CORE_FIELD_ATTRIBUTE ? R_ATTRIBUTE_TARGET_FIELD
+                                                            : R_ATTRIBUTE_TARGET_VARIANT;
+
+    return r_semantic_attribute_use(emitter->frontend, attribute->type, target, subject, member);
+}
+
+/* The program strings and float helpers that the constants of one use need. */
+static bool r_c17_preflight_attribute_use(RC17Emitter *emitter,
+                                          const RSemanticAttributeUse *use,
+                                          const RSemanticAggregate *attribute) {
+    for (uint32_t index = 0U; index < attribute->field_count; ++index) {
+        const RSemanticAttributeValue *value =
+            &emitter->frontend->attribute_values[(size_t)use->first_value + index];
+        const RSemanticTypeKind kind = r_c17_value_kind(emitter, value->type);
+
+        if (kind == R_SEMANTIC_TYPE_STR) {
+            if (value->text_length == 0U) {
+                emitter->uses_empty_program_string |= emitter->follow_calls;
+            } else if (!r_c17_mark_program_string(emitter, value->text_intern_id)) {
+                return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+            }
+        } else if (kind == R_SEMANTIC_TYPE_F32) {
+            emitter->uses_f32_literal |= emitter->follow_calls;
+        } else if (kind == R_SEMANTIC_TYPE_F64) {
+            emitter->uses_f64_literal |= emitter->follow_calls;
+        }
+    }
+    return true;
+}
+
+static bool r_c17_preflight_attribute_subject(RC17Emitter *emitter,
+                                              RStandardCallOperation operation,
+                                              RTypeId subject_type,
+                                              RTypeId result_type) {
+    const RSemanticAggregate *aggregate =
+        r_c17_aggregate_for_type(emitter, r_c17_value_type(emitter, subject_type), NULL);
+    const RSemanticAggregate *attribute;
+    uint32_t members;
+
+    if (aggregate == NULL) {
+        return r_c17_fail(emitter, R_FRONTEND_NOT_LOWERABLE);
+    }
+    if (operation == R_STANDARD_CALL_CORE_FIELD_NAME_AT) {
+        emitter->uses_empty_program_string |= emitter->follow_calls;
+        for (uint32_t index = 0U; index < aggregate->field_count; ++index) {
+            const RSemanticField *field =
+                &emitter->frontend->semantic_fields[(size_t)aggregate->first_field + index];
+
+            if (!r_c17_mark_program_string(emitter, field->name_intern_id)) {
+                return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+            }
+        }
+        return true;
+    }
+    attribute = r_c17_reflection_attribute(emitter, result_type, NULL);
+    if (attribute == NULL) {
+        return r_c17_fail(emitter, R_FRONTEND_NOT_LOWERABLE);
+    }
+    members = operation == R_STANDARD_CALL_CORE_TYPE_ATTRIBUTE    ? UINT32_C(1)
+              : operation == R_STANDARD_CALL_CORE_FIELD_ATTRIBUTE ? aggregate->field_count
+                                                                  : aggregate->variant_count;
+    for (uint32_t member = 0U; member < members; ++member) {
+        const RSemanticAttributeUse *use =
+            r_c17_attribute_use(emitter, operation, subject_type, attribute, member);
+
+        if ((use != NULL) && !r_c17_preflight_attribute_use(emitter, use, attribute)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 /* Every variant name a selection may produce is a program string; enum_from_name needs the
  * comparison helper and the name selections fall back to the empty program string. */
 static bool r_c17_preflight_reflection_subject(RC17Emitter *emitter,
@@ -11675,6 +11809,10 @@ static bool r_c17_preflight_reflection_subject(RC17Emitter *emitter,
     if (emitter->follow_calls &&
         !r_c17_register_reflection_helper(emitter, operation, subject_type, result_type)) {
         return false;
+    }
+    if ((operation >= R_STANDARD_CALL_CORE_TYPE_ATTRIBUTE) &&
+        (operation <= R_STANDARD_CALL_CORE_FIELD_NAME_AT)) {
+        return r_c17_preflight_attribute_subject(emitter, operation, subject_type, result_type);
     }
     if ((operation == R_STANDARD_CALL_CORE_ENUM_ORDINAL) ||
         (operation == R_STANDARD_CALL_CORE_ENUM_AT)) {
@@ -22642,22 +22780,42 @@ static const char *r_c17_reflection_helper_stem(RStandardCallOperation operation
         return "enum_from_name";
     case R_STANDARD_CALL_CORE_VARIANT_NAME:
         return "variant_name";
+    case R_STANDARD_CALL_CORE_TYPE_ATTRIBUTE:
+        return "type_attribute";
+    case R_STANDARD_CALL_CORE_FIELD_ATTRIBUTE:
+        return "field_attribute";
+    case R_STANDARD_CALL_CORE_VARIANT_ATTRIBUTE:
+        return "variant_attribute";
+    case R_STANDARD_CALL_CORE_FIELD_NAME_AT:
+        return "field_name";
     default:
         return NULL;
     }
 }
 
-/* `r_reflection_<selection>_a<aggregate>`: the shared helper of one selection over one enum. */
+/* `r_reflection_<selection>_a<aggregate>`: the shared helper of one selection over one type; an
+ * attribute form adds `_a<attribute>`. */
 static bool r_c17_emit_reflection_helper_name(RC17Emitter *emitter,
                                               RStandardCallOperation operation,
-                                              RTypeId subject_type) {
+                                              RTypeId subject_type,
+                                              RTypeId result_type) {
     const char *stem = r_c17_reflection_helper_stem(operation);
     uint32_t aggregate_id = UINT32_C(0);
+    uint32_t attribute_id = UINT32_C(0);
 
     if ((stem == NULL) ||
         (r_c17_aggregate_for_type(
-             emitter, r_c17_value_type(emitter, subject_type), &aggregate_id) == NULL)) {
+             emitter, r_c17_value_type(emitter, subject_type), &aggregate_id) == NULL) ||
+        (r_c17_attribute_operation(operation) &&
+         (r_c17_reflection_attribute(emitter, result_type, &attribute_id) == NULL))) {
         return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+    }
+    if (r_c17_attribute_operation(operation)) {
+        return r_c17_format(emitter,
+                            "r_reflection_%s_a%08" PRIu32 "_a%08" PRIu32,
+                            stem,
+                            aggregate_id,
+                            attribute_id);
     }
     return r_c17_format(emitter, "r_reflection_%s_a%08" PRIu32, stem, aggregate_id);
 }
@@ -22792,12 +22950,16 @@ static bool r_c17_emit_reflection_helper_header(RC17Emitter *emitter,
         emitter->output.length = start;
         if (!r_c17_write(emitter, "static ") || !r_c17_emit_value_type(emitter, helper->result) ||
             !r_c17_write(emitter, layout == 0U ? " " : "\n") ||
-            !r_c17_emit_reflection_helper_name(emitter, helper->operation, helper->subject) ||
+            !r_c17_emit_reflection_helper_name(
+                emitter, helper->operation, helper->subject, helper->result) ||
             !r_c17_write(emitter, "(")) {
             return false;
         }
         switch (helper->operation) {
         case R_STANDARD_CALL_CORE_ENUM_AT:
+        case R_STANDARD_CALL_CORE_TYPE_ATTRIBUTE:
+        case R_STANDARD_CALL_CORE_FIELD_ATTRIBUTE:
+        case R_STANDARD_CALL_CORE_FIELD_NAME_AT:
             if (!r_c17_write(emitter, "size_t r_index")) {
                 return false;
             }
@@ -22832,9 +22994,187 @@ static bool r_c17_emit_reflection_helper_header(RC17Emitter *emitter,
     return true;
 }
 
+/* One argument of a user attribute as a C constant of its field type (R-AGG-0013). */
+static bool r_c17_emit_attribute_constant(RC17Emitter *emitter,
+                                          const RSemanticAttributeValue *value) {
+    const RSemanticTypeKind kind = r_c17_value_kind(emitter, value->type);
+    bool is_signed = false;
+    uint32_t width = UINT32_C(0);
+
+    if (kind == R_SEMANTIC_TYPE_BOOL) {
+        return r_c17_format(emitter, "(_Bool)%u", value->bits != 0U ? 1U : 0U);
+    }
+    if (kind == R_SEMANTIC_TYPE_CHAR) {
+        return r_c17_format(emitter, "UINT32_C(%" PRIu64 ")", value->bits);
+    }
+    if (kind == R_SEMANTIC_TYPE_F32) {
+        return r_c17_format(
+            emitter, "r_f32_from_bits(UINT32_C(%" PRIu32 "))", (uint32_t)value->bits);
+    }
+    if (kind == R_SEMANTIC_TYPE_F64) {
+        return r_c17_format(emitter, "r_f64_from_bits(UINT64_C(%" PRIu64 "))", value->bits);
+    }
+    if (r_c17_kind_is_integer(kind) && r_c17_integer_properties(kind, &is_signed, &width)) {
+        const uint64_t mask =
+            width == UINT32_C(64) ? UINT64_MAX : (UINT64_C(1) << width) - UINT64_C(1);
+
+        return r_c17_emit_integer_literal(emitter, kind, value->bits & mask);
+    }
+    if (r_c17_type_is_c_abi_integer(emitter, value->type)) {
+        const RSemanticTypeKind representation =
+            r_semantic_integer_representation(emitter->frontend, value->type);
+
+        if (!r_c17_integer_properties(representation, &is_signed, &width)) {
+            return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+        }
+        return r_c17_write(emitter, "(") && r_c17_emit_value_type(emitter, value->type) &&
+               r_c17_write(emitter, ")") &&
+               r_c17_emit_integer_literal(
+                   emitter,
+                   representation,
+                   value->bits &
+                       (width == UINT32_C(64) ? UINT64_MAX : (UINT64_C(1) << width) - UINT64_C(1)));
+    }
+    if (kind == R_SEMANTIC_TYPE_ENUM) {
+        return r_c17_emit_enum_literal(emitter, value->type, value->bits);
+    }
+    return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+}
+
+/* `r_result` becomes `o::some` of the arguments of one use, field by field. */
+static bool r_c17_emit_attribute_some(RC17Emitter *emitter,
+                                      uint32_t depth,
+                                      const RSemanticAggregate *attribute,
+                                      const RSemanticAttributeUse *use) {
+    if (!r_c17_indent(emitter, depth) || !r_c17_write(emitter, "r_result.r_tag = UINT32_C(1);\n")) {
+        return false;
+    }
+    for (uint32_t index = 0U; index < attribute->field_count; ++index) {
+        const RSemanticAttributeValue *value =
+            &emitter->frontend->attribute_values[(size_t)use->first_value + index];
+        const RSemanticField *field =
+            &emitter->frontend->semantic_fields[(size_t)attribute->first_field + index];
+
+        if (r_c17_value_kind(emitter, value->type) == R_SEMANTIC_TYPE_STR) {
+            if (!r_c17_indent(emitter, depth) ||
+                !r_c17_write(emitter, "r_result.r_payload.r_some.") ||
+                !r_c17_emit_field_name(emitter, field) || !r_c17_write(emitter, ".data = ") ||
+                ((value->text_length == 0U)
+                     ? !r_c17_write(emitter, "r_empty_program_string")
+                     : !r_c17_emit_program_string_name(emitter, value->text_intern_id)) ||
+                !r_c17_write(emitter, ";\n") || !r_c17_indent(emitter, depth) ||
+                !r_c17_write(emitter, "r_result.r_payload.r_some.") ||
+                !r_c17_emit_field_name(emitter, field) ||
+                !r_c17_format(
+                    emitter, ".length = (size_t)UINT64_C(%" PRIu32 ");\n", value->text_length)) {
+                return false;
+            }
+            continue;
+        }
+        if (!r_c17_indent(emitter, depth) || !r_c17_write(emitter, "r_result.r_payload.r_some.") ||
+            !r_c17_emit_field_name(emitter, field) || !r_c17_write(emitter, " = ") ||
+            !r_c17_emit_attribute_constant(emitter, value) || !r_c17_write(emitter, ";\n")) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* R-REFL-0003 and R-REFL-0005 (L42): a field name at a run-time index, or the arguments of an
+ * attribute on the type, the indexed field or the enumerator, selected by a `switch` over the
+ * members that carry it; any other operand leaves the empty string or none. */
+static bool r_c17_emit_attribute_helper(RC17Emitter *emitter, const RC17ReflectionHelper *helper) {
+    const RSemanticAggregate *aggregate =
+        r_c17_reflection_subject(emitter, helper->operation, helper->subject);
+    const RSemanticAggregate *attribute = NULL;
+    const bool names = helper->operation == R_STANDARD_CALL_CORE_FIELD_NAME_AT;
+    RC17ReflectionRef target = {"r_result", NULL, NULL, UINT32_C(0)};
+    uint32_t members;
+
+    if ((aggregate == NULL) ||
+        (!names &&
+         ((attribute = r_c17_reflection_attribute(emitter, helper->result, NULL)) == NULL)) ||
+        !r_c17_emit_reflection_helper_header(emitter, helper) || !r_c17_write(emitter, "    ") ||
+        !r_c17_emit_value_type(emitter, helper->result) ||
+        !r_c17_write(emitter, " r_result = {0};\n\n")) {
+        return r_c17_fail(emitter, R_FRONTEND_NOT_LOWERABLE);
+    }
+    if (helper->operation == R_STANDARD_CALL_CORE_TYPE_ATTRIBUTE) {
+        const RSemanticAttributeUse *use = r_c17_attribute_use(
+            emitter, helper->operation, helper->subject, attribute, UINT32_C(0));
+
+        return r_c17_write(emitter, "    (void)r_index;\n") &&
+               ((use == NULL) || r_c17_emit_attribute_some(emitter, UINT32_C(1), attribute, use)) &&
+               r_c17_write(emitter, "    return r_result;\n}\n\n");
+    }
+    members = helper->operation == R_STANDARD_CALL_CORE_VARIANT_ATTRIBUTE ? aggregate->variant_count
+                                                                          : aggregate->field_count;
+    if (!r_c17_write(emitter,
+                     helper->operation == R_STANDARD_CALL_CORE_VARIANT_ATTRIBUTE
+                         ? "    switch (r_value) {\n"
+                         : "    switch (r_index) {\n")) {
+        return false;
+    }
+    for (uint32_t member = 0U; member < members; ++member) {
+        const RSemanticAttributeUse *use =
+            names ? NULL
+                  : r_c17_attribute_use(
+                        emitter, helper->operation, helper->subject, attribute, member);
+
+        if (!names && (use == NULL)) {
+            continue;
+        }
+        if (!r_c17_write(emitter, "    case ")) {
+            return false;
+        }
+        if (helper->operation == R_STANDARD_CALL_CORE_VARIANT_ATTRIBUTE) {
+            const RSemanticVariant *variant = r_c17_reflection_variant(emitter, aggregate, member);
+
+            if ((variant == NULL) ||
+                !r_c17_emit_enum_literal(
+                    emitter, r_c17_value_type(emitter, helper->subject), variant->value)) {
+                return r_c17_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+            }
+        } else if (!r_c17_format(emitter, "UINT64_C(%" PRIu32 ")", member)) {
+            return false;
+        }
+        if (!r_c17_write(emitter, ": {\n")) {
+            return false;
+        }
+        if (names) {
+            const RSemanticField *field =
+                &emitter->frontend->semantic_fields[(size_t)aggregate->first_field + member];
+
+            if (!r_c17_emit_reflection_text_assignment(
+                    emitter,
+                    UINT32_C(2),
+                    &target,
+                    field->name_intern_id,
+                    r_c17_reflection_name_length(emitter, field->name_intern_id))) {
+                return false;
+            }
+        } else if (!r_c17_emit_attribute_some(emitter, UINT32_C(2), attribute, use)) {
+            return false;
+        }
+        if (!r_c17_write(emitter, "        break;\n    }\n")) {
+            return false;
+        }
+    }
+    if (!r_c17_write(emitter, "    default: {\n") ||
+        (names &&
+         !r_c17_emit_reflection_text_assignment(emitter, UINT32_C(2), &target, UINT32_C(0), 0U))) {
+        return false;
+    }
+    return r_c17_write(emitter, "        break;\n    }\n    }\n    return r_result;\n}\n\n");
+}
+
 /* The body of one helper: the name table of enum_from_name, the empty result, the selection
  * switch and the return. */
 static bool r_c17_emit_reflection_helper(RC17Emitter *emitter, const RC17ReflectionHelper *helper) {
+    if ((helper->operation >= R_STANDARD_CALL_CORE_TYPE_ATTRIBUTE) &&
+        (helper->operation <= R_STANDARD_CALL_CORE_FIELD_NAME_AT)) {
+        return r_c17_emit_attribute_helper(emitter, helper);
+    }
     const RSemanticAggregate *aggregate =
         r_c17_reflection_subject(emitter, helper->operation, helper->subject);
     RC17ReflectionRef target = {"r_result", NULL, NULL, UINT32_C(0)};
@@ -22936,9 +23276,10 @@ static bool r_c17_emit_reflection_helpers(RC17Emitter *emitter) {
 static bool r_c17_emit_reflection_call(RC17Emitter *emitter,
                                        RStandardCallOperation operation,
                                        RTypeId subject_type,
+                                       RTypeId result_type,
                                        const RC17ReflectionRef *operand) {
     return r_c17_write(emitter, " = ") &&
-           r_c17_emit_reflection_helper_name(emitter, operation, subject_type) &&
+           r_c17_emit_reflection_helper_name(emitter, operation, subject_type, result_type) &&
            r_c17_write(emitter, "(") && r_c17_emit_reflection_ref(emitter, operand) &&
            r_c17_write(emitter, ");\n");
 }
@@ -22962,7 +23303,7 @@ static bool r_c17_emit_reflection(RC17Emitter *emitter,
     start = emitter->output.length;
     if (!r_c17_new_temporary(emitter, node->type, depth, &temporary) ||
         !r_c17_emit_reflection_call(
-            emitter, node->standard_operation, node->auxiliary_type, &source) ||
+            emitter, node->standard_operation, node->auxiliary_type, node->type, &source) ||
         !r_c17_reflow_assignment_call(emitter, start, depth)) {
         return false;
     }
@@ -22988,8 +23329,11 @@ static bool r_c17_emit_async_reflection(RC17Emitter *emitter,
     source.identifier = r_c17_mir_operand(emitter, instruction, UINT32_C(0));
     start = emitter->output.length;
     return r_c17_indent(emitter, depth) && r_c17_emit_reflection_ref(emitter, &target) &&
-           r_c17_emit_reflection_call(
-               emitter, instruction->standard_operation, instruction->auxiliary_type, &source) &&
+           r_c17_emit_reflection_call(emitter,
+                                      instruction->standard_operation,
+                                      instruction->auxiliary_type,
+                                      instruction->type,
+                                      &source) &&
            r_c17_reflow_assignment_call(emitter, start, depth);
 }
 

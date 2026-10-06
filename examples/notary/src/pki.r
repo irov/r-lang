@@ -8,7 +8,7 @@ import example.notary.keys;
    key; and AES-CBC, which older protocols still require. */
 
 protected void line(std.string::string* out, std.string::string text) throws std.alloc::alloc_error {
-    std.string::append_str(out, text.as_str());
+    std.string::append_str(out, text);
     std.string::push_scalar(out, '\n');
 }
 
@@ -44,7 +44,7 @@ std.string::string keys(str passphrase) throws std.alloc::alloc_error, std.crypt
     std.crypto::private_key wrapped = std.crypto::private_key::ecdsa(move key);
     std.crypto::public_key public_part = wrapped.public_key();
     std.string::string public_pem = public_part.to_pem();
-    std.string::append_str(&out, public_pem.as_str());
+    std.string::append_str(&out, public_pem);
     line(&out, f"ES256 signature, {size} bytes: {signature_hex}");
     // Both keys read back from their PEM text: the signature is deterministic (RFC 6979).
     std.secret::buffer private_pem = wrapped.to_pem();

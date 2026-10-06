@@ -80,7 +80,7 @@ protected void report_panic(const Server* shared, std.http::method sent, str tar
             switch (move name) {
             case variant o::some(move named):
                 switch (move value) {
-                case variant o::some(move text): record.text(named.as_str(), text.as_str());
+                case variant o::some(move text): record.text(named, text);
                 case variant o::none: break;
                 }
             case variant o::none: drop value;
@@ -91,7 +91,7 @@ protected void report_panic(const Server* shared, std.http::method sent, str tar
         record.number("http.status_code", 500i64);
         str text = std.thread::panic_text(report);
         std.string::string panic_value = f"{category}: {text}";
-        record.text("panic", panic_value.as_str());
+        record.text("panic", panic_value);
         record.text("severity", "critical");
         shared->log.log_at(std.log::level::error, "panic recovered", &record, core::location());
     } catch (std.error::fault failure) {
@@ -105,14 +105,14 @@ protected std.http::response refusal(u16 status, str reason) throws std.alloc::a
     std.string::string body = std.string::from_str("{\"error\":\"");
     body.append(reason);
     body.append("\"}");
-    return std.http::response::json(status, body.as_str());
+    return std.http::response::json(status, body);
 }
 
 /* A JSON answer; `<`, `>` and `&` are escaped, so the text can stand inside a page of the admin
    panel. */
 protected std.http::response answer(u16 status, std.string::string body) throws std.alloc::alloc_error {
-    std.string::string escaped = std.json::escape_html(body.as_str());
-    return std.http::response::json(status, escaped.as_str());
+    std.string::string escaped = std.json::escape_html(body);
+    return std.http::response::json(status, escaped);
 }
 
 /* A JSON response of a value; the values of this server always encode. */
@@ -143,13 +143,13 @@ protected std.string::string request_id(const std.http::request* incoming) throw
 protected async std.http::flow<Call> open_request(arc Server shared, std.http::flow<Call> current)
     throws std.error::fault {
     std.string::string id = request_id(&current.request);
-    current.notes.set("request_id", id.as_str());
+    current.notes.set("request_id", id);
     std.log::fields bound = std.log::fields::create();
-    bound.text("request_id", id.as_str());
+    bound.text("request_id", id);
     o<std.log::logger> old = core::replace(&current.context.log, o::some(shared->log.with(&bound)));
     drop old;
     try {
-        current.response.headers.set("X-Request-ID", id.as_str());
+        current.response.headers.set("X-Request-ID", id);
     } catch (std.http::http_error rejected) {
         rejected as void;
     }
@@ -163,11 +163,11 @@ protected async std.http::flow<Call> close_request(arc Server shared, std.http::
     std.string::string id = std.string::create();
     o<std.string::string> given = current.notes.get("request_id");
     switch (move given) {
-    case variant o::some(move value): id.append(value.as_str());
+    case variant o::some(move value): id.append(value);
     case variant o::none: break;
     }
     try {
-        current.response.headers.set("X-Request-ID", id.as_str());
+        current.response.headers.set("X-Request-ID", id);
     } catch (std.http::http_error rejected) {
         rejected as void;
     }
@@ -176,7 +176,7 @@ protected async std.http::flow<Call> close_request(arc Server shared, std.http::
     if (std.string::len(&current.route) == 0usize) {
         record.text("http.route", current.request.path());
     } else {
-        record.text("http.route", current.route.as_str());
+        record.text("http.route", current.route);
     }
     u16 status = current.response.status;
     record.number("http.status_code", status as i64);
@@ -219,11 +219,11 @@ protected async std.http::flow<Call> authenticate(arc Server shared, std.http::f
             std.jwt::validation rules = std.jwt::validation::create();
             rules.require_expiration = false;
             example.arena.sessions::Session session = std.jwt::verify_claims::<example.arena.sessions::Session>(
-                &shared->keys, text.as_str(), &rules, std.time::system_now());
-            current.context.account.append(session.account.as_str());
-            current.notes.set("usr.id", session.account.as_str());
+                &shared->keys, text, &rules, std.time::system_now());
+            current.context.account.append(session.account);
+            current.notes.set("usr.id", session.account);
             std.log::fields user = std.log::fields::create();
-            user.text("usr.id", session.account.as_str());
+            user.text("usr.id", session.account);
             o<std.log::logger> child = o::none;
             switch (current.context.log) {
             case variant o::some(logger): child = o::some(logger->with(&user));
@@ -328,7 +328,7 @@ protected async std.http::flow<Call> begin_command(arc Server shared, std.http::
             }
             await (lease.get())->begin();
             array<std.postgres::value> locking = [];
-            add(&locking, std.postgres::value::of_text(current.context.account.as_str()));
+            add(&locking, std.postgres::value::of_text(current.context.account));
             std.postgres::rows locked =
                 await (lease.get())->query("SELECT id FROM users WHERE account_id = $1 FOR UPDATE", move locking);
             if (len(locked.items) != 1usize) {
@@ -336,14 +336,14 @@ protected async std.http::flow<Call> begin_command(arc Server shared, std.http::
                 return (move current).with(refusal(404u16, "no player"));
             }
             array<std.postgres::value> asking = [];
-            add(&asking, std.postgres::value::of_text(current.context.account.as_str()));
-            add(&asking, std.postgres::value::of_text(current.context.command.as_str()));
+            add(&asking, std.postgres::value::of_text(current.context.account));
+            add(&asking, std.postgres::value::of_text(current.context.command));
             std.postgres::rows kept = await (lease.get())->query(
                 "SELECT status, body FROM client_commands WHERE account_id = $1 AND command_id = $2", move asking);
             if (len(kept.items) == 1usize) {
                 await (lease.get())->rollback();
                 Kept again = kept.decode::<Kept>(0usize);
-                std.http::response replayed = std.http::response::json(again.status as u16, again.body.as_str());
+                std.http::response replayed = std.http::response::json(again.status as u16, again.body);
                 replayed.headers.set("X-Replayed", "true");
                 return (move current).with(move replayed);
             }
@@ -375,8 +375,8 @@ protected async std.http::flow<Call> finish_command(arc Server shared, std.http:
                 return move current;
             }
             array<std.postgres::value> keeping = [];
-            add(&keeping, std.postgres::value::of_text(current.context.account.as_str()));
-            add(&keeping, std.postgres::value::of_text(current.context.command.as_str()));
+            add(&keeping, std.postgres::value::of_text(current.context.account));
+            add(&keeping, std.postgres::value::of_text(current.context.command));
             add(&keeping, std.postgres::value::integer(current.response.status as i64));
             add(&keeping, std.postgres::value::of_bytes(current.response.body.as_slice()));
             u64 stored = await (lease.get())->execute(
@@ -408,7 +408,7 @@ struct Profile { std.string::string account; u64 request; };
 
 protected async std.http::flow<Call> me(arc Server shared, std.http::flow<Call> current) throws std.error::fault {
     drop shared;
-    Profile body = {.account = std.string::from_str(current.context.account.as_str()),
+    Profile body = {.account = std.string::from_str(current.context.account),
                     .request = current.context.number};
     std.http::response result = encoded(200u16, &body);
     return (move current).with(move result);
@@ -477,8 +477,8 @@ protected async std.http::flow<Call> rename(arc Server shared, std.http::flow<Ca
     try {
         Rename wanted = std.json::unmarshal(current.request.body.as_slice());
         array<std.postgres::value> changing = [];
-        add(&changing, std.postgres::value::of_text(current.context.account.as_str()));
-        add(&changing, std.postgres::value::of_text(wanted.nick.as_str()));
+        add(&changing, std.postgres::value::of_text(current.context.account));
+        add(&changing, std.postgres::value::of_text(wanted.nick));
         u64 changed = await transaction_of(&current.context)->execute(
             "UPDATE users SET nickname = $2 WHERE account_id = $1", move changing);
         changed as void;
@@ -503,7 +503,7 @@ protected async std.http::flow<Call> crash(arc Server shared, std.http::flow<Cal
     drop shared;
     try {
         array<std.postgres::value> changing = [];
-        add(&changing, std.postgres::value::of_text(current.context.account.as_str()));
+        add(&changing, std.postgres::value::of_text(current.context.account));
         u64 changed = await transaction_of(&current.context)->execute(
             "UPDATE users SET nickname = 'Crashed' WHERE account_id = $1", move changing);
         changed as void;
@@ -520,7 +520,7 @@ protected async std.http::flow<Call> echo(arc Server shared, std.http::flow<Call
     drop shared;
     try {
         Echo body = {.echo = std.string::from_utf8(current.request.body.as_slice()),
-                     .account = std.string::from_str(current.context.account.as_str())};
+                     .account = std.string::from_str(current.context.account)};
         std.http::response result = encoded(200u16, &body);
         return (move current).with(move result);
     } catch (std.string::string_error failure) {
@@ -540,7 +540,7 @@ protected async void late_failure(std.string::string account) {
 protected async std.http::flow<Call> background(arc Server shared, std.http::flow<Call> current)
     throws std.error::fault {
     drop shared;
-    task<void> later = late_failure(std.string::from_str(current.context.account.as_str()));
+    task<void> later = late_failure(std.string::from_str(current.context.account));
     (move later).detach();
     std.http::response queued = std.http::response::json(202u16, "{\"queued\":true}");
     return (move current).with(move queued);
@@ -549,11 +549,11 @@ protected async std.http::flow<Call> background(arc Server shared, std.http::flo
 /* The record of a panic that nothing observed, from background work. */
 protected void log_panic(const Server* shared, std.log::panic_record record) throws std.error::fault {
     std.log::fields fields = std.log::fields::create();
-    str category = record.category.as_str();
-    str text = record.text.as_str();
+    str category = record.category;
+    str text = record.text;
     std.string::string panic_value = f"{category}: {text}";
-    fields.text("panic", panic_value.as_str());
-    fields.text("place", record.place.as_str());
+    fields.text("panic", panic_value);
+    fields.text("place", record.place);
     fields.text("severity", "critical");
     shared->log.log_at(std.log::level::error, "panic recovered", &fields, core::location());
 }

@@ -45,7 +45,7 @@ async i32 main() {
             return result.stdout if accepted else result.stderr
 
         interface = emit('interface', [provider, consumer])
-        assert '(interface version=32 ' in interface
+        assert '(interface version=33 ' in interface
         functions = [line for line in interface.splitlines()
                      if 'name="scopes.provider::inspect"' in line or
                      'name="scopes.provider::read"' in line]

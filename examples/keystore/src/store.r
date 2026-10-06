@@ -34,27 +34,27 @@ void apply(dyn(Store)* backend, Command command, u32 key, u32 value, std.string:
     case Command::put:
         backend->put(key, value);
         std.string::string stored = f"stored {key}\n";
-        output->append(stored.as_str()); break;
+        output->append(stored); break;
     case Command::get:
         o<u32> found = backend->get(key);
         switch (found) {
         case variant o::some(current):
             u32 number = *current;
             std.string::string row = f"{key}={number}\n";
-            output->append(row.as_str()); break;
+            output->append(row); break;
         case variant o::none:
             std.string::string missing = f"{key}=none\n";
-            output->append(missing.as_str()); break;
+            output->append(missing); break;
         }
         break;
     case Command::remove:
         bool removed = backend->remove(key);
         std.string::string report = f"removed={removed}\n";
-        output->append(report.as_str()); break;
+        output->append(report); break;
     case Command::count:
         usize entries = backend->count();
         std.string::string total = f"count={entries}\n";
-        output->append(total.as_str()); break;
+        output->append(total); break;
     case Command::backend:
         const dyn(Store)* view = backend;
         constexpr str label = view->name();

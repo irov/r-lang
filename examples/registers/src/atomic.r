@@ -63,13 +63,13 @@ std.string::string script(u32 initial, const array<std.string::string>* commands
         u32 after = core::atomic_load(&register_value, core::memory_order::acquire);
         constexpr str name = core::enum_name(operation);
         std.string::string row = f"{name} before={before} after={after} accepted={changed}\n";
-        str text = row.as_str();
+        str text = row;
         output.append(text);
     }
     u32 final = core::atomic_load(&register_value, core::memory_order::acquire);
     bool lock_free = core::atomic_is_lock_free(&register_value);
     std.string::string row = f"value={final} lock_free={lock_free}\n";
-    str text = row.as_str();
+    str text = row;
     output.append(text);
     return move output;
 }

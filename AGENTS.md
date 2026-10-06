@@ -102,6 +102,9 @@ cmake --preset fuzz              # libFuzzer if available, else a standalone dri
   (`yes > /dev/null` hogs, 4–12 parallel copies of the binary) before calling it timing.
 - After reverting a temporary mutation by copying a file back, `touch` it: make compares
   modification times at one-second resolution and can keep the mutant's object file.
+  Python has the same blind spot: a tool imported and then edited within the same second to a
+  file of the same size keeps its stale `__pycache__` bytecode; delete the `.pyc` after such an
+  edit (a digest replaced by a digest is exactly that edit).
 
 ## Gates
 
@@ -270,6 +273,16 @@ these rules are the ones that most often reject otherwise reasonable code:
   to a local first.
 - Importing an R-source module requires `import std.x;` even for the R part of a C module.
 - `constexpr str` converts to `const u8[]` through a `str` local (one conversion per expression).
+- A `std.string::string` place is viewed as `str` wherever `str` is expected
+  (`db.execute(sql, params)`, `str name = record.name;`, `*text` for a pointer); a temporary
+  string (a call result, an f-string) needs a local first, and a string is never a byte slice
+  (`as_bytes()`). Write `.as_str()` only where no `str` is expected (`switch`, generic
+  arguments).
+- An attribute of the program is a struct marked `@attribute(type|field|variant)`; use it as
+  `@name(arguments)` after importing it by name (`import m::{key};`) or as `@m::key`, and read it
+  with `core::type_attribute::<A, T>()`, `core::field_attribute::<A, T>(index)` or
+  `core::variant_attribute::<A, T>(value)`. Arguments are literals or `Enum::name`; `variant` is
+  a keyword, so a variant target is written `@attribute(variant)` only.
 - `core::location()` is the translation-time `module.path:line` of the call; pass it explicitly
   (`logger.log_at(level, message, &fields, core::location())`), since R has no implicit caller
   parameters.

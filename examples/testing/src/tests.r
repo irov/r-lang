@@ -50,8 +50,8 @@ void formats_releases() throws std.test::failure, std.alloc::alloc_error {
     example.testing.version::version next =
         example.testing.version::bump(current, example.testing.version::part::minor);
     std.string::string text = example.testing.version::text(&next);
-    std.test::equal_text(text.as_str(), "1.5.0");
-    std.test::contains(text.as_str(), ".5.");
+    std.test::equal_text(text, "1.5.0");
+    std.test::contains(text, ".5.");
 }
 
 /* An asynchronous test runs as a task of the test entry. */

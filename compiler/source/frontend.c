@@ -375,6 +375,8 @@ void r_frontend_destroy(RFrontendContext *context) {
     r_context_free(context, context->semantic_fields);
     r_context_free(context, context->json_fields);
     r_context_free(context, context->semantic_variants);
+    r_context_free(context, context->attribute_uses);
+    r_context_free(context, context->attribute_values);
     r_context_free(context, context->semantic_symbols);
     r_context_free(context, context->error_borrow_mappings);
     r_context_free(context, context->store_borrow_mappings);

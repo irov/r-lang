@@ -608,6 +608,14 @@ static bool r_overload_compatible(RBodyContext *body, RTypeId actual, RTypeId pa
     if (from == NULL || to == NULL) {
         return false;
     }
+    if (to->kind == R_SEMANTIC_TYPE_STR) {
+        /* R-EXPR-0015 (L41): a string place views as str; lowering the selected call rejects a
+           temporary string. */
+        RTypeId string_type;
+        return r_semantic_intern_named_standard_type(
+                   body->frontend, "std.string::string", &string_type) &&
+               (r_semantic_value_type(body->frontend, actual) == string_type);
+    }
     if (to->kind == R_SEMANTIC_TYPE_SLICE && to->flags == R_SEMANTIC_TYPE_FLAG_SHARED) {
         if (from->kind == R_SEMANTIC_TYPE_BORROW) {
             const RSemanticType *array = r_semantic_type(body->frontend, from->base);

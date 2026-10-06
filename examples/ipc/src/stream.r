@@ -75,7 +75,7 @@ async bool stopped_by_signal(const Stops* stops) {
 async u32 serve(std.string::string path, u32 limit) throws std.error::fault {
     Stops stops = {.terminate = std.signal::kind::terminate.listen(),
                    .interrupt = std.signal::listen(std.signal::kind::interrupt)};
-    str where = path.as_str();
+    str where = path;
     std.net::unix_listener listener = await std.net::unix_listen(where, 8u32, true);
     await std.console::print(f"listening {path}\n");
     u32 served = 0u32;
@@ -101,7 +101,7 @@ async u32 serve(std.string::string path, u32 limit) throws std.error::fault {
 /* Send one line and read the answer through std.bufio; the client half-closes after its line. */
 async std.string::string call(std.string::string path, std.string::string message)
     throws std.error::fault {
-    str where = path.as_str();
+    str where = path;
     std.net::unix_stream connection = await std.net::unix_connect(where);
     task_scope(1) output {
         await std.net::unix_write_all_from(&connection, message.as_bytes());

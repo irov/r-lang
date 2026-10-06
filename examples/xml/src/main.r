@@ -148,7 +148,7 @@ bytes list_events(const u8[] document, usize chunk, bool all)
         std.bytes::append_u8(&output, 9);
         usize depth = parser.depth();
         std.string::string depth_text = f"{depth}";
-        append_str(&output, depth_text.as_str());
+        append_str(&output, depth_text);
         std.bytes::append_u8(&output, 9);
         append_escaped(&output, parser.name());
         std.bytes::append_u8(&output, 9);
@@ -162,7 +162,7 @@ bytes list_events(const u8[] document, usize chunk, bool all)
 void append_selected(bytes* target, const std.xml::reader* parser, usize ordinal) throws std.alloc::alloc_error {
     usize depth = parser->depth();
     std.string::string line = f"{ordinal}\t{depth}\t";
-    append_str(target, line.as_str());
+    append_str(target, line);
     for (usize level = 0usize; level < depth; level += 1usize) {
         std.bytes::append_u8(target, 47);
         append_escaped(target, parser->path_name(level));
@@ -261,7 +261,7 @@ async i32 main(const str[] arguments) {
             await write_output(move listed);
             break;
         case Command::select:
-            bytes chosen = select_elements(input_view, options.pattern.as_str(), options.chunk);
+            bytes chosen = select_elements(input_view, options.pattern, options.chunk);
             await write_output(move chosen);
             break;
         case Command::compact:

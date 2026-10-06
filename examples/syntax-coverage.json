@@ -754,6 +754,7 @@
     {
       "node": "conditional_expression",
       "applications": [
+        "arena",
         "binary",
         "clock",
         "dispatch",
@@ -2021,6 +2022,7 @@
     {
       "node": "match_pattern",
       "applications": [
+        "arena",
         "calculator",
         "dispatch",
         "environment",
@@ -2146,14 +2148,12 @@
         "relay",
         "runner",
         "service",
-        "settings",
         "snapshots",
         "statistics",
         "status",
         "streams",
         "tally",
         "telemetry",
-        "testing",
         "text",
         "textkit",
         "tls",
@@ -2465,6 +2465,7 @@
     {
       "node": "pattern_test",
       "applications": [
+        "arena",
         "environment",
         "http"
       ],

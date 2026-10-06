@@ -21,7 +21,7 @@ std.string::string fragments(str input, usize chunk) throws std.json::error, std
         if (progress.state == std.json::feed_state::value_ready) {
             std.json::value item = decoder.take();
             std.string::string line = item.stringify();
-            str text = line.as_str();
+            str text = line;
             state_report.value.append(text);
             state_report.value.append("\n");
         } else { ended = progress.state == std.json::feed_state::end; }
@@ -64,7 +64,7 @@ async std.string::string first() throws std.json::error, std.io::io_error, std.a
     usize suffix_size = len(pending);
     u32 checksum = std.hash::crc32(pending);
     std.string::string suffix = f"remaining={suffix_size} crc32={checksum}\n";
-    str text = suffix.as_str();
+    str text = suffix;
     state_report.value.append(text);
     await (move remaining_input).close();
     return core::replace(&state_report.value, std.string::create());

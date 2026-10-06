@@ -15,7 +15,7 @@
 |Поле |Значение
 |Документ |R Standard Library Specification
 |Версия языка |0.1
-|Редакция документа |0.1.0-draft.68
+|Редакция документа |0.1.0-draft.69
 |Статус |Перевод нормативного черновика; не является стабильным стандартом R 1.0
 |Язык документа |Русский перевод; ключевые нормативные термины приведены на английском
 |Требуемый стандарт языка |R Core Language Specification 0.1
@@ -287,7 +287,7 @@ Copy, бросает ровно `+std.alloc::alloc_error+` и вызывает �
 
 [[R-LIB-0024]]
 *R-LIB-0024* — Каждый profile предоставляет эти exact compiler-recognized static reflection
-intrinsics Core R-REFL-0001..R-REFL-0004 как closed families над именуемым ими type либо
+intrinsics Core R-REFL-0001..R-REFL-0005 как closed families над именуемым ими type либо
 value:
 
 * `+core::enum_count::<T>() -> usize+`, `+core::enum_min::<T>() -> T+`, `+core::enum_max::<T>() -> T+`
@@ -300,7 +300,11 @@ value:
 * `+core::type_name::<T>() -> constexpr str+`, `+core::field_count::<T>() -> usize+` и
   `+core::field_name::<T>(usize index) -> constexpr str+`;
 * `+core::target_name() -> constexpr str+`, `+core::profile_name() -> constexpr str+` и
-  `+core::location() -> constexpr str+`.
+  `+core::location() -> constexpr str+`;
+* `+core::type_attribute::<A, T>() -> o<A>+`,
+  `+core::field_attribute::<A, T>(usize index) -> o<A>+` и
+  `+core::variant_attribute::<A, T>(T value) -> o<A>+` для типа атрибута `+A+` (Core
+  R-AGG-0013).
 
 Каждая constant форма сворачивается во время translation, а каждая selection понижается
 в прямые сравнения с таблицами времени translation; items ничего не выделяют, не паникуют

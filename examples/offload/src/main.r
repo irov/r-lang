@@ -126,11 +126,11 @@ async i32 main() {
         array<std.string::string> arguments = std.env::arguments();
         o<Command> command = o::none;
         if (len(arguments) == 3usize) {
-            command = core::enum_from_name::<Command>(arguments[1].as_str());
+            command = core::enum_from_name::<Command>(arguments[1]);
         }
         switch (command) {
         case variant o::some(chosen):
-            u32 ms = std.convert::parse_u32(arguments[2].as_str(), 10u32);
+            u32 ms = std.convert::parse_u32(arguments[2], 10u32);
             switch (*chosen) {
             case Command::nap: status += await naps(ms);
             case Command::cancel: status += await cancel(ms);

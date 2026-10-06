@@ -49,7 +49,7 @@ std.string::string statistics(const i64[] values) throws std.alloc::alloc_error 
     case variant o::some(low):
         i64 low_value = *low;
         std.string::string row = f" min {low_value}";
-        std.string::append_str(&out, row.as_str());
+        std.string::append_str(&out, row);
     case variant o::none:
         std.string::append_str(&out, " min -");
     }
@@ -57,7 +57,7 @@ std.string::string statistics(const i64[] values) throws std.alloc::alloc_error 
     case variant o::some(high):
         i64 high_value = *high;
         std.string::string row = f" max {high_value}";
-        std.string::append_str(&out, row.as_str());
+        std.string::append_str(&out, row);
     case variant o::none:
         std.string::append_str(&out, " max -");
     }
@@ -65,20 +65,20 @@ std.string::string statistics(const i64[] values) throws std.alloc::alloc_error 
     for (const i64* value in std.iter::reversed(values)) {
         i64 shown = *value;
         std.string::string item = f" {shown}";
-        std.string::append_str(&out, item.as_str());
+        std.string::append_str(&out, item);
     }
     std.string::append_str(&out, "\nchunks:");
     for (const i64[] chunk in std.iter::chunks(values, 3usize)) {
         i64 part = 0i64;
         for (usize index = 0usize; index < len(chunk); index += 1usize) { part += chunk[index]; }
         std.string::string item = f" {part}";
-        std.string::append_str(&out, item.as_str());
+        std.string::append_str(&out, item);
     }
     std.string::append_str(&out, "\nsteps:");
     for (const i64[] pair in std.iter::windows(values, 2usize)) {
         i64 step = pair[1] - pair[0];
         std.string::string item = f" {step}";
-        std.string::append_str(&out, item.as_str());
+        std.string::append_str(&out, item);
     }
     std.string::append_str(&out, "\n");
     return move out;

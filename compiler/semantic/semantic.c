@@ -1362,6 +1362,17 @@ static uint32_t r_semantic_associated_parameter_schema(const RFrontendContext *,
 static bool
 r_semantic_reduce_associated(RFrontendContext *, RTypeId, const RTypeVector *, RTypeId *);
 static bool r_semantic_type_from_ast(RFrontendContext *, RAstRef, RTypeId *);
+static bool r_semantic_type_is_integer(const RFrontendContext *, RTypeId);
+/* R-AGG-0013 (L42): attributes declared by the program (attributes.inc). */
+static bool r_semantic_attribute_is_user(const RFrontendContext *, RAstRef);
+static bool r_attribute_record_use(RFrontendContext *, RAstRef, uint32_t, RTypeId, uint32_t);
+static bool r_attribute_declared_targets(RFrontendContext *,
+                                         RAstRef,
+                                         const RAstNodeView *,
+                                         RSemanticAggregateKind,
+                                         bool,
+                                         RSemanticAggregate *);
+static bool r_attributes_resolve(RFrontendContext *);
 static RTypeId r_semantic_error_value_type(const RFrontendContext *, RTypeId);
 static bool r_semantic_standard_fault_family(RFrontendContext *);
 
@@ -5202,7 +5213,7 @@ static bool r_semantic_callable_resources(RFrontendContext *context, RAstRef ref
         if (!r_ast_ref_child(context, ref, index, &child) ||
             !r_ast_ref_view(context, child, &attribute))
             return false;
-        if (attribute.kind != R_SYNTAX_ATTRIBUTE)
+        if ((attribute.kind != R_SYNTAX_ATTRIBUTE) || r_semantic_attribute_is_user(context, child))
             continue;
         if (!r_ast_direct_token(context, child, 1U, NULL, &name))
             return false;
@@ -8712,6 +8723,11 @@ static bool r_semantic_external_modifiers(RFrontendContext *context,
         }
         if (!r_ast_ref_view(context, child, &attribute))
             return false;
+        if ((attribute.kind == R_SYNTAX_ATTRIBUTE) &&
+            r_semantic_attribute_is_user(context, child)) {
+            /* R-AGG-0013 (L42): a function takes no attribute of the program. */
+            continue;
+        }
         if (attribute.kind == R_SYNTAX_ATTRIBUTE) {
             RAstTokenView test_name;
             if (r_ast_direct_token(context, child, 1U, NULL, &test_name) &&
@@ -9660,7 +9676,8 @@ static bool r_semantic_collect_module_attributes(RFrontendContext *context,
             return false;
         }
         if (r_ast_ref_token(context, child, &token) ||
-            !r_ast_ref_view(context, child, &attribute) || (attribute.kind != R_SYNTAX_ATTRIBUTE)) {
+            !r_ast_ref_view(context, child, &attribute) || (attribute.kind != R_SYNTAX_ATTRIBUTE) ||
+            r_semantic_attribute_is_user(context, child)) {
             continue;
         }
         valid = r_ast_direct_token(context, child, 1U, NULL, &name) &&
@@ -9838,6 +9855,7 @@ static bool r_semantic_append_aggregate_header(RFrontendContext *context,
     aggregate.name_intern_id = name.intern_id;
     aggregate.module_source = source_id;
     aggregate.declaration_ast = declaration.node;
+    aggregate.external_ast = external.node;
     aggregate.generic_schema = r_generic_schema_at(context, name.span);
     aggregate.is_protected = r_semantic_external_is_protected(context, external);
     if (!r_ast_ref_view(context, external, &external_view)) {
@@ -9857,14 +9875,30 @@ static bool r_semantic_append_aggregate_header(RFrontendContext *context,
             }
         } else if (!r_ast_ref_view(context, child, &child_view)) {
             return false;
+        } else if ((child_view.kind == R_SYNTAX_ATTRIBUTE) &&
+                   r_semantic_attribute_is_user(context, child)) {
+            /* R-AGG-0013 (L42): resolved once the members of every type are known. */
+            if (extern_block == NULL) {
+                if (!r_attribute_record_use(
+                        context, child, R_ATTRIBUTE_TARGET_TYPE, R_TYPE_ID_INVALID, UINT32_C(0))) {
+                    return false;
+                }
+                context->attribute_uses[context->attribute_use_count - 1U].declaration =
+                    declaration.node;
+            }
         } else if (child_view.kind == R_SYNTAX_ATTRIBUTE) {
             RAstTokenView attribute_name;
             RAstTokenView argument;
             RAstRef argument_ref;
             bool valid = r_ast_direct_token(context, child, UINT32_C(1), NULL, &attribute_name);
 
-            if (valid && (extern_block != NULL) &&
-                r_semantic_token_text_equal_owned(context, &attribute_name, "c_type")) {
+            if (valid && r_semantic_token_text_equal_owned(context, &attribute_name, "attribute")) {
+                if (!r_attribute_declared_targets(
+                        context, child, &child_view, kind, extern_block != NULL, &aggregate)) {
+                    return false;
+                }
+            } else if (valid && (extern_block != NULL) &&
+                       r_semantic_token_text_equal_owned(context, &attribute_name, "c_type")) {
                 /* R-FFI-0017: a complete C aggregate names its C spelling. */
                 if (!r_semantic_c_type_attribute(context, child, &aggregate, &have_c_type)) {
                     return false;
@@ -10069,6 +10103,8 @@ static bool r_semantic_field_has_protected(const RFrontendContext *context, RAst
 }
 
 #include "json_attributes.inc"
+
+#include "attributes.inc"
 
 static bool r_semantic_collect_struct_fields(RFrontendContext *context,
                                              uint32_t aggregate_id,
@@ -10328,6 +10364,21 @@ static bool r_semantic_variant_attributes(RFrontendContext *context,
         if (!r_ast_ref_child(context, variant_ref, index, &child) ||
             r_ast_ref_token(context, child, &name) || !r_ast_ref_view(context, child, &attribute) ||
             (attribute.kind != R_SYNTAX_ATTRIBUTE)) {
+            continue;
+        }
+        if (r_semantic_attribute_is_user(context, child)) {
+            /* R-AGG-0013 (L42): an attribute of an enumerator of a fieldless enum. */
+            const RSemanticVariant *variant =
+                &context->semantic_variants[context->semantic_variant_count - 1U];
+            if (!aggregate->is_tagged && !aggregate->is_error &&
+                (aggregate->generic_origin == 0U) &&
+                !r_attribute_record_use(context,
+                                        child,
+                                        R_ATTRIBUTE_TARGET_VARIANT,
+                                        aggregate->type,
+                                        variant->declaration_index)) {
+                return false;
+            }
             continue;
         }
         if (!r_ast_direct_token(context, child, 1U, NULL, &name) ||
@@ -12597,6 +12648,7 @@ static bool r_semantic_append_opaque_aggregate(RFrontendContext *context,
         }
         if (r_ast_ref_view(context, child, &child_view) &&
             (child_view.kind == R_SYNTAX_ATTRIBUTE) &&
+            !r_semantic_attribute_is_user(context, child) &&
             !r_semantic_c_type_attribute(context, child, &aggregate, &have_c_type)) {
             return false;
         }
@@ -12987,7 +13039,8 @@ static bool r_semantic_collect_c_constant(RFrontendContext *context,
             return false;
         }
         if (!r_ast_ref_view(context, child, &child_view) ||
-            (child_view.kind != R_SYNTAX_ATTRIBUTE)) {
+            (child_view.kind != R_SYNTAX_ATTRIBUTE) ||
+            r_semantic_attribute_is_user(context, child)) {
             continue;
         }
         if (!r_semantic_attribute_arguments(
@@ -13254,7 +13307,8 @@ static bool r_semantic_collect_c_object(RFrontendContext *context,
             return false;
         }
         if (!r_ast_ref_view(context, child, &child_view) ||
-            (child_view.kind != R_SYNTAX_ATTRIBUTE)) {
+            (child_view.kind != R_SYNTAX_ATTRIBUTE) ||
+            r_semantic_attribute_is_user(context, child)) {
             continue;
         }
         if (!r_semantic_attribute_arguments(
@@ -13499,7 +13553,8 @@ static bool r_semantic_collect_c_import(RFrontendContext *context,
             continue;
         }
         if (!r_ast_ref_view(context, child, &child_view) ||
-            (child_view.kind != R_SYNTAX_ATTRIBUTE)) {
+            (child_view.kind != R_SYNTAX_ATTRIBUTE) ||
+            r_semantic_attribute_is_user(context, child)) {
             continue;
         }
         if (!r_semantic_attribute_arguments(
@@ -13883,6 +13938,7 @@ static bool r_semantic_collect_extern_block(RFrontendContext *context,
         }
         if (r_ast_ref_view(context, child, &child_view) &&
             (child_view.kind == R_SYNTAX_ATTRIBUTE) &&
+            !r_semantic_attribute_is_user(context, child) &&
             !r_semantic_extern_block_attribute(context, child, &attributes, &block_valid)) {
             return false;
         }
@@ -34969,7 +35025,10 @@ static bool r_body_core_operation_is_reflection(const RFrontendContext *context,
                                         "variant_count",
                                         "type_name",
                                         "field_count",
-                                        "field_name"};
+                                        "field_name",
+                                        "type_attribute",
+                                        "field_attribute",
+                                        "variant_attribute"};
     size_t form_index;
 
     if (!r_ast_view_kind(context, qualified, R_SYNTAX_QUALIFIED_NAME, &view)) {
@@ -49471,9 +49530,110 @@ static bool r_body_lower_value(RBodyContext *body,
            r_body_finish_value(body, contextual_type, result);
 }
 
+/* R-EXPR-0015 (L41): a place of type std.string::string where str is expected becomes the view
+ * std.string::as_str(&place). The place is borrowed, never moved, so the borrow rules of an
+ * explicit `.as_str()` apply unchanged. */
+static bool r_body_view_string_place(RBodyContext *body, RExpressionResult *result) {
+    const RSourceSpan span = r_body_hir_node(body, result->node)->span;
+    const RExpressionResult place = *result;
+    RExpressionResult borrowed = {0};
+    RHirNodeId child_storage[1];
+    RHirVector children;
+    RTypeId string_type;
+    RTypeId borrow_type;
+    RTypeId str_type;
+
+    if (!r_semantic_intern_named_standard_type(
+            body->frontend, "std.string::string", &string_type) ||
+        !r_semantic_intern_derived_type(body->frontend,
+                                        R_SEMANTIC_TYPE_BORROW,
+                                        string_type,
+                                        R_TYPE_ID_INVALID,
+                                        UINT64_C(0),
+                                        R_SEMANTIC_TYPE_FLAG_SHARED,
+                                        &borrow_type) ||
+        !r_semantic_type_from_token(body->frontend, R_TOKEN_KW_STR, &str_type)) {
+        return false;
+    }
+    if (!r_body_require_initialized_symbol(body, place.symbol, span)) {
+        result->valid = false;
+        return true;
+    }
+    if (!r_body_form_safe_borrow(body, span, borrow_type, &place, &borrowed)) {
+        return false;
+    }
+    if (!borrowed.valid) {
+        r_body_expression_invalid(result);
+        return true;
+    }
+    child_storage[0] = borrowed.node;
+    children.items = child_storage;
+    children.count = UINT32_C(1);
+    children.capacity = UINT32_C(1);
+    r_body_expression_invalid(result);
+    return r_body_append_standard_call(body,
+                                       span,
+                                       str_type,
+                                       str_type,
+                                       R_STANDARD_CALL_STRING_AS_STR,
+                                       &children,
+                                       &borrowed,
+                                       result);
+}
+
+static bool r_body_is_string_owner(RBodyContext *body, RTypeId type, bool *owner) {
+    RTypeId string_type;
+
+    *owner = false;
+    if (!r_semantic_intern_named_standard_type(
+            body->frontend, "std.string::string", &string_type)) {
+        return false;
+    }
+    *owner = r_semantic_value_type(body->frontend, type) == string_type;
+    return true;
+}
+
 static bool
 r_body_finish_value_impl(RBodyContext *body, RTypeId contextual_type, RExpressionResult *result) {
     bool formed_call_bounded_view = false;
+    if (result->valid && (contextual_type != R_TYPE_ID_INVALID)) {
+        const RSemanticType *expected =
+            r_semantic_type(body->frontend, r_semantic_value_type(body->frontend, contextual_type));
+        const bool expects_str = (expected != NULL) && (expected->kind == R_SEMANTIC_TYPE_STR);
+        const bool expects_bytes =
+            (expected != NULL) && (expected->kind == R_SEMANTIC_TYPE_SLICE) &&
+            (expected->flags == R_SEMANTIC_TYPE_FLAG_SHARED) &&
+            (r_semantic_value_kind(body->frontend, expected->base) == R_SEMANTIC_TYPE_U8);
+        bool string_owner = false;
+
+        if ((expects_str || expects_bytes) &&
+            !r_body_is_string_owner(body, result->type, &string_owner)) {
+            return false;
+        }
+        /* The string edges are not chained (R-EXPR-0015): a string is not a byte slice. */
+        if (string_owner && expects_bytes) {
+            result->valid = false;
+            return r_body_diagnostic(body,
+                                     "R-DIAG-TYPE-001",
+                                     "R-EXPR-0015",
+                                     "a std.string::string converts to str, not to a byte slice; "
+                                     "take as_bytes() of it",
+                                     r_body_hir_node(body, result->node)->span);
+        }
+        if (string_owner && result->is_place && !r_body_view_string_place(body, result)) {
+            return false;
+        }
+        if (string_owner && result->valid && !result->is_place &&
+            (r_semantic_value_kind(body->frontend, result->type) != R_SEMANTIC_TYPE_STR)) {
+            result->valid = false;
+            return r_body_diagnostic(body,
+                                     "R-DIAG-TYPE-001",
+                                     "R-EXPR-0015",
+                                     "only a std.string::string place converts to str; bind "
+                                     "the temporary string to a name first",
+                                     r_body_hir_node(body, result->node)->span);
+        }
+    }
     if (result->valid &&
         r_semantic_value_kind(body->frontend, result->type) == R_SEMANTIC_TYPE_NULL_T) {
         const RTypeId target = r_semantic_value_type(body->frontend, contextual_type);
@@ -60815,9 +60975,10 @@ RFrontendStatus r_analyze_program(RFrontendContext *context) {
         !r_semantic_collect_traits(context) || !r_generic_resolve_trait_constraints(context) ||
         !r_generic_resolve_projection_constraints(context) ||
         !r_semantic_collect_module_bindings(context) ||
-        !r_semantic_collect_aggregate_members(context) || !r_derive_reject_families(context) ||
-        !r_generic_resolve_callable_constraints(context) || !r_pack_finalize_parameters(context) ||
-        !r_semantic_collect_impls(context) || context->resource_status != R_FRONTEND_OK) {
+        !r_semantic_collect_aggregate_members(context) || !r_attributes_resolve(context) ||
+        !r_derive_reject_families(context) || !r_generic_resolve_callable_constraints(context) ||
+        !r_pack_finalize_parameters(context) || !r_semantic_collect_impls(context) ||
+        context->resource_status != R_FRONTEND_OK) {
         context->semantic_analyzing = false;
         return (context->resource_status == R_FRONTEND_OK) ? R_FRONTEND_INTERNAL_ERROR
                                                            : context->resource_status;

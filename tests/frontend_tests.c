@@ -221,9 +221,10 @@ static void r_test_async_ffi_and_attribute_diagnostics(void) {
                                         "}\n";
     static const char invalid_ffi[] = "module invalid.ffi;\n"
                                       "extern \"other\" { c_int foreign_value; }\n";
-    static const char invalid_attribute[] =
-        "module invalid.attribute;\n"
-        "@unknown_attribute protected i32 unknown() { return 0; }\n";
+    /* An unknown name is no longer a syntax error: it may name an attribute type (R-AGG-0013),
+       which the semantic pass resolves. A malformed argument still is. */
+    static const char invalid_attribute[] = "module invalid.attribute;\n"
+                                            "@repr(-) protected i32 unknown() { return 0; }\n";
     static const char invalid_standard_return[] =
         "module invalid.standard_return;\n"
         "protected array<u8> wrong() { return std.array::create::()(); }\n";

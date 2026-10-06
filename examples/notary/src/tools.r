@@ -9,7 +9,7 @@ import std.cose;
    CBOR document written item by item. */
 
 protected void line(std.string::string* out, std.string::string text) throws std.alloc::alloc_error {
-    std.string::append_str(out, text.as_str());
+    std.string::append_str(out, text);
     std.string::push_scalar(out, '\n');
 }
 
@@ -48,8 +48,8 @@ std.string::string password(str secret) throws std.alloc::alloc_error, std.crypt
     const u8[] text = std.string::as_bytes(&hash);
     bool shaped = len(text) > 10usize && std.bytes::starts_with(text, "$argon2id$");
     line(&out, f"argon2id hash: {shaped}");
-    bool same = std.crypto::password_verify(hash.as_str(), secret);
-    bool other = std.crypto::password_verify(hash.as_str(), "not the password");
+    bool same = std.crypto::password_verify(hash, secret);
+    bool other = std.crypto::password_verify(hash, "not the password");
     line(&out, f"same password: {same}, other password: {other}");
     return move out;
 }

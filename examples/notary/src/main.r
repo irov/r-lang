@@ -21,7 +21,7 @@ protected const str usage_text =
     "notary keys PASSPHRASE | cbc PASSPHRASE TEXT\n";
 
 str word(const array<std.string::string>* arguments, usize index) {
-    return (*arguments)[index].as_str();
+    return (*arguments)[index];
 }
 
 protected bytes hex_argument(const array<std.string::string>* arguments, usize index)
@@ -75,7 +75,7 @@ protected async void say(std.string::string text) throws std.error::fault {
 }
 
 protected void line(std.string::string* out, std.string::string text) throws std.alloc::alloc_error {
-    std.string::append_str(out, text.as_str());
+    std.string::append_str(out, text);
     std.string::push_scalar(out, '\n');
 }
 
@@ -89,7 +89,7 @@ std.string::string demo() throws std.alloc::alloc_error, std.crypto::crypto_erro
     std.string::string public_hex = std.encoding::encode_hex(key.public_key[..]);
     line(&out, f"public key {public_hex}");
     std.string::string message_hex = signed(passphrase, "Pay 10 coins to Bob");
-    bytes message = std.encoding::decode_hex(message_hex.as_str());
+    bytes message = std.encoding::decode_hex(message_hex);
     usize size = len(message);
     line(&out, f"signed {size} bytes");
     line(&out, shown(message.as_slice()));
@@ -127,7 +127,7 @@ std.string::string demo() throws std.alloc::alloc_error, std.crypto::crypto_erro
         line(&out, f"changed message refused: {code}");
     }
     std.crypto::signing_key other = example.notary.keys::signer("another passphrase");
-    bytes original = std.encoding::decode_hex(message_hex.as_str());
+    bytes original = std.encoding::decode_hex(message_hex);
     try {
         std.cose::message foreign = std.cose::verify_sign1(original.as_slice(), other.public_key[..], "");
         drop foreign;
@@ -137,7 +137,7 @@ std.string::string demo() throws std.alloc::alloc_error, std.crypto::crypto_erro
         line(&out, f"other key refused: {code}");
     }
     std.string::string sealed_hex = sealed_text(passphrase, "meet at noon");
-    bytes sealed = std.encoding::decode_hex(sealed_hex.as_str());
+    bytes sealed = std.encoding::decode_hex(sealed_hex);
     std.secret::buffer sealing = example.notary.keys::sealing_key(passphrase);
     bytes opened = std.cose::decrypt0(sealed.as_slice(), std.secret::as_slice(&sealing), "");
     std.string::string opened_text = text_of(opened.as_slice());
@@ -149,7 +149,7 @@ async i32 main() {
     array<std.string::string> arguments = std.env::arguments();
     usize given = len(arguments);
     o<Command> command = o::none;
-    if (given >= 2usize) { command = core::enum_from_name::<Command>(arguments[1].as_str()); }
+    if (given >= 2usize) { command = core::enum_from_name::<Command>(arguments[1]); }
     switch (command) {
     case variant o::none:
         await std.console::eprint(std.string::from_str(usage_text));

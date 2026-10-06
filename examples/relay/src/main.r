@@ -21,7 +21,7 @@ array<std.string::string> words(array<std.string::string> arguments)
 async own dyn(std.stream::Reader)* source(array<std.string::string> arguments)
     throws std.error::fault {
     if (len(arguments) == 3usize) {
-        std.fs::path path = std.fs::path_from_utf8(arguments[2].as_str());
+        std.fs::path path = std.fs::path_from_utf8(arguments[2]);
         std.fs::open_file_options reading = std.fs::open_file_options {.access = std.fs::access::read,
             .create = std.fs::create_mode::existing, .truncate = false, .append = false,
             .follow_final_symlink = false};
@@ -50,7 +50,7 @@ async i32 main() {
     array<std.string::string> arguments = std.env::arguments();
     usize given = len(arguments);
     o<Command> command = o::none;
-    if (given >= 2usize) { command = core::enum_from_name::<Command>(arguments[1].as_str()); }
+    if (given >= 2usize) { command = core::enum_from_name::<Command>(arguments[1]); }
     switch (command) {
     case variant o::none:
         drop arguments;
@@ -73,7 +73,7 @@ async i32 main() {
                 drop arguments;
                 return 64;
             }
-            std.fs::path path = std.fs::path_from_utf8(arguments[2].as_str());
+            std.fs::path path = std.fs::path_from_utf8(arguments[2]);
             drop arguments;
             std.fs::open_file_options reading = std.fs::open_file_options {.access = std.fs::access::read,
                 .create = std.fs::create_mode::existing, .truncate = false, .append = false,

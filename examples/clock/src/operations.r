@@ -61,7 +61,7 @@ async std.string::string ticked(u32 count, u32 period, u32 pause)
     task_scope(1) scope {
         u64 first = await ticker.tick();
         std.string::string head = f" {first}";
-        std.string::append_str(&output, head.as_str());
+        std.string::append_str(&output, head);
         if (pause != 0u32) {
             await std.time::sleep_for(std.time::duration_from_parts(
                 (pause / 1000u32) as i64, (pause % 1000u32) * 1000000u32));
@@ -69,12 +69,12 @@ async std.string::string ticked(u32 count, u32 period, u32 pause)
         for (u32 index = 1u32; index < count; index += 1u32) {
             u64 number = await ticker.tick();
             std.string::string item = f" {number}";
-            std.string::append_str(&output, item.as_str());
+            std.string::append_str(&output, item);
         }
     }
     std.time::duration elapsed = std.time::monotonic_now().duration(started);
     i64 spent = elapsed.seconds() * 1000i64 + (elapsed.nanoseconds() / 1000000u32) as i64;
     std.string::string tail = f"\nelapsed={spent} ms\n";
-    std.string::append_str(&output, tail.as_str());
+    std.string::append_str(&output, tail);
     return move output;
 }

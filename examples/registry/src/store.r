@@ -58,7 +58,7 @@ publish(const std.sqlite::database* db, str topic, str id, str name)
 
 /* Creates the tables in a new database file in write-ahead-log mode and reports the mode. */
 async std.string::string create(std.string::string path) throws std.sqlite::sqlite_error, std.error::fault {
-    std.sqlite::database db = await std.sqlite::open(path.as_str(), std.sqlite::options {.wal = true});
+    std.sqlite::database db = await std.sqlite::open(path, std.sqlite::options {.wal = true});
     await db.execute_script(SCHEMA);
     std.sqlite::rows mode = await db.query("PRAGMA journal_mode", values());
     std.string::string journal = std.string::from_str(mode.items[0usize].text(0usize));
@@ -70,10 +70,10 @@ async std.string::string create(std.string::string path) throws std.sqlite::sqli
    rolls both back. Returns the sequence number of the event. */
 async i64 register(std.string::string path, std.string::string id, std.string::string name, o<f64> weight)
     throws RegistryError, std.sqlite::sqlite_error, std.json::error, std.error::fault {
-    std.sqlite::database db = await std.sqlite::open(path.as_str(), writing());
+    std.sqlite::database db = await std.sqlite::open(path, writing());
     array<std.sqlite::value> device = values();
-    add(&device, std.sqlite::value::of_text(id.as_str()));
-    add(&device, std.sqlite::value::of_text(name.as_str()));
+    add(&device, std.sqlite::value::of_text(id));
+    add(&device, std.sqlite::value::of_text(name));
     add(&device, std.sqlite::value::integer(1i64));
     add(&device, std.sqlite::value::of_bool(true));
     switch (weight) {
@@ -97,7 +97,7 @@ async i64 register(std.string::string path, std.string::string id, std.string::s
         }
         throw move failure;
     }
-    std.sqlite::execution event = await publish(&db, "device.registered", id.as_str(), name.as_str());
+    std.sqlite::execution event = await publish(&db, "device.registered", id, name);
     await db.commit();
     await (move db).close();
     return event.last_row_id;
@@ -107,10 +107,10 @@ async i64 register(std.string::string path, std.string::string id, std.string::s
    back. */
 async i64 rename(std.string::string path, std.string::string id, std.string::string name)
     throws RegistryError, std.sqlite::sqlite_error, std.json::error, std.error::fault {
-    std.sqlite::database db = await std.sqlite::open(path.as_str(), writing());
+    std.sqlite::database db = await std.sqlite::open(path, writing());
     array<std.sqlite::value> change = values();
-    add(&change, std.sqlite::value::of_text(name.as_str()));
-    add(&change, std.sqlite::value::of_text(id.as_str()));
+    add(&change, std.sqlite::value::of_text(name));
+    add(&change, std.sqlite::value::of_text(id));
     await db.begin(std.sqlite::begin_mode::immediate);
     std.sqlite::execution updated =
         await db.execute("UPDATE device SET name = ?1, revision = revision + 1 WHERE id = ?2", move change);
@@ -118,7 +118,7 @@ async i64 rename(std.string::string path, std.string::string id, std.string::str
         await db.rollback();
         throw RegistryError {.reason = Refusal::unknown_device};
     }
-    std.sqlite::execution event = await publish(&db, "device.renamed", id.as_str(), name.as_str());
+    std.sqlite::execution event = await publish(&db, "device.renamed", id, name);
     await db.commit();
     await (move db).close();
     return event.last_row_id;
@@ -134,12 +134,12 @@ protected array<std.sqlite::value> one_text(str text) throws std.alloc::alloc_er
    transaction. */
 async i64 retire(std.string::string path, std.string::string id, std.string::string note)
     throws RegistryError, std.sqlite::sqlite_error, std.json::error, std.error::fault {
-    std.sqlite::database db = await std.sqlite::open(path.as_str(), writing());
+    std.sqlite::database db = await std.sqlite::open(path, writing());
     await db.begin(std.sqlite::begin_mode::exclusive);
     array<std.sqlite::value> change = values();
     add(&change, std.sqlite::value::of_bool(false));
-    add(&change, std.sqlite::value::of_text(note.as_str()));
-    add(&change, std.sqlite::value::of_text(id.as_str()));
+    add(&change, std.sqlite::value::of_text(note));
+    add(&change, std.sqlite::value::of_text(id));
     std.sqlite::execution updated =
         await db.execute("UPDATE device SET active = ?1, note = ?2, revision = revision + 1 WHERE id = ?3",
                          move change);
@@ -147,9 +147,9 @@ async i64 retire(std.string::string path, std.string::string id, std.string::str
         await db.rollback();
         throw RegistryError {.reason = Refusal::unknown_device};
     }
-    std.sqlite::rows found = await db.query("SELECT name FROM device WHERE id = ?", one_text(id.as_str()));
+    std.sqlite::rows found = await db.query("SELECT name FROM device WHERE id = ?", one_text(id));
     std.sqlite::execution event =
-        await publish(&db, "device.retired", id.as_str(), found.items[0usize].text(0usize));
+        await publish(&db, "device.retired", id, found.items[0usize].text(0usize));
     await db.commit();
     await (move db).close();
     return event.last_row_id;
@@ -196,14 +196,14 @@ protected std.string::string device_line(const std.sqlite::row* device)
 
 /* The devices in the order of their identifiers. */
 async std.string::string listing(std.string::string path) throws std.sqlite::sqlite_error, std.error::fault {
-    std.sqlite::database db = await std.sqlite::open(path.as_str(), std.sqlite::options {.read_only = true});
+    std.sqlite::database db = await std.sqlite::open(path, std.sqlite::options {.read_only = true});
     std.sqlite::rows found =
         await db.query("SELECT id, name, revision, active, weight, note, fingerprint FROM device ORDER BY id",
                        values());
     std.string::string text = std.string::create();
     for (usize index = 0usize; index < len(found.items); index += 1usize) {
         std.string::string line = device_line(&found.items[index]);
-        std.string::append_str(&text, line.as_str());
+        std.string::append_str(&text, line);
         std.string::append_str(&text, "\n");
     }
     await (move db).close();
@@ -227,7 +227,7 @@ protected std.string::string shown(const std.sqlite::value* item) throws std.all
 
 /* The events not yet delivered, in order, as columns found by name. */
 async std.string::string pending(std.string::string path) throws std.sqlite::sqlite_error, std.error::fault {
-    std.sqlite::database db = await std.sqlite::open(path.as_str(), std.sqlite::options {.read_only = true});
+    std.sqlite::database db = await std.sqlite::open(path, std.sqlite::options {.read_only = true});
     std.sqlite::rows found =
         await db.query("SELECT seq, topic, payload FROM outbox WHERE delivered = 0 ORDER BY seq", values());
     std.string::string text = std.string::create();
@@ -243,7 +243,7 @@ async std.string::string pending(std.string::string path) throws std.sqlite::sql
         std.string::string body = shown(event->at(2usize));
         usize count = event->count();
         std.string::string line = f"{seq} {kind} {body} ({count} columns)\n";
-        std.string::append_str(&text, line.as_str());
+        std.string::append_str(&text, line);
     }
     await (move db).close();
     return move text;
@@ -252,7 +252,7 @@ async std.string::string pending(std.string::string path) throws std.sqlite::sql
 /* Delivers pending events in order: each is printed, as a relay would send it to a broker, and
    marked delivered in the same transaction that read it. */
 async std.string::string deliver(std.string::string path, i64 limit) throws std.sqlite::sqlite_error, std.error::fault {
-    std.sqlite::database db = await std.sqlite::open(path.as_str(), writing());
+    std.sqlite::database db = await std.sqlite::open(path, writing());
     std.sqlite::statement next =
         await db.prepare("SELECT seq, topic, payload FROM outbox WHERE delivered = 0 ORDER BY seq LIMIT ?");
     std.sqlite::statement mark = await db.prepare("UPDATE outbox SET delivered = 1 WHERE seq = ?");
@@ -268,7 +268,7 @@ async std.string::string deliver(std.string::string path, i64 limit) throws std.
         str topic = event->text(1usize);
         str body = event->text(2usize);
         std.string::string line = f"deliver {seq} {topic} {body}\n";
-        std.string::append_str(&text, line.as_str());
+        std.string::append_str(&text, line);
         array<std.sqlite::value> which = values();
         add(&which, std.sqlite::value::integer(seq));
         std.sqlite::execution marked = await mark.execute(move which);
@@ -277,7 +277,7 @@ async std.string::string deliver(std.string::string path, i64 limit) throws std.
     bool open = db.in_transaction();
     await db.commit();
     std.string::string summary = f"delivered {delivered} (transaction was open: {open})\n";
-    std.string::append_str(&text, summary.as_str());
+    std.string::append_str(&text, summary);
     drop next;
     drop mark;
     await (move db).close();

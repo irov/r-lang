@@ -38,7 +38,7 @@ async std.postgres::connection open() throws std.postgres::pg_error, std.tls::tl
     o<std.string::string> authority = std.env::get("PGSSLROOTCERT");
     switch (move authority) {
     case variant o::some(move file):
-        std.fs::path path = std.fs::path_from_utf8(file.as_str());
+        std.fs::path path = std.fs::path_from_utf8(file);
         bytes certificates = await std.fs::read_file(&path, 1048576usize);
         std.tls::config trust = std.tls::client_config();
         trust.add_authority(certificates.as_slice());
@@ -76,7 +76,7 @@ async placed place(std.postgres::connection db, std.string::string sku, i64 quan
     await db.begin();
     try {
         array<std.postgres::value> key = values();
-        add(&key, std.postgres::value::of_text(sku.as_str()));
+        add(&key, std.postgres::value::of_text(sku));
         std.postgres::rows found = await db.query("SELECT stock FROM products WHERE sku = $1 FOR UPDATE", move key);
         if (len(found.items) == 0usize) {
             await db.rollback();
@@ -89,10 +89,10 @@ async placed place(std.postgres::connection db, std.string::string sku, i64 quan
         }
         array<std.postgres::value> take = values();
         add(&take, std.postgres::value::integer(quantity));
-        add(&take, std.postgres::value::of_text(sku.as_str()));
+        add(&take, std.postgres::value::of_text(sku));
         (await db.execute("UPDATE products SET stock = stock - $1 WHERE sku = $2", move take)) as void;
         array<std.postgres::value> order = values();
-        add(&order, std.postgres::value::of_text(sku.as_str()));
+        add(&order, std.postgres::value::of_text(sku));
         add(&order, std.postgres::value::integer(quantity));
         std.postgres::rows made = await db.query("INSERT INTO orders(sku, quantity) VALUES ($1, $2) RETURNING id", move order);
         i64 order_id = made.items[0usize].integer(0usize);
@@ -116,7 +116,7 @@ async std.string::string listing(std.postgres::connection db) throws std.postgre
         i64 quantity = item->integer(2usize);
         i64 left = item->integer(3usize);
         std.string::string line = f"{id} {name} x{quantity} ({left} left)\n";
-        out.append(line.as_str());
+        out.append(line);
     }
     return move out;
 }
@@ -138,7 +138,7 @@ async void watch(std.postgres::connection db, u32 count) throws std.postgres::pg
     await std.console::println(std.string::from_str("listening"));
     for (u32 seen = 0u32; seen < count; seen += 1u32) {
         std.postgres::notification heard = await db.wait_notification();
-        str payload = heard.payload.as_str();
+        str payload = heard.payload;
         await std.console::println(f"order {payload}");
     }
 }
@@ -157,15 +157,15 @@ async std.string::string totals(std.postgres::connection db) throws std.postgres
         std.postgres::rows found = await total.query(move key);
         if (index == 0usize) {
             const std.postgres::column[] heading = std.array::as_slice(&found.columns);
-            str first = heading[0usize].name.as_str();
-            str second = heading[1usize].name.as_str();
+            str first = heading[0usize].name;
+            str second = heading[1usize].name;
             std.string::string line = f"{first} {second}\n";
-            out.append(line.as_str());
+            out.append(line);
         }
         str sku = found.items[0usize].text(0usize);
         i64 ordered = found.items[0usize].integer(1usize);
         std.string::string line = f"{sku} {ordered}\n";
-        out.append(line.as_str());
+        out.append(line);
     }
     await (move total).close();
     return move out;

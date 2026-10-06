@@ -31,7 +31,7 @@ std.string::string calendar(const std.time::zone* where, std.time::system_time a
     std.time::system_time next_month = where->add_months(at, 1i64);
     i64 hours = (tomorrow.unix_seconds - midnight.unix_seconds) / 3600i64;
     std.string::string steps = f"day starts {midnight.unix_seconds} and lasts {hours} hours\nnext month {next_month.unix_seconds}\n";
-    out.append(steps.as_str());
+    out.append(steps);
     return move out;
 }
 
@@ -44,8 +44,8 @@ std.string::string three_zones(std.time::system_time at) throws std.time::zone_e
     std.string::string out = shown(&utc, at);
     std.string::string second = shown(&india, at);
     std.string::string third = shown(&sydney, at);
-    out.append(second.as_str());
-    out.append(third.as_str());
+    out.append(second);
+    out.append(third);
     return move out;
 }
 
@@ -84,7 +84,7 @@ async std.string::string named_wall(std.string::string name, std.time::local_tim
 /* The zone of a TZif file anywhere, such as a copy that ships with a program. */
 async std.string::string from_file(std.string::string path, std.time::system_time at)
     throws std.time::zone_error, std.error::fault {
-    std.fs::path file = std.fs::path_from_utf8(path.as_str());
+    std.fs::path file = std.fs::path_from_utf8(path);
     bytes data = await std.fs::read_file(&file, 1048576usize);
     std.time::zone where = std.time::parse_tzif("file", data.as_slice());
     return shown(&where, at);

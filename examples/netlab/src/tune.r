@@ -34,7 +34,7 @@ async std.string::string tune(u32 keepalive_ms, u32 hop_limit) throws std.error:
         client.set_options(quiet);
         std.string::string off = keepalive_text(client.get_options());
         std.string::string cleared = f"tcp keepalive={off}\n";
-        output.append(cleared.as_str());
+        output.append(cleared);
         std.net::socket_address local = example.netlab.address::loopback();
         std.net::udp_socket socket = await local.bind(false);
         std.net::udp_options datagram = std.net::udp_get_options(&socket);
@@ -44,7 +44,7 @@ async std.string::string tune(u32 keepalive_ms, u32 hop_limit) throws std.error:
         std.net::udp_set_options(&socket, datagram);
         std.net::udp_options now = socket.get_options();
         std.string::string datagrams = f"udp broadcast={now.broadcast} multicast_hop_limit={now.multicast_hop_limit} multicast_loop={now.multicast_loop}\n";
-        output.append(datagrams.as_str());
+        output.append(datagrams);
         /* Interface 1 is the loopback interface of the reference target. */
         std.net::ip_address group = std.net::parse_ip("239.1.2.3");
         socket.join_multicast(group, 1u32);
@@ -62,7 +62,7 @@ async std.string::string tune(u32 keepalive_ms, u32 hop_limit) throws std.error:
             unjoined_refused = failure.code == std.net::error_code::address_not_available;
         }
         std.string::string membership = f"multicast joined=239.1.2.3 repeated_refused={repeated_refused} unjoined_refused={unjoined_refused}\n";
-        output.append(membership.as_str());
+        output.append(membership);
         await (move socket).close();
         await (move client).close();
         await (move listener).close();

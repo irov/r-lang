@@ -106,7 +106,7 @@ std.string::string packed(const u64[] values)
             else { value = reader.read_u64_le(record); }
         }
         std.string::string row = f"read {value}\n";
-        std.string::append_str(&out, row.as_str());
+        std.string::append_str(&out, row);
     }
     return move out;
 }

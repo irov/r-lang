@@ -16,7 +16,7 @@ async i32 show_devices() throws std.error::fault {
     for (usize index = 0usize; index < 3usize; index += 1usize) {
         const example.status.records::Device* device = &fleet[index];
         std.string::string line = f"{device}\n";
-        report.append(line.as_str());
+        report.append(line);
     }
     fleet as void;
     await std.console::print(move report);
@@ -69,7 +69,7 @@ async i32 main() {
         array<std.string::string> arguments = std.env::arguments();
         o<Command> command = o::none;
         if (len(arguments) >= 2usize) {
-            command = core::enum_from_name::<Command>(arguments[1].as_str());
+            command = core::enum_from_name::<Command>(arguments[1]);
         }
         switch (command) {
         case variant o::some(chosen):
@@ -89,7 +89,7 @@ async i32 main() {
                         std.string::from_str("status probe ADDRESS PORT\n"));
                 } else {
                     std.string::string line =
-                        probe_line(arguments[2].as_str(), arguments[3].as_str());
+                        probe_line(arguments[2], arguments[3]);
                     await std.console::print(move line);
                 }
             }

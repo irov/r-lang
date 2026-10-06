@@ -20,7 +20,7 @@ protected void append_value(std.string::string* output, str label, o<i32> result
     case variant o::some(value):
         i32 number = *value;
         std.string::string row = f"{label}={number}\n";
-        str row_text = row.as_str();
+        str row_text = row;
         output->append(row_text); break;
     case variant o::none:
         output->append(label);
@@ -63,7 +63,7 @@ void apply(dict<i32, i32>* inventory, Command command, i32 key, i32 amount, std.
     case Command::has:
         bool present = inventory->contains(&key);
         std.string::string row = f"present={present}\n";
-        str row_text = row.as_str();
+        str row_text = row;
         output->append(row_text); break;
     case Command::remove:
         o<i32> removed = inventory->remove(&key);
@@ -90,7 +90,7 @@ void apply(dict<i32, i32>* inventory, Command command, i32 key, i32 amount, std.
                 i32 sku = *entry->key;
                 i32 quantity = *entry->value;
                 std.string::string row = f"{sku} {quantity}\n";
-                str row_text = row.as_str();
+                str row_text = row;
                 output->append(row_text); break;
             case variant o::none: return;
             }

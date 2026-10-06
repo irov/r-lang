@@ -19,6 +19,10 @@ build/debug/tests/codegen_example_arena admin 'an administrator secret of 32 by'
 build/debug/tests/codegen_example_arena google service-account.json https://www.googleapis.com/auth/androidpublisher
 ```
 
+Each command carries its usage form in a `@help` attribute of its enumerator (Core R-AGG-0013);
+a wrong command or a wrong number of operands prints the usage built from them in declaration
+order with `core::variant_attribute` and exits with 64.
+
 `token` signs the claims the game clients read, in the field names they expect, with the server
 key in PEM. The key may be the SEC1 `EC PRIVATE KEY` that `openssl ecparam` writes, or PKCS#8.
 ES256 signatures are the deterministic ones of RFC 6979, so the same key and claims give the same
@@ -138,7 +142,19 @@ database: migration_mismatch version 2
 `insert_statement` makes from the JSON names of its fields, and the parameters of
 `parameters_of` in the same order; a nickname that is taken is the unique violation of the
 server, `database: server 23505`. `ban ID TYPE AT` updates the row by its id with the statement
-of `update_statement`, which it prints:
+of `update_statement`, which it prints. The table and the key come from attributes that the
+program declares in [mapping.r](src/mapping.r) (Core R-AGG-0013) and reads at translation time
+(R-REFL-0005), so no statement names them:
+
+```r
+@attribute(type) struct table { str name; };
+@attribute(field) struct key {};
+
+@table("users")
+struct BanChange { @key i64 id; BanType ban_type; std.string::string last_ban_check; };
+
+std.string::string sql = example.arena.mapping::update_statement::<BanChange>();
+```
 
 ```text
 UPDATE users SET "ban_type" = $2, "last_ban_check" = $3 WHERE "id" = $1

@@ -59,7 +59,7 @@ i32 main() { Counter value={.count=42}; return read_report(&value)+converted(&va
             return result.stdout if accepted else result.stderr
 
         interface = emit('interface', [provider, consumer])
-        assert '(interface version=32 ' in interface
+        assert '(interface version=33 ' in interface
         assert 'module="traits.provider"' in interface
         assert 'method_contracts=' in interface
         assert '(name="Convert" module="traits.provider" arguments=(i32))' in interface

@@ -9,14 +9,14 @@ std.string::string levels() throws std.alloc::alloc_error {
         usize ordinal = core::enum_ordinal(*value);
         constexpr str name = core::enum_name(*value);
         std.string::string row = f"{ordinal} {name}\n";
-        str text = row.as_str();
+        str text = row;
         output.append(text);
     }
     usize count = core::enum_count::<Level>();
     constexpr str least = core::enum_name(core::enum_min::<Level>());
     constexpr str greatest = core::enum_name(core::enum_max::<Level>());
     std.string::string row = f"levels={count} least={least} greatest={greatest}\n";
-    str text = row.as_str();
+    str text = row;
     output.append(text);
     return move output;
 }

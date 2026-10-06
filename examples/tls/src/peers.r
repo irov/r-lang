@@ -6,7 +6,7 @@ import std.tls;
 const usize max_pem = 65536usize;
 
 protected async bytes read_pem(std.string::string name) throws std.error::fault {
-    std.fs::path path = std.fs::path_from_utf8(name.as_str());
+    std.fs::path path = std.fs::path_from_utf8(name);
     return await path.read_file(max_pem);
 }
 

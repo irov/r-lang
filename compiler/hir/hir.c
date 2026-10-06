@@ -804,6 +804,18 @@ static bool r_hir_dump_node(const RFrontendContext *context,
         case R_STANDARD_CALL_CORE_VARIANT_NAME:
             operation_name = "core::variant_name";
             break;
+        case R_STANDARD_CALL_CORE_TYPE_ATTRIBUTE:
+            operation_name = "core::type_attribute";
+            break;
+        case R_STANDARD_CALL_CORE_FIELD_ATTRIBUTE:
+            operation_name = "core::field_attribute";
+            break;
+        case R_STANDARD_CALL_CORE_VARIANT_ATTRIBUTE:
+            operation_name = "core::variant_attribute";
+            break;
+        case R_STANDARD_CALL_CORE_FIELD_NAME_AT:
+            operation_name = "core::field_name";
+            break;
         case R_STANDARD_CALL_CORE_REFLECT_ENUM_COUNT:
             operation_name = "core::enum_count";
             break;
@@ -1942,8 +1954,10 @@ static bool r_hir_dump_node(const RFrontendContext *context,
                 !r_hir_write_type(context, node->auxiliary_type, writer, user_data)) {
                 return false;
             }
-        } else if ((node->standard_operation >= R_STANDARD_CALL_CORE_ENUM_NAME) &&
-                   (node->standard_operation <= R_STANDARD_CALL_CORE_REFLECT_FIELD_NAME)) {
+        } else if (((node->standard_operation >= R_STANDARD_CALL_CORE_ENUM_NAME) &&
+                    (node->standard_operation <= R_STANDARD_CALL_CORE_REFLECT_FIELD_NAME)) ||
+                   ((node->standard_operation >= R_STANDARD_CALL_CORE_TYPE_ATTRIBUTE) &&
+                    (node->standard_operation <= R_STANDARD_CALL_CORE_FIELD_NAME_AT))) {
             if (!r_write_text(writer, user_data, " subject=") ||
                 !r_hir_write_type(context, node->auxiliary_type, writer, user_data)) {
                 return false;

@@ -18,7 +18,7 @@ std.string::string split_fields(str line, str separator) throws std.alloc::alloc
         usize lead = size_of_text(piece) - size_of_text(std.text::trim_start(piece));
         usize trail = size_of_text(piece) - size_of_text(std.text::trim_end(piece));
         std.string::string row = f"field {number}: [{trimmed}] lead={lead} trail={trail}\n";
-        std.string::append_str(&out, row.as_str());
+        std.string::append_str(&out, row);
     }
     return move out;
 }
@@ -30,10 +30,10 @@ std.string::string numbered(str text) throws std.alloc::alloc_error {
     for (str line in std.text::lines(text)) {
         number += 1u32;
         std.string::string row = f"{number:3}| {line}\n";
-        std.string::append_str(&out, row.as_str());
+        std.string::append_str(&out, row);
     }
     std.string::string total = f"{number} lines\n";
-    std.string::append_str(&out, total.as_str());
+    std.string::append_str(&out, total);
     return move out;
 }
 
@@ -45,7 +45,7 @@ std.string::string code_points(str text) throws std.alloc::alloc_error {
     for (char value in std.text::scalars(text)) {
         u32 code = value as u32;
         std.string::string row = f"{at:3}  U+{code:04x}\n";
-        std.string::append_str(&out, row.as_str());
+        std.string::append_str(&out, row);
         at = std.text::next_scalar_boundary(text, at);
     }
     usize middle = size_of_text(text) / 2usize;
@@ -54,7 +54,7 @@ std.string::string code_points(str text) throws std.alloc::alloc_error {
     usize after = std.text::next_scalar_boundary(text, middle);
     std.string::string summary =
         f"{at} bytes; byte {middle}: boundary={exact} previous={before} next={after}\n";
-    std.string::append_str(&out, summary.as_str());
+    std.string::append_str(&out, summary);
     return move out;
 }
 

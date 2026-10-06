@@ -1,5 +1,7 @@
 module example.arena.store;
 import std.postgres;
+import example.arena.mapping::{table, key};
+import example.arena.mapping;
 import std.time;
 import std.uuid;
 import std.text;
@@ -13,6 +15,7 @@ import std.text;
 enum BanType { none, suspicious, ban };
 
 /* What registration writes; the database fills the id, the defaults and the later columns. */
+@table("users")
 struct NewUser {
     std.string::string account_id;
     std.string::string nickname;
@@ -22,8 +25,9 @@ struct NewUser {
 };
 
 /* A ban, written by an UPDATE keyed by the id. */
+@table("users")
 struct BanChange {
-    i64 id;
+    @key i64 id;
     BanType ban_type;
     std.string::string last_ban_check;
 };
@@ -102,9 +106,9 @@ async std.string::string migrate() throws std.postgres::pg_error, std.error::fau
 
 async std.string::string register(NewUser fresh) throws std.postgres::pg_error, std.error::fault {
     std.postgres::connection db = await open_database();
-    std.string::string sql = std.postgres::insert_statement::<NewUser>("users");
+    std.string::string sql = example.arena.mapping::insert_statement::<NewUser>();
     sql.append(" RETURNING id");
-    std.postgres::rows made = await db.query(sql.as_str(), std.postgres::parameters_of(&fresh));
+    std.postgres::rows made = await db.query(sql, std.postgres::parameters_of(&fresh));
     i64 id = made.items[0usize].integer(0usize);
     await (move db).close();
     return f"user {id}\n";
@@ -112,8 +116,8 @@ async std.string::string register(NewUser fresh) throws std.postgres::pg_error, 
 
 async std.string::string ban(BanChange change) throws std.postgres::pg_error, std.error::fault {
     std.postgres::connection db = await open_database();
-    std.string::string sql = std.postgres::update_statement::<BanChange>("users", "id");
-    u64 changed = await db.execute(sql.as_str(), std.postgres::parameters_of(&change));
+    std.string::string sql = example.arena.mapping::update_statement::<BanChange>();
+    u64 changed = await db.execute(sql, std.postgres::parameters_of(&change));
     await (move db).close();
     return f"{sql}\nchanged {changed}\n";
 }
@@ -141,7 +145,7 @@ async std.string::string sync(i64 id, std.time::system_time at, std.uuid::uuid s
     add(&given, std.postgres::value::integer(id));
     add(&given, std.postgres::value::of_time(at));
     add(&given, std.postgres::value::of_uuid(&session));
-    add(&given, badge_list(badges.as_str()));
+    add(&given, badge_list(badges));
     add(&given, std.postgres::value::of_json(&stats));
     u64 changed = await db.execute(
         "UPDATE users SET last_sync = $2, session = $3, badges = $4, stats = stats || $5 WHERE id = $1", move given);
@@ -156,7 +160,7 @@ protected void put_list(std.string::string* out, const array<std.string::string>
     }
     for (usize index = 0usize; index < len(*items); index += 1usize) {
         if (index > 0usize) { out->append(","); }
-        out->append((*items)[index].as_str());
+        out->append((*items)[index]);
     }
 }
 
@@ -170,25 +174,25 @@ async std.string::string users() throws std.postgres::pg_error, std.json::error,
     std.string::string out = std.string::create();
     for (usize index = 0usize; index < len(players); index += 1usize) {
         i64 id = players[index].id;
-        str account = players[index].account.as_str();
-        str nick = players[index].nickname.as_str();
+        str account = players[index].account;
+        str nick = players[index].nickname;
         BanType ban_type = players[index].ban_type;
         f64 gems = players[index].gems;
         i64 joined = players[index].joined;
         std.string::string line = f"{id} {account} {nick} {ban_type} gems {gems} joined {joined} clan ";
-        out.append(line.as_str());
+        out.append(line);
         switch (players[index].clan_id) {
         case variant o::some(clan):
             i64 shown = *clan;
             std.string::string number = f"{shown}";
-            out.append(number.as_str());
+            out.append(number);
         case variant o::none: out.append("-");
         }
         out.append(" badges ");
         put_list(&out, &players[index].badges);
         out.append(" stats ");
         std.string::string stats = std.json::stringify(&players[index].stats);
-        out.append(stats.as_str());
+        out.append(stats);
         out.append("\n");
     }
     return move out;
@@ -197,7 +201,7 @@ async std.string::string users() throws std.postgres::pg_error, std.json::error,
 protected void put_two(std.string::string* out, u8 number) throws std.alloc::alloc_error {
     if (number < 10u8) { out->append("0"); }
     std.string::string digits = f"{number}";
-    out->append(digits.as_str());
+    out->append(digits);
 }
 
 /* A time of the database in RFC 3339; the server writes no year past 9999, which RFC 3339
@@ -239,7 +243,7 @@ async std.string::string user(i64 id) throws NoUser, std.postgres::pg_error, std
     std.string::string at = shown_time(first->time(synced));
     std.uuid::uuid session = first->uuid(found.column_index("session"));
     std.string::string line = f"last sync {at} session {session}\n";
-    out.append(line.as_str());
+    out.append(line);
     out.append("badges");
     array<o<std.string::string>> badges = first->text_array(found.column_index("badges"));
     for (usize index = 0usize; index < len(badges); index += 1usize) {

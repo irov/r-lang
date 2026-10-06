@@ -71,7 +71,7 @@ std.string::string statistics(std.json::value root)
                     pending.push(move child);
                 } else {
                     std.string::string key = std.string::from_str(node.key_at(last));
-                    str name = key.as_str();
+                    str name = key;
                     std.json::value child = node.take_field(name);
                     pending.push(move child);
                 }

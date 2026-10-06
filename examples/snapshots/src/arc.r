@@ -34,7 +34,7 @@ std.string::string run(i32 initial, i32 revised, bool retain_reader) throws std.
         i32 version = returned->version;
         i32 value = returned->value;
         std.string::string row = f"foreign_snapshot version={version} value={value}\n";
-        str row_text = row.as_str();
+        str row_text = row;
         output.append(row_text);
     }
     o<arc Snapshot> refreshed = subscription.upgrade();
@@ -44,7 +44,7 @@ std.string::string run(i32 initial, i32 revised, bool retain_reader) throws std.
     case variant o::some(move current):
         i32 value = current->value;
         std.string::string row = f"subscription={value}\n";
-        str row_text = row.as_str();
+        str row_text = row;
         output.append(row_text);
         break;
     case variant o::none: output.append("subscription=expired\n"); break;
@@ -60,13 +60,13 @@ std.string::string run(i32 initial, i32 revised, bool retain_reader) throws std.
     switch (move outcome) {
     case variant std.arc::try_unwrap_result::unwrapped(move value):
         std.string::string row = f"unwrapped version={value.version} value={value.value}\n";
-        str row_text = row.as_str();
+        str row_text = row;
         output.append(row_text);
         break;
     case variant std.arc::try_unwrap_result::shared(move retained):
         i32 value = retained->value;
         std.string::string row = f"still_shared value={value}\n";
-        str row_text = row.as_str();
+        str row_text = row;
         output.append(row_text);
         break;
     }
@@ -77,7 +77,7 @@ std.string::string run(i32 initial, i32 revised, bool retain_reader) throws std.
     case variant o::none: break;
     }
     std.string::string row = f"reader_keeps_alive={alive}\n";
-    str row_text = row.as_str();
+    str row_text = row;
     output.append(row_text);
     return move output;
 }

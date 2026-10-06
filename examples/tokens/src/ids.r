@@ -9,11 +9,11 @@ std.string::string fresh(bool timed, u32 count) throws std.time::time_error, std
         if (timed == true) {
             std.uuid::uuid made = std.uuid::v7();
             std.string::string row = f"{made}\n";
-            std.string::append_str(&out, row.as_str());
+            std.string::append_str(&out, row);
         } else {
             std.uuid::uuid made = std.uuid::v4();
             std.string::string row = f"{made}\n";
-            std.string::append_str(&out, row.as_str());
+            std.string::append_str(&out, row);
         }
     }
     return move out;

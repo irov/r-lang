@@ -2,8 +2,8 @@
   "schema_version": 3,
   "generated_from": {
     "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-    "revision": "0.1.0-draft.68",
-    "sha256": "9ea53ce9c84c09b9f86e43e7864bef3ed7689609daf107cddd188e0f0481fffc"
+    "revision": "0.1.0-draft.69",
+    "sha256": "2b396c2ea2da8c8b47c3714be61c2a4854860114e485404b7f2218d5bcc4486f"
   },
   "extraction": {
     "qualified_item_pattern": "(?<![A-Za-z0-9_.])((?:core|std\\.[a-z][a-z0-9]*)::[A-Za-z_][A-Za-z0-9_]*)",
@@ -11,7 +11,7 @@
       "R-LIB-0001": 20,
       "R-LIB-0011": 10,
       "R-LIB-0012": 22,
-      "R-LIB-0024": 16,
+      "R-LIB-0024": 19,
       "R-LIB-0025": 4,
       "R-SLIB-C-0001": 1,
       "R-SLIB-CONV-0002": 1,
@@ -26,7 +26,7 @@
       "R-LIB-0001": "5375ba18932b66260e350206caa3bdd284a0d99ccb7365d6715ec86a82a256ac",
       "R-LIB-0011": "bad2e9acdb5d0e246e8b7ae30d39bd311a53a20b06d361b34b6558469c790062",
       "R-LIB-0012": "c2aa9b207f7297de2ab9c470dabf728f2fa1d92c2827b010ef7de32090bc1be1",
-      "R-LIB-0024": "243b8b9c6bc7f7090a3f685b84f1715f20dc581efbb2f615837ce3f7f8f602df",
+      "R-LIB-0024": "0dcd6683ac922b193d1ccee1e32e808107f67421046def17b8831661b5bb8977",
       "R-LIB-0025": "536bb3dc8c2d40e442d578aad7199694ad01cb313c0e04996b4f439e582223b4",
       "R-SLIB-C-0001": "49e64346f93cce514fc3d6825645d536f78730d1219412c267f7aadb626baf83",
       "R-SLIB-CONV-0002": "467f4b66ef802d7b779b01c6c1a99a12cfdcef70d10129d56c97f6a672a12a17",
@@ -4829,6 +4829,51 @@
       "scoped": false
     },
     {
+      "record_id": "core::field_attribute#operation",
+      "id": "core::field_attribute",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_family",
+      "normative_rules": [
+        "R-LIB-0024"
+      ],
+      "implementation": {
+        "kind": "intrinsic",
+        "compiler_contract": "The semantic pass checks the attribute type and the C17 emitter selects the arguments of the attribute on the indexed field from a translation-time table."
+      },
+      "source_signature": "core::field_attribute::<A, T>(usize index) -> o<A>",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "o<A>",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "o<A>"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "o<A>",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "o<A>"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "5f6b613010be7db499992313c0fa783cf54ea7065a73d75921d8506aeae7bc2d"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
       "record_id": "core::field_count#operation",
       "id": "core::field_count",
       "facet": "operation",
@@ -5726,6 +5771,51 @@
       "scoped": false
     },
     {
+      "record_id": "core::type_attribute#operation",
+      "id": "core::type_attribute",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_family",
+      "normative_rules": [
+        "R-LIB-0024"
+      ],
+      "implementation": {
+        "kind": "intrinsic",
+        "compiler_contract": "The semantic pass checks the attribute type and the C17 emitter writes the arguments of the attribute on the type as a translation-time constant."
+      },
+      "source_signature": "core::type_attribute::<A, T>() -> o<A>",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "o<A>",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "o<A>"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "o<A>",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "o<A>"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "5f6b613010be7db499992313c0fa783cf54ea7065a73d75921d8506aeae7bc2d"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
       "record_id": "core::type_name#operation",
       "id": "core::type_name",
       "facet": "operation",
@@ -5850,6 +5940,51 @@
         },
         "completion": null,
         "descriptor_sha256": "b13929a530cd1e767eacfd2be9a53ed2d01bf8d8b05e8cdc72b6e7a668d9bf6e"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "core::variant_attribute#operation",
+      "id": "core::variant_attribute",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_family",
+      "normative_rules": [
+        "R-LIB-0024"
+      ],
+      "implementation": {
+        "kind": "intrinsic",
+        "compiler_contract": "The semantic pass checks the attribute type and the C17 emitter selects the arguments of the attribute on the enumerator from a translation-time table."
+      },
+      "source_signature": "core::variant_attribute::<A, T>(T value) -> o<A>",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "o<A>",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "o<A>"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "o<A>",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "o<A>"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "5f6b613010be7db499992313c0fa783cf54ea7065a73d75921d8506aeae7bc2d"
       },
       "panics_on_allocation_failure": false,
       "discardable_result": false,

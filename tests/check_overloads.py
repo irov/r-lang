@@ -242,7 +242,7 @@ def check_modules(frontend, directory):
             outputs.append(result.stdout)
         if outputs[0] != outputs[1]:
             raise ValueError(f'{emit} changes when source modules are reordered')
-        if emit == 'interface' and (outputs[0].count('overload="') < 4 or '(interface version=32' not in outputs[0]):
+        if emit == 'interface' and (outputs[0].count('overload="') < 4 or '(interface version=33' not in outputs[0]):
             raise ValueError('interface does not export the complete overload families')
 
 

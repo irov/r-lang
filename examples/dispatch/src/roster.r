@@ -34,7 +34,7 @@ std.string::string reconcile(const i32[] requests, i32 withdrawn, bool cancel)
     case variant o::some(value):
         i32 amount = *value;
         std.string::string row = f"withdrawn={withdrawn} requests={amount}\n";
-        str view = row.as_str();
+        str view = row;
         output.append(view); break;
     case variant o::none: break;
     }
@@ -42,7 +42,7 @@ std.string::string reconcile(const i32[] requests, i32 withdrawn, bool cancel)
     usize count = arrival.count();
     bool empty = arrival.is_empty();
     std.string::string summary = f"dispatchable={count} empty={empty}\narrival:";
-    str summary_view = summary.as_str();
+    str summary_view = summary;
     output.append(summary_view);
     std.set::set_iter<i32> cursor = arrival.iter();
     bool done = false;
@@ -52,7 +52,7 @@ std.string::string reconcile(const i32[] requests, i32 withdrawn, bool cancel)
         case variant o::some(pointer):
             i32 id = **pointer;
             std.string::string row = f" {id}";
-            str view = row.as_str();
+            str view = row;
             output.append(view); break;
         case variant o::none: done = true; break;
         }
@@ -67,14 +67,14 @@ std.string::string reconcile(const i32[] requests, i32 withdrawn, bool cancel)
         case variant o::some(pointer):
             i32 quantity = **pointer;
             std.string::string row = f" {id}:{quantity}";
-            str view = row.as_str();
+            str view = row;
             output.append(view); break;
         case variant o::none: break;
         }
     }
     usize bookings = reservations.count();
     std.string::string footer = f"\nbooking_count={bookings}\n";
-    str footer_view = footer.as_str();
+    str footer_view = footer;
     output.append(footer_view);
     return move output;
 }
