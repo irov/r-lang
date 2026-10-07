@@ -71,7 +71,7 @@ void renders_every_kind() throws std.test::failure, std.metrics::metrics_error, 
     std.test::equal(took.count(), 3u64);
     std.test::check(took.sum() == 4.25, "the sum of the observations");
     std.string::string text = registry.render();
-    std.test::equal_text(text.as_str(),
+    std.test::equal_text(text,
         "# HELP http_requests_total Requests served.\n"
         "# TYPE http_requests_total counter\n"
         "http_requests_total{route=\"/health\"} 3\n"
@@ -154,6 +154,6 @@ async void counts_from_several_tasks() throws std.test::failure, std.metrics::me
     std.test::equal(took.count(), 4000u64);
     std.metrics::registry same = registry.share();
     std.string::string text = same.render();
-    std.test::check(std.text::contains(text.as_str(), "event_seconds_bucket{le=\"0.005\"} 4000\n"), "first bucket");
-    std.test::check(std.text::contains(text.as_str(), "events_total 4000\n"), "the counter");
+    std.test::check(std.text::contains(text, "event_seconds_bucket{le=\"0.005\"} 4000\n"), "first bucket");
+    std.test::check(std.text::contains(text, "events_total 4000\n"), "the counter");
 }

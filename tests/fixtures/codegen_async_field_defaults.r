@@ -6,7 +6,7 @@ module test.codegen.async_field_defaults;
    async function. */
 
 protected bool matches(const std.string::string* source, const u8[] expected) {
-    const u8[] actual = std.string::as_bytes(source);
+    const u8[] actual = *source;
     usize actual_length = len(actual);
     usize expected_length = len(expected);
     if (actual_length != expected_length) { return false; }

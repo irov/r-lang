@@ -54,7 +54,7 @@ async i32 checks() throws std.error::fault, Failed {
     task_scope(1) writing { written.value = await std.log::writer::to_file(move sink, &path); }
     throw (written.value != 3u64) Failed {.code = 4};
     std.string::string text = await read_text(std.fs::path_clone(&path));
-    str lines = text.as_str();
+    str lines = text;
     throw (std.text::contains(lines, " level=info task=") == false ||
            std.text::contains(lines, " message=\"hello \\\"world\\\"\" path=\"/a b\" count=-3 ok=true key=*** password=*** Session=s\n") == false)
         Failed {.code = 5};
@@ -77,7 +77,7 @@ async i32 checks() throws std.error::fault, Failed {
     task_scope(1) draining { small_written.value = await std.log::writer::to_file(move small, &path); }
     throw (small_written.value != 1u64) Failed {.code = 9};
     std.string::string drained = await read_text(std.fs::path_clone(&path));
-    throw (std.text::ends_with(drained.as_str(), "message=\"records dropped\" dropped=2\n") == false)
+    throw (std.text::ends_with(drained, "message=\"records dropped\" dropped=2\n") == false)
         Failed {.code = 10};
     /* A capacity of zero holds one line. */
     std.log::writer tiny = std.log::writer::create(0usize);
@@ -105,7 +105,7 @@ async i32 checks() throws std.error::fault, Failed {
     task_scope(1) naming { names_written.value = await std.log::writer::to_file(move names, &path); }
     std.string::string rewritten = await read_text(std.fs::path_clone(&path));
     throw (names_written.value != 1u64 ||
-           std.text::ends_with(rewritten.as_str(), " message=names _time=t bad_name=b _=e __=u odd_name=*** aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa=long\n") == false)
+           std.text::ends_with(rewritten, " message=names _time=t bad_name=b _=e __=u odd_name=*** aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa=long\n") == false)
         Failed {.code = 12};
     return 0;
 }

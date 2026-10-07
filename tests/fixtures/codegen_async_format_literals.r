@@ -6,7 +6,7 @@ protected void test_observe(const T* value) { value as void; }
 
 
 protected bool matches(const std.string::string* source, const u8[] expected) {
-    const u8[] actual = std.string::as_bytes(source);
+    const u8[] actual = *source;
     usize actual_length = len(actual);
     usize expected_length = len(expected);
     if (actual_length != expected_length) { return false; }

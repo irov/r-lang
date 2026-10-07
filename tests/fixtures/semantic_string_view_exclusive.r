@@ -1,10 +1,11 @@
-module test.semantic.string_view_chain;
+module test.semantic.string_view_exclusive;
 
-/* R-EXPR-0015: the string edges are not chained, so a string place is not a byte slice. */
+/* R-EXPR-0015: a string place views only as shared bytes, never as an exclusive byte slice. */
+usize clear(u8[] data) { return len(data); }
+
 i32 run() throws std.alloc::alloc_error {
     std.string::string word = std.string::from_str("word");
-    const u8[] bytes = word;
-    return len(bytes) as i32;
+    return clear(word) as i32;
 }
 
 i32 main() {

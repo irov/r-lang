@@ -157,14 +157,14 @@ media_type parse(str text) throws mime_error, std.alloc::alloc_error {
 }
 
 /* R-SLIB-MIME-0001: the type and the subtype in lower case. */
-str media_type::kind(const media_type* this) { return this->kind_text.as_str(); }
-str media_type::subtype(const media_type* this) { return this->subtype_text.as_str(); }
+str media_type::kind(const media_type* this) { return this->kind_text; }
+str media_type::subtype(const media_type* this) { return this->subtype_text; }
 
 /* R-SLIB-MIME-0001: "type/subtype" in lower case, without parameters. */
 std.string::string media_type::essence(const media_type* this) throws std.alloc::alloc_error {
-    std.string::string result = std.string::from_str(this->kind_text.as_str());
+    std.string::string result = std.string::from_str(this->kind_text);
     std.string::append_str(&result, "/");
-    std.string::append_str(&result, this->subtype_text.as_str());
+    std.string::append_str(&result, this->subtype_text);
     return move result;
 }
 
@@ -172,8 +172,8 @@ std.string::string media_type::essence(const media_type* this) throws std.alloc:
    case. */
 o<str> media_type::parameter(const media_type* this, str name) {
     for (usize index = 0usize; index < len(this->parameters); index += 1usize) {
-        if (std.text::equal_ignore_ascii_case(this->parameters[index].name.as_str(), name) == true) {
-            return o::some(this->parameters[index].value.as_str());
+        if (std.text::equal_ignore_ascii_case(this->parameters[index].name, name) == true) {
+            return o::some(this->parameters[index].value);
         }
     }
     return o::none;
@@ -186,14 +186,14 @@ impl core::Format for media_type {
     /* type/subtype, then "; name=value" for each parameter, the value quoted when it is not a
        token. */
     void format(const media_type* this, std.format::builder* out) throws std.alloc::alloc_error {
-        std.format::append_str(out, this->kind_text.as_str());
+        std.format::append_str(out, this->kind_text);
         std.format::append_str(out, "/");
-        std.format::append_str(out, this->subtype_text.as_str());
+        std.format::append_str(out, this->subtype_text);
         for (usize index = 0usize; index < len(this->parameters); index += 1usize) {
             std.format::append_str(out, "; ");
-            std.format::append_str(out, this->parameters[index].name.as_str());
+            std.format::append_str(out, this->parameters[index].name);
             std.format::append_str(out, "=");
-            str value = this->parameters[index].value.as_str();
+            str value = this->parameters[index].value;
             if (is_token(value) == true) {
                 std.format::append_str(out, value);
                 continue;

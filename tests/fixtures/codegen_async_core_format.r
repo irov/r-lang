@@ -5,7 +5,7 @@ module test.codegen.async_core_format;
    each instance by its own type; an interface call dispatches from an async frame. */
 
 protected bool matches(const std.string::string* source, const u8[] expected) {
-    const u8[] actual = std.string::as_bytes(source);
+    const u8[] actual = *source;
     usize actual_length = len(actual);
     usize expected_length = len(expected);
     if (actual_length != expected_length) { return false; }
@@ -27,7 +27,7 @@ struct Box { T value; };
 impl core::Format for Box<T> {
     void format(const Box<T>* this, std.format::builder* out) throws std.alloc::alloc_error {
         std.string::string inner = f"Box({this->value})";
-        std.format::append_str(out, inner.as_str());
+        std.format::append_str(out, inner);
     }
 };
 

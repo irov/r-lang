@@ -160,8 +160,8 @@ usize fields::count(const fields* this) {
 protected array<field> copy_entries(const array<field>* entries) throws std.alloc::alloc_error {
     array<field> copied = std.array::create();
     for (const field* entry in entries) {
-        append(&copied, field {.name = std.string::from_str(entry->name.as_str()),
-                               .value = std.string::from_str(entry->value.as_str()), .kind = entry->kind});
+        append(&copied, field {.name = std.string::from_str(entry->name),
+                               .value = std.string::from_str(entry->value), .kind = entry->kind});
     }
     return move copied;
 }
@@ -178,7 +178,7 @@ layout layout::standard() throws std.alloc::alloc_error {
 
 protected o<std.string::string> copy_name(const (o<std.string::string>)* name) throws std.alloc::alloc_error {
     switch (*name) {
-    case variant o::some(text): return o::some(std.string::from_str(text->as_str()));
+    case variant o::some(text): return o::some(std.string::from_str(*text));
     case variant o::none: break;
     }
     return o::none;
@@ -186,9 +186,9 @@ protected o<std.string::string> copy_name(const (o<std.string::string>)* name) t
 
 protected layout copy_layout(const layout* source) throws std.alloc::alloc_error {
     o<std.string::string> task_field = copy_name(&source->task_name);
-    return layout {.time_name = std.string::from_str(source->time_name.as_str()),
-                   .level_name = std.string::from_str(source->level_name.as_str()),
-                   .message_name = std.string::from_str(source->message_name.as_str()), .task_name = move task_field,
+    return layout {.time_name = std.string::from_str(source->time_name),
+                   .level_name = std.string::from_str(source->level_name),
+                   .message_name = std.string::from_str(source->message_name), .task_name = move task_field,
                    .caller_name = copy_name(&source->caller_name),
                    .time_digits = source->time_digits, .trim_time = source->trim_time,
                    .omit_empty_message = source->omit_empty_message, .sequence = source->sequence};
@@ -244,7 +244,7 @@ logger writer::logger(const writer* this, level threshold, format style)
 logger logger::share(const logger* this) throws std.alloc::alloc_error {
     array<std.string::string> masked = std.array::create();
     for (const std.string::string* name in &this->masked) {
-        append(&masked, std.string::from_str(name->as_str()));
+        append(&masked, std.string::from_str(*name));
     }
     return logger {.lines = std.sync::clone_sync_sender(&this->lines),
                    .state = std.arc::clone(&this->state), .threshold = this->threshold,
@@ -257,19 +257,19 @@ logger logger::share(const logger* this) throws std.alloc::alloc_error {
 void logger::set_layout(logger* this, layout value) throws std.alloc::alloc_error {
     o<std.string::string> task_field = o::none;
     switch (value.task_name) {
-    case variant o::some(name): task_field = o::some(field_name(name->as_str()));
+    case variant o::some(name): task_field = o::some(field_name(*name));
     case variant o::none: break;
     }
     o<std.string::string> caller_field = o::none;
     switch (value.caller_name) {
-    case variant o::some(name): caller_field = o::some(field_name(name->as_str()));
+    case variant o::some(name): caller_field = o::some(field_name(*name));
     case variant o::none: break;
     }
     u32 digits = value.time_digits;
     if (digits > 9u32) { digits = 9u32; }
-    layout written = layout {.time_name = field_name(value.time_name.as_str()),
-                             .level_name = field_name(value.level_name.as_str()),
-                             .message_name = field_name(value.message_name.as_str()), .task_name = move task_field,
+    layout written = layout {.time_name = field_name(value.time_name),
+                             .level_name = field_name(value.level_name),
+                             .message_name = field_name(value.message_name), .task_name = move task_field,
                              .caller_name = move caller_field,
                              .time_digits = digits, .trim_time = value.trim_time,
                              .omit_empty_message = value.omit_empty_message, .sequence = value.sequence};
@@ -284,8 +284,8 @@ void logger::set_layout(logger* this, layout value) throws std.alloc::alloc_erro
 logger logger::with(const logger* this, const fields* extra) throws std.alloc::alloc_error {
     logger child = this->share();
     for (const field* entry in &extra->entries) {
-        append(&child.bound, field {.name = std.string::from_str(entry->name.as_str()),
-                                    .value = std.string::from_str(entry->value.as_str()), .kind = entry->kind});
+        append(&child.bound, field {.name = std.string::from_str(entry->name),
+                                    .value = std.string::from_str(entry->value), .kind = entry->kind});
     }
     return move child;
 }
@@ -319,7 +319,7 @@ protected bool ascii_equal_ignoring_case(const u8[] a, const u8[] b) {
 
 protected bool logger::masks(const logger* this, str name) {
     for (const std.string::string* masked in &this->masked) {
-        if (ascii_equal_ignoring_case(masked->as_str(), name) == true) { return true; }
+        if (ascii_equal_ignoring_case(*masked, name) == true) { return true; }
     }
     return false;
 }
@@ -336,7 +336,7 @@ protected void append_control(std.string::string* line, u8 byte) throws std.allo
     }
     u32 code = byte as u32;
     std.string::string escape = f"\\u00{code:02x}";
-    line->append(escape.as_str());
+    line->append(escape);
 }
 
 /* A text value in quotes when it is empty or holds a space, quote, `=`, backslash or control
@@ -401,17 +401,17 @@ protected void append_pair(std.string::string* line, format style, str name, str
 
 /* Whether a field name is the name of a member that every record of the logger carries. */
 protected bool logger::carries(const logger* this, str name) {
-    if (same(name, this->shape.time_name.as_str()) == true || same(name, this->shape.level_name.as_str()) == true ||
-        same(name, this->shape.message_name.as_str()) == true) {
+    if (same(name, this->shape.time_name) == true || same(name, this->shape.level_name) == true ||
+        same(name, this->shape.message_name) == true) {
         return true;
     }
     switch (this->shape.task_name) {
     case variant o::some(task_field):
-        if (same(name, task_field->as_str()) == true) { return true; }
+        if (same(name, *task_field) == true) { return true; }
     case variant o::none: break;
     }
     switch (this->shape.caller_name) {
-    case variant o::some(caller_field): return same(name, caller_field->as_str());
+    case variant o::some(caller_field): return same(name, *caller_field);
     case variant o::none: break;
     }
     return false;
@@ -423,13 +423,13 @@ protected void logger::put_fields(const logger* this, std.string::string* line, 
     throws std.alloc::alloc_error {
     for (const field* entry in entries) {
         std.string::string written = std.string::create();
-        if (this->carries(entry->name.as_str()) == true) { written.append("_"); }
-        written.append(entry->name.as_str());
-        if (entry->kind == field_kind::secret || this->masks(entry->name.as_str()) == true ||
-            this->masks(written.as_str()) == true) {
-            append_pair(line, this->style, written.as_str(), "***", true);
+        if (this->carries(entry->name) == true) { written.append("_"); }
+        written.append(entry->name);
+        if (entry->kind == field_kind::secret || this->masks(entry->name) == true ||
+            this->masks(written) == true) {
+            append_pair(line, this->style, written, "***", true);
         } else {
-            append_pair(line, this->style, written.as_str(), entry->value.as_str(), entry->kind == field_kind::string);
+            append_pair(line, this->style, written, entry->value, entry->kind == field_kind::string);
         }
     }
 }
@@ -439,7 +439,7 @@ protected void logger::put_fields(const logger* this, std.string::string* line, 
 protected std.string::string logger::stamp(const logger* this, std.time::system_time now) throws std.error::fault {
     std.string::string full = std.time::format_rfc3339(now, this->shape.time_digits);
     if (this->shape.trim_time == false || this->shape.time_digits == 0u32) { return move full; }
-    const u8[] bytes = full.as_bytes();
+    const u8[] bytes = full;
     usize end = len(bytes) - 1usize;
     while (bytes[end - 1usize] == 48u8) { end -= 1usize; }
     if (bytes[end - 1usize] == 46u8) { end -= 1usize; }
@@ -475,7 +475,7 @@ protected void logger::put_caller(const logger* this, std.string::string* line, 
     const u8[] bytes = caller;
     if (len(bytes) == 0usize) { return; }
     switch (this->shape.caller_name) {
-    case variant o::some(name): this->put_member(line, false, name->as_str(), caller, true);
+    case variant o::some(name): this->put_member(line, false, *name, caller, true);
     case variant o::none: break;
     }
 }
@@ -485,7 +485,7 @@ protected void logger::put_message(const logger* this, std.string::string* line,
     throws std.alloc::alloc_error {
     const u8[] bytes = message;
     if (len(bytes) == 0usize && this->shape.omit_empty_message == true) { return; }
-    this->put_member(line, false, this->shape.message_name.as_str(), message, true);
+    this->put_member(line, false, this->shape.message_name, message, true);
 }
 
 /* R-SLIB-LOG-0002, R-SLIB-LOG-0004: the line of one record in the order of the layout. */
@@ -495,13 +495,13 @@ protected std.string::string logger::render(const logger* this, level value, str
     str name = core::enum_name(value);
     std.string::string line = std.string::create();
     if (this->shape.sequence == order::time_first) {
-        this->put_member(&line, true, this->shape.time_name.as_str(), time.as_str(), true);
-        this->put_member(&line, false, this->shape.level_name.as_str(), name, true);
+        this->put_member(&line, true, this->shape.time_name, time, true);
+        this->put_member(&line, false, this->shape.level_name, name, true);
         switch (this->shape.task_name) {
         case variant o::some(task_field):
             u64 running = std.async::task_id();
             std.string::string task_text = f"{running}";
-            this->put_member(&line, false, task_field->as_str(), task_text.as_str(), false);
+            this->put_member(&line, false, *task_field, task_text, false);
         case variant o::none: break;
         }
         this->put_caller(&line, caller);
@@ -509,15 +509,15 @@ protected std.string::string logger::render(const logger* this, level value, str
         this->put_fields(&line, &this->bound);
         this->put_fields(&line, &extra->entries);
     } else {
-        this->put_member(&line, true, this->shape.level_name.as_str(), name, true);
+        this->put_member(&line, true, this->shape.level_name, name, true);
         this->put_fields(&line, &this->bound);
         this->put_fields(&line, &extra->entries);
-        this->put_member(&line, false, this->shape.time_name.as_str(), time.as_str(), true);
+        this->put_member(&line, false, this->shape.time_name, time, true);
         switch (this->shape.task_name) {
         case variant o::some(task_field):
             u64 running = std.async::task_id();
             std.string::string task_text = f"{running}";
-            this->put_member(&line, false, task_field->as_str(), task_text.as_str(), false);
+            this->put_member(&line, false, *task_field, task_text, false);
         case variant o::none: break;
         }
         this->put_caller(&line, caller);
@@ -597,14 +597,14 @@ async u64 writer::to_stderr(writer this) throws std.error::fault {
         switch (move next) {
         case variant o::some(move line):
             std.io::output target = std.io::stderr();
-            task_scope(1) io { await std.io::write_all_from(&target, line.as_bytes()); }
+            task_scope(1) io { await std.io::write_all_from(&target, line); }
             written += 1u64;
         case variant o::none:
             u64 dropped = core::atomic_load(&this.state->dropped, core::memory_order::relaxed);
             if (dropped != 0u64) {
                 std.io::output target = std.io::stderr();
                 std.string::string last = drop_line(dropped);
-                task_scope(1) io { await std.io::write_all_from(&target, last.as_bytes()); }
+                task_scope(1) io { await std.io::write_all_from(&target, last); }
             }
             return written;
         }
@@ -626,13 +626,13 @@ async u64 writer::to_file(writer this, const std.fs::path* path) throws std.erro
         o<std.string::string> next = await std.sync::receive(&this.lines);
         switch (move next) {
         case variant o::some(move line):
-            task_scope(1) io { await std.fs::write_all_from(&target, line.as_bytes()); }
+            task_scope(1) io { await std.fs::write_all_from(&target, line); }
             written += 1u64;
         case variant o::none:
             u64 dropped = core::atomic_load(&this.state->dropped, core::memory_order::relaxed);
             if (dropped != 0u64) {
                 std.string::string last = drop_line(dropped);
-                task_scope(1) io { await std.fs::write_all_from(&target, last.as_bytes()); }
+                task_scope(1) io { await std.fs::write_all_from(&target, last); }
             }
             await std.fs::close_file(move target);
             return written;

@@ -34,7 +34,7 @@ task_scope(2) io {
         example.tls.peers::serve(move incoming, &server);
     try {
         std.tls::stream<std.net::tcp_stream> session =
-            await std.tls::connect(move outgoing, &client, arguments[5].as_str());
+            await std.tls::connect(move outgoing, &client, arguments[5]);
         await talk(move session, command, message(&arguments));
     } catch (std.tls::tls_error failure) {
         status = 65;

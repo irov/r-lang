@@ -81,6 +81,9 @@ protected array<std.postgres::migration> migrations() throws std.alloc::alloc_er
     add_step(&steps, step(4u64, "commands",
                           "CREATE TABLE client_commands (account_id text NOT NULL, command_id text NOT NULL, "
                           "status integer NOT NULL, body text NOT NULL, PRIMARY KEY (account_id, command_id))"));
+    add_step(&steps, step(5u64, "stocks",
+                          "CREATE TABLE user_stocks (id bigserial UNIQUE, account_id text NOT NULL, "
+                          "offer_id text NOT NULL, stock bigint NOT NULL, PRIMARY KEY (account_id, offer_id))"));
     return move steps;
 }
 
@@ -250,7 +253,7 @@ async std.string::string user(i64 id) throws NoUser, std.postgres::pg_error, std
         switch (badges[index]) {
         case variant o::some(badge):
             out.append(" [");
-            out.append(badge->as_str());
+            out.append(*badge);
             out.append("]");
         case variant o::none: out.append(" NULL");
         }
@@ -263,4 +266,107 @@ async std.string::string user(i64 id) throws NoUser, std.postgres::pg_error, std
     }
     out.append("\n");
     return move out;
+}
+
+/* What an account may still buy of an offer. The table, its key of two columns and the id the
+   database fills come from the attribute of std.postgres (Library R-SLIB-PG-0017), so the
+   operations below name no column. */
+@std.postgres::table(name = "user_stocks", key = "account_id, offer_id", generated = "id")
+struct UserStock {
+    i64 id = 0i64;
+    std.string::string account_id;
+    std.string::string offer_id;
+    i64 stock;
+};
+
+protected array<std.postgres::value> stock_key(str account, str offer) throws std.alloc::alloc_error {
+    array<std.postgres::value> key = [];
+    add(&key, std.postgres::value::of_text(account));
+    add(&key, std.postgres::value::of_text(offer));
+    return move key;
+}
+
+protected UserStock stock_of(str account, str offer, i64 stock) throws std.alloc::alloc_error {
+    return UserStock {.account_id = std.string::from_str(account), .offer_id = std.string::from_str(offer), .stock = stock};
+}
+
+/* A purchase in one transaction: the first purchase of an offer opens its stock with five items;
+   the decrement is written after a savepoint and rolled back to it when the stock is short. */
+async std.string::string buy(std.string::string account, std.string::string offer, i64 count)
+    throws std.postgres::pg_error, std.error::fault {
+    std.postgres::connection db = await open_database();
+    await db.begin();
+    i64 have = 5i64;
+    i64 id = 0i64;
+    o<UserStock> found = await db.find::<UserStock>(stock_key(account, offer));
+    switch (found) {
+    case variant o::some(row):
+        have = row->stock;
+        id = row->id;
+    case variant o::none: break;
+    }
+    if (found is variant o::none) {
+        UserStock opened = stock_of(account, offer, have);
+        UserStock created = await db.insert(&opened);
+        id = created.id;
+    }
+    drop found;
+    await db.savepoint("purchase");
+    i64 left = have - count;
+    UserStock after = stock_of(account, offer, left);
+    after.id = id;
+    u64 changed = await db.update(&after);
+    changed as void;
+    std.string::string answer = std.string::create();
+    if (have < count) {
+        await db.rollback_to("purchase");
+        std.string::string refused = f"{offer} is out of stock for {account}: {have} left\n";
+        answer.append(refused);
+    } else {
+        std.string::string bought = f"{account} bought {count} of {offer}, {left} left\n";
+        answer.append(bought);
+    }
+    await db.release("purchase");
+    await db.commit();
+    await (move db).close();
+    return move answer;
+}
+
+/* The stocks of an account, in the order of their offers. */
+async std.string::string stocks(std.string::string account) throws std.postgres::pg_error, std.error::fault {
+    std.postgres::connection db = await open_database();
+    array<std.postgres::value> given = [];
+    add(&given, std.postgres::value::of_text(account));
+    array<UserStock> found = await db.select::<UserStock>("WHERE account_id = $1 ORDER BY offer_id", move given);
+    await (move db).close();
+    std.string::string out = std.string::create();
+    for (usize index = 0usize; index < len(found); index += 1usize) {
+        str offer = found[index].offer_id;
+        i64 stock = found[index].stock;
+        std.string::string line = f"{offer} {stock}\n";
+        out.append(line);
+    }
+    return move out;
+}
+
+/* New stocks of an offer for several accounts: their old rows go, the new ones are written in
+   one statement. */
+async std.string::string restock(std.string::string offer, i64 stock, array<std.string::string> accounts)
+    throws std.postgres::pg_error, std.error::fault {
+    std.postgres::connection db = await open_database();
+    array<UserStock> fresh = [];
+    for (usize index = 0usize; index < len(accounts); index += 1usize) {
+        UserStock old = stock_of(accounts[index], offer, 0i64);
+        u64 removed = await db.remove(&old);
+        removed as void;
+        try {
+            fresh.push(stock_of(accounts[index], offer, stock));
+        } catch (std.array::push_error<UserStock> rejected) {
+            (move rejected) as void;
+            throw std.alloc::alloc_error::out_of_memory;
+        }
+    }
+    u64 written = await db.insert_all(&fresh);
+    await (move db).close();
+    return f"restocked {written} of {offer}\n";
 }

@@ -10,7 +10,7 @@ protected void test_observe(const T* value) { value as void; }
 
 
 protected bool matches(const std.string::string* source, const u8[] expected) {
-    const u8[] actual = std.string::as_bytes(source);
+    const u8[] actual = *source;
     if (len(actual) != len(expected)) { return false; }
     usize index = 0;
     while (index < len(actual)) {
@@ -23,7 +23,7 @@ protected bool matches(const std.string::string* source, const u8[] expected) {
 protected i32 exercise() throws std.json::error, std.alloc::alloc_error {
     std.json::decoder<array<o<std.string::string>>> decoder = std.json::new_decoder();
     std.string::string source_owner = std.string::from_str("[\"Madrid\",null,\"\\uD83D\\uDE00\"]");
-    const u8[] source = std.string::as_bytes(&source_owner);
+    const u8[] source = source_owner;
     usize index = 0;
     while (index < len(source)) {
         usize end = index + 1;
@@ -63,7 +63,7 @@ protected i32 exercise() throws std.json::error, std.alloc::alloc_error {
     std.json::decoder<std.json::value> elements = std.json::new_decoder(options);
     test_observe(&elements);
     std.string::string documents_owner = std.string::from_str("[null,{},[1],true,\"s\"]");
-    const u8[] documents = std.string::as_bytes(&documents_owner);
+    const u8[] documents = documents_owner;
     usize index_2 = 0;
     usize count = 0;
     usize document_size = len(documents);
@@ -241,7 +241,7 @@ struct Node { std.string::string name; array<Leaf> children; };
 
 protected i32 exercise_recursive() throws std.json::error, std.alloc::alloc_error {
     std.string::string source_owner = std.string::from_str("{\"name\":\"root\",\"children\":[{\"name\":\"leaf\",\"children\":[]}]}");
-    const u8[] source = std.string::as_bytes(&source_owner);
+    const u8[] source = source_owner;
     Node tree = std.json::unmarshal(source);
     std.string::string encoded = std.json::marshal(&tree);
     if (matches(&encoded, source) == false) { return 28; }

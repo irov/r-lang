@@ -103,7 +103,7 @@ std.string::string admin_token(str secret, str subject, std.time::system_time no
     std.json::insert(&claims, "sub", std.json::from_string(subject_bytes));
     i64 expires = now.unix_seconds + seconds;
     std.string::string expires_text = f"{expires}";
-    std.json::number number = std.json::parse_number(expires_text.as_bytes());
+    std.json::number number = std.json::parse_number(expires_text);
     std.json::insert(&claims, "exp", std.json::from_number(&number));
     return std.jwt::sign(&signer, &claims);
 }

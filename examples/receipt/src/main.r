@@ -22,7 +22,7 @@ protected std.string::string receipt(str customer, i32 quantity, f64 unit_price)
     builder.append("Receipt for ");
     builder.append(customer);
     builder.append('\n');
-    str heading = builder.as_str();
+    str heading = builder;
     std.string::string output = std.string::from_str(heading);
     // The copied heading remains valid while this allocation is reused for the body.
     builder.clear();

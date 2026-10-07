@@ -31,7 +31,7 @@ Summary summarize(const F* checksum, View<u8> view) {
 async std.string::string inspect(std.string::string source)
     throws Usage, std.alloc::alloc_error, std.async::start_error {
 
-        const u8[] data = source.as_bytes();
+        const u8[] data = source;
         View<u8> view = bounded(data, 60usize);
         fn @noalloc @nonblocking u32 checksum(const u8[] value) {
             u32 digest = std.hash::crc32(value);

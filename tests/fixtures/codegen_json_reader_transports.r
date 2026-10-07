@@ -9,6 +9,7 @@ async i32 aa_file(std.fs::file source) {
         switch (move decoded) {
         case variant o::some(move entry):
             if (entry.id != 18446744073709551615) { return 1; }
+            // The C wrapper names generated functions by number; the explicit call keeps them.
             const u8[] text = std.string::as_bytes(&entry.text);
             if (len(text) != 5) { return 1; }
             break;

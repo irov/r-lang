@@ -87,7 +87,7 @@ void token_request::set_scope(token_request* this, str scope) throws std.alloc::
 }
 
 protected std.string::string copy_text(const std.string::string* text) throws std.alloc::alloc_error {
-    return std.string::from_str(text->as_str());
+    return std.string::from_str(*text);
 }
 
 protected grant copy_grant(const grant* kind) throws std.alloc::alloc_error {
@@ -113,12 +113,12 @@ protected token_request copy_request(const token_request* request) throws std.al
 /* ---- The form of a token request ---- */
 
 protected void add_field(std.string::string* form, str name, str value) throws std.alloc::alloc_error {
-    const u8[] written = form->as_bytes();
+    const u8[] written = *form;
     if (len(written) > 0usize) { form->append("&"); }
     form->append(name);
     form->append("=");
     std.string::string encoded = std.encoding::percent_encode(value);
-    form->append(encoded.as_str());
+    form->append(encoded);
 }
 
 /* The application/x-www-form-urlencoded body of a request. */
@@ -128,23 +128,23 @@ protected std.string::string form_of(const token_request* request) throws std.al
     case variant grant::client_credentials: add_field(&form, "grant_type", "client_credentials");
     case variant grant::refresh_token(value):
         add_field(&form, "grant_type", "refresh_token");
-        add_field(&form, "refresh_token", value->as_str());
+        add_field(&form, "refresh_token", *value);
     case variant grant::authorization_code(code):
         add_field(&form, "grant_type", "authorization_code");
-        add_field(&form, "code", code->code.as_str());
-        const u8[] redirect = code->redirect_uri.as_bytes();
-        if (len(redirect) > 0usize) { add_field(&form, "redirect_uri", code->redirect_uri.as_str()); }
-        const u8[] verifier = code->verifier.as_bytes();
-        if (len(verifier) > 0usize) { add_field(&form, "code_verifier", code->verifier.as_str()); }
+        add_field(&form, "code", code->code);
+        const u8[] redirect = code->redirect_uri;
+        if (len(redirect) > 0usize) { add_field(&form, "redirect_uri", code->redirect_uri); }
+        const u8[] verifier = code->verifier;
+        if (len(verifier) > 0usize) { add_field(&form, "code_verifier", code->verifier); }
     case variant grant::jwt_bearer(assertion):
         add_field(&form, "grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer");
-        add_field(&form, "assertion", assertion->as_str());
+        add_field(&form, "assertion", *assertion);
     }
-    const u8[] scope = request->scope.as_bytes();
-    if (len(scope) > 0usize) { add_field(&form, "scope", request->scope.as_str()); }
-    const u8[] client = request->client_id.as_bytes();
+    const u8[] scope = request->scope;
+    if (len(scope) > 0usize) { add_field(&form, "scope", request->scope); }
+    const u8[] client = request->client_id;
     if (len(client) > 0usize && std.secret::len(&request->client_secret) == 0usize) {
-        add_field(&form, "client_id", request->client_id.as_str());
+        add_field(&form, "client_id", request->client_id);
     }
     return move form;
 }
@@ -152,19 +152,19 @@ protected std.string::string form_of(const token_request* request) throws std.al
 /* The value of the Authorization field of a confidential client: Basic with the form-encoded
    identifier and secret. */
 protected std.string::string basic_of(const token_request* request) throws oauth2_error, std.alloc::alloc_error {
-    std.string::string pair = std.encoding::percent_encode(request->client_id.as_str());
+    std.string::string pair = std.encoding::percent_encode(request->client_id);
     pair.append(":");
     try {
         str secret = core::validate_utf8(std.secret::as_slice(&request->client_secret));
         std.string::string encoded = std.encoding::percent_encode(secret);
-        pair.append(encoded.as_str());
+        pair.append(encoded);
     } catch (core::utf8_error rejected) {
         rejected as void;
         throw failure(error_code::invalid_request, 0u16);
     }
-    std.string::string credentials = std.encoding::encode_base64(pair.as_bytes());
+    std.string::string credentials = std.encoding::encode_base64(pair);
     std.string::string value = std.string::from_str("Basic ");
-    value.append(credentials.as_str());
+    value.append(credentials);
     return move value;
 }
 
@@ -187,8 +187,8 @@ protected token token_of(const u8[] body, u16 status, std.time::system_time now)
         throw (std.json::kind(&answer) != std.json::value_kind::object) failure(error_code::invalid_response, status);
         std.string::string access = member_text(&answer, "access_token");
         std.string::string kind = member_text(&answer, "token_type");
-        const u8[] access_bytes = access.as_bytes();
-        const u8[] kind_bytes = kind.as_bytes();
+        const u8[] access_bytes = access;
+        const u8[] kind_bytes = kind;
         throw (len(access_bytes) == 0usize || len(kind_bytes) == 0usize) failure(error_code::invalid_response, status);
         o<std.time::system_time> expires = o::none;
         switch (std.json::find(&answer, "expires_in")) {
@@ -219,7 +219,7 @@ protected oauth2_error error_of(const u8[] body, u16 status) throws std.alloc::a
         std.json::value answer = std.json::parse(body);
         if (std.json::kind(&answer) == std.json::value_kind::object) {
             std.string::string code = member_text(&answer, "error");
-            const u8[] code_bytes = code.as_bytes();
+            const u8[] code_bytes = code;
             if (len(code_bytes) > 0usize) {
                 return oauth2_error {.code = error_code::endpoint_error, .status = status, .error = move code,
                                      .description = member_text(&answer, "error_description")};
@@ -239,20 +239,20 @@ async token request_token(std.http::client* http, const token_request* request, 
     std.http::request message = std.http::request::create(std.http::method::post, "/");
     message.headers.set("Content-Type", "application/x-www-form-urlencoded");
     message.headers.set("Accept", "application/json");
-    const u8[] client = request->client_id.as_bytes();
+    const u8[] client = request->client_id;
     if (len(client) > 0usize && std.secret::len(&request->client_secret) > 0usize) {
         std.string::string authorization = basic_of(request);
-        message.headers.set("Authorization", authorization.as_str());
+        message.headers.set("Authorization", authorization);
     }
     std.string::string form = form_of(request);
-    const u8[] form_bytes = form.as_bytes();
+    const u8[] form_bytes = form;
     bytes body = std.bytes::with_capacity(len(form_bytes));
-    std.bytes::append(&body, form.as_bytes());
+    std.bytes::append(&body, form);
     bytes old_body = core::replace(&message.body, move body);
     drop old_body;
     std.http::response answer = std.http::response::create(0u16);
     task_scope(1) io {
-        std.http::response received = await http->send(move message, request->endpoint.as_str());
+        std.http::response received = await http->send(move message, request->endpoint);
         std.http::response old = core::replace(&answer, move received);
         drop old;
     }
@@ -276,7 +276,7 @@ struct service_account {
 protected std.string::string required_member(const std.json::value* object, str name)
     throws oauth2_error, std.alloc::alloc_error {
     std.string::string text = member_text(object, name);
-    const u8[] bytes_of_text = text.as_bytes();
+    const u8[] bytes_of_text = text;
     throw (len(bytes_of_text) == 0usize) failure(error_code::invalid_key_file, 0u16);
     return move text;
 }
@@ -289,18 +289,18 @@ service_account service_account::from_json(const u8[] text) throws oauth2_error,
         std.json::value file = std.json::parse(text);
         throw (std.json::kind(&file) != std.json::value_kind::object) failure(error_code::invalid_key_file, 0u16);
         std.string::string kind = member_text(&file, "type");
-        const u8[] kind_bytes = kind.as_bytes();
+        const u8[] kind_bytes = kind;
         throw (len(kind_bytes) > 0usize && std.bytes::equal(kind_bytes, "service_account") == false)
             failure(error_code::invalid_key_file, 0u16);
         std.string::string email = required_member(&file, "client_email");
         std.string::string pem = required_member(&file, "private_key");
         std.string::string uri = member_text(&file, "token_uri");
-        const u8[] uri_bytes = uri.as_bytes();
+        const u8[] uri_bytes = uri;
         if (len(uri_bytes) == 0usize) { uri.append(google_token_uri); }
-        std.crypto::private_key key = std.crypto::private_key::from_pem(pem.as_bytes());
+        std.crypto::private_key key = std.crypto::private_key::from_pem(pem);
         std.jwt::signer signer = std.jwt::signer::with_private_key(std.jwt::algorithm::rs256, move key);
         std.string::string kid = member_text(&file, "private_key_id");
-        signer.set_key_id(kid.as_str());
+        signer.set_key_id(kid);
         return service_account {.client_email = move email, .token_uri = move uri, .signer = move signer};
     } catch (std.json::error rejected) {
         (move rejected) as void;
@@ -319,18 +319,18 @@ std.string::string service_account::assertion(const service_account* this, str s
                                               std.time::system_time now) throws oauth2_error, std.alloc::alloc_error {
     try {
         std.json::value claims = std.json::object();
-        std.json::insert(&claims, "iss", std.json::from_string(this->client_email.as_bytes()));
+        std.json::insert(&claims, "iss", std.json::from_string(this->client_email));
         const u8[] scope_bytes = scope;
         if (len(scope_bytes) > 0usize) { std.json::insert(&claims, "scope", std.json::from_string(scope_bytes)); }
-        std.json::insert(&claims, "aud", std.json::from_string(this->token_uri.as_bytes()));
+        std.json::insert(&claims, "aud", std.json::from_string(this->token_uri));
         const u8[] subject_bytes = subject;
         if (len(subject_bytes) > 0usize) { std.json::insert(&claims, "sub", std.json::from_string(subject_bytes)); }
         std.string::string issued = f"{now.unix_seconds}";
-        std.json::number issued_number = std.json::parse_number(issued.as_bytes());
+        std.json::number issued_number = std.json::parse_number(issued);
         std.json::insert(&claims, "iat", std.json::from_number(&issued_number));
         i64 expires = now.unix_seconds + 3600i64;
         std.string::string expiry = f"{expires}";
-        std.json::number expiry_number = std.json::parse_number(expiry.as_bytes());
+        std.json::number expiry_number = std.json::parse_number(expiry);
         std.json::insert(&claims, "exp", std.json::from_number(&expiry_number));
         return std.jwt::sign(&this->signer, &claims);
     } catch (std.json::error rejected) {
@@ -345,7 +345,7 @@ std.string::string service_account::assertion(const service_account* this, str s
 token_request service_account::request_for(const service_account* this, str scope, str subject,
                                              std.time::system_time now) throws oauth2_error, std.alloc::alloc_error {
     std.string::string assertion = this->assertion(scope, subject, now);
-    return token_request::create(this->token_uri.as_str(), grant::jwt_bearer(move assertion));
+    return token_request::create(this->token_uri, grant::jwt_bearer(move assertion));
 }
 
 /* ---- The shared token ---- */
@@ -402,14 +402,14 @@ protected token_request request_now(const cache* state, std.time::system_time no
     switch (state->from) {
     case variant origin::request(stored):
         token_request copied = copy_request(stored);
-        const u8[] refresh = state->refresh.as_bytes();
+        const u8[] refresh = state->refresh;
         if (len(refresh) > 0usize) {
             grant old_grant = core::replace(&copied.kind, grant::refresh_token(copy_text(&state->refresh)));
             drop old_grant;
         }
         return move copied;
     case variant origin::account(source):
-        return source->account.request_for(source->scope.as_str(), source->subject.as_str(), now);
+        return source->account.request_for(source->scope, source->subject, now);
     }
 }
 
@@ -426,7 +426,7 @@ protected async void fill(cache* state, std.time::system_time now)
         token old = core::replace(&received, move answer);
         drop old;
     }
-    const u8[] refresh = received.refresh_token.as_bytes();
+    const u8[] refresh = received.refresh_token;
     if (len(refresh) > 0usize) {
         std.string::string old_refresh = core::replace(&state->refresh, copy_text(&received.refresh_token));
         drop old_refresh;

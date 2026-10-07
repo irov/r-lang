@@ -62,7 +62,7 @@ i32 deep(u32 limit) throws std.alloc::alloc_error {
                                                     u32 selected = pair.left > pair.right ? pair.left - pair.right : pair.right - pair.left + (accumulator.rounds as u32);
                                                     checksum = (checksum ^ selected ^ accumulator.mix(selected, depth)) & 0x7fffffffu32;
                                                     std.string::string note = f"depth {depth} slot {slot} checksum {checksum} total {accumulator.total} signed {accumulator.signed_total}";
-                                                    const u8[] note_bytes = std.string::as_bytes(&note);
+                                                    const u8[] note_bytes = note;
                                                     if (len(note_bytes) == 0usize) { return 9; }
                                                     for (u32 last = 0u32; last < 2u32; last += 1u32) {
                                                         if (last == 0u32) { continue; }

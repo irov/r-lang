@@ -6624,6 +6624,7 @@ UNQUALIFIED_SIGNATURE_RULE_EXEMPTIONS = frozenset(
         "R-SLIB-PG-0014",
         "R-SLIB-PG-0015",
         "R-SLIB-PG-0016",
+        "R-SLIB-PG-0017",
         "R-SLIB-CMP-0001",
         "R-SLIB-ITER-0002",
         "R-SLIB-ITER-0003",

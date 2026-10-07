@@ -6,7 +6,7 @@ module test.codegen.core_format_failures;
    appended before it in an explicit builder, which its owner then destroys. */
 
 protected bool matches(const std.string::string* source, const u8[] expected) {
-    const u8[] actual = std.string::as_bytes(source);
+    const u8[] actual = *source;
     usize actual_length = len(actual);
     usize expected_length = len(expected);
     if (actual_length != expected_length) { return false; }
@@ -25,7 +25,7 @@ struct Label { std.string::string text; };
 impl core::Format for Label {
     void format(const Label* this, std.format::builder* out) throws std.alloc::alloc_error {
         std.string::string copy = f"<{this->text}>";
-        std.format::append_str(out, copy.as_str());
+        std.format::append_str(out, copy);
     }
 };
 

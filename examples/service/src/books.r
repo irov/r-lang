@@ -148,7 +148,7 @@ async void handle(arc Books shared, std.net::tcp_connection connection) throws s
     u64 value = value_of(command, request);
     std.string::string reply = await answer(move shared, command, value);
     task_scope(1) io {
-        await std.net::tcp_write_all_from(&connection.stream, reply.as_str());
+        await std.net::tcp_write_all_from(&connection.stream, reply);
     }
 }
 

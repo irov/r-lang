@@ -217,8 +217,8 @@ Standing Standing::clone(const Standing* value) throws std.alloc::alloc_error {
 std.cmp::ordering by_points(const Standing* left, const Standing* right) {
     if (left->points > right->points) { return std.cmp::ordering::less; }
     if (left->points < right->points) { return std.cmp::ordering::greater; }
-    const u8[] a = left->name.as_bytes();
-    const u8[] b = right->name.as_bytes();
+    const u8[] a = left->name;
+    const u8[] b = right->name;
     i32 order = std.bytes::compare(a, b);
     if (order < 0) { return std.cmp::ordering::less; }
     if (order > 0) { return std.cmp::ordering::greater; }

@@ -55,8 +55,8 @@ protected void add_text(array<std.string::string>* target, str text) throws std.
 protected o<str> lookup(const array<std.string::string>* names, const array<std.string::string>* values,
                         str name) {
     for (usize index = 0usize; index < len(*names); index += 1usize) {
-        if (std.bytes::equal((*names)[index].as_bytes(), name) == true) {
-            return o::some((*values)[index].as_str());
+        if (std.bytes::equal((*names)[index], name) == true) {
+            return o::some((*values)[index]);
         }
     }
     return o::none;
@@ -80,17 +80,17 @@ protected std.json::value json_number_text(str text) throws std.json::error, std
 
 protected std.json::value json_unsigned(u64 value) throws std.json::error, std.alloc::alloc_error {
     std.string::string text = f"{value}";
-    return json_number_text(text.as_str());
+    return json_number_text(text);
 }
 
 protected std.json::value json_float(f64 value) throws std.json::error, std.alloc::alloc_error {
     std.string::string text = f"{value}";
-    return json_number_text(text.as_str());
+    return json_number_text(text);
 }
 
 protected std.json::value copy_value(const std.json::value* value) throws std.json::error, std.alloc::alloc_error {
     std.string::string text = std.json::stringify(value);
-    return std.json::parse(text.as_bytes());
+    return std.json::parse(text);
 }
 
 protected std.json::value object_or_empty(o<std.json::value> taken) throws std.json::error, std.alloc::alloc_error {
@@ -120,7 +120,7 @@ protected std.json::value value_or_null(o<std.json::value> taken) {
 @generic<T: json_encode>
 protected std.json::value to_value(const T* source) throws std.json::error, std.alloc::alloc_error {
     std.string::string text = std.json::marshal(source);
-    return std.json::parse(text.as_bytes());
+    return std.json::parse(text);
 }
 
 protected void put(std.json::value* object, str key, std.json::value item)
@@ -312,13 +312,13 @@ enum content {
 /* The JSON of the contents of a resource: {"uri", "mimeType"?, "text" | "blob"}. */
 protected std.json::value contents_value(const contents* item) throws std.json::error, std.alloc::alloc_error {
     std.json::value object = std.json::object();
-    put_text(&object, "uri", item->uri.as_str());
-    if (std.string::len(&item->mime_type) != 0usize) { put_text(&object, "mimeType", item->mime_type.as_str()); }
+    put_text(&object, "uri", item->uri);
+    if (std.string::len(&item->mime_type) != 0usize) { put_text(&object, "mimeType", item->mime_type); }
     if (item->binary == true) {
         std.string::string encoded = std.encoding::encode_base64(item->blob.as_slice());
-        put_text(&object, "blob", encoded.as_str());
+        put_text(&object, "blob", encoded);
     } else {
-        put_text(&object, "text", item->text.as_str());
+        put_text(&object, "text", item->text);
     }
     return move object;
 }
@@ -327,8 +327,8 @@ protected std.json::value media_value(str kind, const media* item) throws std.js
     std.json::value object = std.json::object();
     put_text(&object, "type", kind);
     std.string::string encoded = std.encoding::encode_base64(item->data.as_slice());
-    put_text(&object, "data", encoded.as_str());
-    put_text(&object, "mimeType", item->mime_type.as_str());
+    put_text(&object, "data", encoded);
+    put_text(&object, "mimeType", item->mime_type);
     return move object;
 }
 
@@ -338,7 +338,7 @@ std.json::value content::json_marshal(const content* value) throws std.json::err
     case variant content::text(text):
         std.json::value object = std.json::object();
         put_text(&object, "type", "text");
-        put_text(&object, "text", text->as_str());
+        put_text(&object, "text", *text);
         return move object;
     case variant content::image(item): return media_value("image", item);
     case variant content::audio(item): return media_value("audio", item);
@@ -495,7 +495,7 @@ tool_result tool_result::of_error(str text) throws std.alloc::alloc_error {
 @generic<T: json_encode>
 tool_result tool_result::of_structured(const T* value) throws std.json::error, std.alloc::alloc_error {
     std.string::string text = std.json::marshal(value);
-    std.json::value structured = std.json::parse(text.as_bytes());
+    std.json::value structured = std.json::parse(text);
     array<content> blocks = std.array::create::<content>();
     append(&blocks, content::text(move text));
     return tool_result {.content = move blocks, .structured = o::some(move structured), .is_error = false};
@@ -562,7 +562,7 @@ void input_required::set_state(input_required* this, str state) throws std.alloc
 
 /* R-SLIB-MCP-0007: the number of input requests, and the key and the request at an index. */
 usize input_required::count(const input_required* this) { return len(this->requests); }
-str input_required::key_at(const input_required* this, usize index) { return this->keys[index].as_str(); }
+str input_required::key_at(const input_required* this, usize index) { return this->keys[index]; }
 const elicitation* input_required::request_at(const input_required* this, usize index) {
     return &this->requests[index];
 }
@@ -712,7 +712,7 @@ struct input {
 /* R-SLIB-MCP-0007: the answer under a key, none when the client sent none. */
 o<const answer*> input::get(const input* this, str key) {
     for (usize index = 0usize; index < len(this->keys); index += 1usize) {
-        if (std.bytes::equal(this->keys[index].as_bytes(), key) == true) {
+        if (std.bytes::equal(this->keys[index], key) == true) {
             return o::some(&this->answers[index]);
         }
     }
@@ -722,7 +722,7 @@ o<const answer*> input::get(const input* this, str key) {
 /* R-SLIB-MCP-0007: the echoed state, empty when the client sent none. */
 str input::state_text(const input* this) {
     switch (this->state) {
-    case variant o::some(value): return value->as_str();
+    case variant o::some(value): return *value;
     case variant o::none: return "";
     }
 }
@@ -888,7 +888,7 @@ protected void purge(array<task_entry>* entries) {
 
 protected o<usize> task_index(const array<task_entry>* entries, str id) {
     for (usize index = 0usize; index < len(*entries); index += 1usize) {
-        if (std.bytes::equal((*entries)[index].id.as_bytes(), id) == true) { return o::some(index); }
+        if (std.bytes::equal((*entries)[index].id, id) == true) { return o::some(index); }
     }
     return o::none;
 }
@@ -897,7 +897,7 @@ protected o<usize> task_index(const array<task_entry>* entries, str id) {
 protected std.json::value outstanding_requests(const task_entry* entry) throws std.json::error, std.alloc::alloc_error {
     std.json::value result = std.json::object();
     for (usize at = 0usize; at < len(entry->outstanding); at += 1usize) {
-        str key = entry->outstanding[at].as_str();
+        str key = entry->outstanding[at];
         switch (std.json::find(&entry->requests, key)) {
         case variant o::some(request): put(&result, key, copy_value(*request));
         case variant o::none: break;
@@ -911,11 +911,11 @@ protected std.json::value outstanding_requests(const task_entry* entry) throws s
 protected std.json::value detail_of(const task_entry* entry, u64 ttl_ms, u64 poll_ms)
     throws std.json::error, std.alloc::alloc_error {
     std.json::value result = std.json::object();
-    put_text(&result, "taskId", entry->id.as_str());
+    put_text(&result, "taskId", entry->id);
     put_text(&result, "status", status_name(entry->status));
-    if (std.string::len(&entry->message) != 0usize) { put_text(&result, "statusMessage", entry->message.as_str()); }
-    put_text(&result, "createdAt", entry->created.as_str());
-    put_text(&result, "lastUpdatedAt", entry->updated.as_str());
+    if (std.string::len(&entry->message) != 0usize) { put_text(&result, "statusMessage", entry->message); }
+    put_text(&result, "createdAt", entry->created);
+    put_text(&result, "lastUpdatedAt", entry->updated);
     put(&result, "ttlMs", json_unsigned(ttl_ms));
     put(&result, "pollIntervalMs", json_unsigned(poll_ms));
     if (entry->status == task_status::input_required) { put(&result, "inputRequests", outstanding_requests(entry)); }
@@ -928,7 +928,7 @@ protected std.json::value detail_of(const task_entry* entry, u64 ttl_ms, u64 pol
 protected void announce_task(const task_board* board, str id) throws std.alloc::alloc_error {
     std.string::string text = std.string::from_str("k");
     std.string::append_str(&text, id);
-    announce(&board->changes, text.as_str());
+    announce(&board->changes, text);
 }
 
 /* Sets the message of a task that works; false when there is no such task or it does not work. */
@@ -1027,7 +1027,7 @@ bool progress::report(progress* this, f64 value, o<f64> total, str message) thro
     switch (this->link) {
     case variant o::some(link):
         std.string::string text = progress_text(value, total, message);
-        noted = o::some(board_note(&*link->board, link->id.as_str(), text.as_str()));
+        noted = o::some(board_note(&*link->board, link->id, text));
     case variant o::none: break;
     }
     switch (noted) {
@@ -1256,11 +1256,11 @@ protected bool object_schema(const std.json::value* schema) {
 void server<S>::add_tool(server<S>* this, tool definition,
                          async fn(arc S, call) -> tool_outcome throws(std.error::fault) handler)
     throws mcp_error, std.alloc::alloc_error {
-    throw (valid_name(definition.name.as_str()) == false) failure(std.jsonrpc::invalid_params, "invalid tool name");
+    throw (valid_name(definition.name) == false) failure(std.jsonrpc::invalid_params, "invalid tool name");
     throw (object_schema(&definition.input_schema) == false)
         failure(std.jsonrpc::invalid_params, "the input schema of a tool describes an object");
     for (usize index = 0usize; index < len(this->tools); index += 1usize) {
-        throw (std.bytes::equal(this->tools[index].definition.name.as_bytes(), definition.name.as_bytes()) == true)
+        throw (std.bytes::equal(this->tools[index].definition.name, definition.name) == true)
             failure(std.jsonrpc::invalid_params, "a tool of that name exists");
     }
     append(&this->tools, tool_entry<S> {.definition = move definition, .handler = handler, .task_mode = 0u8});
@@ -1273,7 +1273,7 @@ void server<S>::add_resource(server<S>* this, resource definition,
     throws mcp_error, std.alloc::alloc_error {
     throw (std.string::len(&definition.uri) == 0usize) failure(std.jsonrpc::invalid_params, "a resource has a URI");
     for (usize index = 0usize; index < len(this->resources); index += 1usize) {
-        throw (std.bytes::equal(this->resources[index].definition.uri.as_bytes(), definition.uri.as_bytes()) == true)
+        throw (std.bytes::equal(this->resources[index].definition.uri, definition.uri) == true)
             failure(std.jsonrpc::invalid_params, "a resource at that URI exists");
     }
     append(&this->resources, resource_entry<S> {.definition = move definition, .handler = handler});
@@ -1330,7 +1330,7 @@ protected bool valid_template(str text) {
 void server<S>::add_template(server<S>* this, resource_template definition,
                              async fn(arc S, read) -> read_outcome throws(std.error::fault) handler)
     throws mcp_error, std.alloc::alloc_error {
-    throw (valid_template(definition.uri_template.as_str()) == false)
+    throw (valid_template(definition.uri_template) == false)
         failure(std.jsonrpc::invalid_params, "invalid URI template");
     append(&this->templates, template_entry<S> {.definition = move definition, .handler = handler});
 }
@@ -1340,9 +1340,9 @@ void server<S>::add_template(server<S>* this, resource_template definition,
 void server<S>::add_prompt(server<S>* this, prompt definition,
                            async fn(arc S, prompt_call) -> prompt_outcome throws(std.error::fault) handler)
     throws mcp_error, std.alloc::alloc_error {
-    throw (valid_name(definition.name.as_str()) == false) failure(std.jsonrpc::invalid_params, "invalid prompt name");
+    throw (valid_name(definition.name) == false) failure(std.jsonrpc::invalid_params, "invalid prompt name");
     for (usize index = 0usize; index < len(this->prompts); index += 1usize) {
-        throw (std.bytes::equal(this->prompts[index].definition.name.as_bytes(), definition.name.as_bytes()) == true)
+        throw (std.bytes::equal(this->prompts[index].definition.name, definition.name) == true)
             failure(std.jsonrpc::invalid_params, "a prompt of that name exists");
     }
     append(&this->prompts, prompt_entry<S> {.definition = move definition, .handler = handler});
@@ -1416,7 +1416,7 @@ protected task_board new_board(const options* settings, notifier changes) throws
 void server<S>::run_as_task(server<S>* this, str tool, bool required) throws mcp_error, std.alloc::alloc_error {
     bool found = false;
     for (usize index = 0usize; index < len(this->tools); index += 1usize) {
-        if (std.bytes::equal(this->tools[index].definition.name.as_bytes(), tool) == true) {
+        if (std.bytes::equal(this->tools[index].definition.name, tool) == true) {
             this->tools[index].task_mode = 1u8;
             if (required == true) { this->tools[index].task_mode = 2u8; }
             found = true;
@@ -1482,7 +1482,7 @@ protected struct admitted {
 };
 
 protected bool is_method(const admitted* request, str name) {
-    return std.bytes::equal(request->method.as_bytes(), name);
+    return std.bytes::equal(request->method, name);
 }
 
 /* A refusal of a request: its JSON-RPC error and the HTTP status that carries it. */
@@ -1640,16 +1640,16 @@ protected admission admit(const server<S>* host, std.jsonrpc::request message, o
     }
     switch (header_version) {
     case variant o::some(sent):
-        if (std.bytes::equal(*sent, meta.version.as_bytes()) == false) {
+        if (std.bytes::equal(*sent, meta.version) == false) {
             return admission::refused(refusal_of(header_mismatch,
                 "Header mismatch: MCP-Protocol-Version does not match the protocol version of the body", 400u16));
         }
     case variant o::none: break;
     }
-    if (std.bytes::equal(meta.version.as_bytes(), protocol_version) == false) {
-        return admission::refused(unsupported(meta.version.as_str()));
+    if (std.bytes::equal(meta.version, protocol_version) == false) {
+        return admission::refused(unsupported(meta.version));
     }
-    if (offers(host, message.method.as_str()) == false) {
+    if (offers(host, message.method) == false) {
         return admission::refused(refusal_of(std.jsonrpc::method_not_found, "Method not found", 404u16));
     }
     if (meta.level == false) {
@@ -1748,7 +1748,7 @@ protected std.json::value discovery(const server<S>* host) throws std.json::erro
     put(&result, "supportedVersions", move versions);
     put(&result, "capabilities", offered(host));
     if (std.string::len(&host->instructions) != 0usize) {
-        put_text(&result, "instructions", host->instructions.as_str());
+        put_text(&result, "instructions", host->instructions);
     }
     cache_hints(&result, &host->settings);
     finish(&result, &host->info, "complete");
@@ -1779,7 +1779,7 @@ protected void finish_page(std.json::value* result, str key, std.json::value ent
     put(result, key, move entries);
     if (next < count) {
         std.string::string cursor = f"{next}";
-        put_text(result, "nextCursor", cursor.as_str());
+        put_text(result, "nextCursor", cursor);
     }
     cache_hints(result, settings);
     finish(result, info, "complete");
@@ -1978,12 +1978,12 @@ protected std.json::value elicitation_value(const elicitation* request) throws s
     switch (*request) {
     case variant elicitation::form(asked):
         put_text(&params, "mode", "form");
-        put_text(&params, "message", asked->message.as_str());
+        put_text(&params, "message", asked->message);
         put(&params, "requestedSchema", copy_value(&asked->schema));
     case variant elicitation::url(asked):
         put_text(&params, "mode", "url");
-        put_text(&params, "message", asked->message.as_str());
-        put_text(&params, "url", asked->url.as_str());
+        put_text(&params, "message", asked->message);
+        put_text(&params, "url", asked->url);
     }
     std.json::value object = std.json::object();
     put_text(&object, "method", "elicitation/create");
@@ -2024,12 +2024,12 @@ protected outgoing input_reply(const implementation* info, const admitted* reque
     if (len(asked->requests) != 0usize) {
         std.json::value requests = std.json::object();
         for (usize index = 0usize; index < len(asked->requests); index += 1usize) {
-            put(&requests, asked->keys[index].as_str(), elicitation_value(&asked->requests[index]));
+            put(&requests, asked->keys[index], elicitation_value(&asked->requests[index]));
         }
         put(&result, "inputRequests", move requests);
     }
     switch (asked->state) {
-    case variant o::some(state): put_text(&result, "requestState", state->as_str());
+    case variant o::some(state): put_text(&result, "requestState", *state);
     case variant o::none: break;
     }
     finish(&result, info, "input_required");
@@ -2050,7 +2050,7 @@ protected o<std.json::value> board_create(const task_board* board, str id)
     throws std.json::error, std.alloc::alloc_error {
     std.string::string now = time_text();
     task_entry entry = {.id = std.string::from_str(id), .status = task_status::working, .message = std.string::create(),
-                        .created = std.string::from_str(now.as_str()), .updated = move now,
+                        .created = std.string::from_str(now), .updated = move now,
                         .expires = expiry(board->ttl_ms), .round = 0u32, .requests = std.json::null(),
                         .outstanding = std.array::create::<std.string::string>(),
                         .keys = std.array::create::<std.string::string>(), .answers = std.array::create::<answer>(),
@@ -2179,15 +2179,15 @@ protected bool ask_in(array<task_entry>* entries, str id, const input_required* 
         std.array::clear(&entry->keys);
         std.array::clear(&entry->answers);
         for (usize at = 0usize; at < len(asked->requests); at += 1usize) {
-            std.string::string key = round_key(entry->round, asked->keys[at].as_str());
-            put(&requests, key.as_str(), elicitation_value(&asked->requests[at]));
-            add_text(&entry->outstanding, key.as_str());
+            std.string::string key = round_key(entry->round, asked->keys[at]);
+            put(&requests, key, elicitation_value(&asked->requests[at]));
+            add_text(&entry->outstanding, key);
         }
         std.json::value old_requests = core::replace(&entry->requests, move requests);
         drop old_requests;
         o<std.string::string> state = o::none;
         switch (asked->state) {
-        case variant o::some(text): state = o::some(std.string::from_str(text->as_str()));
+        case variant o::some(text): state = o::some(std.string::from_str(*text));
         case variant o::none: break;
         }
         o<std.string::string> old_state = core::replace(&entry->state, move state);
@@ -2226,7 +2226,7 @@ protected str handler_key(str key) {
 /* The place of a key among the outstanding requests of a task; their count when it is not one. */
 protected usize outstanding_slot(const array<std.string::string>* outstanding, str key) {
     for (usize slot = 0usize; slot < len(*outstanding); slot += 1usize) {
-        if (std.bytes::equal((*outstanding)[slot].as_bytes(), key) == true) { return slot; }
+        if (std.bytes::equal((*outstanding)[slot], key) == true) { return slot; }
     }
     return len(*outstanding);
 }
@@ -2361,10 +2361,10 @@ protected array<std.string::string> known_in(array<task_entry>* entries, const a
     purge(entries);
     array<std.string::string> found = std.array::create::<std.string::string>();
     for (usize at = 0usize; at < len(*ids); at += 1usize) {
-        switch (task_index(entries, (*ids)[at].as_str())) {
+        switch (task_index(entries, (*ids)[at])) {
         case variant o::some(index):
             index as void;
-            add_text(&found, (*ids)[at].as_str());
+            add_text(&found, (*ids)[at]);
         case variant o::none: break;
         }
     }
@@ -2462,13 +2462,13 @@ protected outgoing start_task(const server<S>* host, const admitted* request, us
     case variant o::some(move board):
         std.uuid::uuid made = std.uuid::v4();
         std.string::string id = f"{made}";
-        o<std.json::value> seed = board_create(&*board, id.as_str());
+        o<std.json::value> seed = board_create(&*board, id);
         switch (move seed) {
         case variant o::some(move value):
             std.string::string name = core::replace(&context.name, std.string::create());
             std.json::value arguments = core::replace(&context.arguments, std.json::null());
             drop context;
-            task_job job = {.id = std.string::from_str(id.as_str()), .tool = tool, .name = move name,
+            task_job job = {.id = std.string::from_str(id), .tool = tool, .name = move name,
                             .arguments = move arguments, .form = request->form, .url = request->url};
             std.sync::send_result<task_work> sent = std.sync::send(&board->jobs, task_work::start(move job));
             drop sent;
@@ -2498,7 +2498,7 @@ protected tool_plan plan_call(const server<S>* host, admitted* request, const (s
     }
     bool found = false;
     for (usize index = 0usize; index < len(host->tools); index += 1usize) {
-        if (std.bytes::equal(host->tools[index].definition.name.as_bytes(), wanted) == true) {
+        if (std.bytes::equal(host->tools[index].definition.name, wanted) == true) {
             *chosen = index;
             found = true;
             break;
@@ -2506,7 +2506,7 @@ protected tool_plan plan_call(const server<S>* host, admitted* request, const (s
     }
     if (found == false) {
         std.string::string text = f"Unknown tool: {wanted}";
-        return tool_plan::refused(refusal_of(std.jsonrpc::invalid_params, text.as_str(), 200u16));
+        return tool_plan::refused(refusal_of(std.jsonrpc::invalid_params, text, 200u16));
     }
     o<std.json::value> given_arguments = o::none;
     switch (member(&request->params, "arguments")) {
@@ -2678,7 +2678,7 @@ protected read_plan plan_read(const server<S>* host, admitted* request, const (s
     array<std.string::string> values = std.array::create::<std.string::string>();
     bool found = false;
     for (usize index = 0usize; index < len(host->resources); index += 1usize) {
-        if (std.bytes::equal(host->resources[index].definition.uri.as_bytes(), uri) == true) {
+        if (std.bytes::equal(host->resources[index].definition.uri, uri) == true) {
             *chosen = read_target {.from_template = false, .index = index};
             found = true;
             break;
@@ -2688,7 +2688,7 @@ protected read_plan plan_read(const server<S>* host, admitted* request, const (s
         for (usize index = 0usize; index < len(host->templates); index += 1usize) {
             std.array::clear(&names);
             std.array::clear(&values);
-            if (template_match(host->templates[index].definition.uri_template.as_str(), uri, &names, &values) == true) {
+            if (template_match(host->templates[index].definition.uri_template, uri, &names, &values) == true) {
                 *chosen = read_target {.from_template = true, .index = index};
                 found = true;
                 break;
@@ -2753,11 +2753,11 @@ protected async outgoing read_resource(arc server<S> host, admitted request, std
         switch (move plan) {
         case variant read_plan::refused(move problem): return refuse(&request.id, move problem);
         case variant read_plan::ready(move context):
-            std.string::string uri = std.string::from_str(context.uri.as_str());
+            std.string::string uri = std.string::from_str(context.uri);
             auto handler = reader_of(&*host, target);
             try {
                 read_outcome outcome = await handler(std.arc::clone(&host->state), move context);
-                return read_reply(&*host, &request, uri.as_str(), move outcome);
+                return read_reply(&*host, &request, uri, move outcome);
             } catch (std.error::fault rejected) {
                 rejected as void;
             } catch (std.json::error rejected) {
@@ -2806,7 +2806,7 @@ protected prompt_plan plan_prompt(const server<S>* host, admitted* request,
     }
     bool found = false;
     for (usize index = 0usize; index < len(host->prompts); index += 1usize) {
-        if (std.bytes::equal(host->prompts[index].definition.name.as_bytes(), wanted) == true) {
+        if (std.bytes::equal(host->prompts[index].definition.name, wanted) == true) {
             *chosen = index;
             found = true;
             break;
@@ -2814,7 +2814,7 @@ protected prompt_plan plan_prompt(const server<S>* host, admitted* request,
     }
     if (found == false) {
         std.string::string text = f"Unknown prompt: {wanted}";
-        return prompt_plan::refused(refusal_of(std.jsonrpc::invalid_params, text.as_str(), 200u16));
+        return prompt_plan::refused(refusal_of(std.jsonrpc::invalid_params, text, 200u16));
     }
     array<std.string::string> names = std.array::create::<std.string::string>();
     array<std.string::string> values = std.array::create::<std.string::string>();
@@ -2826,12 +2826,12 @@ protected prompt_plan plan_prompt(const server<S>* host, admitted* request,
     const prompt* definition = &host->prompts[*chosen].definition;
     for (usize index = 0usize; index < len(definition->arguments); index += 1usize) {
         if (definition->arguments[index].required == false) { continue; }
-        str name = definition->arguments[index].name.as_str();
+        str name = definition->arguments[index].name;
         if (present(lookup(&names, &values, name)) == false) {
             std.string::string text = f"Missing required argument: {name}";
             drop names;
             drop values;
-            return prompt_plan::refused(refusal_of(std.jsonrpc::invalid_params, text.as_str(), 200u16));
+            return prompt_plan::refused(refusal_of(std.jsonrpc::invalid_params, text, 200u16));
         }
     }
     input given_input = input_of(&request->params, request->form, request->url);
@@ -2916,10 +2916,10 @@ protected enum completion_plan { ready(completion_request), refused(refusal) };
 protected bool prompt_has(const server<S>* host, str prompt_name, str argument, bool* known) {
     for (usize index = 0usize; index < len(host->prompts); index += 1usize) {
         const prompt* definition = &host->prompts[index].definition;
-        if (std.bytes::equal(definition->name.as_bytes(), prompt_name) == true) {
+        if (std.bytes::equal(definition->name, prompt_name) == true) {
             *known = true;
             for (usize at = 0usize; at < len(definition->arguments); at += 1usize) {
-                if (std.bytes::equal(definition->arguments[at].name.as_bytes(), argument) == true) { return true; }
+                if (std.bytes::equal(definition->arguments[at].name, argument) == true) { return true; }
             }
             return false;
         }
@@ -2930,7 +2930,7 @@ protected bool prompt_has(const server<S>* host, str prompt_name, str argument, 
 @generic<S: send & sync & unborrowed>
 protected bool template_offers(const server<S>* host, str pattern, str argument, bool* known) {
     for (usize index = 0usize; index < len(host->templates); index += 1usize) {
-        str shape = host->templates[index].definition.uri_template.as_str();
+        str shape = host->templates[index].definition.uri_template;
         if (std.bytes::equal(shape, pattern) == true) {
             *known = true;
             return template_has(shape, argument);
@@ -2994,10 +2994,10 @@ protected completion_plan plan_completion(const server<S>* host, const std.json:
     if (offered_argument == false) {
         if (known == false) {
             std.string::string text = f"Unknown reference: {reference}";
-            return completion_plan::refused(refusal_of(std.jsonrpc::invalid_params, text.as_str(), 200u16));
+            return completion_plan::refused(refusal_of(std.jsonrpc::invalid_params, text, 200u16));
         }
         std.string::string text = f"Unknown argument: {argument}";
-        return completion_plan::refused(refusal_of(std.jsonrpc::invalid_params, text.as_str(), 200u16));
+        return completion_plan::refused(refusal_of(std.jsonrpc::invalid_params, text, 200u16));
     }
     array<std.string::string> names = std.array::create::<std.string::string>();
     array<std.string::string> values = std.array::create::<std.string::string>();
@@ -3027,7 +3027,7 @@ protected outgoing completion_reply(const server<S>* host, const admitted* reque
         more = true;
     }
     for (usize index = 0usize; index < count; index += 1usize) {
-        std.json::append(&values, std.json::from_string(found->values[index].as_bytes()));
+        std.json::append(&values, std.json::from_string(found->values[index]));
     }
     std.json::value body = std.json::object();
     put(&body, "values", move values);
@@ -3177,14 +3177,14 @@ protected std.json::value filter_value(const filter* granted) throws std.json::e
     if (len(granted->uris) != 0usize) {
         std.json::value uris = std.json::array();
         for (usize index = 0usize; index < len(granted->uris); index += 1usize) {
-            std.json::append(&uris, std.json::from_string(granted->uris[index].as_bytes()));
+            std.json::append(&uris, std.json::from_string(granted->uris[index]));
         }
         put(&result, "resourceSubscriptions", move uris);
     }
     if (len(granted->tasks) != 0usize) {
         std.json::value ids = std.json::array();
         for (usize index = 0usize; index < len(granted->tasks); index += 1usize) {
-            std.json::append(&ids, std.json::from_string(granted->tasks[index].as_bytes()));
+            std.json::append(&ids, std.json::from_string(granted->tasks[index]));
         }
         put(&result, "taskIds", move ids);
     }
@@ -3216,7 +3216,7 @@ protected outgoing subscription_note(const std.jsonrpc::request_id* id, str meth
 protected bool covers(const filter* granted, str uri) {
     const u8[] given = uri;
     for (usize index = 0usize; index < len(granted->uris); index += 1usize) {
-        const u8[] watched = granted->uris[index].as_bytes();
+        const u8[] watched = granted->uris[index];
         if (std.bytes::equal(watched, given) == true) { return true; }
         if (len(watched) != 0usize && len(given) > len(watched) &&
             std.bytes::equal(given[0usize..len(watched)], watched) == true &&
@@ -3230,7 +3230,7 @@ protected bool covers(const filter* granted, str uri) {
 /* Whether a subscription receives the states of a task. */
 protected bool watches_task(const filter* granted, str identifier) {
     for (usize index = 0usize; index < len(granted->tasks); index += 1usize) {
-        if (std.bytes::equal(granted->tasks[index].as_bytes(), identifier) == true) { return true; }
+        if (std.bytes::equal(granted->tasks[index], identifier) == true) { return true; }
     }
     return false;
 }
@@ -3321,10 +3321,10 @@ protected async bool send_missed(const (std.sync::sync_sender<outgoing>)* sender
         }
         for (usize index = 0usize; index < len(granted->uris); index += 1usize) {
             append(&notes, subscription_note(id, "notifications/resources/updated",
-                                             o::some(granted->uris[index].as_str()), o::none));
+                                             o::some(granted->uris[index]), o::none));
         }
         for (usize index = 0usize; index < len(granted->tasks); index += 1usize) {
-            o<outgoing> state = task_note(id, board, granted->tasks[index].as_str());
+            o<outgoing> state = task_note(id, board, granted->tasks[index]);
             switch (move state) {
             case variant o::some(move item): append(&notes, move item);
             case variant o::none: break;
@@ -3406,7 +3406,7 @@ protected async void watch(arc server<S> host, std.jsonrpc::request_id id, filte
             switch (move result) {
             case variant std.async::broadcast_result::received(move text):
                 try {
-                    note = change_note(&id, &granted, &board, text.as_str());
+                    note = change_note(&id, &granted, &board, text);
                 } catch (std.json::error rejected) {
                     (move rejected) as void;
                 }
@@ -3482,7 +3482,7 @@ protected async outgoing answer_request(arc server<S> host, admitted request, st
     }
     if (is_method(&request, "prompts/get") == true) { return await get_prompt(move host, move request, move out); }
     drop out;
-    if (is_task_method(request.method.as_str()) == true) {
+    if (is_task_method(request.method) == true) {
         try {
             return answer_task_request(&*host, &request);
         } catch (std.json::error rejected) {
@@ -3523,7 +3523,7 @@ protected std.json::value error_value(i64 code, str message, o<std.json::value> 
     throws std.json::error, std.alloc::alloc_error {
     std.json::value result = std.json::object();
     std.string::string spelled = f"{code}";
-    std.json::number number = std.json::parse_number(spelled.as_bytes());
+    std.json::number number = std.json::parse_number(spelled);
     put(&result, "code", std.json::from_number(&number));
     put_text(&result, "message", message);
     switch (move data) {
@@ -3557,8 +3557,8 @@ protected async void forward_stop(std.sync::receiver<std.service::stop> stop, st
 
 /* The call that a handler of a task receives in a round. */
 protected call task_call(const task_job* job, input given, const (arc task_board)* board) throws std.json::error, std.alloc::alloc_error {
-    task_link link = {.board = std.arc::clone(board), .id = std.string::from_str(job->id.as_str())};
-    return call {.name = std.string::from_str(job->name.as_str()), .arguments = copy_value(&job->arguments),
+    task_link link = {.board = std.arc::clone(board), .id = std.string::from_str(job->id)};
+    return call {.name = std.string::from_str(job->name), .arguments = copy_value(&job->arguments),
                  .input = move given,
                  .progress = progress {.token = o::none, .sender = o::none, .last = 0.0f64, .started = false,
                                        .link = o::some(move link)}};
@@ -3631,7 +3631,7 @@ protected std.json::value missing_modes_error(const input_required* asked, bool 
     if (need_form == false && need_url == false) { return std.json::null(); }
     refusal problem = missing_modes(need_form, need_url);
     o<std.json::value> data = core::replace(&problem.data, o::none);
-    return error_value(problem.code, problem.message.as_str(), move data);
+    return error_value(problem.code, problem.message, move data);
 }
 
 protected input empty_input(bool form, bool url) {
@@ -3644,7 +3644,7 @@ protected input empty_input(bool form, bool url) {
 @scoped
 protected async bool settle_round(const task_board* board, const task_job* job, const task_signals* signals,
                                   round_end ended, (o<input>)* pending) throws std.error::fault {
-    str id = job->id.as_str();
+    str id = job->id;
     switch (move ended) {
     case variant round_end::stopped:
         board_finish(board, id, task_status::cancelled, std.json::null());
@@ -3747,7 +3747,7 @@ protected async void run_rounds(arc server<S> host, arc task_board board, task_j
             const task_board* shared = &*board;
             task_scope(1) io { going = await settle_round(shared, &job, &signals, move ended, &pending); }
         case variant o::none:
-            board_finish(&*board, job.id.as_str(), task_status::failed, internal_error_value());
+            board_finish(&*board, job.id, task_status::failed, internal_error_value());
             going = false;
         }
     }
@@ -3759,7 +3759,7 @@ protected async void run_task(arc server<S> host, task_job job) throws std.error
     o<arc task_board> found = shared_board(&*host);
     switch (move found) {
     case variant o::some(move board):
-        o<task_signals> signals = board_signals(&*board, job.id.as_str());
+        o<task_signals> signals = board_signals(&*board, job.id);
         switch (move signals) {
         case variant o::some(move signal): await run_rounds(move host, move board, move job, move signal);
         case variant o::none:
@@ -4071,7 +4071,7 @@ protected incoming classify(const server<S>* host, const u8[] line) throws std.a
         }
         return incoming::reply(internal_error(&id));
     case variant std.jsonrpc::message::notification(move note):
-        if (std.bytes::equal(note.method.as_bytes(), "notifications/cancelled") == false) { return incoming::ignore; }
+        if (std.bytes::equal(note.method, "notifications/cancelled") == false) { return incoming::ignore; }
         switch (note.params) {
         case variant o::some(params):
             switch (member(params, "requestId")) {
@@ -4223,7 +4223,7 @@ protected struct mirror { std.string::string header; array<std.string::string> p
 
 protected array<std.string::string> copy_path(const array<std.string::string>* path) throws std.alloc::alloc_error {
     array<std.string::string> result = std.array::create::<std.string::string>();
-    for (usize index = 0usize; index < len(*path); index += 1usize) { add_text(&result, (*path)[index].as_str()); }
+    for (usize index = 0usize; index < len(*path); index += 1usize) { add_text(&result, (*path)[index]); }
     return move result;
 }
 
@@ -4234,7 +4234,7 @@ protected o<const std.json::value*> property_at(const std.json::value* schema, c
         switch (current) {
         case variant o::some(value):
             switch (member(*value, "properties")) {
-            case variant o::some(properties): current = member(*properties, (*path)[index].as_str());
+            case variant o::some(properties): current = member(*properties, (*path)[index]);
             case variant o::none: return o::none;
             }
         case variant o::none: return o::none;
@@ -4294,7 +4294,7 @@ protected o<const std.json::value*> argument_at(const std.json::value* arguments
     o<const std.json::value*> current = o::some(arguments);
     for (usize index = 0usize; index < len(*path); index += 1usize) {
         switch (current) {
-        case variant o::some(value): current = member(*value, (*path)[index].as_str());
+        case variant o::some(value): current = member(*value, (*path)[index]);
         case variant o::none: return o::none;
         }
     }
@@ -4317,13 +4317,13 @@ protected bool params_match(const std.json::value* schema, const std.json::value
         case variant o::some(value):
             if (std.json::kind(*value) == std.json::value_kind::null) { continue; }
             std.string::string name = std.string::from_str("Mcp-Param-");
-            std.string::append_str(&name, found[index].header.as_str());
-            switch (fields->get(name.as_str())) {
+            std.string::append_str(&name, found[index].header);
+            switch (fields->get(name)) {
             case variant o::some(spelled):
                 o<std.string::string> decoded = header_value(*spelled);
                 switch (move decoded) {
                 case variant o::some(move text):
-                    if (header_matches(text.as_str(), *value) == false) { return false; }
+                    if (header_matches(text, *value) == false) { return false; }
                 case variant o::none: return false;
                 }
             case variant o::none: return false;
@@ -4378,7 +4378,7 @@ protected bool origin_allowed(const server<S>* host, const std.http::request* in
     switch (incoming->headers.get("Origin")) {
     case variant o::some(origin):
         for (usize index = 0usize; index < len(host->origins); index += 1usize) {
-            if (std.bytes::equal(host->origins[index].as_bytes(), *origin) == true) { return true; }
+            if (std.bytes::equal(host->origins[index], *origin) == true) { return true; }
         }
         try {
             std.url::url parsed = std.url::parse(*origin);
@@ -4386,7 +4386,7 @@ protected bool origin_allowed(const server<S>* host, const std.http::request* in
             switch (incoming->headers.get("Host")) {
             case variant o::some(name):
                 std.string::string authority = parsed.authority_text();
-                return std.text::equal_ignore_ascii_case(authority.as_str(), *name);
+                return std.text::equal_ignore_ascii_case(authority, *name);
             case variant o::none: break;
             }
         } catch (std.url::url_error rejected) {
@@ -4405,7 +4405,7 @@ protected std.string::string metadata_url(str resource) throws std.alloc::alloc_
         std.string::string text = std.string::from_str(parsed.scheme());
         std.string::append_str(&text, "://");
         std.string::string authority = parsed.authority_text();
-        std.string::append_str(&text, authority.as_str());
+        std.string::append_str(&text, authority);
         std.string::append_str(&text, "/.well-known/oauth-protected-resource");
         str path = parsed.path();
         if (std.bytes::equal(path, "/") == false) { std.string::append_str(&text, path); }
@@ -4420,14 +4420,14 @@ protected std.string::string metadata_url(str resource) throws std.alloc::alloc_
    empty. */
 protected std.string::string challenge_text(const protection* guard, str error_code) throws std.alloc::alloc_error {
     std.string::string text = std.string::from_str("Bearer resource_metadata=\"");
-    std.string::string url = metadata_url(guard->resource.as_str());
-    std.string::append_str(&text, url.as_str());
+    std.string::string url = metadata_url(guard->resource);
+    std.string::append_str(&text, url);
     std.string::append_str(&text, "\"");
     if (len(guard->scopes) != 0usize) {
         std.string::append_str(&text, ", scope=\"");
         for (usize index = 0usize; index < len(guard->scopes); index += 1usize) {
             if (index != 0usize) { std.string::append_str(&text, " "); }
-            std.string::append_str(&text, guard->scopes[index].as_str());
+            std.string::append_str(&text, guard->scopes[index]);
         }
         std.string::append_str(&text, "\"");
     }
@@ -4531,7 +4531,7 @@ protected post_plan plan_post(const server<S>* host, const std.http::request* in
     }
     switch (move parsed) {
     case variant std.jsonrpc::message::notification(move note):
-        o<challenge_head> denied = authorize(host, &incoming->headers, note.method.as_str());
+        o<challenge_head> denied = authorize(host, &incoming->headers, note.method);
         drop note;
         switch (move denied) {
         case variant o::some(move head): return post_plan::challenge(move head);
@@ -4545,7 +4545,7 @@ protected post_plan plan_post(const server<S>* host, const std.http::request* in
         drop item;
         return post_plan::reply(invalid_request());
     case variant std.jsonrpc::message::request(move message):
-        o<challenge_head> denied = authorize(host, &incoming->headers, message.method.as_str());
+        o<challenge_head> denied = authorize(host, &incoming->headers, message.method);
         switch (move denied) {
         case variant o::some(move head):
             drop message;
@@ -4560,7 +4560,7 @@ protected post_plan plan_post(const server<S>* host, const std.http::request* in
         }
         switch (incoming->headers.get("Mcp-Method")) {
         case variant o::some(sent):
-            if (std.bytes::equal(*sent, message.method.as_bytes()) == false) {
+            if (std.bytes::equal(*sent, message.method) == false) {
                 drop message;
                 return mismatch(&id, "Header mismatch: Mcp-Method does not match the method of the body");
             }
@@ -4568,7 +4568,7 @@ protected post_plan plan_post(const server<S>* host, const std.http::request* in
             drop message;
             return mismatch(&id, "Header mismatch: the Mcp-Method header is missing");
         }
-        bool named = names_target(message.method.as_str());
+        bool named = names_target(message.method);
         if (named == true && present(incoming->headers.get("Mcp-Name")) == false) {
             drop message;
             return mismatch(&id, "Header mismatch: the Mcp-Name header is missing");
@@ -4580,7 +4580,7 @@ protected post_plan plan_post(const server<S>* host, const std.http::request* in
             if (named == true) {
                 str key = "name";
                 if (is_method(&request, "resources/read") == true) { key = "uri"; }
-                if (is_task_method(request.method.as_str()) == true) { key = "taskId"; }
+                if (is_task_method(request.method) == true) { key = "taskId"; }
                 switch (member_text(&request.params, key)) {
                 case variant o::some(body):
                     bool same = false;
@@ -4588,7 +4588,7 @@ protected post_plan plan_post(const server<S>* host, const std.http::request* in
                     case variant o::some(spelled):
                         o<std.string::string> decoded = header_value(*spelled);
                         switch (move decoded) {
-                        case variant o::some(move text): same = std.bytes::equal(text.as_bytes(), *body);
+                        case variant o::some(move text): same = std.bytes::equal(text, *body);
                         case variant o::none: break;
                         }
                     case variant o::none: break;
@@ -4604,7 +4604,7 @@ protected post_plan plan_post(const server<S>* host, const std.http::request* in
                 switch (member_text(&request.params, "name")) {
                 case variant o::some(name):
                     for (usize index = 0usize; index < len(host->tools); index += 1usize) {
-                        if (std.bytes::equal(host->tools[index].definition.name.as_bytes(), *name) == true &&
+                        if (std.bytes::equal(host->tools[index].definition.name, *name) == true &&
                             params_match(&host->tools[index].definition.input_schema, &request.params,
                                          &incoming->headers) == false) {
                             drop request;
@@ -4702,7 +4702,7 @@ protected async bool forward_http(std.http::body_writer* writer, outgoing item, 
         std.string::string text = text_or_empty(move encoded);
         if (std.string::len(&text) == 0usize) { return last == false; }
         if (last == true && *streaming == false) {
-            task_scope(1) io { await write_json(writer, item.status, text.as_str()); }
+            task_scope(1) io { await write_json(writer, item.status, text); }
             return false;
         }
         if (*streaming == false) {
@@ -4713,9 +4713,9 @@ protected async bool forward_http(std.http::body_writer* writer, outgoing item, 
             }
         }
         bool more = last == false;
-        std.string::string event = std.http::sse_event("", "", text.as_str());
+        std.string::string event = std.http::sse_event("", "", text);
         task_scope(1) io {
-            bool alive = await writer->send_text(event.as_str());
+            bool alive = await writer->send_text(event);
             if (alive == false) { return false; }
         }
         return more;
@@ -4759,7 +4759,7 @@ protected async void write_head(std.http::body_writer writer, u16 status) throws
 protected async void write_challenge(std.http::body_writer writer, challenge_head head) throws std.error::fault {
     std.http::response reply_head = std.http::response::create(head.status);
     try {
-        reply_head.headers.add("WWW-Authenticate", head.challenge.as_str());
+        reply_head.headers.add("WWW-Authenticate", head.challenge);
     } catch (std.http::http_error rejected) {
         rejected as void;
     }
@@ -4819,16 +4819,16 @@ protected async std.http::response serve_metadata(arc server<S> host, std.http::
     case variant o::some(guard):
         try {
             std.json::value document = std.json::object();
-            put_text(&document, "resource", guard->resource.as_str());
+            put_text(&document, "resource", guard->resource);
             std.json::value servers = std.json::array();
             for (usize index = 0usize; index < len(guard->authorization_servers); index += 1usize) {
-                std.json::append(&servers, std.json::from_string(guard->authorization_servers[index].as_bytes()));
+                std.json::append(&servers, std.json::from_string(guard->authorization_servers[index]));
             }
             put(&document, "authorization_servers", move servers);
             if (len(guard->scopes) != 0usize) {
                 std.json::value scopes = std.json::array();
                 for (usize index = 0usize; index < len(guard->scopes); index += 1usize) {
-                    std.json::append(&scopes, std.json::from_string(guard->scopes[index].as_bytes()));
+                    std.json::append(&scopes, std.json::from_string(guard->scopes[index]));
                 }
                 put(&document, "scopes_supported", move scopes);
             }
@@ -4836,7 +4836,7 @@ protected async std.http::response serve_metadata(arc server<S> host, std.http::
             std.json::append(&methods, std.json::from_string("header"));
             put(&document, "bearer_methods_supported", move methods);
             std.string::string text = std.json::stringify(&document);
-            return std.http::response::json(200u16, text.as_str());
+            return std.http::response::json(200u16, text);
         } catch (std.json::error rejected) {
             (move rejected) as void;
         }
@@ -4859,7 +4859,7 @@ void route(std.http::router<server<S>>* routes, str path) throws std.http::http_
     if (std.bytes::equal(path, "/") == false) {
         std.string::string inserted = std.string::from_str("/.well-known/oauth-protected-resource");
         std.string::append_str(&inserted, path);
-        routes->add(std.http::method::get, inserted.as_str(), serve_metadata::<S>);
+        routes->add(std.http::method::get, inserted, serve_metadata::<S>);
     }
 }
 
@@ -4968,9 +4968,9 @@ protected void add_token(const http_link* link, std.http::request* post) throws 
     switch (link->token) {
     case variant o::some(token):
         std.string::string value = std.string::from_str("Bearer ");
-        std.string::append_str(&value, token->as_str());
+        std.string::append_str(&value, *token);
         try {
-            post->headers.add("Authorization", value.as_str());
+            post->headers.add("Authorization", value);
         } catch (std.http::http_error rejected) {
             rejected as void;
         }
@@ -5309,7 +5309,7 @@ protected std.string::string header_text(str value) throws std.alloc::alloc_erro
     if (plain == true) { return std.string::from_str(value); }
     std.string::string text = std.string::from_str("=?base64?");
     std.string::string encoded = std.encoding::encode_base64(bytes);
-    std.string::append_str(&text, encoded.as_str());
+    std.string::append_str(&text, encoded);
     std.string::append_str(&text, "?=");
     return move text;
 }
@@ -5336,9 +5336,9 @@ protected void mirror_headers(const tool* definition, const std.json::value* arg
             switch (move text) {
             case variant o::some(move spelled):
                 std.string::string name = std.string::from_str("Mcp-Param-");
-                std.string::append_str(&name, found[index].header.as_str());
+                std.string::append_str(&name, found[index].header);
                 try {
-                    fields->add(name.as_str(), spelled.as_str());
+                    fields->add(name, spelled);
                 } catch (std.http::http_error rejected) {
                     rejected as void;
                 }
@@ -5362,7 +5362,7 @@ protected async void add_mirrors(const http_link* link, str name, const std.json
     case variant o::none: break;
     }
     for (usize index = 0usize; index < len(*known); index += 1usize) {
-        if (std.bytes::equal((*known)[index].name.as_bytes(), name) == true) {
+        if (std.bytes::equal((*known)[index].name, name) == true) {
             mirror_headers(&(*known)[index], arguments, fields);
         }
     }
@@ -5420,7 +5420,7 @@ protected async o<std.jsonrpc::message> event_message(std.http::streamed* opened
                 switch (move event) {
                 case variant o::some(move found):
                     try {
-                        std.jsonrpc::message parsed = std.jsonrpc::parse(found.data.as_bytes());
+                        std.jsonrpc::message parsed = std.jsonrpc::parse(found.data);
                         if (is_response(&parsed) == true) {
                             o<std.jsonrpc::message> old = core::replace(&found_reply, o::some(move parsed));
                             drop old;
@@ -5497,7 +5497,7 @@ protected async std.jsonrpc::message http_call(const http_link* link, std.jsonrp
     o<std.string::string> encoded = encoded_text(&request_message);
     std.string::string method = std.string::create();
     switch (request_message) {
-    case variant std.jsonrpc::message::request(item): std.string::append_str(&method, item->method.as_str());
+    case variant std.jsonrpc::message::request(item): std.string::append_str(&method, item->method);
     default: break;
     }
     drop request_message;
@@ -5508,11 +5508,11 @@ protected async std.jsonrpc::message http_call(const http_link* link, std.jsonrp
         post.headers.add("Content-Type", "application/json");
         post.headers.add("Accept", "application/json, text/event-stream");
         post.headers.add("MCP-Protocol-Version", protocol_version);
-        post.headers.add("Mcp-Method", method.as_str());
+        post.headers.add("Mcp-Method", method);
         const u8[] named = name;
         if (len(named) != 0usize) {
             std.string::string value = header_text(name);
-            post.headers.add("Mcp-Name", value.as_str());
+            post.headers.add("Mcp-Name", value);
         }
         for (usize index = 0usize; index < extra.count(); index += 1usize) {
             post.headers.add(extra.name_at(index), extra.value_at(index));
@@ -5521,7 +5521,7 @@ protected async std.jsonrpc::message http_call(const http_link* link, std.jsonrp
         rejected as void;
         throw broken("a header of the request is not valid");
     }
-    std.bytes::append(&post.body, text.as_bytes());
+    std.bytes::append(&post.body, text);
     add_token(link, &post);
     std.http::client web = web_client(link);
     std.time::instant now = std.time::monotonic_now();
@@ -5531,7 +5531,7 @@ protected async std.jsonrpc::message http_call(const http_link* link, std.jsonrp
     try {
         deadline (limit_time) {
             task_scope(1) io {
-                o<std.jsonrpc::message> got = await post_message(&web, move post, link->endpoint.as_str(), limit,
+                o<std.jsonrpc::message> got = await post_message(&web, move post, link->endpoint, limit,
                                                                  &status);
                 o<std.jsonrpc::message> old = core::replace(&reply, move got);
                 drop old;
@@ -5554,7 +5554,7 @@ protected async std.jsonrpc::message http_call(const http_link* link, std.jsonrp
     throw (status == 401u16) failure(unauthorized, "the server requires a valid bearer token");
     throw (status == 403u16) failure(forbidden, "the token of the client lacks a scope that the request needs");
     std.string::string problem = f"the server answered with HTTP status {status} and no message";
-    throw failure(protocol_violation, problem.as_str());
+    throw failure(protocol_violation, problem);
 }
 
 /* The value of the Mcp-Name header of a request: the name of a tool or prompt, the URI of a
@@ -5574,7 +5574,7 @@ protected std.json::value result_of(std.jsonrpc::message reply) throws mcp_error
     case variant std.jsonrpc::message::result(move item):
         return match (move item) { case { .result = move value }: move value; };
     case variant std.jsonrpc::message::failure(move item):
-        throw mcp_error {.code = item.code, .message = std.string::from_str(item.message.as_str())};
+        throw mcp_error {.code = item.code, .message = std.string::from_str(item.message)};
     default: break;
     }
     throw broken("the server answered with no response");
@@ -5589,12 +5589,12 @@ protected async std.json::value http_request(const client* owner, std.jsonrpc::r
     switch (owner->http) {
     case variant o::some(link):
         if (std.bytes::equal(method, "tools/call") == true) {
-            task_scope(1) io { await add_mirrors(link, name.as_str(), &body, &extra); }
+            task_scope(1) io { await add_mirrors(link, name, &body, &extra); }
         }
         std.jsonrpc::request message = {.id = move id, .method = std.string::from_str(method),
                                         .params = o::some(move body)};
         task_scope(1) io {
-            std.jsonrpc::message reply = await http_call(link, move message, name.as_str(), move extra,
+            std.jsonrpc::message reply = await http_call(link, move message, name, move extra,
                                                          owner->settings.timeout, owner->settings.max_message);
             return result_of(move reply);
         }
@@ -5736,7 +5736,7 @@ protected std.json::value next_round(const std.json::value* params, std.json::va
         drop answers;
     }
     switch (move state) {
-    case variant o::some(move text): put_text(&result, "requestState", text.as_str());
+    case variant o::some(move text): put_text(&result, "requestState", text);
     case variant o::none: break;
     }
     return move result;
@@ -5890,7 +5890,7 @@ protected std.json::value task_params(str id) throws std.alloc::alloc_error {
 /* Whether a key is among those a client answered. */
 protected bool answered_key(const array<std.string::string>* answered, str key) {
     for (usize index = 0usize; index < len(*answered); index += 1usize) {
-        if (std.bytes::equal((*answered)[index].as_bytes(), key) == true) { return true; }
+        if (std.bytes::equal((*answered)[index], key) == true) { return true; }
     }
     return false;
 }
@@ -5975,7 +5975,7 @@ protected async std.json::value client::follow_task(const client* this, std.json
                 drop old;
             }
             if (std.json::len(&responses) != 0usize) {
-                std.json::value params = task_params(id.as_str());
+                std.json::value params = task_params(id);
                 try {
                     put(&params, "inputResponses", move responses);
                 } catch (std.json::error rejected) {
@@ -5992,7 +5992,7 @@ protected async std.json::value client::follow_task(const client* this, std.json
         }
         await std.time::sleep_for(poll_interval(&state));
         task_scope(1) io {
-            std.json::value got = await this->request("tasks/get", task_params(id.as_str()), false);
+            std.json::value got = await this->request("tasks/get", task_params(id), false);
             std.json::value old = core::replace(&state, move got);
             drop old;
         }
@@ -6051,7 +6051,7 @@ async discovery client::discover(const client* this) throws mcp_error, std.error
             switch (member(*meta, key_server)) {
             case variant o::some(info):
                 std.string::string text = std.json::stringify(*info);
-                implementation found = std.json::unmarshal(text.as_bytes());
+                implementation found = std.json::unmarshal(text);
                 implementation old = core::replace(&server, move found);
                 drop old;
             case variant o::none: break;
@@ -6106,7 +6106,7 @@ protected async array<std.json::value> client::list_all(const client* this, str 
         switch (cursor) {
         case variant o::some(text):
             try {
-                put_text(&params, "cursor", text->as_str());
+                put_text(&params, "cursor", *text);
             } catch (std.json::error rejected) {
                 (move rejected) as void;
             }
@@ -6197,9 +6197,9 @@ protected bool usable_tool(const tool* definition) throws std.alloc::alloc_error
     if (object_schema(&definition->input_schema) == false) { return false; }
     array<mirror> found = mirrors_of(&definition->input_schema);
     for (usize index = 0usize; index < len(found); index += 1usize) {
-        if (is_token(found[index].header.as_str()) == false) { return false; }
+        if (is_token(found[index].header) == false) { return false; }
         for (usize other = 0usize; other < index; other += 1usize) {
-            if (std.text::equal_ignore_ascii_case(found[other].header.as_str(), found[index].header.as_str()) == true) {
+            if (std.text::equal_ignore_ascii_case(found[other].header, found[index].header) == true) {
                 return false;
             }
         }
@@ -6212,7 +6212,7 @@ protected bool usable_tool(const tool* definition) throws std.alloc::alloc_error
     try {
         std.string::string text = std.json::stringify(&definition->input_schema);
         usize annotations = 0usize;
-        const u8[] bytes = text.as_bytes();
+        const u8[] bytes = text;
         str needle = "\"x-mcp-header\":";
         const u8[] pattern = needle;
         usize at = 0usize;
@@ -6231,7 +6231,7 @@ protected bool usable_tool(const tool* definition) throws std.alloc::alloc_error
 protected o<T> decode_as(const std.json::value* value) throws std.alloc::alloc_error {
     try {
         std.string::string text = std.json::stringify(value);
-        T found = std.json::unmarshal(text.as_bytes());
+        T found = std.json::unmarshal(text);
         return o::some(move found);
     } catch (std.json::error rejected) {
         (move rejected) as void;
@@ -6730,14 +6730,14 @@ protected std.json::value interests_value(const interests* wanted) throws std.js
     if (len(wanted->uris) != 0usize) {
         std.json::value uris = std.json::array();
         for (usize index = 0usize; index < len(wanted->uris); index += 1usize) {
-            std.json::append(&uris, std.json::from_string(wanted->uris[index].as_bytes()));
+            std.json::append(&uris, std.json::from_string(wanted->uris[index]));
         }
         put(&result, "resourceSubscriptions", move uris);
     }
     if (len(wanted->tasks) != 0usize) {
         std.json::value ids = std.json::array();
         for (usize index = 0usize; index < len(wanted->tasks); index += 1usize) {
-            std.json::append(&ids, std.json::from_string(wanted->tasks[index].as_bytes()));
+            std.json::append(&ids, std.json::from_string(wanted->tasks[index]));
         }
         put(&result, "taskIds", move ids);
     }
@@ -6786,7 +6786,7 @@ protected enum event { changed(change), acknowledged(interests), ended, other };
 protected event event_of(std.jsonrpc::message message) throws mcp_error, std.alloc::alloc_error {
     switch (move message) {
     case variant std.jsonrpc::message::notification(move note):
-        str method = note.method.as_str();
+        str method = note.method;
         if (std.bytes::equal(method, "notifications/tools/list_changed") == true) { return event::changed(change::tools); }
         if (std.bytes::equal(method, "notifications/prompts/list_changed") == true) { return event::changed(change::prompts); }
         if (std.bytes::equal(method, "notifications/resources/list_changed") == true) {
@@ -6812,7 +6812,7 @@ protected event event_of(std.jsonrpc::message message) throws mcp_error, std.all
         }
         return event::other;
     case variant std.jsonrpc::message::failure(move item):
-        throw mcp_error {.code = item.code, .message = std.string::from_str(item.message.as_str())};
+        throw mcp_error {.code = item.code, .message = std.string::from_str(item.message)};
     case variant std.jsonrpc::message::result(move item):
         drop item;
         return event::ended;
@@ -6833,7 +6833,7 @@ protected async o<std.jsonrpc::message> next_event(std.http::streamed* stream, s
         switch (move ready) {
         case variant o::some(move found):
             try {
-                return o::some(std.jsonrpc::parse(found.data.as_bytes()));
+                return o::some(std.jsonrpc::parse(found.data));
             } catch (std.jsonrpc::rpc_error rejected) {
                 (move rejected) as void;
             }
@@ -6985,7 +6985,7 @@ protected async subscription listen_http(const http_link* link, std.jsonrpc::req
     } catch (std.http::http_error rejected) {
         rejected as void;
     }
-    std.bytes::append(&post.body, text.as_bytes());
+    std.bytes::append(&post.body, text);
     add_token(link, &post);
     std.http::client web = web_client(link);
     o<std.http::streamed> opened = o::none;
@@ -6994,7 +6994,7 @@ protected async subscription listen_http(const http_link* link, std.jsonrpc::req
     try {
         deadline (limit) {
             task_scope(1) io {
-                std.http::streamed got = await web.open(move post, link->endpoint.as_str());
+                std.http::streamed got = await web.open(move post, link->endpoint);
                 o<std.http::streamed> old = core::replace(&opened, o::some(move got));
                 drop old;
             }

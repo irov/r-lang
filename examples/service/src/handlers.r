@@ -69,7 +69,7 @@ async void count(arc Total total, std.net::tcp_connection connection) throws std
     u64 sum = await add(move total, amount);
     std.string::string reply = f"{sum}";
     task_scope(1) io {
-        await std.net::tcp_write_all_from(&connection.stream, reply.as_str());
+        await std.net::tcp_write_all_from(&connection.stream, reply);
     }
 }
 
@@ -136,6 +136,6 @@ async void repeat(arc Repeat settings, std.net::tcp_connection connection) throw
     case variant o::none: break;
     }
     task_scope(1) io {
-        await std.net::tcp_write_all_from(&connection.stream, reply.as_str());
+        await std.net::tcp_write_all_from(&connection.stream, reply);
     }
 }

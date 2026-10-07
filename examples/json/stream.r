@@ -11,7 +11,7 @@ async i32 example() throws std.json::error, std.alloc::alloc_error {
     std.json::decoder<Entry> decoder = std.json::new_decoder(options);
     std.string::string input = std.string::from_str(
         "[{\"id\":1,\"name\":\"Madrid\"},{\"id\":2,\"name\":\"\\uD83D\\uDE00\"}]");
-    const u8[] source = input.as_bytes();
+    const u8[] source = input;
     usize offset = 0;
     u64 sum = 0;
     while (true) {

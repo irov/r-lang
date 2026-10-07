@@ -38,7 +38,7 @@ async u32 number_lines() throws std.error::fault {
         std.bufio::writer<std.io::output>::create(std.io::stdout(), 64usize);
     task_scope(1) io {
         for (std.string::string numbered in &numbered_input) {
-            task_scope(1) write { await output.write(numbered.as_bytes()); }
+            task_scope(1) write { await output.write(numbered); }
         }
         await output.write_str("----\n");
     }
@@ -46,7 +46,7 @@ async u32 number_lines() throws std.error::fault {
     usize pending = output.buffered();
     std.string::string total = f"{number} lines, {pending} bytes left for the final flush\n";
     task_scope(1) io {
-        await output.write(total.as_bytes());
+        await output.write(total);
         await output.flush();
     }
     return number;

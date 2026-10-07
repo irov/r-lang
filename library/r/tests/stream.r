@@ -165,8 +165,8 @@ async void write_all_repeats_partial_writes() throws std.error::fault, std.test:
     Chunked chunked = {.tally = std.arc::clone(&shared)};
     std.string::string letters = std.string::from_str("abcdefgh");
     task_scope(1) io {
-        await emit(&chunked, letters.as_bytes());
-        const u8[] all = letters.as_bytes();
+        await emit(&chunked, letters);
+        const u8[] all = letters;
         await chunked.write_all_from(all[0usize..0usize]);
         await chunked.shutdown();
     }
@@ -180,7 +180,7 @@ async void a_writer_that_takes_nothing_breaks_the_pipe() throws std.error::fault
     Stuck stuck = {.tag = 1u32};
     std.string::string single = std.string::from_str("x");
     try {
-        task_scope(1) io { await emit(&stuck, single.as_bytes()); }
+        task_scope(1) io { await emit(&stuck, single); }
         std.test::fail("a writer that takes no byte cannot finish");
     } catch (std.io::io_error failure) {
         std.test::check(failure.code == std.io::error_code::broken_pipe, "broken_pipe");
@@ -279,7 +279,7 @@ async void files_are_streams() throws std.error::fault, std.test::failure {
     std.fs::file file = await path.open_file(writing());
     std.string::string text = std.string::from_str("file bytes");
     task_scope(1) io {
-        await emit(&file, text.as_bytes());
+        await emit(&file, text);
         await file.shutdown();
     }
     await (move file).close();
@@ -315,10 +315,10 @@ async void tcp_streams_and_connections_are_streams() throws std.error::fault,
     bytes received = {};
     bytes replied = {};
     task_scope(1) io {
-        await send(&channel, request.as_bytes());
+        await send(&channel, request);
         usize read = await drain(&connection, &received);
         std.test::equal(read, 8usize);
-        await send(&connection, reply.as_bytes());
+        await send(&connection, reply);
         usize back = await drain(&channel, &replied);
         std.test::equal(back, 5usize);
     }
@@ -337,7 +337,7 @@ async void unix_streams_are_streams() throws std.error::fault, std.test::failure
     bytes received = {};
     bytes replied = {};
     task_scope(1) io {
-        await send(&client, request.as_bytes());
+        await send(&client, request);
         usize echoed = await echo(&server);
         std.test::equal(echoed, 18usize);
         usize back = await drain_any(&client, &replied);

@@ -5,7 +5,7 @@ struct User {
     @json(optional, default = "missing") std.string::string email;
 };
 protected bool matches(const std.string::string* value, const u8[] expected) {
-    const u8[] actual = std.string::as_bytes(value);
+    const u8[] actual = *value;
     if (len(actual) != len(expected)) { return false; }
     usize index = 0;
     while (index < len(actual)) {

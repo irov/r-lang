@@ -82,7 +82,7 @@ async i64 register(std.string::string path, std.string::string id, std.string::s
     }
     add(&device, std.sqlite::value::null_value);
     // The first 8 bytes of the SHA-256 of the identifier.
-    std.hash::sha256_digest digest = std.hash::sha256(id.as_bytes());
+    std.hash::sha256_digest digest = std.hash::sha256(id);
     add(&device, std.sqlite::value::of_blob(digest.bytes[0usize..8usize]));
     await db.begin(std.sqlite::begin_mode::immediate);
     try {
@@ -220,7 +220,7 @@ protected std.string::string shown(const std.sqlite::value* item) throws std.all
     case variant std.sqlite::value::real(number):
         f64 real = *number;
         return f"{real}";
-    case variant std.sqlite::value::text(data): return std.string::from_str(data->as_str());
+    case variant std.sqlite::value::text(data): return std.string::from_str(*data);
     case variant std.sqlite::value::blob(data): return std.encoding::encode_hex(data->as_slice());
     }
 }

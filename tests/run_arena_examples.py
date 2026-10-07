@@ -39,7 +39,8 @@ usage = ('arena token KEY ACCOUNT NICK EMAIL PLATFORM PROVIDER AVATAR | check KE
          'arena google KEY_FILE SCOPE | client ENDPOINT CLIENT SECRET | login ENDPOINT CODE VERIFIER\n'
          'arena config\n'
          'arena migrate | register ACCOUNT NICK EMAIL CREATED | ban ID TYPE AT | sync ID AT SESSION BADGES STATS\n'
-         'arena users | user ID | server KEY CIPHER\n')
+         'arena users | user ID | server KEY CIPHER\n'
+         'arena buy ACCOUNT OFFER COUNT | stocks ACCOUNT | restock OFFER COUNT ACCOUNT...\n')
 checks = 0
 
 
@@ -99,10 +100,10 @@ def database_checks():
         environment = dict(os.environ)
         environment.update(database.environment())
         expect(['users'], 65, '', 'database: server 42P01\n', environment)
-        expect(['migrate'], 0, 'applied 4 migrations\n', environment=environment)
+        expect(['migrate'], 0, 'applied 5 migrations\n', environment=environment)
         expect(['migrate'], 0, 'applied 0 migrations\n', environment=environment)
         assert database.psql('SELECT version, name FROM r_schema_migrations ORDER BY version') == \
-            '1|users\n2|sessions\n3|gems\n4|commands\n'
+            '1|users\n2|sessions\n3|gems\n4|commands\n5|stocks\n'
         expect(['register', '42', 'Ann', 'ann@example.test', '2024-03-10T07:00:00Z'], 0, 'user 1\n',
                environment=environment)
         expect(['register', '43', 'Борис', 'boris@example.test', '2024-03-11T23:30:00+05:00'], 0, 'user 2\n',
@@ -142,6 +143,17 @@ def database_checks():
         database.psql("ALTER TABLE users RENAME COLUMN nickname TO nick")
         expect(['users'], 65, '', 'database: missing_column nickname\n', environment)
         database.psql("ALTER TABLE users RENAME COLUMN nick TO nickname")
+        # Stocks by the table attribute of std.postgres: find, insert, update under a savepoint,
+        # a rollback to it when the stock is short, select, remove and insert_all.
+        expect(['buy', '42', 'gems', '2'], 0, '42 bought 2 of gems, 3 left\n', environment=environment)
+        expect(['buy', '42', 'gems', '4'], 0, 'gems is out of stock for 42: 3 left\n', environment=environment)
+        expect(['buy', '42', 'coins', '5'], 0, '42 bought 5 of coins, 0 left\n', environment=environment)
+        expect(['stocks', '42'], 0, 'coins 0\ngems 3\n', environment=environment)
+        expect(['restock', 'gems', '10', '42', '43'], 0, 'restocked 2 of gems\n', environment=environment)
+        expect(['stocks', '43'], 0, 'gems 10\n', environment=environment)
+        assert database.psql("SELECT account_id, offer_id, stock FROM user_stocks ORDER BY account_id, offer_id") == \
+            '42|coins|0\n42|gems|10\n43|gems|10\n'
+        expect(['buy', '42', 'gems', '0'], 64, '', usage, environment)
         server_checks(database, environment)
         # An applied migration that changed is refused before anything runs.
         database.psql("UPDATE r_schema_migrations SET checksum = 'x' WHERE version = 2")

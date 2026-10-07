@@ -37,7 +37,7 @@ usize rest(str first, str... others) {
 i32 main() {
     i32 failures = 0;
     std.string::string owned = std.string::from_str("alphabet");
-    str word = longest("a", owned.as_str(), "abc");
+    str word = longest("a", owned, "abc");
     if (len(word) != 8usize) { failures += 1; }
     str none = longest();
     if (len(none) != 0usize) { failures += 1; }

@@ -18,7 +18,7 @@ protected std.string::string round_trip(str text)
 protected void same(str text)
     throws std.test::failure, std.jsonrpc::rpc_error, std.json::error, std.alloc::alloc_error {
     std.string::string written = round_trip(text);
-    std.test::equal_text(written.as_str(), text);
+    std.test::equal_text(written, text);
 }
 
 /* The code of the failure that parsing the text throws, and whether it names an id. */
@@ -53,7 +53,7 @@ void reads_and_writes_every_kind() throws std.test::failure, std.jsonrpc::rpc_er
     same("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32700,\"message\":\"Parse error\",\"data\":{\"at\":3}}}");
     std.string::string reordered =
         round_trip("{\"method\":\"m\",\"params\":{},\"id\":\"1\",\"jsonrpc\":\"2.0\",\"extra\":true}");
-    std.test::equal_text(reordered.as_str(), "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"m\",\"params\":{}}");
+    std.test::equal_text(reordered, "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"m\",\"params\":{}}");
     std.jsonrpc::message request = std.jsonrpc::parse("{\"jsonrpc\":\"2.0\",\"id\":\"7\",\"method\":\"m\"}");
     switch (move request) {
     case variant std.jsonrpc::message::request(move item):
@@ -107,7 +107,7 @@ void answers_a_failure() throws std.test::failure, std.jsonrpc::rpc_error, std.j
     std.jsonrpc::rpc_error failure = rejection("{\"jsonrpc\":\"2.0\",\"id\":\"r\",\"method\":[]}");
     std.jsonrpc::message answer = std.jsonrpc::message::failure(std.jsonrpc::error_response::of(&failure));
     std.string::string text = std.jsonrpc::encode(&answer);
-    std.test::equal_text(text.as_str(),
+    std.test::equal_text(text,
                          "{\"jsonrpc\":\"2.0\",\"id\":\"r\",\"error\":{\"code\":-32600,\"message\":\"Invalid Request\"}}");
 }
 
@@ -168,12 +168,12 @@ async void frames_messages_by_line() throws std.error::fault, std.test::failure,
         u32 count = await read_all(&input, &lines);
         std.test::equal(count, 3u32);
     }
-    std.test::equal_text(lines[0usize].as_str(),
+    std.test::equal_text(lines[0usize],
                          "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"a\",\"params\":{\"text\":\"two\\nlines\"}}");
-    std.test::equal_text(lines[1usize].as_str(), "{\"jsonrpc\":\"2.0\",\"method\":\"b\"}");
-    std.jsonrpc::message third = std.jsonrpc::parse(lines[2usize].as_str());
+    std.test::equal_text(lines[1usize], "{\"jsonrpc\":\"2.0\",\"method\":\"b\"}");
+    std.jsonrpc::message third = std.jsonrpc::parse(lines[2usize]);
     std.string::string written = std.jsonrpc::encode(&third);
-    std.test::equal_text(written.as_str(), "{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{}}");
+    std.test::equal_text(written, "{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{}}");
     await (move client).close();
     await (move listener).close();
 }

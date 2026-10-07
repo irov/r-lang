@@ -4,7 +4,7 @@ module test.codegen.json_tree;
 struct TestStorage1 { std.json::value value; };
 
 protected bool matches(const std.string::string* source, const u8[] expected) {
-    const u8[] actual = std.string::as_bytes(source);
+    const u8[] actual = *source;
     usize size = len(actual);
     usize other_size = len(expected);
     if (size != other_size) { return false; }

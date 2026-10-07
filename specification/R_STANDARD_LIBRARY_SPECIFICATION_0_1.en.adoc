@@ -15,7 +15,7 @@ Normative draft of the R standard library
 |Field |Value
 |Document|R Standard Library Specification
 |Language version|0.1
-|Document revision|0.1.0-draft.69
+|Document revision|0.1.0-draft.70
 |Status|Normative draft; not a stable R 1.0 standard
 |Document language|English; normative original
 |Required language standard|R Core Language Specification 0.1
@@ -8067,6 +8067,50 @@ is released after the last step and after every `+pg_error+`; a fault ends the s
 it the lock. The sql of a step therefore cannot end the transaction itself or run a statement
 that a transaction block refuses.
 
+[[R-SLIB-PG-0017]]
+*R-SLIB-PG-0017* — Tables of structs:
+
+* `+std.postgres::table+`;
+* `+std.postgres::connection::insert<T: json_encode & json_decode>(const std.postgres::connection* this, const T* row) -> task<T throws std.postgres::pg_error, std.error::fault> throws std.postgres::pg_error, std.async::start_error, std.alloc::alloc_error+`;
+* `+std.postgres::connection::insert_all<T: json_encode>(const std.postgres::connection* this, const array<T>* items) -> task<u64 throws std.postgres::pg_error, std.error::fault> throws std.postgres::pg_error, std.async::start_error, std.alloc::alloc_error+`;
+* `+std.postgres::connection::update<T: json_encode>(const std.postgres::connection* this, const T* row) -> task<u64 throws std.postgres::pg_error, std.error::fault> throws std.postgres::pg_error, std.async::start_error, std.alloc::alloc_error+`;
+* `+std.postgres::connection::upsert<T: json_encode & json_decode>(const std.postgres::connection* this, const T* row) -> task<T throws std.postgres::pg_error, std.error::fault> throws std.postgres::pg_error, std.async::start_error, std.alloc::alloc_error+`;
+* `+std.postgres::connection::remove<T: json_encode>(const std.postgres::connection* this, const T* row) -> task<u64 throws std.postgres::pg_error, std.error::fault> throws std.postgres::pg_error, std.async::start_error, std.alloc::alloc_error+`;
+* `+std.postgres::connection::find<T: json_decode>(const std.postgres::connection* this, array<std.postgres::value> key) -> task<o<T> throws std.postgres::pg_error, std.error::fault> throws std.postgres::pg_error, std.async::start_error, std.alloc::alloc_error+`;
+* `+std.postgres::connection::select<T: json_decode>(const std.postgres::connection* this, str tail, array<std.postgres::value> parameters) -> task<array<T> throws std.postgres::pg_error, std.error::fault> throws std.postgres::pg_error, std.async::start_error, std.alloc::alloc_error+`;
+* `+std.postgres::connection::savepoint(const std.postgres::connection* this, str name) -> task<void throws std.postgres::pg_error, std.error::fault> throws std.async::start_error, std.alloc::alloc_error+`;
+* `+std.postgres::connection::release(const std.postgres::connection* this, str name) -> task<void throws std.postgres::pg_error, std.error::fault> throws std.async::start_error, std.alloc::alloc_error+`;
+* `+std.postgres::connection::rollback_to(const std.postgres::connection* this, str name) -> task<void throws std.postgres::pg_error, std.error::fault> throws std.async::start_error, std.alloc::alloc_error+`.
+
+`+table+` is a Copy attribute type (Core R-AGG-0013) with the target `+type+` and the public
+fields `+str name+`, `+str key+` and `+str generated+`, the last two empty by default. A struct T
+marked `+@std.postgres::table(...)+` is stored in the table `+name+`, written into a statement
+as given, so that a schema may qualify it. Its columns are the JSON names of its fields
+(R-SLIB-PG-0015); `+key+` and `+generated+` list columns separated by commas and optional
+spaces: the key identifies a row, and the generated columns are filled by the database and left
+out of what the program writes. A T without the attribute is `+unsupported+`, a listed column
+that is no JSON name of T is `+missing_column+` with the name in detail, and an operation that
+needs a key of a table without one is `+invalid_value+`; each is thrown when the operation is
+started.
+
+insert writes `+INSERT INTO name (columns) VALUES ($1, ...) RETURNING *+` over the columns of T
+that are not generated, in field order, with parameters made as by parameters_of, and reads the
+returned row into T as decode does. insert_all writes every row in one statement with a VALUES
+list, split in order into several statements when one would have more than 65535 parameters, and
+returns the number of rows inserted; an empty array writes nothing. update writes
+`+UPDATE name SET "c" = $i, ... WHERE "k" = $j AND ...+` over the columns that are neither key
+nor generated and returns the number of rows changed. upsert writes the INSERT of insert followed
+by `+ON CONFLICT (keys) DO UPDATE SET "c" = EXCLUDED."c", ... RETURNING *+` over the columns that
+are neither key nor generated, or over the first key column when there is none, and reads the
+row. remove writes `+DELETE FROM name WHERE "k" = $j AND ...+` and returns the number of rows
+removed. find writes `+SELECT * FROM name WHERE "k" = $1 AND ...+` with the values of `+key+` in
+the order of the key columns, a different number of them being `+invalid_value+`, and returns
+the first row or none. select writes `+SELECT * FROM name+`, a space and tail as written, with
+the parameters $1 to $N, and reads every row. savepoint, release and rollback_to run
+`+SAVEPOINT "name"+`, `+RELEASE SAVEPOINT "name"+` and `+ROLLBACK TO SAVEPOINT "name"+` as
+scripts of R-SLIB-PG-0006: inside a transaction, a rollback to a savepoint undoes the statements
+after it and keeps the transaction.
+
 === 21.33 JSON Web Tokens: `+std.jwt+`
 
 [[R-SLIB-JWT-0001]]
@@ -8686,7 +8730,7 @@ contract of the unsafe `+map_file+` keeps the range in the file and unchanged by
 |R source translated with the program over the native provider `+std.fs.native+`
 (R-SLIB-RSRC-0003)
 
-|`+std.postgres+`: R-SLIB-PG-0001..0016
+|`+std.postgres+`: R-SLIB-PG-0001..0017
 |Move options, connections, statements, rows and notifications; a connection is shared through
 `+arc+` by its handles, every operation keeps it through a new reference; row views borrow the row
 |Server errors are `+std.postgres::pg_error+` with SQLSTATE, message, detail and hint; failures of

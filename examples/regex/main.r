@@ -15,7 +15,7 @@ i32 main() {
         case variant o::none: return 2;
         }
         std.string::string redacted = number.replace_all("item=42 count=7", "#");
-        str text = redacted.as_str();
+        str text = redacted;
         bool correct = std.text::equal_ignore_ascii_case(text, "item=# count=#");
         if (correct == false) { return 3; }
 

@@ -58,7 +58,7 @@ async i32 main(const str[] arguments) {
             usize count = 0usize;
             task_scope(1) io {
                 count += await file.read_at_into(5u64, window.as_slice_mut(), o::none);
-                await std.fs::write_all_at_from(&file, 0u64, head.as_str(), o::none);
+                await std.fs::write_all_at_from(&file, 0u64, head, o::none);
             }
             if (count != 3usize || same(window.as_slice(), "567") == false) { throw TestAssertionFailed {.code = 13}; }
             bytes again = std.alloc::bytes(32usize, 0u8);

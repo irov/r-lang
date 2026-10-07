@@ -46,7 +46,7 @@ void finds_environment_variables() throws std.test::failure, std.error::fault {
     std.string::string wanted = owned("R_STRING_KEYS_FIXTURE");
     o<const std.string::string*> found = std.dict::get(&variables, &wanted);
     switch (found) {
-    case variant o::some(value): std.test::equal_text((*value)->as_str(), "value-42");
+    case variant o::some(value): std.test::equal_text(**value, "value-42");
     case variant o::none: std.test::fail("the variable is a key");
     }
     std.string::string absent = owned("R_STRING_KEYS_FIXTURE_ABSENT");

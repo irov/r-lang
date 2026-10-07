@@ -73,7 +73,7 @@ protected std.string::string shown(const std.mcp::tool_result* result) throws st
     }
     if (len(result->content) != 0usize) {
         switch (result->content[0usize]) {
-        case variant std.mcp::content::text(text): return std.string::from_str(text->as_str());
+        case variant std.mcp::content::text(text): return std.string::from_str(*text);
         case variant std.mcp::content::image(picture): return media_text("image", picture);
         case variant std.mcp::content::audio(sound): return media_text("audio", sound);
         case variant std.mcp::content::link(linked): return std.string::from_str(linked->uri);
@@ -433,7 +433,7 @@ async void converse(const std.mcp::client* link, str label) throws std.error::fa
             switch (said->content) {
             case variant std.mcp::content::text(message):
                 std.string::append_str(&prompt_line, " ");
-                std.string::append_str(&prompt_line, message->as_str());
+                std.string::append_str(&prompt_line, *message);
             default: break;
             }
         }

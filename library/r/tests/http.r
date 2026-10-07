@@ -32,7 +32,7 @@ protected async std.http::response item(arc Counter state, std.http::request inc
     case variant o::some(id): std.string::append_str(&text, *id);
     case variant o::none: std.string::append_str(&text, "?");
     }
-    return std.http::response::text(200u16, text.as_str());
+    return std.http::response::text(200u16, text);
 }
 
 protected async std.http::response file(arc Counter state, std.http::request incoming)
@@ -43,7 +43,7 @@ protected async std.http::response file(arc Counter state, std.http::request inc
     case variant o::some(rest): std.string::append_str(&text, *rest);
     case variant o::none: break;
     }
-    return std.http::response::text(200u16, text.as_str());
+    return std.http::response::text(200u16, text);
 }
 
 protected async std.http::response echo(arc Counter state, std.http::request incoming)
@@ -115,13 +115,13 @@ protected async std.http::response result_page(arc Counter state, std.http::requ
     drop state;
     std.string::string text = std.string::from_str(std.http::method_name(incoming.method));
     std.string::append_str(&text, " ");
-    std.string::append_str(&text, incoming.target.as_str());
+    std.string::append_str(&text, incoming.target);
     std.string::string length = std.string::create();
     usize size = len(incoming.body);
     std.string::string shown = f" body={size}";
-    std.string::append_str(&text, shown.as_str());
+    std.string::append_str(&text, shown);
     drop length;
-    return std.http::response::text(200u16, text.as_str());
+    return std.http::response::text(200u16, text);
 }
 
 protected async std.http::response forever(arc Counter state, std.http::request incoming)
@@ -164,9 +164,9 @@ protected async void events(arc Counter state, std.http::request incoming, std.h
     for (u32 index = 0u32; index < 3u32; index += 1u32) {
         std.string::string id = f"{index}";
         std.string::string data = f"n={index}\nsecond line";
-        std.string::string text = std.http::sse_event("tick", id.as_str(), data.as_str());
+        std.string::string text = std.http::sse_event("tick", id, data);
         task_scope(1) io {
-            bool sent = await writer.send_text(text.as_str());
+            bool sent = await writer.send_text(text);
             if (sent == false) { return; }
         }
     }
@@ -215,7 +215,7 @@ protected u32 count_messages(std.http::sse_parser* parser)
         bool found = false;
         switch (move got) {
         case variant o::some(move message):
-            std.test::equal_text(message.event.as_str(), "tick");
+            std.test::equal_text(message.event, "tick");
             count += 1u32;
             found = true;
         case variant o::none: break;
@@ -410,7 +410,7 @@ protected std.string::string base_of(std.net::socket_address endpoint, str schem
 
 protected std.string::string url_at(const std.string::string* base, str path)
     throws std.alloc::alloc_error {
-    std.string::string text = std.string::from_str(base->as_str());
+    std.string::string text = std.string::from_str(*base);
     std.string::append_str(&text, path);
     return move text;
 }
@@ -425,20 +425,20 @@ protected async void plain_requests(std.http::client* owner, const std.string::s
     std.string::string submit_url = url_at(base, "/submit");
     std.string::string zipped_url = url_at(base, "/zipped");
     task_scope(1) io {
-        std.http::response first = await owner->get(hello_url.as_str());
+        std.http::response first = await owner->get(hello_url);
         expect_text(&first, 200u16, "hello");
         std.test::equal(owner->idle_count(), 1usize);
-        std.http::response again = await owner->get(hello_url.as_str());
+        std.http::response again = await owner->get(hello_url);
         expect_text(&again, 200u16, "hello");
         std.test::equal(owner->idle_count(), 1usize);
-        std.http::response followed = await owner->get(moved_url.as_str());
+        std.http::response followed = await owner->get(moved_url);
         expect_text(&followed, 200u16, "hello");
         std.http::request form = std.http::request::create(std.http::method::post, "/");
         std.bytes::append(&form.body, "name=value");
         form.headers.add("Content-Type", "application/x-www-form-urlencoded");
-        std.http::response seen = await owner->send(move form, submit_url.as_str());
+        std.http::response seen = await owner->send(move form, submit_url);
         expect_text(&seen, 200u16, "GET /result?from=submit body=0");
-        std.http::response inflated = await owner->get(zipped_url.as_str());
+        std.http::response inflated = await owner->get(zipped_url);
         expect_text(&inflated, 200u16, "compressed text, compressed text, compressed text");
         std.test::check(inflated.headers.contains("Content-Encoding") == false, "decoded");
     }
@@ -451,7 +451,7 @@ protected async void streamed_requests(std.http::client* owner, const std.string
     std.string::string events_url = url_at(base, "/events");
     std.string::string silent_url = url_at(base, "/silent-stream");
     task_scope(1) io {
-        std.http::response streamed = await owner->get(events_url.as_str());
+        std.http::response streamed = await owner->get(events_url);
         std.test::equal(streamed.status, 200u16);
         std.test::check(streamed.headers.has_token("Transfer-Encoding", "chunked"), "chunked");
         std.http::sse_parser parser = std.http::sse_parser::create();
@@ -468,9 +468,9 @@ protected async void streamed_requests(std.http::client* owner, const std.string
             switch (move got) {
             case variant o::some(move message):
                 std.string::string expected = f"n={received}\nsecond line";
-                std.test::equal_text(message.data.as_str(), expected.as_str());
+                std.test::equal_text(message.data, expected);
                 std.string::string id = f"{received}";
-                std.test::equal_text(message.id.as_str(), id.as_str());
+                std.test::equal_text(message.id, id);
                 received += 1u32;
                 found = true;
             case variant o::none: break;
@@ -479,10 +479,10 @@ protected async void streamed_requests(std.http::client* owner, const std.string
         }
         std.test::equal(received, 3u32);
         std.http::request head_events = std.http::request::create(std.http::method::head, "/");
-        std.http::response headed = await owner->send(move head_events, events_url.as_str());
+        std.http::response headed = await owner->send(move head_events, events_url);
         std.test::equal(headed.status, 200u16);
         std.test::equal(len(headed.body), 0usize);
-        std.http::response silent = await owner->get(silent_url.as_str());
+        std.http::response silent = await owner->get(silent_url);
         std.test::equal(silent.status, 500u16);
     }
 }
@@ -546,7 +546,7 @@ protected async void opened_requests(const std.http::client* owner, const std.st
     std.string::string hang_url = url_at(base, "/hang");
     o<std.http::streamed> events_stream = o::none;
     task_scope(1) io {
-        o<std.http::streamed> got = await open_stream(owner, events_url.as_str());
+        o<std.http::streamed> got = await open_stream(owner, events_url);
         o<std.http::streamed> old = core::replace(&events_stream, move got);
         drop old;
     }
@@ -561,7 +561,7 @@ protected async void opened_requests(const std.http::client* owner, const std.st
     case variant o::none: std.test::fail("an event stream");
     }
     task_scope(1) io {
-        o<std.http::streamed> left = await open_stream(owner, hang_url.as_str());
+        o<std.http::streamed> left = await open_stream(owner, hang_url);
         switch (move left) {
         case variant o::some(move stream):
             std.test::equal(stream.head.status, 200u16);
@@ -588,7 +588,7 @@ protected async u32 client_requests(std.string::string base, std.http::client ow
     }
     try {
         task_scope(1) io {
-            std.http::response partial = await web.get(broken_url.as_str());
+            std.http::response partial = await web.get(broken_url);
             drop partial;
         }
         std.test::fail("a stream whose handler failed");
@@ -596,12 +596,12 @@ protected async u32 client_requests(std.string::string base, std.http::client ow
         std.test::check(rejected.code == std.http::error_code::unexpected_end, "unexpected_end");
     }
     task_scope(1) after {
-        std.http::response again_hello = await web.get(hello_url.as_str());
+        std.http::response again_hello = await web.get(hello_url);
         expect_text(&again_hello, 200u16, "hello");
     }
     try {
         task_scope(1) io {
-            std.http::response looping = await web.get(loop_url.as_str());
+            std.http::response looping = await web.get(loop_url);
             drop looping;
         }
         std.test::fail("redirects without end");
@@ -667,9 +667,9 @@ protected async u32 secure_requests(std.string::string base, std.http::client ow
     std.string::string items_url = url_at(&base, "/items/42");
     u32 checked = 0u32;
     task_scope(1) io {
-        std.http::response first = await web.get(hello_url.as_str());
+        std.http::response first = await web.get(hello_url);
         expect_text(&first, 200u16, "hello");
-        std.http::response second = await web.get(items_url.as_str());
+        std.http::response second = await web.get(items_url);
         expect_text(&second, 200u16, "item 42");
         std.test::equal(web.idle_count(), 1usize);
         checked += 1u32;
@@ -721,7 +721,7 @@ protected async std.string::string raw_exchange(std.net::socket_address endpoint
     bytes reply = {};
     u8[256] chunk = {};
     task_scope(1) io {
-        await std.net::tcp_write_all_from(&client, message.as_bytes());
+        await std.net::tcp_write_all_from(&client, message);
         await std.net::tcp_shutdown(&client, std.net::shutdown_direction::write);
         while (true) {
             usize count = await std.net::tcp_read_into(&client, &chunk);
@@ -734,7 +734,7 @@ protected async std.string::string raw_exchange(std.net::socket_address endpoint
 
 protected void expect_prefix(const std.string::string* reply, str prefix)
     throws std.test::failure, std.alloc::alloc_error {
-    std.test::check(std.text::starts_with(reply->as_str(), prefix), reply->as_str());
+    std.test::check(std.text::starts_with(*reply, prefix), *reply);
 }
 
 protected async u32 protocol_clients(std.net::socket_address endpoint,
@@ -744,12 +744,12 @@ protected async u32 protocol_clients(std.net::socket_address endpoint,
     task_scope(1) io {
         std.string::string bad = await raw_exchange(endpoint, "GARBAGE\r\n\r\n");
         expect_prefix(&bad, "HTTP/1.1 400 Bad Request\r\n");
-        std.test::check(std.text::contains(bad.as_str(), "Connection: close\r\n"), "closed");
+        std.test::check(std.text::contains(bad, "Connection: close\r\n"), "closed");
         std.string::string chunked = await raw_exchange(endpoint,
             "POST /echo HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n"
             "3;note=1\r\nabc\r\n2\r\nde\r\n0\r\nTrailer: t\r\n\r\n");
         expect_prefix(&chunked, "HTTP/1.1 201 Created\r\n");
-        std.test::check(std.text::ends_with(chunked.as_str(), "\r\n\r\nabcde"), chunked.as_str());
+        std.test::check(std.text::ends_with(chunked, "\r\n\r\nabcde"), chunked);
         std.string::string large = await raw_exchange(endpoint,
             "GET /hello HTTP/1.1\r\nHost: x\r\nX-Long: 0123456789012345678901234567890123456789"
             "0123456789012345678901234567890123456789012345678901234567890123456789012345678901"
@@ -761,7 +761,7 @@ protected async u32 protocol_clients(std.net::socket_address endpoint,
         expect_prefix(&body, "HTTP/1.1 413 Content Too Large\r\n");
         std.string::string old = await raw_exchange(endpoint, "GET /hello HTTP/1.0\r\n\r\n");
         expect_prefix(&old, "HTTP/1.1 200 OK\r\n");
-        std.test::check(std.text::ends_with(old.as_str(), "hello"), "HTTP/1.0 closes after one response");
+        std.test::check(std.text::ends_with(old, "hello"), "HTTP/1.0 closes after one response");
         std.string::string unknown = await raw_exchange(endpoint, "BREW /pot HTTP/1.1\r\n\r\n");
         expect_prefix(&unknown, "HTTP/1.1 501 Not Implemented\r\n");
         std.string::string version = await raw_exchange(endpoint, "GET / HTTP/1.2\r\n\r\n");
@@ -774,8 +774,8 @@ protected async u32 protocol_clients(std.net::socket_address endpoint,
         expect_prefix(&folded, "HTTP/1.1 400 Bad Request\r\n");
         std.string::string pipelined = await raw_exchange(endpoint,
             "GET /hello HTTP/1.1\r\n\r\nGET /items/9 HTTP/1.1\r\nConnection: close\r\n\r\n");
-        std.test::check(std.text::ends_with(pipelined.as_str(), "item 9"), "two pipelined requests");
-        std.test::check(std.text::contains(pipelined.as_str(), "\r\n\r\nhello"), "the first answer");
+        std.test::check(std.text::ends_with(pipelined, "item 9"), "two pipelined requests");
+        std.test::check(std.text::contains(pipelined, "\r\n\r\nhello"), "the first answer");
         checked += 1u32;
     }
     std.sync::send_result<std.service::stop> sent = std.sync::send(&stopper, std.service::stop::drain);
@@ -868,8 +868,8 @@ protected async u32 chunked_pair(std.net::tcp_stream client, std.net::tcp_connec
     u32 checked = 0u32;
     task_scope(1) io {
         await std.http::write_chunked_head(&server, &head, false);
-        await std.http::write_chunk(&server, first.as_bytes());
-        await std.http::write_chunk(&server, second.as_bytes());
+        await std.http::write_chunk(&server, first);
+        await std.http::write_chunk(&server, second);
         await std.http::finish_chunks(&server);
         std.http::response result = await std.http::read_response(&input, std.http::method::get, &bounds);
         std.test::equal(result.status, 200u16);
@@ -894,33 +894,33 @@ async void writes_and_reads_chunked_bodies()
 @test
 void formats_and_parses_event_streams() throws std.test::failure, std.http::http_error, std.alloc::alloc_error {
     std.string::string one = std.http::sse_event("update", "7", "a\nb\r\nc");
-    std.test::equal_text(one.as_str(), "event: update\nid: 7\ndata: a\ndata: b\ndata: c\n\n");
+    std.test::equal_text(one, "event: update\nid: 7\ndata: a\ndata: b\ndata: c\n\n");
     std.string::string plain = std.http::sse_event("", "", "");
-    std.test::equal_text(plain.as_str(), "data: \n\n");
+    std.test::equal_text(plain, "data: \n\n");
     std.http::sse_parser parser = std.http::sse_parser::create();
     parser.feed(": comment\r\nevent: first\rdata: x\r");
     std.test::check(drained(&parser), "a CR may precede an LF");
     parser.feed("\ndata:y\n\nid: 9\ndata: z\nretry: 5\n\n\nevent: skipped\n\ndata: last\n");
     switch (parser.next()) {
     case variant o::some(message):
-        std.test::equal_text(message->event.as_str(), "first");
-        std.test::equal_text(message->data.as_str(), "x\ny");
-        std.test::equal_text(message->id.as_str(), "");
+        std.test::equal_text(message->event, "first");
+        std.test::equal_text(message->data, "x\ny");
+        std.test::equal_text(message->id, "");
     case variant o::none: std.test::fail("the first message");
     }
     switch (parser.next()) {
     case variant o::some(message):
-        std.test::equal_text(message->event.as_str(), "message");
-        std.test::equal_text(message->data.as_str(), "z");
-        std.test::equal_text(message->id.as_str(), "9");
+        std.test::equal_text(message->event, "message");
+        std.test::equal_text(message->data, "z");
+        std.test::equal_text(message->id, "9");
     case variant o::none: std.test::fail("the second message");
     }
     std.test::check(drained(&parser), "an unfinished message waits");
     parser.feed("\n");
     switch (parser.next()) {
     case variant o::some(message):
-        std.test::equal_text(message->event.as_str(), "message");
-        std.test::equal_text(message->data.as_str(), "last");
+        std.test::equal_text(message->event, "message");
+        std.test::equal_text(message->data, "last");
     case variant o::none: std.test::fail("the last message");
     }
 }
@@ -1004,7 +1004,7 @@ protected async u32 upgrade_requests(std.string::string base, std.sync::sender<s
     add_header(&asking.headers, "Connection", "Upgrade");
     o<std.http::upgraded> taken = o::none;
     task_scope(1) io {
-        std.http::handshake refused = await web.upgrade(move plain, echo_url.as_str());
+        std.http::handshake refused = await web.upgrade(move plain, echo_url);
         expect_text(&refused.answer, 400u16, "echo only");
         o<std.http::upgraded> none = core::replace(&refused.connection, o::none);
         switch (move none) {
@@ -1013,7 +1013,7 @@ protected async u32 upgrade_requests(std.string::string base, std.sync::sender<s
             std.test::fail("a refused upgrade keeps no connection");
         case variant o::none: checked += 1u32;
         }
-        std.http::handshake accepted = await web.upgrade(move asking, echo_url.as_str());
+        std.http::handshake accepted = await web.upgrade(move asking, echo_url);
         std.test::equal(accepted.answer.status, 101u16);
         std.test::check(accepted.answer.headers.has_token("Upgrade", "echo"), "the protocol");
         std.test::check(accepted.answer.headers.contains("Date"), "a Date field");
@@ -1025,14 +1025,14 @@ protected async u32 upgrade_requests(std.string::string base, std.sync::sender<s
     case variant o::some(move switched):
         task_scope(1) io {
             std.string::string back = await talk(&switched, "over the switched connection");
-            std.test::equal_text(back.as_str(), "over the switched connection");
+            std.test::equal_text(back, "over the switched connection");
             checked += 1u32;
         }
     case variant o::none: std.test::fail("an accepted upgrade keeps the connection");
     }
     task_scope(1) io {
         std.http::handshake ordinary = await web.upgrade(
-            std.http::request::create(std.http::method::get, "/"), hello_url.as_str());
+            std.http::request::create(std.http::method::get, "/"), hello_url);
         expect_text(&ordinary.answer, 200u16, "hello");
         checked += 1u32;
     }
@@ -1091,8 +1091,8 @@ protected async std.http::flow<Visit> sign_in(arc Counter state, std.http::flow<
     }
     switch (move token) {
     case variant o::some(move name):
-        current.notes.set("account", name.as_str());
-        std.string::append_str(&current.context.account, name.as_str());
+        current.notes.set("account", name);
+        std.string::append_str(&current.context.account, name);
         return step(move current, 1u32);
     case variant o::none:
         std.http::flow<Visit> refused = step(move current, 9u32);
@@ -1107,7 +1107,7 @@ protected async std.http::flow<Visit> stamp(arc Counter state, std.http::flow<Vi
     std.http::flow<Visit> passed = step(move current, 3u32);
     u32 trail = passed.context.trail;
     std.string::string text = f"{trail}";
-    add_field(&passed.response, "X-Trail", text.as_str());
+    add_field(&passed.response, "X-Trail", text);
     return move passed;
 }
 
@@ -1120,7 +1120,7 @@ protected async std.http::flow<Visit> show_user(arc Counter state, std.http::flo
     case variant o::some(id): std.string::append_str(&body, *id);
     case variant o::none: break;
     }
-    return (move handled).with(std.http::response::text(200u16, body.as_str()));
+    return (move handled).with(std.http::response::text(200u16, body));
 }
 
 protected async std.http::flow<Visit> show_me(arc Counter state, std.http::flow<Visit> current)
@@ -1128,8 +1128,8 @@ protected async std.http::flow<Visit> show_me(arc Counter state, std.http::flow<
     drop state;
     std.http::flow<Visit> handled = step(move current, 4u32);
     std.string::string body = std.string::from_str("me ");
-    std.string::append_str(&body, handled.context.account.as_str());
-    return (move handled).with(std.http::response::text(200u16, body.as_str()));
+    std.string::append_str(&body, handled.context.account);
+    return (move handled).with(std.http::response::text(200u16, body));
 }
 
 protected async std.http::flow<Visit> show_all(arc Counter state, std.http::flow<Visit> current)
@@ -1167,7 +1167,7 @@ protected void note_panic(const Counter* state, std.http::method sent, str targe
         o<std.string::string> account = noted->get("account");
         switch (move account) {
         case variant o::some(move named):
-            if (std.bytes::equal(named.as_bytes(), "ann") == false) { seen = 100u32; }
+            if (std.bytes::equal(named, "ann") == false) { seen = 100u32; }
             drop named;
         case variant o::none: seen = 100u32;
         }

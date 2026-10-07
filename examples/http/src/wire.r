@@ -38,8 +38,8 @@ protected async void answer(std.bufio::reader<std.net::tcp_connection>* input)
             await std.console::println(
                 f"server: {sent} {incoming.target} body {total} bytes in {pieces} reads");
             await std.http::write_chunked_head(&input->source, &reply, false);
-            await std.http::write_chunk(&input->source, first.as_bytes());
-            await std.http::write_chunk(&input->source, second.as_bytes());
+            await std.http::write_chunk(&input->source, first);
+            await std.http::write_chunk(&input->source, second);
             await std.http::finish_chunks(&input->source);
         }
     case variant o::none: break;

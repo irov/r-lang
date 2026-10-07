@@ -37,7 +37,7 @@ protected std.time::system_time at(str text) throws std.convert::parse_error {
 }
 
 protected async std.time::zone zone_named(std.string::string name) throws std.time::zone_error, std.error::fault {
-    const u8[] text = name.as_bytes();
+    const u8[] text = name;
     if (len(text) > 6usize && std.bytes::starts_with(text, "posix:") == true) {
         return std.time::posix_zone(core::validate_utf8(text[6usize..len(text)]));
     }
@@ -59,9 +59,9 @@ protected std.time::ambiguity choice_named(str name) {
 protected async std.string::string run(array<std.string::string> arguments)
     throws std.time::zone_error, std.error::fault {
     std.time::zone where = await zone_named(core::replace(&arguments[1usize], std.string::create()));
-    switch (arguments[0usize].as_str()) {
+    switch (arguments[0usize]) {
     case "local":
-        std.time::system_time instant = at(arguments[2usize].as_str());
+        std.time::system_time instant = at(arguments[2usize]);
         std.time::local_time local = where.to_local(instant);
         str name = where.abbreviation(instant);
         i32 offset = where.offset(instant);
@@ -72,17 +72,17 @@ protected async std.string::string run(array<std.string::string> arguments)
         u8 second = local.second;
         return f"{local.year}-{month}-{day} {hour}:{minute}:{second} {offset} {local.dst} {name} {local.weekday} {local.year_day}";
     case "resolve":
-        std.time::local_time wall = {.year = number(arguments[2usize].as_str()) as i32,
-                                     .month = number(arguments[3usize].as_str()) as u8,
-                                     .day = number(arguments[4usize].as_str()) as u8,
-                                     .hour = number(arguments[5usize].as_str()) as u8,
-                                     .minute = number(arguments[6usize].as_str()) as u8,
-                                     .second = number(arguments[7usize].as_str()) as u8, .nanosecond = 0u32,
+        std.time::local_time wall = {.year = number(arguments[2usize]) as i32,
+                                     .month = number(arguments[3usize]) as u8,
+                                     .day = number(arguments[4usize]) as u8,
+                                     .hour = number(arguments[5usize]) as u8,
+                                     .minute = number(arguments[6usize]) as u8,
+                                     .second = number(arguments[7usize]) as u8, .nanosecond = 0u32,
                                      .weekday = 0u8, .year_day = 0u16, .offset = 0i32, .dst = false};
-        return seconds(where.from_local(wall, choice_named(arguments[8usize].as_str())));
-    case "start": return seconds(where.start_of_day(at(arguments[2usize].as_str())));
-    case "days": return seconds(where.add_days(at(arguments[2usize].as_str()), number(arguments[3usize].as_str())));
-    case "months": return seconds(where.add_months(at(arguments[2usize].as_str()), number(arguments[3usize].as_str())));
+        return seconds(where.from_local(wall, choice_named(arguments[8usize])));
+    case "start": return seconds(where.start_of_day(at(arguments[2usize])));
+    case "days": return seconds(where.add_days(at(arguments[2usize]), number(arguments[3usize])));
+    case "months": return seconds(where.add_months(at(arguments[2usize]), number(arguments[3usize])));
     default:
         drop where;
         return std.string::from_str("unknown");
@@ -95,7 +95,7 @@ async i32 main() {
         switch (move line) {
         case variant o::some(move text):
             try {
-                array<std.string::string> arguments = words(text.as_str());
+                array<std.string::string> arguments = words(text);
                 await std.console::println(await run(move arguments));
             } catch (std.time::zone_error failure) {
                 std.time::zone_error_code code = failure.code;

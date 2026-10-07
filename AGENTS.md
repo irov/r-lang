@@ -273,11 +273,12 @@ these rules are the ones that most often reject otherwise reasonable code:
   to a local first.
 - Importing an R-source module requires `import std.x;` even for the R part of a C module.
 - `constexpr str` converts to `const u8[]` through a `str` local (one conversion per expression).
-- A `std.string::string` place is viewed as `str` wherever `str` is expected
-  (`db.execute(sql, params)`, `str name = record.name;`, `*text` for a pointer); a temporary
-  string (a call result, an f-string) needs a local first, and a string is never a byte slice
-  (`as_bytes()`). Write `.as_str()` only where no `str` is expected (`switch`, generic
-  arguments).
+- A `std.string::string` or `std.format::builder` place is viewed as `str` or `const u8[]`
+  wherever one of them is expected (`db.execute(sql, params)`, `str name = record.name;`,
+  `write_all_from(&stream, reply)`, `*text` for a pointer), and a `switch` or `match` on such
+  a place selects by its `str` view; a temporary (a call result, an f-string) needs a local first.
+  Write `.as_str()` or `.as_bytes()` only where neither is expected (generic arguments); the
+  length of a string is `text.len()`.
 - An attribute of the program is a struct marked `@attribute(type|field|variant)`; use it as
   `@name(arguments)` after importing it by name (`import m::{key};`) or as `@m::key`, and read it
   with `core::type_attribute::<A, T>()`, `core::field_attribute::<A, T>(index)` or

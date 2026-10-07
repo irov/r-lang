@@ -15,7 +15,7 @@ struct Celsius { i32 degrees; };
 std.json::value Celsius::json_marshal(const Celsius* value) throws std.json::error, std.alloc::alloc_error {
     i32 degrees = value->degrees;
     std.string::string text = f"{degrees}C";
-    return std.json::from_string(text.as_bytes());
+    return std.json::from_string(text);
 }
 
 Celsius Celsius::json_unmarshal(const std.json::value* value) throws std.json::error, std.alloc::alloc_error {
@@ -71,7 +71,7 @@ protected std.string::string line_of(str kind, str tag, std.string::string text)
     std.string::append_str(&line, " ");
     std.string::append_str(&line, tag);
     std.string::append_str(&line, " ");
-    std.string::append_str(&line, text.as_str());
+    std.string::append_str(&line, text);
     return move line;
 }
 

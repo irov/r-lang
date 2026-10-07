@@ -8,14 +8,14 @@ struct UserId { u64 value; };
 
 std.json::value UserId::json_marshal(const UserId* value) throws std.json::error, std.alloc::alloc_error {
     std.string::string text = std.json::marshal(&value->value);
-    const u8[] source = text.as_bytes();
+    const u8[] source = text;
     std.json::value result = std.json::parse(source);
     return move result;
 }
 
 UserId UserId::json_unmarshal(const std.json::value* value) throws std.json::error, std.alloc::alloc_error {
     std.string::string text = value->stringify();
-    const u8[] source = text.as_bytes();
+    const u8[] source = text;
     u64 number = std.json::unmarshal(source);
     return UserId { .value = number };
 }

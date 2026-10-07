@@ -112,7 +112,7 @@ protected async i32 serve(u16 http_port, u16 tls_port, std.string::string socket
 protected async std.string::string unix_get(std.string::string socket, std.string::string target) throws std.error::fault {
     std.net::unix_stream stream = await std.net::unix_connect(socket, o::none);
     std.string::string request = f"GET {target} HTTP/1.1\r\nHost: local\r\nConnection: close\r\n\r\n";
-    task_scope(1) sending { await std.net::unix_write_all_from(&stream, request.as_bytes(), o::none); }
+    task_scope(1) sending { await std.net::unix_write_all_from(&stream, request, o::none); }
     bytes received = {};
     u8[512] buffer = {};
     bool open = true;
@@ -274,7 +274,7 @@ protected async void answer_source(arc Quiet state, std.service::connection conn
     drop state;
     u32 origin = connection.source();
     std.string::string line = f"listener {origin}\n";
-    task_scope(1) io { await connection.write_all_from(line.as_bytes()); }
+    task_scope(1) io { await connection.write_all_from(line); }
 }
 
 protected async std.string::string probe_client(std.string::string socket,

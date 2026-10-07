@@ -38,12 +38,12 @@ async std.string::string name_of(i32 n) throws std.alloc::alloc_error {
 async i32 classify(i32 n) throws std.alloc::alloc_error, std.async::start_error {
     std.string::string text = await name_of(n);
     i32 code = 0;
-    switch (std.text::ignore_ascii_case(text.as_str())) {
+    switch (std.text::ignore_ascii_case(text)) {
     case "one": code = 1;
     case "two": code = 2;
     default: code = 9;
     }
-    i32 exact = match (text.as_str()) {
+    i32 exact = match (text) {
         case "One": 10;
         default: 0;
     };

@@ -48,7 +48,7 @@ try {
     await db.rollback();
     ...
 }
-std.sqlite::execution event = await publish(&db, "device.registered", id.as_str(), name.as_str());
+std.sqlite::execution event = await publish(&db, "device.registered", id, name);
 await db.commit();
 ```
 

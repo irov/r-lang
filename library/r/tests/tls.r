@@ -118,10 +118,10 @@ protected async void exchange(std.tls::stream<std.net::tcp_stream> secured,
     u8[64] buffer = {};
     u8[16] reply = {};
     task_scope(1) io {
-        await secured.write_all_from(request.as_bytes());
+        await secured.write_all_from(request);
         usize count = await served.read_into(&buffer);
         std.test::check(std.bytes::equal(buffer[0usize..count], "hello over tls"), "the request");
-        await served.write_all_from(pong.as_bytes());
+        await served.write_all_from(pong);
         usize back = await secured.read_into(&reply);
         std.test::check(std.bytes::equal(reply[0usize..back], "pong"), "the reply");
         await secured.shutdown();

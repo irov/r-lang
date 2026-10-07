@@ -14,8 +14,8 @@ async i32 main() {
             std.string::string current = std.string::from_str("before");
             std.string::string next = std.string::from_str("after");
             std.string::string old = core::replace(&current, move next);
-            str old_text = old.as_str();
-            str new_text = current.as_str();
+            str old_text = old;
+            str new_text = current;
             bool old_matches = std.bytes::equal(old_text, "before");
             bool new_matches = std.bytes::equal(new_text, "after");
             if (old_matches == false || new_matches == false) { throw TestAssertionFailed {.code = 2}; }

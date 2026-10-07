@@ -13,7 +13,7 @@ protected async bytes read_pem(std.string::string name) throws std.error::fault 
 /* A client that trusts the authorities of the PEM file ca, or with `system` those of the system
    (SSL_CERT_FILE or the bundle of the system), and offers two protocols. */
 async std.tls::config client(std.string::string ca) throws std.error::fault, std.tls::tls_error {
-    switch (ca.as_str()) {
+    switch (ca) {
     case "system":
         std.tls::config trusted = await std.tls::system_client_config();
         trusted.add_protocol("h2");
@@ -60,7 +60,7 @@ async void answer(std.tls::stream<std.net::tcp_connection> session) throws std.e
     text.append_utf8(request[0usize..count]);
     std.string::string reply = f"{count} bytes: {text}";
     task_scope(1) io {
-        await session.write_all_from(reply.as_bytes());
+        await session.write_all_from(reply);
         while (true) {
             usize more = await session.read_into(&request);
             if (more == 0usize) { break; }

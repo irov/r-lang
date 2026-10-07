@@ -129,10 +129,10 @@ async i32 owned_items() throws std.error::fault {
     std.string::string joined = std.string::create();
     task_scope(1) walk {
         for (std.string::string word in &words) {
-            joined.append(word.as_str());
+            joined.append(word);
         }
     }
-    if (std.text::equal_ignore_ascii_case(joined.as_str(), "word1word2word3") == false) {
+    if (std.text::equal_ignore_ascii_case(joined, "word1word2word3") == false) {
         return 21;
     }
     return 0;

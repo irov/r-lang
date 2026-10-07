@@ -19,10 +19,10 @@ protected void expect_error(str text, decoder form, std.convert::parse_error_cod
         case decoder::percent: std.encoding::percent_decode(text) as void;
         }
         std.string::string message = f"\"{text}\" decoded";
-        std.test::fail(message.as_str());
+        std.test::fail(message);
     } catch (std.convert::parse_error failure) {
         std.string::string message = f"the error code of \"{text}\"";
-        std.test::check(failure.code == code, message.as_str());
+        std.test::check(failure.code == code, message);
         std.test::equal(failure.index, index);
     }
 }
@@ -35,18 +35,18 @@ void encodes_base64_vectors() throws std.test::failure, std.alloc::alloc_error {
     str[7] unpadded = {"", "Zg", "Zm8", "Zm9v", "Zm9vYg", "Zm9vYmE", "Zm9vYmFy"};
     for (usize index = 0usize; index < 7usize; index += 1usize) {
         std.string::string standard = std.encoding::encode_base64(plain[index]);
-        std.test::equal_text(standard.as_str(), padded[index]);
+        std.test::equal_text(standard, padded[index]);
         std.string::string url = std.encoding::encode_base64_url(plain[index]);
-        std.test::equal_text(url.as_str(), unpadded[index]);
+        std.test::equal_text(url, unpadded[index]);
     }
     // Symbols 62 and 63 differ between the alphabets.
     u8[6] high = {0x00u8, 0x7fu8, 0x80u8, 0xffu8, 0x3eu8, 0x3fu8};
     std.string::string standard = std.encoding::encode_base64(high);
-    std.test::equal_text(standard.as_str(), "AH+A/z4/");
+    std.test::equal_text(standard, "AH+A/z4/");
     std.string::string url = std.encoding::encode_base64_url(high);
-    std.test::equal_text(url.as_str(), "AH-A_z4_");
+    std.test::equal_text(url, "AH-A_z4_");
     std.string::string scalars = std.encoding::encode_base64("é🙂");
-    std.test::equal_text(scalars.as_str(), "w6nwn5mC");
+    std.test::equal_text(scalars, "w6nwn5mC");
 }
 
 @test
@@ -80,14 +80,14 @@ void encodes_and_decodes_hex()
     throws std.test::failure, std.alloc::alloc_error, std.convert::parse_error {
     u8[5] values = {0x00u8, 0x09u8, 0x7fu8, 0xabu8, 0xffu8};
     std.string::string digits = std.encoding::encode_hex(values);
-    std.test::equal_text(digits.as_str(), "00097fabff");
+    std.test::equal_text(digits, "00097fabff");
     // Digits of either case decode.
     bytes decoded = std.encoding::decode_hex("00097FaBfF");
     std.test::check(std.bytes::equal(decoded.as_slice(), values) == true, "mixed case digits");
     bytes empty = std.encoding::decode_hex("");
     std.test::equal(len(empty), 0usize);
     std.string::string none = std.encoding::encode_hex(empty.as_slice());
-    std.test::equal_text(none.as_str(), "");
+    std.test::equal_text(none, "");
 }
 
 @test
@@ -95,8 +95,8 @@ void percent_encodes_text()
     throws std.test::failure, std.alloc::alloc_error, std.convert::parse_error {
     // The unreserved bytes stay; every other byte becomes % and two uppercase digits.
     std.string::string encoded = std.encoding::percent_encode("a b/é~-._Z9?&=");
-    std.test::equal_text(encoded.as_str(), "a%20b%2F%C3%A9~-._Z9%3F%26%3D");
-    bytes decoded = std.encoding::percent_decode(encoded.as_str());
+    std.test::equal_text(encoded, "a%20b%2F%C3%A9~-._Z9%3F%26%3D");
+    bytes decoded = std.encoding::percent_decode(encoded);
     std.test::check(std.bytes::equal(decoded.as_slice(), "a b/é~-._Z9?&=") == true,
                     "a round trip");
     // Digits of either case decode; a plus sign stays a plus sign.
@@ -139,16 +139,16 @@ void round_trips_every_byte_value()
     for (usize index = 0usize; index < 256usize; index += 1usize) { every[index] = index as u8; }
     std.string::string standard = std.encoding::encode_base64(every);
     std.test::equal(standard.len(), 344usize);
-    std.test::contains(standard.as_str(), "8PHy8/T19vf4+fr7/P3+/w==");
-    bytes standard_back = std.encoding::decode_base64(standard.as_str());
+    std.test::contains(standard, "8PHy8/T19vf4+fr7/P3+/w==");
+    bytes standard_back = std.encoding::decode_base64(standard);
     std.test::check(std.bytes::equal(standard_back.as_slice(), every) == true, "base64");
     std.string::string url = std.encoding::encode_base64_url(every);
     std.test::equal(url.len(), 342usize);
-    std.test::contains(url.as_str(), "8PHy8_T19vf4-fr7_P3-_w");
-    bytes url_back = std.encoding::decode_base64_url(url.as_str());
+    std.test::contains(url, "8PHy8_T19vf4-fr7_P3-_w");
+    bytes url_back = std.encoding::decode_base64_url(url);
     std.test::check(std.bytes::equal(url_back.as_slice(), every) == true, "base64url");
     std.string::string digits = std.encoding::encode_hex(every);
     std.test::equal(digits.len(), 512usize);
-    bytes digits_back = std.encoding::decode_hex(digits.as_str());
+    bytes digits_back = std.encoding::decode_hex(digits);
     std.test::check(std.bytes::equal(digits_back.as_slice(), every) == true, "hex");
 }

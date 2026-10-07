@@ -29,11 +29,11 @@ async void records_spans_with_parents() throws std.test::failure, std.error::fau
                     "the parent lasts as long as its child");
     array<std.trace::record> kept = tracer.drain();
     std.test::equal(len(kept), 2usize);
-    std.test::equal_text(kept[0usize].name.as_str(), "query \"items\"");
+    std.test::equal_text(kept[0usize].name, "query \"items\"");
     std.string::string json = kept[0usize].json();
-    std.test::check(std.text::starts_with(json.as_str(), "{\"id\":2,\"parent\":1,\"task\":"), "id and parent");
-    std.test::check(std.text::contains(json.as_str(), "\"name\":\"query \\\"items\\\"\""), "an escaped name");
-    std.test::check(std.text::contains(json.as_str(), "\"attributes\":{\"rows\":\"3\\u000a\"}}"), "attributes");
+    std.test::check(std.text::starts_with(json, "{\"id\":2,\"parent\":1,\"task\":"), "id and parent");
+    std.test::check(std.text::contains(json, "\"name\":\"query \\\"items\\\"\""), "an escaped name");
+    std.test::check(std.text::contains(json, "\"attributes\":{\"rows\":\"3\\u000a\"}}"), "attributes");
     array<std.trace::record> empty = tracer.drain();
     std.test::equal(len(empty), 0usize);
 }

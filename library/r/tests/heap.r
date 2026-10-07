@@ -38,7 +38,7 @@ protected std.string::string drain(std.heap::heap<i32>* target) throws std.alloc
         case variant o::some(value):
             i32 number = *value;
             std.string::string piece = f"{number} ";
-            text.append(piece.as_str());
+            text.append(piece);
         case variant o::none:
             return move text;
         }
@@ -80,7 +80,7 @@ void pops_in_descending_order() throws std.test::failure, std.alloc::alloc_error
     push(&numbers, 5);
     std.test::equal(numbers.count(), 6usize);
     std.string::string order = drain(&numbers);
-    std.test::equal_text(order.as_str(), "9 7 5 5 1 -3 ");
+    std.test::equal_text(order, "9 7 5 5 1 -3 ");
     std.test::check(numbers.is_empty(), "every element was popped");
 }
 
@@ -120,7 +120,7 @@ void interleaves_pushes_and_pops() throws std.test::failure, std.alloc::alloc_er
     }
     push(&numbers, 3);
     std.string::string rest = drain(&numbers);
-    std.test::equal_text(rest.as_str(), "3 2 2 1 ");
+    std.test::equal_text(rest, "3 2 2 1 ");
 }
 
 @test

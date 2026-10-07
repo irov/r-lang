@@ -143,7 +143,7 @@ i32 main() {
     i32 failures = len(PRIMES) == 10usize ? 0 : 1;
     failures += PRIMES[9usize] == 29u32 ? 0 : 1;
     failures += total(&PRIMES) == 129u32 && PRIME_SUM == 129u32 ? 0 : 1;
-    str view = std.string::as_str(&BANNER);
+    str view = BANNER;
     failures += len(view) == 4usize && view[3usize] == 55u8 ? 0 : 1;
     failures += port_of("https") == 443u16 && port_of("ssh") == 22u16 ? 0 : 1;
     failures += port_of("gopher") == 89u16 && port_of("ftp") == 0u16 ? 0 : 1;

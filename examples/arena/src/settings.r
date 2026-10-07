@@ -48,7 +48,7 @@ std.string::string describe() throws std.config::field_error, std.config::config
     Environment found = std.config::from_environment::<Environment>("");
     str project = "arena";
     switch (found.datadog_project) {
-    case variant o::some(named): project = named->as_str();
+    case variant o::some(named): project = *named;
     case variant o::none: break;
     }
     std.config::config layers = std.config::config::create();

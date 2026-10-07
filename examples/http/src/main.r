@@ -30,7 +30,7 @@ protected std.string::string base_url(str scheme, std.net::socket_address endpoi
 protected async void show(std.http::client* web, str scheme, const std.string::string* base,
                           std.http::request message)
     throws std.error::fault, std.http::http_error, std.tls::tls_error {
-    std.string::string address = std.string::from_str(base->as_str());
+    std.string::string address = std.string::from_str(*base);
     std.string::append_str(&address, message.target);
     str sent = std.http::method_name(message.method);
     std.string::string path = std.string::from_str(message.target);
@@ -71,7 +71,7 @@ protected std.string::string event_lines(std.http::sse_parser* parser, str schem
 @scoped
 protected async void show_events(std.http::client* web, str scheme, const std.string::string* base)
     throws std.error::fault, std.http::http_error, std.tls::tls_error {
-    std.string::string address = std.string::from_str(base->as_str());
+    std.string::string address = std.string::from_str(*base);
     std.string::append_str(&address, "/prices");
     o<std.http::streamed> opened = o::none;
     task_scope(1) io {

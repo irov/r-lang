@@ -1046,6 +1046,10 @@ static bool r_body_lower_match(RBodyContext *body,
         !r_ast_find_direct_child(body->frontend, expression, R_SYNTAX_EXPRESSION, &input) ||
         !r_body_lower_expression(body, input, 0U, &place))
         goto cleanup;
+    /* R-EXPR-0031 (L43): a string or builder place is matched as its str view; a temporary or
+       moved input keeps its type, so a move binding still takes the owner. */
+    if (place.valid && place.is_place && !r_body_view_string_owner(body, false, &place))
+        goto cleanup;
     if (!place.valid) {
         success = true;
         goto cleanup;

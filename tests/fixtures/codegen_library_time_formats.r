@@ -14,7 +14,7 @@ protected i32 writes_rfc3339(i64 seconds, u32 nanoseconds, u32 digits, str expec
         std.time::system_time {.unix_seconds = seconds, .nanoseconds = nanoseconds};
     try {
         std.string::string text = std.time::format_rfc3339(value, digits);
-        if (same(text.as_str(), expected) == false) { return 1; }
+        if (same(text, expected) == false) { return 1; }
         return 0;
     } catch (std.time::time_error failure) {
         failure as void;
@@ -26,7 +26,7 @@ protected i32 writes_http(i64 seconds, str expected) throws std.alloc::alloc_err
     std.time::system_time value = std.time::system_time {.unix_seconds = seconds, .nanoseconds = 0u32};
     try {
         std.string::string text = std.time::format_http_date(value);
-        if (same(text.as_str(), expected) == false) { return 1; }
+        if (same(text, expected) == false) { return 1; }
         return 0;
     } catch (std.time::time_error failure) {
         failure as void;

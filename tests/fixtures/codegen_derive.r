@@ -153,7 +153,7 @@ i32 check_records() throws std.alloc::alloc_error, std.array::push_error<std.str
     rows.push(move third);
     rows.push(move fifth);
     std.slice::sort(rows[0usize..len(rows)]);
-    if (std.bytes::equal(rows[0usize].name.as_bytes(), "alpha") == false) { return 44; }
+    if (std.bytes::equal(rows[0usize].name, "alpha") == false) { return 44; }
     if (rows[2usize].scores[2usize] != 4) { return 45; }
     return 0;
 }

@@ -45,7 +45,7 @@ std.string::string password(str secret) throws std.alloc::alloc_error, std.crypt
     std.string::string out = std.string::create();
     std.crypto::password_limits limits = std.crypto::password_limits::interactive();
     std.string::string hash = std.crypto::password_hash(secret, limits);
-    const u8[] text = std.string::as_bytes(&hash);
+    const u8[] text = hash;
     bool shaped = len(text) > 10usize && std.bytes::starts_with(text, "$argon2id$");
     line(&out, f"argon2id hash: {shaped}");
     bool same = std.crypto::password_verify(hash, secret);

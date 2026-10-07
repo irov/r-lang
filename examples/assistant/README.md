@@ -111,7 +111,7 @@ needs the user returns `needs_input` with its questions. The request then ends w
 
 ```r
 std.mcp::input_required asked = std.mcp::input_required::create();
-asked.ask_form("confirm", question.as_str(), std.json::schema::<confirm_form>());
+asked.ask_form("confirm", question, std.json::schema::<confirm_form>());
 asked.set_state(expected);
 return std.mcp::tool_outcome::needs_input(move asked);
 ```
@@ -208,7 +208,7 @@ A server over HTTP can be an OAuth 2.1 resource server (R-SLIB-MCP-0020). The de
 server before serving it:
 
 ```r
-std.mcp::protection guard = std.mcp::protection::create(address.as_str(), "https://auth.example");
+std.mcp::protection guard = std.mcp::protection::create(address, "https://auth.example");
 guard.scope("notes.write");
 built.protect(move guard, example.assistant.memory::check_token);
 ```

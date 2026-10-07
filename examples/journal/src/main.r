@@ -32,7 +32,7 @@ protected u32 number(const array<std.string::string>* arguments, usize index)
 }
 
 protected std.string::string copy_of(const std.string::string* text) throws std.alloc::alloc_error {
-    return std.string::from_str(text->as_str());
+    return std.string::from_str(*text);
 }
 
 async void say(std.string::string text) throws std.error::fault {

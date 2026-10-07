@@ -32,7 +32,7 @@ impl core::AsyncIterator for NumberedLines {
 
 task_scope(1) io {
     for (std.string::string numbered in &numbered_input) {
-        task_scope(1) write { await output.write(numbered.as_bytes()); }
+        task_scope(1) write { await output.write(numbered); }
     }
     await output.write_str("----\n");
 }

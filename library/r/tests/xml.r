@@ -138,10 +138,10 @@ protected void expect_read_error(str label, const u8[] document, std.xml::option
             if (kind == std.xml::event_kind::none) { break; }
         }
         std.string::string message = f"{label}: the document was read";
-        std.test::fail(message.as_str());
+        std.test::fail(message);
     } catch (std.xml::error failure) {
         std.string::string message = f"{label}: the error code";
-        std.test::check(failure.code == code, message.as_str());
+        std.test::check(failure.code == code, message);
         try {
             parser.feed(document, true) as void;
             std.test::fail("a poisoned reader continued");
@@ -167,7 +167,7 @@ protected void expect_bytes(const array<u8>* actual, str expected)
 void reads_events_in_document_order()
     throws std.test::failure, std.alloc::alloc_error, std.xml::error {
     std.string::string events = describe(document_text, std.xml::default_options(), 4096usize);
-    std.test::equal_text(events.as_str(), document_events);
+    std.test::equal_text(events, document_events);
     // The accessors of single events.
     const u8[] document = document_text;
     std.xml::reader parser = std.xml::reader::create(std.xml::default_options());
@@ -229,7 +229,7 @@ void accepts_fragments_split_anywhere()
     for (usize index = 0usize; index < 5usize; index += 1usize) {
         std.string::string events =
             describe(document_text, std.xml::default_options(), chunks[index]);
-        std.test::equal_text(events.as_str(), document_events);
+        std.test::equal_text(events, document_events);
     }
     // A reset reader starts a new document.
     const u8[] document = document_text;
@@ -252,19 +252,19 @@ void decodes_text_and_attributes()
     std.string::string entities = describe(
         "<a t='x&lt;y'>&lt;&gt;&amp;&quot;&apos;&#65;&#x42;&#x20AC;</a>",
         std.xml::default_options(), 4096usize);
-    std.test::equal_text(entities.as_str(), "<a t=x<y>|\"<>&\"'AB€\"|</a>|");
+    std.test::equal_text(entities, "<a t=x<y>|\"<>&\"'AB€\"|</a>|");
     // Tab, LF and CR in attribute values become spaces.
     std.string::string normalized =
         describe("<a v='1\t2\n3\r4'/>", std.xml::default_options(), 4096usize);
-    std.test::equal_text(normalized.as_str(), "<a v=1 2 3 4>|</a>|");
+    std.test::equal_text(normalized, "<a v=1 2 3 4>|</a>|");
     // Whitespace-only text is dropped unless asked for; CDATA stays verbatim.
     str spaced = "<a> <b/> <![CDATA[ &amp; ]]></a>";
     std.string::string skipped = describe(spaced, std.xml::default_options(), 4096usize);
-    std.test::equal_text(skipped.as_str(), "<a>|<b>|</b>|[CDATA[ &amp; ]]|</a>|");
+    std.test::equal_text(skipped, "<a>|<b>|</b>|[CDATA[ &amp; ]]|</a>|");
     std.xml::options verbose = std.xml::default_options();
     verbose.skip_whitespace = false;
     std.string::string kept = describe(spaced, verbose, 4096usize);
-    std.test::equal_text(kept.as_str(), "<a>|\" \"|<b>|</b>|\" \"|[CDATA[ &amp; ]]|</a>|");
+    std.test::equal_text(kept, "<a>|\" \"|<b>|</b>|\" \"|[CDATA[ &amp; ]]|</a>|");
     std.xml::options defaults = std.xml::default_options();
     std.test::equal(defaults.max_depth, 256usize);
     std.test::equal(defaults.max_attributes, 256usize);
@@ -320,7 +320,7 @@ void writes_escaped_documents()
     // The reader reads back what the writer wrote.
     std.string::string events =
         describe(std.array::as_slice(&compact), std.xml::default_options(), 4096usize);
-    std.test::equal_text(events.as_str(),
+    std.test::equal_text(events,
                          "?xml(version=\"1.0\" encoding=\"UTF-8\")|<root a=x<y&\"z\">|<item>|"
                          "\"alpha & <beta>\"|</item>|<empty>|</empty>|!-- note --|?proc(data)|"
                          "<raw>|[CDATA[<raw>]]|</raw>|</root>|");

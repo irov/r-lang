@@ -59,7 +59,7 @@ async void awaits() throws std.test::failure, std.error::fault {
 void builds() throws std.alloc::alloc_error, std.test::failure {
     std.string::string text = std.string::from_str("abc");
     text.append("def");
-    std.test::equal_text(text.as_str(), "abcdef");
+    std.test::equal_text(text, "abcdef");
 }
 
 protected u64 helper(u64 value) {

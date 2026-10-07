@@ -36,7 +36,7 @@ protected array<std.net::socket_address> one(std.net::socket_address server) thr
 }
 
 protected bool named(const std.dns::question* asked, str name, u16 kind) {
-    return std.text::equal_ignore_ascii_case(asked->name.as_str(), name) == true && asked->kind == kind;
+    return std.text::equal_ignore_ascii_case(asked->name, name) == true && asked->kind == kind;
 }
 
 /* The test zone: the records of a question, its response code, and whether an answer over UDP
@@ -44,14 +44,14 @@ protected bool named(const std.dns::question* asked, str name, u16 kind) {
 protected u8 zone(const std.dns::question* asked, array<std.dns::record>* answers, bool* truncated)
     throws std.dns::dns_error, std.alloc::alloc_error {
     if (named(asked, "_chat._tcp.test", 33u16) == true) {
-        add(answers, std.dns::record::srv(asked->name.as_str(), 60u32, 20u16, 5u16, 7003u16, "c.test."));
-        add(answers, std.dns::record::srv(asked->name.as_str(), 60u32, 10u16, 1u16, 7001u16, "a.test."));
-        add(answers, std.dns::record::txt(asked->name.as_str(), 60u32, "not a service"));
-        add(answers, std.dns::record::srv(asked->name.as_str(), 60u32, 10u16, 9u16, 7002u16, "b.test."));
+        add(answers, std.dns::record::srv(asked->name, 60u32, 20u16, 5u16, 7003u16, "c.test."));
+        add(answers, std.dns::record::srv(asked->name, 60u32, 10u16, 1u16, 7001u16, "a.test."));
+        add(answers, std.dns::record::txt(asked->name, 60u32, "not a service"));
+        add(answers, std.dns::record::srv(asked->name, 60u32, 10u16, 9u16, 7002u16, "b.test."));
         return 0u8;
     }
     if (named(asked, "_none._tcp.test", 33u16) == true) {
-        add(answers, std.dns::record::srv(asked->name.as_str(), 60u32, 0u16, 0u16, 0u16, "."));
+        add(answers, std.dns::record::srv(asked->name, 60u32, 0u16, 0u16, 0u16, "."));
         return 0u8;
     }
     if (named(asked, "info.test", 16u16) == true) {
@@ -59,18 +59,18 @@ protected u8 zone(const std.dns::question* asked, array<std.dns::record>* answer
         for (u32 index = 0u32; index < 30u32; index += 1u32) {
             std.string::append_str(&long_text, "0123456789");
         }
-        add(answers, std.dns::record::txt(asked->name.as_str(), 60u32, long_text.as_str()));
-        add(answers, std.dns::record::txt(asked->name.as_str(), 60u32, "v=1"));
+        add(answers, std.dns::record::txt(asked->name, 60u32, long_text));
+        add(answers, std.dns::record::txt(asked->name, 60u32, "v=1"));
         return 0u8;
     }
     if (named(asked, "1.0.0.127.in-addr.arpa", 12u16) == true) {
-        add(answers, std.dns::record::ptr(asked->name.as_str(), 60u32, "localhost."));
+        add(answers, std.dns::record::ptr(asked->name, 60u32, "localhost."));
         return 0u8;
     }
     if (named(asked, "big.test", 33u16) == true) {
         *truncated = true;
         for (u16 index = 0u16; index < 40u16; index += 1u16) {
-            add(answers, std.dns::record::srv(asked->name.as_str(), 60u32, 1u16, index, (8000u32 + (index as u32)) as u16,
+            add(answers, std.dns::record::srv(asked->name, 60u32, 1u16, index, (8000u32 + (index as u32)) as u16,
                                               "a-rather-long-target-name.example.test."));
         }
         return 0u8;
@@ -157,7 +157,7 @@ void encodes_and_reads_a_query() throws std.test::failure, std.dns::dns_error, s
     std.test::equal(query[11usize], 1u8);
     std.dns::question asked = std.dns::parse_query(query.as_slice());
     std.test::equal(asked.id, 4660u16);
-    std.test::equal_text(asked.name.as_str(), "_chat._tcp.Example.org");
+    std.test::equal_text(asked.name, "_chat._tcp.Example.org");
     std.test::equal(asked.kind, 33u16);
     std.test::check(asked.recursion, "recursion desired");
     std.test::equal(std.dns::type_code(std.dns::record_type::aaaa), 28u16);
@@ -171,14 +171,14 @@ void rejects_invalid_names() throws std.test::failure, std.alloc::alloc_error {
     for (u32 index = 0u32; index < 26u32; index += 1u32) { std.string::append_str(&long_name, "abcdefghi."); }
     u32 rejected_count = 0u32;
     try {
-        bytes query = std.dns::encode_query(1u16, long_label.as_str(), 1u16);
+        bytes query = std.dns::encode_query(1u16, long_label, 1u16);
         (move query) as void;
     } catch (std.dns::dns_error rejected) {
         std.test::check(rejected.code == std.dns::error_code::invalid_name, "a label of 64 bytes");
         rejected_count += 1u32;
     }
     try {
-        bytes query = std.dns::encode_query(1u16, long_name.as_str(), 1u16);
+        bytes query = std.dns::encode_query(1u16, long_name, 1u16);
         (move query) as void;
     } catch (std.dns::dns_error rejected) {
         std.test::check(rejected.code == std.dns::error_code::invalid_name, "a name of 260 bytes");
@@ -217,8 +217,8 @@ void follows_compressed_names() throws std.test::failure, std.dns::dns_error, st
     bytes message = compressed_response(false);
     array<std.dns::record> found = std.dns::parse_response(message.as_slice(), 5u16, "A.TEST.", 12u16);
     std.test::equal(len(found), 1usize);
-    std.test::equal_text(found[0usize].name.as_str(), "a.test");
-    std.test::equal_text(found[0usize].target.as_str(), "x.test");
+    std.test::equal_text(found[0usize].name, "a.test");
+    std.test::equal_text(found[0usize].target, "x.test");
     std.test::equal(found[0usize].ttl, 60u32);
     u32 failures = 0u32;
     try {
@@ -263,17 +263,17 @@ void reads_resolv_conf() throws std.test::failure, std.alloc::alloc_error {
     std.test::equal(len(servers), 2usize);
     std.string::string first = std.net::format_ip(servers[0usize].address);
     std.string::string second = std.net::format_ip(servers[1usize].address);
-    std.test::equal_text(first.as_str(), "192.0.2.53");
-    std.test::equal_text(second.as_str(), "2001:db8::1");
+    std.test::equal_text(first, "192.0.2.53");
+    std.test::equal_text(second, "2001:db8::1");
     std.test::equal(servers[1usize].port, 53u16);
 }
 
 @test
 void names_reverse_lookups() throws std.test::failure, std.error::fault {
     std.string::string v4 = std.dns::reverse_name(std.net::parse_ip("192.0.2.10"));
-    std.test::equal_text(v4.as_str(), "10.2.0.192.in-addr.arpa");
+    std.test::equal_text(v4, "10.2.0.192.in-addr.arpa");
     std.string::string v6 = std.dns::reverse_name(std.net::parse_ip("2001:db8::567:89ab"));
-    std.test::equal_text(v6.as_str(),
+    std.test::equal_text(v6,
                          "b.a.9.8.7.6.5.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa");
 }
 
@@ -285,11 +285,11 @@ async void finds_services_in_order() throws std.dns::dns_error, std.error::fault
         auto server = serve_udp(&socket, 2u32);
         array<std.dns::srv_record> services = await resolving.lookup_srv("_chat._tcp.test");
         std.test::equal(len(services), 3usize);
-        std.test::equal_text(services[0usize].target.as_str(), "b.test");
+        std.test::equal_text(services[0usize].target, "b.test");
         std.test::equal(services[0usize].port, 7002u16);
-        std.test::equal_text(services[1usize].target.as_str(), "a.test");
+        std.test::equal_text(services[1usize].target, "a.test");
         std.test::equal(services[1usize].weight, 1u16);
-        std.test::equal_text(services[2usize].target.as_str(), "c.test");
+        std.test::equal_text(services[2usize].target, "c.test");
         std.test::equal(services[2usize].priority, 20u16);
         array<std.dns::srv_record> none = await resolving.lookup_srv("_none._tcp.test");
         std.test::equal(len(none), 0usize);
@@ -311,10 +311,10 @@ async void reads_text_and_reverse_records() throws std.dns::dns_error, std.error
         std.string::string joined = texts[0usize].text();
         std.test::equal(std.string::len(&joined), 300usize);
         std.string::string short_text = texts[1usize].text();
-        std.test::equal_text(short_text.as_str(), "v=1");
+        std.test::equal_text(short_text, "v=1");
         array<std.string::string> names = await resolving.reverse(std.net::parse_ip("127.0.0.1"));
         std.test::equal(len(names), 1usize);
-        std.test::equal_text(names[0usize].as_str(), "localhost");
+        std.test::equal_text(names[0usize], "localhost");
         await move server;
     }
     await (move socket).close();

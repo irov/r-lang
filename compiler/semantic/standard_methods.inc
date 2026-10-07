@@ -911,14 +911,15 @@ static bool r_standard_lower_overload(RBodyContext *body,
             body->prelowered_result = &prelowered;
         }
         kind = r_semantic_value_kind(context, value_type);
-        RTypeId string_type;
-        if (!r_semantic_intern_named_standard_type(context, "std.string::string", &string_type)) {
+        RTypeId owner_type;
+        RStandardCallOperation view_operation;
+        if (!r_body_string_view_owner(body, value_type, &owner_type, &view_operation)) {
             body->prelowered_result = NULL;
             return false;
         }
-        /* A string place appends through its str view (R-EXPR-0015, L41). */
+        /* A string or builder place appends through its str view (R-EXPR-0015, L41, L43). */
         if (kind == R_SEMANTIC_TYPE_STR || kind == R_SEMANTIC_TYPE_CONSTEXPR_STR ||
-            r_semantic_value_type(context, value_type) == string_type) {
+            view_operation != R_STANDARD_CALL_INVALID) {
             operation =
                 formatting ? R_STANDARD_CALL_FORMAT_APPEND_STR : R_STANDARD_CALL_STRING_APPEND_STR;
         } else if (kind == R_SEMANTIC_TYPE_CHAR) {

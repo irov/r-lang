@@ -1,7 +1,7 @@
 # R Frontend Parser 0.1
 
 This directory contains the bootstrap frontend for the normative English R Core
-Specification `0.1.0-draft.100`.
+Specification `0.1.0-draft.101`.
 
 ```text
 UTF-8 source
@@ -350,18 +350,24 @@ closed code uses the concrete representation and normal cleanup, without boxing.
 
 ### String views of owned strings
 
-A place of type `std.string::string` where `str` is expected, as an argument, an initializer,
-a field initializer or a returned value, lowers to the standard call
-`std.string::as_str(&place)` (R-EXPR-0015): `r_body_finish_value_impl` forms the shared borrow
-with the ordinary borrow checks and appends the call, so the view and its region are those of an
-explicit `.as_str()` and the place stays usable after the last use of the view. A string that is
-not a place (a call result, an f-string) is rejected with a request to name it, because a view of
-a temporary would have to outlive the full expression, across an `await` in an async body; a
-string where a byte slice is expected is rejected, since the string edges do not chain. Overload
-selection counts the edge among the existing conversions (`r_overload_compatible`,
-R-FUNC-0004), and `append` of a string or a `std.format` builder takes a string argument
-through its `str` overload. A pointer to a string is not viewed; its dereference `*text` is a
-place and is.
+A place of type `std.string::string` or `std.format::builder` where `str` or `const u8[]` is
+expected, as an argument, an initializer, a field initializer or a returned value, lowers to the
+standard call `as_str(&place)` of its type (R-EXPR-0015): `r_body_finish_value_impl` forms the
+shared borrow with the ordinary borrow checks and appends the call, so the view and its region are
+those of an explicit `.as_str()` and the place stays usable after the last use of the view. Where a
+byte slice is expected, a string place lowers to `std.string::as_bytes(&place)` and a builder's view
+takes the existing `str` to `const u8[]` edge (a builder has no `as_bytes`); the specification
+counts the place-to-bytes conversion as one edge, so it does not break the rule that string edges do
+not chain. A value of these types that is not a place (a call result, an f-string) is rejected with
+a request to name it, because a view of a temporary would have to outlive the full expression,
+across an `await` in an async body; an exclusive `u8[]` is rejected, since the view is shared.
+Overload selection counts the edges among the existing conversions (`r_overload_compatible`,
+R-FUNC-0004), and `append` of a string or a builder takes a string or builder argument through its
+`str` overload. The value of a `switch` that is such a place is viewed before the label switch is
+chosen (R-STMT-0006), so string labels apply unchanged, and so is the input of a `match`
+(`r_body_lower_match`, R-EXPR-0031) when it is a place: a temporary or moved input keeps its type,
+so that a move binding still takes the owner. A pointer to a string is not viewed; its dereference
+`*text` is a place and is.
 
 ### Dyn interfaces
 

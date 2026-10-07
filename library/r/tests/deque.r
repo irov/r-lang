@@ -62,7 +62,7 @@ protected std.string::string drain(std.deque::deque<i32>* target, bool from_fron
         case variant o::some(value):
             i32 number = *value;
             std.string::string piece = f"{number} ";
-            text.append(piece.as_str());
+            text.append(piece);
         case variant o::none:
             return move text;
         }
@@ -104,11 +104,11 @@ void queues_first_in_first_out() throws std.test::failure, std.alloc::alloc_erro
     for (i32 value in 1..6) { push_back(&queue, value); }
     std.test::equal(queue.count(), 5usize);
     std.string::string order = drain(&queue, true);
-    std.test::equal_text(order.as_str(), "1 2 3 4 5 ");
+    std.test::equal_text(order, "1 2 3 4 5 ");
     std.test::check(queue.is_empty(), "every element was popped");
     for (i32 value in 1..4) { push_front(&queue, value); }
     std.string::string reversed = drain(&queue, false);
-    std.test::equal_text(reversed.as_str(), "1 2 3 ");
+    std.test::equal_text(reversed, "1 2 3 ");
 }
 
 @test
@@ -116,11 +116,11 @@ void stacks_at_either_end() throws std.test::failure, std.alloc::alloc_error {
     std.deque::deque<i32> back_stack = std.deque::deque<i32>::create();
     for (i32 value in 1..5) { push_back(&back_stack, value); }
     std.string::string from_back = drain(&back_stack, false);
-    std.test::equal_text(from_back.as_str(), "4 3 2 1 ");
+    std.test::equal_text(from_back, "4 3 2 1 ");
     std.deque::deque<i32> front_stack = std.deque::deque<i32>::create();
     for (i32 value in 1..5) { push_front(&front_stack, value); }
     std.string::string from_front = drain(&front_stack, true);
-    std.test::equal_text(from_front.as_str(), "4 3 2 1 ");
+    std.test::equal_text(from_front, "4 3 2 1 ");
 }
 
 @test
@@ -166,12 +166,12 @@ void mixes_both_ends() throws std.test::failure, std.alloc::alloc_error {
     push_back(&queue, 5);
     push_front(&queue, 0);
     std.string::string order = drain(&queue, true);
-    std.test::equal_text(order.as_str(), "0 2 3 5 ");
+    std.test::equal_text(order, "0 2 3 5 ");
     push_front(&queue, 9);
     push_front(&queue, 8);
     push_back(&queue, 10);
     std.string::string backwards = drain(&queue, false);
-    std.test::equal_text(backwards.as_str(), "10 9 8 ");
+    std.test::equal_text(backwards, "10 9 8 ");
 }
 
 @test
@@ -198,17 +198,17 @@ void moves_owned_values() throws std.test::failure, std.alloc::alloc_error,
     words.push_back(move last);
     o<const std.string::string*> front = words.front();
     switch (front) {
-    case variant o::some(word): std.test::equal_text((*word)->as_str(), "first");
+    case variant o::some(word): std.test::equal_text(**word, "first");
     case variant o::none: std.test::fail("the deque has a front");
     }
     o<std.string::string> back = words.pop_back();
     switch (move back) {
-    case variant o::some(move word): std.test::equal_text(word.as_str(), "last");
+    case variant o::some(move word): std.test::equal_text(word, "last");
     case variant o::none: std.test::fail("the deque has a back");
     }
     o<std.string::string> head = words.pop_front();
     switch (move head) {
-    case variant o::some(move word): std.test::equal_text(word.as_str(), "first");
+    case variant o::some(move word): std.test::equal_text(word, "first");
     case variant o::none: std.test::fail("the deque has a front");
     }
     std.test::equal(words.count(), 1usize);
@@ -234,7 +234,7 @@ void grows_at_both_ends() throws std.test::failure, std.alloc::alloc_error {
     }
     std.test::equal(total, -155);
     std.string::string rest = drain(&queue, false);
-    std.test::equal_text(rest.as_str(),
+    std.test::equal_text(rest,
         "19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0 -1 -2 -3 -4 -5 -6 -7 -8 -9 -10 ");
 }
 

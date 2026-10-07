@@ -62,11 +62,11 @@ protected std.jwt::validation rules() {
 protected std.string::string run(const array<std.string::string>* arguments)
     throws std.alloc::alloc_error, std.jwt::jwt_error, std.crypto::crypto_error, std.json::error {
     const std.string::string[] at_words = std.array::as_slice(arguments);
-    switch (at_words[0usize].as_str()) {
+    switch (at_words[0usize]) {
     case "sign":
-        std.jwt::algorithm alg = std.jwt::algorithm::parse(at_words[1usize].as_str());
-        bytes key = hex_of(at_words[2usize].as_str());
-        bytes claims_text = hex_of(at_words[3usize].as_str());
+        std.jwt::algorithm alg = std.jwt::algorithm::parse(at_words[1usize]);
+        bytes key = hex_of(at_words[2usize]);
+        bytes claims_text = hex_of(at_words[3usize]);
         std.json::value claims = std.json::parse(claims_text.as_slice());
         if (is_hmac(alg) == true) {
             std.jwt::signer hmac = std.jwt::signer::hmac(alg, key.as_slice());
@@ -76,8 +76,8 @@ protected std.string::string run(const array<std.string::string>* arguments)
         std.jwt::signer signer = std.jwt::signer::with_private_key(alg, move private_part);
         return std.jwt::sign(&signer, &claims);
     case "verify":
-        std.jwt::algorithm alg = std.jwt::algorithm::parse(at_words[1usize].as_str());
-        bytes key = hex_of(at_words[2usize].as_str());
+        std.jwt::algorithm alg = std.jwt::algorithm::parse(at_words[1usize]);
+        bytes key = hex_of(at_words[2usize]);
         std.jwt::key_set keys = std.jwt::key_set::create();
         if (is_hmac(alg) == true) {
             keys.add(std.jwt::verifier::hmac(alg, key.as_slice()));
@@ -86,19 +86,19 @@ protected std.string::string run(const array<std.string::string>* arguments)
             keys.add(std.jwt::verifier::with_public_key(alg, move public_part));
         }
         std.jwt::validation checks = rules();
-        std.json::value claims = std.jwt::verify(&keys, at_words[3usize].as_str(), &checks, at(at_words[4usize].as_str()));
+        std.json::value claims = std.jwt::verify(&keys, at_words[3usize], &checks, at(at_words[4usize]));
         return std.json::stringify(&claims);
     case "jwks":
-        bytes set = hex_of(at_words[1usize].as_str());
+        bytes set = hex_of(at_words[1usize]);
         std.jwt::key_set keys = std.jwt::key_set::from_jwks(set.as_slice());
         std.jwt::validation checks = rules();
-        std.json::value claims = std.jwt::verify(&keys, at_words[2usize].as_str(), &checks, at(at_words[3usize].as_str()));
+        std.json::value claims = std.jwt::verify(&keys, at_words[2usize], &checks, at(at_words[3usize]));
         return std.json::stringify(&claims);
     case "jwk":
-        std.jwt::algorithm alg = std.jwt::algorithm::parse(at_words[1usize].as_str());
-        bytes key = hex_of(at_words[2usize].as_str());
+        std.jwt::algorithm alg = std.jwt::algorithm::parse(at_words[1usize]);
+        bytes key = hex_of(at_words[2usize]);
         std.crypto::public_key public_part = std.crypto::public_key::from_der(key.as_slice());
-        std.json::value jwk = std.jwt::jwk(&public_part, alg, at_words[3usize].as_str());
+        std.json::value jwk = std.jwt::jwk(&public_part, alg, at_words[3usize]);
         return std.json::stringify(&jwk);
     default: return std.string::from_str("unknown");
     }
@@ -110,7 +110,7 @@ async i32 main() {
         switch (move line) {
         case variant o::some(move text):
             try {
-                array<std.string::string> arguments = words(text.as_str());
+                array<std.string::string> arguments = words(text);
                 await std.console::println(run(&arguments));
             } catch (std.jwt::jwt_error failure) {
                 std.jwt::error_code code = failure.code;

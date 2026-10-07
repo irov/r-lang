@@ -177,8 +177,8 @@ i32 exclusive_views() {
 
 usize staged_literals() throws std.alloc::alloc_error {
     std.string::string owner = std.string::from_str("owned");
-    Named named = {.name = std.string::as_str(&owner), .id = 1};
-    str[2] pair = {std.string::as_str(&owner), "b"};
+    Named named = {.name = owner, .id = 1};
+    str[2] pair = {owner, "b"};
     return len(named.name) + len(pair[0]) + len(pair[1]);
 }
 

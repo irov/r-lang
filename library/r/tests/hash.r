@@ -11,7 +11,7 @@ import std.hash;
 protected void expect_hex(const u8[] digest, str expected)
     throws std.test::failure, std.alloc::alloc_error {
     std.string::string digits = std.encoding::encode_hex(digest);
-    std.test::equal_text(digits.as_str(), expected);
+    std.test::equal_text(digits, expected);
 }
 
 /* SHA-256 of the data given in pieces of `piece` bytes. */
@@ -87,9 +87,9 @@ void matches_the_one_shot_digests_at_block_boundaries() throws std.test::failure
             std.hash::sha512_digest split_512 = sha512_in_pieces(message, piece);
             std.string::string context = f"length {length} in pieces of {piece}";
             std.test::check(std.bytes::equal(split_256.bytes, whole_256.bytes) == true,
-                            context.as_str());
+                            context);
             std.test::check(std.bytes::equal(split_512.bytes, whole_512.bytes) == true,
-                            context.as_str());
+                            context);
         }
     }
 }

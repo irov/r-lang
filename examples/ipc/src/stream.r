@@ -41,7 +41,7 @@ async void answer(std.net::unix_stream client) throws std.error::fault {
     Count sent = {.value = 0usize};
     task_scope(1) output {
         while (sent.value < total) {
-            const u8[] text = reply.as_bytes();
+            const u8[] text = reply;
             sent.value += await client.write_from(text[sent.value..total]);
         }
     }
@@ -104,7 +104,7 @@ async std.string::string call(std.string::string path, std.string::string messag
     str where = path;
     std.net::unix_stream connection = await std.net::unix_connect(where);
     task_scope(1) output {
-        await std.net::unix_write_all_from(&connection, message.as_bytes());
+        await std.net::unix_write_all_from(&connection, message);
     }
     task_scope(1) ending { await end_line(&connection); }
     await connection.shutdown(std.net::shutdown_direction::write);

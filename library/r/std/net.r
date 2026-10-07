@@ -99,7 +99,7 @@ protected usize append_groups(bytes* out, const u8[] text, usize start, usize en
    network order. */
 bytes ip_octets(std.net::ip_address value) throws std.alloc::alloc_error {
     std.string::string text = std.net::format_ip(value);
-    const u8[] characters = text.as_bytes();
+    const u8[] characters = text;
     bytes out = std.bytes::with_capacity(16usize);
     usize colon = len(characters);
     for (usize index = 0usize; index < len(characters); index += 1usize) {

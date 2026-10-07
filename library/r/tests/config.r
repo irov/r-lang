@@ -78,7 +78,7 @@ protected std.string::string padded_object(usize size) throws std.alloc::alloc_e
     std.string::string text = std.string::from_str("{\"port\": 1}");
     std.string::string chunk = std.string::create();
     for (usize index = 0usize; index < 4096usize; index += 1usize) { chunk.append(" "); }
-    while (std.string::len(&text) + 4096usize <= size) { text.append(chunk.as_str()); }
+    while (std.string::len(&text) + 4096usize <= size) { text.append(chunk); }
     while (std.string::len(&text) < size) { text.append(" "); }
     drop chunk;
     return move text;
@@ -264,7 +264,7 @@ void describes_values_and_sources()
     throws std.config::config_error, std.test::failure, std.alloc::alloc_error {
     std.config::config empty = std.config::config::create();
     std.string::string nothing = empty.describe();
-    std.test::equal_text(nothing.as_str(), "");
+    std.test::equal_text(nothing, "");
     std.config::config settings = declared();
     settings.define("db.password", "hunter2", "database password");
     settings.define("client_secret", "abc", "client secret");
@@ -274,7 +274,7 @@ void describes_values_and_sources()
     settings.set("log.level", "warn", std.config::source::environment);
     settings.set("api.token", "xyz", std.config::source::arguments);
     std.string::string text = settings.describe();
-    std.test::equal_text(text.as_str(),
+    std.test::equal_text(text,
                          "port=9000 (file)\n"
                          "log.level=warn (environment)\n"
                          "log.json=false (default_value)\n"
@@ -444,12 +444,12 @@ async void reads_at_most_one_mebibyte()
     std.fs::path path = std.fs::path_from_utf8("rtest_config_large.json");
     std.string::string largest = padded_object(1048576usize);
     std.test::equal(std.string::len(&largest), 1048576usize);
-    task_scope(1) writing { await write_text(&path, largest.as_str()); }
+    task_scope(1) writing { await write_text(&path, largest); }
     task_scope(1) loading { await settings.load_file(&path); }
     expect_key(&settings, "port", "1", std.config::source::file);
     std.config::config fresh = declared();
     std.string::string larger = padded_object(1048577usize);
-    task_scope(1) writing_more { await write_text(&path, larger.as_str()); }
+    task_scope(1) writing_more { await write_text(&path, larger); }
     try {
         task_scope(1) loading_more { await fresh.load_file(&path); }
         std.test::fail("a file above 1 MiB loaded");
@@ -473,7 +473,7 @@ struct Server {
 protected void expect_field(std.config::field_error failure, std.config::error_code code, str name)
     throws std.test::failure, std.alloc::alloc_error {
     std.test::check(failure.code == code, "error code");
-    std.test::equal_text(failure.name.as_str(), name);
+    std.test::equal_text(failure.name, name);
 }
 
 // R-SLIB-CONFIG-0004: variables convert by the type of their field; absent optional fields keep
@@ -488,11 +488,11 @@ void reads_a_struct_from_the_environment() throws std.test::failure, std.error::
     std.env::remove("ARENA_RATIO");
     try {
         Server read = std.config::from_environment::<Server>("ARENA_");
-        std.test::equal_text(read.host.as_str(), "db.local");
+        std.test::equal_text(read.host, "db.local");
         std.test::equal(read.port, 5432u16);
         std.test::check(read.production, "production");
         std.test::equal(len(read.origins), 2usize);
-        std.test::equal_text(read.origins[1usize].as_str(), "b.test");
+        std.test::equal_text(read.origins[1usize], "b.test");
         switch (read.api_key) {
         case variant o::some(_): std.test::fail("no API key");
         case variant o::none: break;
@@ -504,11 +504,11 @@ void reads_a_struct_from_the_environment() throws std.test::failure, std.error::
         std.test::equal(second.port, 6543u16);
         std.test::check(second.ratio == 0.25, "ratio");
         switch (second.api_key) {
-        case variant o::some(key): std.test::equal_text(key->as_str(), "k-1");
+        case variant o::some(key): std.test::equal_text(*key, "k-1");
         case variant o::none: std.test::fail("an API key");
         }
     } catch (std.config::field_error failure) {
-        std.test::fail(failure.name.as_str());
+        std.test::fail(failure.name);
     }
     std.env::set("ARENA_PG_PORT", "70000");
     try {
@@ -552,9 +552,9 @@ void decodes_a_configuration() throws std.test::failure, std.config::config_erro
     try {
         Limits read = settings.decode::<Limits>();
         std.test::equal(read.max_clients, 64u64);
-        std.test::equal_text(read.level.as_str(), "warn");
+        std.test::equal_text(read.level, "warn");
     } catch (std.config::field_error failure) {
-        std.test::fail(failure.name.as_str());
+        std.test::fail(failure.name);
     }
     settings.set("max_clients", "many", std.config::source::environment);
     try {

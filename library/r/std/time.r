@@ -948,7 +948,7 @@ protected zone_type type_at(const zone* this, i64 instant) {
 }
 
 str zone::name(const zone* this) {
-    return this->zone_name.as_str();
+    return this->zone_name;
 }
 
 /* R-SLIB-TIME-0011: the offset east of UTC in seconds at an instant. */
@@ -1232,7 +1232,7 @@ local_time parse_local(str text, str pattern) throws std.convert::parse_error, s
             o<std.string::string> found = std.env::get("TZDIR");
             switch (move found) {
             case variant o::some(move value):
-                const u8[] text = value.as_bytes();
+                const u8[] text = value;
                 if (len(text) > 0usize) { return move value; }
                 drop value;
             case variant o::none: break;
@@ -1247,13 +1247,13 @@ local_time parse_local(str text, str pattern) throws std.convert::parse_error, s
        of the system. A name that is not a relative path of zone names is invalid_name, a name
        without a file unknown_zone, a file that is not TZif malformed. */
     async zone load_zone(std.string::string name) throws zone_error, std.error::fault {
-        throw (valid_zone_name(name.as_bytes()) == false) zone_failure(zone_error_code::invalid_name);
+        throw (valid_zone_name(name) == false) zone_failure(zone_error_code::invalid_name);
         std.string::string file = zone_directory();
         file.append("/");
-        file.append(name.as_str());
+        file.append(name);
         bytes data = {};
         try {
-            std.fs::path path = std.fs::path_from_utf8(file.as_str());
+            std.fs::path path = std.fs::path_from_utf8(file);
             bytes read = await std.fs::read_file(&path, 1048576usize);
             bytes old = core::replace(&data, move read);
             drop old;
@@ -1262,7 +1262,7 @@ local_time parse_local(str text, str pattern) throws std.convert::parse_error, s
                 zone_failure(zone_error_code::unknown_zone);
             throw refused;
         }
-        return parse_tzif(name.as_str(), data.as_slice());
+        return parse_tzif(name, data.as_slice());
     }
 
     /* R-SLIB-TIME-0010: the zone of the process: TZ when it is set, a zone name or a POSIX TZ
@@ -1278,7 +1278,7 @@ local_time parse_local(str text, str pattern) throws std.convert::parse_error, s
         }
         switch (move setting) {
         case variant o::some(move value):
-            const u8[] text = value.as_bytes();
+            const u8[] text = value;
             usize start = 0usize;
             if (len(text) > 0usize && text[0usize] == 58u8) { start = 1usize; }
             if (start == len(text)) { return utc_zone(); }

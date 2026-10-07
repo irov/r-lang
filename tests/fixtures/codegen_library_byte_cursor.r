@@ -68,12 +68,12 @@ protected i32 check_string() throws std.alloc::alloc_error, std.string::boundary
     std.string::string text = std.string::from_str("héllo");
     std.string::insert_str(&text, 0usize, ">");
     std.string::replace_range(&text, 2usize, 4usize, "E");
-    if (same(text.as_str(), ">hEllo") == false) { return 30; }
+    if (same(text, ">hEllo") == false) { return 30; }
     usize end = std.string::len(&text);
     std.string::insert_str(&text, end, "!");
     std.string::replace_range(&text, 1usize, 1usize, "");
     std.string::replace_range(&text, 0usize, 1usize, "");
-    if (same(text.as_str(), "hEllo!") == false) { return 31; }
+    if (same(text, "hEllo!") == false) { return 31; }
     try {
         std.string::replace_range(&text, 1usize, 9usize, "x");
         return 32;
@@ -99,11 +99,11 @@ protected i32 check_string() throws std.alloc::alloc_error, std.string::boundary
     } catch (std.string::boundary_error failure) {
         if (failure != std.string::boundary_error::not_scalar_boundary) { return 39; }
     }
-    if (same(accent.as_str(), "aéb") == false || same(text.as_str(), "hEllo!") == false) {
+    if (same(accent, "aéb") == false || same(text, "hEllo!") == false) {
         return 40;
     }
     std.string::replace_range(&accent, 1usize, 3usize, "€€");
-    if (same(accent.as_str(), "a€€b") == false) { return 41; }
+    if (same(accent, "a€€b") == false) { return 41; }
     return 0;
 }
 

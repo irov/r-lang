@@ -75,16 +75,16 @@ std.string::string runner::start(runner* this, str name) throws std.alloc::alloc
 protected void runner::record(runner* this, std.string::string text) throws std.alloc::alloc_error {
     if (this->failing == true) { return; }
     this->failing = true;
-    this->problem.append(text.as_str());
+    this->problem.append(text);
     if (this->attempt != 0u64) {
         std.string::string suffix = f" (allocation {this->attempt} failing)";
-        this->problem.append(suffix.as_str());
+        this->problem.append(suffix);
     }
 }
 
 /* R-SLIB-TEST-0002: the test failed an assertion. */
 void runner::fail(runner* this, const failure* reason) throws std.alloc::alloc_error {
-    this->record(std.string::from_str(reason->message.as_str()));
+    this->record(std.string::from_str(reason->message));
 }
 
 /* R-SLIB-TEST-0002: the test threw a standard error; the problem is its portable name. */

@@ -6,7 +6,7 @@ i32 main() {
     usize total = 0usize;
     for (usize index = 0usize; index < iterations; index += 1usize) {
         std.string::string text = f"{index}";
-        const u8[] rendered = std.string::as_bytes(&text);
+        const u8[] rendered = text;
         total += len(rendered);
     }
     return (total % 109usize) as i32;

@@ -87,7 +87,7 @@ async i32 main(const str[] arguments) {
         std.string::string out = std.string::create();
         for (usize at = 1usize; at + 2usize < len(arguments); at += 3usize) {
             std.string::string text = line(arguments[at], arguments[at + 1usize], arguments[at + 2usize]);
-            std.string::append_str(&out, text.as_str());
+            std.string::append_str(&out, text);
             std.string::append_str(&out, "\n");
         }
         await std.console::print(move out);

@@ -133,7 +133,7 @@ u64 applied = await std.postgres::migrate(&db, move steps);
 ```
 
 ```text
-applied 4 migrations
+applied 5 migrations
 applied 0 migrations
 database: migration_mismatch version 2
 ```
@@ -159,6 +159,33 @@ std.string::string sql = example.arena.mapping::update_statement::<BanChange>();
 ```text
 UPDATE users SET "ban_type" = $2, "last_ban_check" = $3 WHERE "id" = $1
 changed 1
+```
+
+`buy ACCOUNT OFFER COUNT`, `stocks ACCOUNT` and `restock OFFER COUNT ACCOUNT...` keep what each
+account may still buy of an offer in `user_stocks`, whose struct names its table, its key of two
+columns and the id the database fills with the attribute of `std.postgres` (R-SLIB-PG-0017), so
+no statement of these commands names a column:
+
+```r
+@std.postgres::table(name = "user_stocks", key = "account_id, offer_id", generated = "id")
+struct UserStock { i64 id = 0i64; std.string::string account_id; std.string::string offer_id; i64 stock; };
+
+o<UserStock> found = await db.find::<UserStock>(stock_key(account, offer));
+UserStock created = await db.insert(&opened);        // INSERT ... RETURNING *: the id comes back
+await db.savepoint("purchase");
+u64 changed = await db.update(&after);               // UPDATE ... WHERE "account_id" = $3 AND "offer_id" = $4
+await db.rollback_to("purchase");                    // when the stock is short
+array<UserStock> rows = await db.select::<UserStock>("WHERE account_id = $1 ORDER BY offer_id", move given);
+u64 written = await db.insert_all(&fresh);           // one INSERT with a VALUES list
+```
+
+A purchase runs in a transaction: the first purchase of an offer opens its stock with five items,
+and a purchase larger than the stock writes its decrement after a savepoint and rolls back to it:
+
+```text
+42 bought 2 of gems, 3 left
+gems is out of stock for 42: 3 left
+restocked 2 of gems
 ```
 
 `sync ID AT SESSION BADGES STATS` sends typed parameters: the instant of RFC 3339, the uuid of the

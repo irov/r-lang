@@ -49,7 +49,7 @@ std.string::string keys(str passphrase) throws std.alloc::alloc_error, std.crypt
     // Both keys read back from their PEM text: the signature is deterministic (RFC 6979).
     std.secret::buffer private_pem = wrapped.to_pem();
     std.crypto::private_key read = std.crypto::private_key::from_pem(std.secret::as_slice(&private_pem));
-    std.crypto::public_key read_public = std.crypto::public_key::from_pem(public_pem.as_bytes());
+    std.crypto::public_key read_public = std.crypto::public_key::from_pem(public_pem);
     bool valid = checks(&read_public, message, signature.as_slice());
     bool other = checks(&read_public, "Pay 11 coins to Bob", signature.as_slice());
     bytes again = signs(&read, message);

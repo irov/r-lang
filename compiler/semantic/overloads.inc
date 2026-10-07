@@ -608,13 +608,23 @@ static bool r_overload_compatible(RBodyContext *body, RTypeId actual, RTypeId pa
     if (from == NULL || to == NULL) {
         return false;
     }
-    if (to->kind == R_SEMANTIC_TYPE_STR) {
-        /* R-EXPR-0015 (L41): a string place views as str; lowering the selected call rejects a
-           temporary string. */
-        RTypeId string_type;
-        return r_semantic_intern_named_standard_type(
-                   body->frontend, "std.string::string", &string_type) &&
-               (r_semantic_value_type(body->frontend, actual) == string_type);
+    const bool to_bytes = (to->kind == R_SEMANTIC_TYPE_SLICE) &&
+                          (to->flags == R_SEMANTIC_TYPE_FLAG_SHARED) &&
+                          (r_semantic_value_kind(body->frontend, to->base) == R_SEMANTIC_TYPE_U8);
+    if ((to->kind == R_SEMANTIC_TYPE_STR) || to_bytes) {
+        /* R-EXPR-0015 (L41, L43): a string or builder place views as str and as bytes; lowering
+           the selected call rejects a temporary. */
+        RTypeId owner_type;
+        RStandardCallOperation operation;
+        if (!r_body_string_view_owner(body, actual, &owner_type, &operation)) {
+            return false;
+        }
+        if (operation != R_STANDARD_CALL_INVALID) {
+            return true;
+        }
+        if (to->kind == R_SEMANTIC_TYPE_STR) {
+            return false;
+        }
     }
     if (to->kind == R_SEMANTIC_TYPE_SLICE && to->flags == R_SEMANTIC_TYPE_FLAG_SHARED) {
         if (from->kind == R_SEMANTIC_TYPE_BORROW) {

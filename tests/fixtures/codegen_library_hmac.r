@@ -14,8 +14,8 @@ protected i32 vector(const u8[] key, const u8[] message, str sha256, str sha512)
     std.hash::sha512_digest long_code = std.hash::hmac_sha512(key, message);
     std.string::string short_hex = std.encoding::encode_hex(short_code.bytes);
     std.string::string long_hex = std.encoding::encode_hex(long_code.bytes);
-    const u8[] short_bytes = short_hex.as_str();
-    const u8[] long_bytes = long_hex.as_str();
+    const u8[] short_bytes = short_hex;
+    const u8[] long_bytes = long_hex;
     const u8[] short_expected = sha256;
     const u8[] long_expected = sha512;
     // Test case 5 compares the first 128 bits only.

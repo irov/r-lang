@@ -40,7 +40,7 @@ void parses_media_types() throws std.test::failure, std.mime::mime_error, std.al
     std.test::equal_text(html.kind(), "text");
     std.test::equal_text(html.subtype(), "html");
     std.string::string essence = html.essence();
-    std.test::equal_text(essence.as_str(), "text/html");
+    std.test::equal_text(essence, "text/html");
     expect_parameter(&html, "charset", "UTF-8");
     expect_parameter(&html, "CHARSET", "UTF-8");
     std.test::check(absent(html.parameter("boundary")) == true, "no boundary");
@@ -49,10 +49,10 @@ void parses_media_types() throws std.test::failure, std.mime::mime_error, std.al
     std.test::equal(form.parameter_count(), 2usize);
     expect_parameter(&form, "boundary", "a b\"c");
     std.string::string shown = f"{form}";
-    std.test::equal_text(shown.as_str(), "multipart/form-data; boundary=\"a b\\\"c\"; x=1");
+    std.test::equal_text(shown, "multipart/form-data; boundary=\"a b\\\"c\"; x=1");
     std.mime::media_type json = std.mime::parse("application/vnd.api+json");
     std.string::string plain = f"{json}";
-    std.test::equal_text(plain.as_str(), "application/vnd.api+json");
+    std.test::equal_text(plain, "application/vnd.api+json");
 }
 
 @test
@@ -87,5 +87,5 @@ void finds_media_types_of_extensions() throws std.test::failure, std.alloc::allo
 void parsing_reports_exhausted_memory() throws std.test::failure, std.mime::mime_error, std.alloc::alloc_error {
     std.mime::media_type value = std.mime::parse("text/plain; charset=utf-8; format=flowed");
     std.string::string shown = f"{value}";
-    std.test::equal_text(shown.as_str(), "text/plain; charset=utf-8; format=flowed");
+    std.test::equal_text(shown, "text/plain; charset=utf-8; format=flowed");
 }

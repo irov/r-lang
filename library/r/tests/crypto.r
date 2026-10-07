@@ -15,11 +15,11 @@ void signs_the_rfc_8032_message() throws std.test::failure, std.alloc::alloc_err
     bytes seed = std.encoding::decode_hex("4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb");
     std.crypto::signing_key key = std.crypto::signing_key::from_seed(seed.as_slice());
     std.string::string public_hex = hex(key.public_key[..]);
-    std.test::equal_text(public_hex.as_str(), "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c");
+    std.test::equal_text(public_hex, "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c");
     u8[1] message = {0x72u8};
     u8[64] signature = key.sign(message[..]);
     std.string::string signature_hex = hex(signature[..]);
-    std.test::equal_text(signature_hex.as_str(),
+    std.test::equal_text(signature_hex,
                          "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da"
                          "085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00");
     std.test::check(std.crypto::verify(key.public_key[..], message[..], signature[..]), "verifies");
@@ -62,8 +62,8 @@ void agrees_on_a_secret() throws std.test::failure, std.alloc::alloc_error, std.
 void hashes_passwords_and_data() throws std.test::failure, std.alloc::alloc_error, std.crypto::crypto_error {
     std.crypto::password_limits limits = std.crypto::password_limits {.operations = 1u64, .memory = 8192usize};
     std.string::string hash = std.crypto::password_hash("hunter2", limits);
-    std.test::check(std.crypto::password_verify(hash.as_str(), "hunter2"), "matches");
-    std.test::check(std.crypto::password_verify(hash.as_str(), "hunter3") == false, "other password");
+    std.test::check(std.crypto::password_verify(hash, "hunter2"), "matches");
+    std.test::check(std.crypto::password_verify(hash, "hunter3") == false, "other password");
     std.test::check(std.crypto::password_limits::interactive().memory == 67108864usize, "interactive");
     bytes digest = std.crypto::blake2b("abc", "", 32usize);
     std.crypto::blake2b_state state = std.crypto::blake2b_state::create("", 32usize);
@@ -84,7 +84,7 @@ void signs_with_ecdsa_and_keeps_the_key_in_pem() throws std.test::failure, std.a
     std.crypto::ecdsa_key key = std.crypto::ecdsa_key::from_scalar(std.crypto::curve::p256, scalar.as_slice());
     bytes signature = key.sign("sample");
     std.string::string signature_hex = hex(signature.as_slice());
-    std.test::equal_text(signature_hex.as_str(),
+    std.test::equal_text(signature_hex,
                          "efd48b2aacb6a8fd1140dd9cd45e81d69d2c877b56aaf991c34d0ea84eaf3716"
                          "f7cb1c942d657c41d436c7a1b6e29f65f3e900dbb9aff4064dc4ab2f843acda8");
     std.crypto::private_key wrapped = std.crypto::private_key::ecdsa(move key);

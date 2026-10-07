@@ -39,7 +39,10 @@ enum Command {
     @help("sync ID AT SESSION BADGES STATS", true) sync,
     @help("users") users,
     @help("user ID") user,
-    @help("server KEY CIPHER", true) server
+    @help("server KEY CIPHER", true) server,
+    @help("buy ACCOUNT OFFER COUNT") buy,
+    @help("stocks ACCOUNT") stocks,
+    @help("restock OFFER COUNT ACCOUNT...", true) restock
 };
 
 error Usage { u32 code; };
@@ -101,6 +104,9 @@ protected bool database_command(Command selected) {
     case Command::users: return true;
     case Command::user: return true;
     case Command::server: return true;
+    case Command::buy: return true;
+    case Command::stocks: return true;
+    case Command::restock: return true;
     default: return false;
     }
 }
@@ -134,7 +140,7 @@ protected async i32 database(Command selected, array<std.string::string> argumen
             throw (given != 7usize) Usage {.code = 2u32};
             std.time::system_time at = std.time::parse_rfc3339(word(&arguments, 3usize));
             std.uuid::uuid session = std.uuid::parse(word(&arguments, 4usize));
-            std.json::value stats = std.json::parse(arguments[6].as_bytes());
+            std.json::value stats = std.json::parse(arguments[6]);
             await say(await example.arena.store::sync(std.convert::parse_i64(word(&arguments, 2usize), 10u32), at, session,
                                                       take(&arguments, 5usize), move stats));
         case Command::users:
@@ -157,6 +163,27 @@ protected async i32 database(Command selected, array<std.string::string> argumen
             throw (key_size(&cipher) != 32usize) Usage {.code = 2u32};
             std.jwt::key_set keys = example.arena.sessions::keys_of(key.as_slice());
             await say(await example.arena.server::run(move keys, move cipher));
+        case Command::buy:
+            throw (given != 5usize) Usage {.code = 2u32};
+            i64 count = std.convert::parse_i64(word(&arguments, 4usize), 10u32);
+            throw (count < 1i64) Usage {.code = 2u32};
+            await say(await example.arena.store::buy(take(&arguments, 2usize), take(&arguments, 3usize), count));
+        case Command::stocks:
+            throw (given != 3usize) Usage {.code = 2u32};
+            await say(await example.arena.store::stocks(take(&arguments, 2usize)));
+        case Command::restock:
+            throw (given < 5usize) Usage {.code = 2u32};
+            i64 stock = std.convert::parse_i64(word(&arguments, 3usize), 10u32);
+            array<std.string::string> accounts = [];
+            for (usize index = 4usize; index < given; index += 1usize) {
+                try {
+                    accounts.push(take(&arguments, index));
+                } catch (std.array::push_error<std.string::string> rejected) {
+                    (move rejected) as void;
+                    throw std.alloc::alloc_error::out_of_memory;
+                }
+            }
+            await say(await example.arena.store::restock(take(&arguments, 2usize), stock, move accounts));
         default: throw Usage {.code = 2u32};
         }
         return 0;
@@ -193,7 +220,7 @@ protected async i32 database(Command selected, array<std.string::string> argumen
             await std.console::eprintln(f"database: server {state}");
             return 65;
         }
-        const u8[] detail_bytes = failure.detail.as_bytes();
+        const u8[] detail_bytes = failure.detail;
         if (len(detail_bytes) == 0usize) {
             str message = failure.message;
             await std.console::eprintln(f"database: {code}: {message}");

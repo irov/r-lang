@@ -11,15 +11,15 @@ void inserts_at_scalar_boundaries()
     throws std.string::boundary_error, std.test::failure, std.alloc::alloc_error {
     std.string::string text = std.string::from_str("héllo");
     std.string::insert_str(&text, 0usize, ">");
-    std.test::equal_text(text.as_str(), ">héllo");
+    std.test::equal_text(text, ">héllo");
     std.string::insert_str(&text, 2usize, "[");
     std.string::insert_str(&text, 5usize, "]");
-    std.test::equal_text(text.as_str(), ">h[é]llo");
+    std.test::equal_text(text, ">h[é]llo");
     usize end = std.string::len(&text);
     std.string::insert_str(&text, end, " €😀");
-    std.test::equal_text(text.as_str(), ">h[é]llo €😀");
+    std.test::equal_text(text, ">h[é]llo €😀");
     std.string::insert_str(&text, 3usize, "");
-    std.test::equal_text(text.as_str(), ">h[é]llo €😀");
+    std.test::equal_text(text, ">h[é]llo €😀");
     std.test::equal(std.string::len(&text), 17usize);
 }
 
@@ -28,19 +28,19 @@ void replaces_ranges()
     throws std.string::boundary_error, std.test::failure, std.alloc::alloc_error {
     std.string::string text = std.string::from_str("hello world");
     std.string::replace_range(&text, 6usize, 11usize, "there");
-    std.test::equal_text(text.as_str(), "hello there");
+    std.test::equal_text(text, "hello there");
     std.string::replace_range(&text, 0usize, 5usize, "hi");
-    std.test::equal_text(text.as_str(), "hi there");
+    std.test::equal_text(text, "hi there");
     std.string::replace_range(&text, 2usize, 3usize, "");
-    std.test::equal_text(text.as_str(), "hithere");
+    std.test::equal_text(text, "hithere");
     std.string::replace_range(&text, 2usize, 2usize, ", ");
-    std.test::equal_text(text.as_str(), "hi, there");
+    std.test::equal_text(text, "hi, there");
     usize end = std.string::len(&text);
     std.string::replace_range(&text, 0usize, end, "");
-    std.test::equal_text(text.as_str(), "");
+    std.test::equal_text(text, "");
     std.test::equal(std.string::len(&text), 0usize);
     std.string::replace_range(&text, 0usize, 0usize, "again");
-    std.test::equal_text(text.as_str(), "again");
+    std.test::equal_text(text, "again");
 }
 
 @test
@@ -48,11 +48,11 @@ void replaces_multibyte_scalars()
     throws std.string::boundary_error, std.test::failure, std.alloc::alloc_error {
     std.string::string text = std.string::from_str("aéb€c😀d");
     std.string::replace_range(&text, 1usize, 3usize, "e");
-    std.test::equal_text(text.as_str(), "aeb€c😀d");
+    std.test::equal_text(text, "aeb€c😀d");
     std.string::replace_range(&text, 3usize, 6usize, "€€");
-    std.test::equal_text(text.as_str(), "aeb€€c😀d");
+    std.test::equal_text(text, "aeb€€c😀d");
     std.string::replace_range(&text, 10usize, 14usize, "!");
-    std.test::equal_text(text.as_str(), "aeb€€c!d");
+    std.test::equal_text(text, "aeb€€c!d");
     std.test::equal(std.string::len(&text), 12usize);
 }
 
@@ -77,7 +77,7 @@ void rejects_ranges_out_of_bounds() throws std.test::failure, std.alloc::alloc_e
     } catch (std.string::boundary_error failure) {
         std.test::check(failure == std.string::boundary_error::out_of_bounds, "index beyond");
     }
-    std.test::equal_text(text.as_str(), "hello");
+    std.test::equal_text(text, "hello");
     std.test::equal(std.string::len(&text), 5usize);
 }
 
@@ -109,7 +109,7 @@ void rejects_indices_inside_scalars() throws std.test::failure, std.alloc::alloc
         std.test::check(failure == std.string::boundary_error::out_of_bounds,
                         "bounds come before boundaries");
     }
-    std.test::equal_text(text.as_str(), "aé€😀");
+    std.test::equal_text(text, "aé€😀");
 }
 
 @test(expect = std.string::boundary_error)
@@ -129,8 +129,8 @@ void builds_text_by_edits()
     usize end = std.string::len(&text);
     std.string::insert_str(&text, end, "!");
     std.string::replace_range(&text, 5usize, 6usize, ", ");
-    std.test::equal_text(text.as_str(), "Hello, world!");
+    std.test::equal_text(text, "Hello, world!");
     std.string::replace_range(&text, 7usize, 12usize, "wörld");
-    std.test::equal_text(text.as_str(), "Hello, wörld!");
+    std.test::equal_text(text, "Hello, wörld!");
     std.test::equal(std.string::len(&text), 14usize);
 }

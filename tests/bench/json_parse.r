@@ -4,7 +4,7 @@ module bench.json_parse;
 i32 main() {
     try {
         std.string::string text = std.string::from_str("{\"users\":[{\"id\":1,\"name\":\"alice\",\"tags\":[\"admin\",\"ops\"],\"active\":true,\"score\":12.5},{\"id\":2,\"name\":\"bob\",\"tags\":[],\"active\":false,\"score\":7},{\"id\":3,\"name\":\"carol\",\"tags\":[\"dev\"],\"active\":true,\"score\":99.25}],\"page\":{\"number\":4,\"size\":50,\"total\":1234,\"next\":null},\"labels\":[\"alpha\",\"beta\",\"gamma\",\"delta\",\"epsilon\"],\"matrix\":[[1,2,3],[4,5,6],[7,8,9]],\"flags\":{\"verbose\":false,\"dry_run\":true,\"retries\":3,\"timeout\":30.5},\"description\":\"a short description of the payload used by the benchmark\"}");
-        const u8[] source = text.as_bytes();
+        const u8[] source = text;
         source as void;
         usize iterations = 200_000usize;
         usize total = 0usize;

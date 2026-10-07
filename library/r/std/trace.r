@@ -92,8 +92,8 @@ protected array<std.trace::attribute> copy_attributes(const array<std.trace::att
     array<std.trace::attribute> copied = [];
     const std.trace::attribute[] listed = std.array::as_slice(source);
     for (usize index = 0usize; index < len(listed); index += 1usize) {
-        std.trace::attribute item = std.trace::attribute {.key = std.string::from_str(listed[index].key.as_str()),
-                                                          .value = std.string::from_str(listed[index].value.as_str())};
+        std.trace::attribute item = std.trace::attribute {.key = std.string::from_str(listed[index].key),
+                                                          .value = std.string::from_str(listed[index].value)};
         try {
             copied.push(move item);
         } catch (std.array::push_error<std.trace::attribute> rejected) {
@@ -106,7 +106,7 @@ protected array<std.trace::attribute> copy_attributes(const array<std.trace::att
 
 protected std.trace::record copy_record(const std.trace::record* source) throws std.alloc::alloc_error {
     return std.trace::record {.id = source->id, .parent = source->parent, .task_id = source->task_id,
-                              .name = std.string::from_str(source->name.as_str()), .start = source->start,
+                              .name = std.string::from_str(source->name), .start = source->start,
                               .duration = source->duration, .attributes = copy_attributes(&source->attributes)};
 }
 
@@ -137,7 +137,7 @@ std.trace::record span::finish(span this) throws std.time::time_error, std.alloc
     std.time::instant ended = std.time::monotonic_now();
     std.trace::record made = std.trace::record {
         .id = this.serial, .parent = this.parent, .task_id = this.task_id,
-        .name = std.string::from_str(this.name.as_str()),
+        .name = std.string::from_str(this.name),
         .start = std.time::instant_duration(this.started, this.core->epoch),
         .duration = std.time::instant_duration(ended, this.started), .attributes = copy_attributes(&this.attributes),
     };
@@ -235,20 +235,20 @@ std.string::string record::json(const std.trace::record* this) throws std.alloc:
     case variant o::some(parent):
         u64 number = *parent;
         std.string::string text = f"{number}";
-        std.string::append_str(&out, text.as_str());
+        std.string::append_str(&out, text);
     case variant o::none: std.string::append_str(&out, "null");
     }
     std.string::string middle = f",\"task\":{started_by},\"name\":";
-    std.string::append_str(&out, middle.as_str());
-    append_json_string(&out, this->name.as_str());
+    std.string::append_str(&out, middle);
+    append_json_string(&out, this->name);
     std.string::string times = f",\"start_us\":{offset},\"duration_us\":{length},\"attributes\":{{";
-    std.string::append_str(&out, times.as_str());
+    std.string::append_str(&out, times);
     const std.trace::attribute[] listed = std.array::as_slice(&this->attributes);
     for (usize index = 0usize; index < len(listed); index += 1usize) {
         if (index > 0usize) { std.string::append_str(&out, ","); }
-        append_json_string(&out, listed[index].key.as_str());
+        append_json_string(&out, listed[index].key);
         std.string::append_str(&out, ":");
-        append_json_string(&out, listed[index].value.as_str());
+        append_json_string(&out, listed[index].value);
     }
     std.string::append_str(&out, "}}");
     return move out;

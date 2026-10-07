@@ -7,8 +7,9 @@ import std.text;
 import std.postgres;
 import std.time;
 import std.uuid;
+import std.postgres::{table};
 
-// The tests of std.postgres (Library R-SLIB-PG-0001..0016) against a PostgreSQL server that
+// The tests of std.postgres (Library R-SLIB-PG-0001..0017) against a PostgreSQL server that
 // tests/run_postgres_tests.py starts for them: the environment names the server as libpq reads it
 // (PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE), R_POSTGRES_SOCKET its socket directory and
 // R_POSTGRES_TLS_AUTHORITY the authority of its certificate. Without R_POSTGRES_TEST every test
@@ -97,7 +98,7 @@ async void refuses_a_wrong_password_and_a_missing_database()
         std.test::check(false, "a wrong password is refused");
     } catch (std.postgres::pg_error refused) {
         std.test::check(refused.code == std.postgres::error_code::server, "server error");
-        std.test::equal_text(refused.sqlstate.as_str(), "28P01");
+        std.test::equal_text(refused.sqlstate, "28P01");
     }
     std.postgres::options missing = std.postgres::options::from_environment();
     missing.database = std.string::from_str("no_such_database");
@@ -106,7 +107,7 @@ async void refuses_a_wrong_password_and_a_missing_database()
         drop absent;
         std.test::check(false, "a missing database is refused");
     } catch (std.postgres::pg_error refused) {
-        std.test::equal_text(refused.sqlstate.as_str(), "3D000");
+        std.test::equal_text(refused.sqlstate, "3D000");
     }
 }
 
@@ -116,7 +117,7 @@ async void connects_over_a_unix_domain_socket()
     if (enabled() == false) { return; }
     std.string::string directory = setting("R_POSTGRES_SOCKET");
     std.postgres::options local = std.postgres::options::from_environment();
-    str folder = directory.as_str();
+    str folder = directory;
     u16 port = local.port;
     local.socket = f"{folder}/.s.PGSQL.{port}";
     local.password = std.string::create();
@@ -161,7 +162,7 @@ async void stores_and_reads_values()
         values());
     std.test::equal(len(found.items), 2usize);
     std.test::equal(found.affected, 2u64);
-    std.test::equal_text(found.columns[1usize].name.as_str(), "name");
+    std.test::equal_text(found.columns[1usize].name, "name");
     std.test::equal(found.columns[0usize].type_oid, 20u32);
     const std.postgres::row* first_row = &found.items[0usize];
     std.test::equal(first_row->integer(0usize), 1i64);
@@ -213,21 +214,21 @@ async void reports_errors_and_keeps_the_connection()
         (await db.execute("INSERT INTO keyed VALUES (1)", values())) as void;
         std.test::check(false, "a duplicate key is refused");
     } catch (std.postgres::pg_error refused) {
-        std.test::equal_text(refused.sqlstate.as_str(), "23505");
-        std.test::check(std.text::contains(refused.message.as_str(), "duplicate key"), "message");
-        std.test::check(std.text::contains(refused.detail.as_str(), "(id)=(1)"), "detail");
+        std.test::equal_text(refused.sqlstate, "23505");
+        std.test::check(std.text::contains(refused.message, "duplicate key"), "message");
+        std.test::check(std.text::contains(refused.detail, "(id)=(1)"), "detail");
     }
     try {
         (await db.query("SELEC 1", values())) as void;
         std.test::check(false, "a syntax error is refused");
     } catch (std.postgres::pg_error refused) {
-        std.test::equal_text(refused.sqlstate.as_str(), "42601");
+        std.test::equal_text(refused.sqlstate, "42601");
     }
     try {
         (await db.query("SELECT $1::int", values())) as void;
         std.test::check(false, "a missing parameter is refused");
     } catch (std.postgres::pg_error refused) {
-        std.test::equal_text(refused.sqlstate.as_str(), "08P01");
+        std.test::equal_text(refused.sqlstate, "08P01");
     }
     std.postgres::rows after = await db.query("SELECT count(*) FROM keyed", values());
     std.test::equal(after.items[0usize].integer(0usize), 1i64);
@@ -249,7 +250,7 @@ async void runs_transactions() throws std.postgres::pg_error, std.error::fault, 
     try {
         (await db.execute("INSERT INTO ledger VALUES (NULL)", values())) as void;
     } catch (std.postgres::pg_error refused) {
-        std.test::equal_text(refused.sqlstate.as_str(), "23502");
+        std.test::equal_text(refused.sqlstate, "23502");
     }
     std.test::check(db.transaction_status() == std.postgres::transaction_status::failed, "failed");
     await db.rollback();
@@ -280,7 +281,7 @@ async void runs_prepared_statements_and_scripts()
         await db.execute_script("INSERT INTO counter VALUES (100); SELECT 1/0; INSERT INTO counter VALUES (200)");
         std.test::check(false, "division by zero ends the script");
     } catch (std.postgres::pg_error refused) {
-        std.test::equal_text(refused.sqlstate.as_str(), "22012");
+        std.test::equal_text(refused.sqlstate, "22012");
     }
     std.postgres::rows left = await db.query("SELECT count(*) FROM counter", values());
     std.test::equal(left.items[0usize].integer(0usize), 3i64);
@@ -297,9 +298,9 @@ async void listens_and_notifies() throws std.postgres::pg_error, std.error::faul
     (await sender.notify("job \"queue\"", "second ✓")) as void;
     std.postgres::notification one_notice = await listener.wait_notification();
     std.postgres::notification two_notice = await listener.wait_notification();
-    std.test::equal_text(one_notice.channel.as_str(), "job \"queue\"");
-    std.test::equal_text(one_notice.payload.as_str(), "first");
-    std.test::equal_text(two_notice.payload.as_str(), "second ✓");
+    std.test::equal_text(one_notice.channel, "job \"queue\"");
+    std.test::equal_text(one_notice.payload, "first");
+    std.test::equal_text(two_notice.payload, "second ✓");
     std.test::check(one_notice.process_id != 0u32, "process");
     await listener.unlisten("job \"queue\"");
     (await sender.notify("job \"queue\"", "unheard")) as void;
@@ -319,20 +320,20 @@ async void copies_in_and_out() throws std.postgres::pg_error, std.error::fault, 
     std.test::equal(loaded, 3u64);
     bytes dumped = await db.copy_out("COPY (SELECT * FROM copied ORDER BY n) TO STDOUT WITH (FORMAT csv)");
     std.string::string text = std.string::from_utf8(dumped.as_slice());
-    std.test::equal_text(text.as_str(), "1,one\n2,\"two, too\"\n3,three\n");
+    std.test::equal_text(text, "1,one\n2,\"two, too\"\n3,three\n");
     try {
         std.string::string bad = std.string::from_str("x,y\n");
         (await db.copy_in("COPY copied FROM STDIN WITH (FORMAT csv)", (move bad).into_bytes())) as void;
         std.test::check(false, "a malformed row is refused");
     } catch (std.postgres::pg_error refused) {
-        std.test::equal_text(refused.sqlstate.as_str(), "22P02");
+        std.test::equal_text(refused.sqlstate, "22P02");
     }
     try {
         bytes nothing = {};
         (await db.copy_in("COPY nothing FROM STDIN", move nothing)) as void;
         std.test::check(false, "a missing table is refused");
     } catch (std.postgres::pg_error refused) {
-        std.test::equal_text(refused.sqlstate.as_str(), "42P01");
+        std.test::equal_text(refused.sqlstate, "42P01");
     }
     std.postgres::rows count = await db.query("SELECT count(*) FROM copied", values());
     std.test::equal(count.items[0usize].integer(0usize), 3i64);
@@ -341,7 +342,7 @@ async void copies_in_and_out() throws std.postgres::pg_error, std.error::fault, 
         (await db.execute("COPY copied FROM STDIN", values())) as void;
         std.test::check(false, "COPY FROM STDIN outside copy_in fails");
     } catch (std.postgres::pg_error refused) {
-        std.test::equal_text(refused.sqlstate.as_str(), "57014");
+        std.test::equal_text(refused.sqlstate, "57014");
     }
     std.test::equal(await db.execute("COPY copied TO STDOUT", values()), 3u64);
     std.postgres::rows still = await db.query("SELECT count(*) FROM copied", values());
@@ -354,7 +355,7 @@ protected async u32 sleeper(std.postgres::connection db) throws std.postgres::pg
         std.postgres::rows slept = await db.query("SELECT pg_sleep(30)", values());
         drop slept;
     } catch (std.postgres::pg_error refused) {
-        if (same(refused.sqlstate.as_str(), "57014") == true) { return 1u32; }
+        if (same(refused.sqlstate, "57014") == true) { return 1u32; }
         throw move refused;
     }
     return 0u32;
@@ -418,7 +419,7 @@ async void connects_over_tls_and_ends_a_closed_connection()
     throws std.postgres::pg_error, std.tls::tls_error, std.error::fault, std.test::failure {
     if (enabled() == false) { return; }
     std.string::string authority_path = setting("R_POSTGRES_TLS_AUTHORITY");
-    std.fs::path path = std.fs::path_from_utf8(authority_path.as_str());
+    std.fs::path path = std.fs::path_from_utf8(authority_path);
     bytes authority = await std.fs::read_file(&path, 65536usize);
     std.tls::config settings = std.tls::client_config();
     settings.add_authority(authority.as_slice());
@@ -457,7 +458,7 @@ async void closes_sessions_that_the_server_ended()
     if (enabled() == false) { return; }
     std.postgres::connection watcher = await std.postgres::connect(std.postgres::options::from_environment());
     std.string::string authority_path = setting("R_POSTGRES_TLS_AUTHORITY");
-    std.fs::path path = std.fs::path_from_utf8(authority_path.as_str());
+    std.fs::path path = std.fs::path_from_utf8(authority_path);
     bytes authority = await std.fs::read_file(&path, 65536usize);
     for (u32 round = 0u32; round < 6u32; round += 1u32) {
         std.postgres::connection plain = await std.postgres::connect(std.postgres::options::from_environment());
@@ -494,7 +495,7 @@ async void reads_typed_cells() throws std.postgres::pg_error, std.error::fault, 
     std.test::equal(day.day, 29u8);
     std.uuid::uuid id = first.uuid(3usize);
     std.string::string id_text = f"{id}";
-    std.test::equal_text(id_text.as_str(), "0190f7e1-1234-7abc-8def-0123456789ab");
+    std.test::equal_text(id_text, "0190f7e1-1234-7abc-8def-0123456789ab");
     std.json::value document = first.json(4usize);
     std.test::equal(std.json::len(&document), 2usize);
     array<o<std.string::string>> tags = first.text_array(5usize);
@@ -504,15 +505,15 @@ async void reads_typed_cells() throws std.postgres::pg_error, std.error::fault, 
     case variant o::none: break;
     }
     switch (tags[2usize]) {
-    case variant o::some(text): std.test::equal_text(text->as_str(), "q\"uote");
+    case variant o::some(text): std.test::equal_text(*text, "q\"uote");
     case variant o::none: std.test::fail("a quoted element");
     }
     switch (tags[3usize]) {
-    case variant o::some(text): std.test::equal_text(text->as_str(), "b,c");
+    case variant o::some(text): std.test::equal_text(*text, "b,c");
     case variant o::none: std.test::fail("an element with a comma");
     }
     switch (tags[4usize]) {
-    case variant o::some(text): std.test::equal_text(text->as_str(), "Ёжик 🦔");
+    case variant o::some(text): std.test::equal_text(*text, "Ёжик 🦔");
     case variant o::none: std.test::fail("an element outside ASCII");
     }
     std.time::system_time early = first.time(6usize);
@@ -611,22 +612,22 @@ async void maps_rows_and_structs()
                             "nick text NOT NULL, created timestamptz NOT NULL, tags text[] NOT NULL, profile jsonb NOT NULL, "
                             "banned boolean NOT NULL, score double precision NOT NULL, avatar text)");
     std.string::string insert = std.postgres::insert_statement::<NewPlayer>("rtest_players");
-    std.test::equal_text(insert.as_str(), "INSERT INTO rtest_players (\"id\", \"nick\", \"created\", \"tags\", \"profile\", \"banned\", \"score\", \"avatar\") VALUES ($1, $2, $3, $4, $5, $6, $7, $8)");
+    std.test::equal_text(insert, "INSERT INTO rtest_players (\"id\", \"nick\", \"created\", \"tags\", \"profile\", \"banned\", \"score\", \"avatar\") VALUES ($1, $2, $3, $4, $5, $6, $7, $8)");
     NewPlayer ann = {.id = 7i64, .nick = std.string::from_str("Ann"), .created = std.string::from_str("2024-03-10T07:00:00Z"),
                      .tags = two_tags("vip", "a,b ёж"),
                      .profile = std.json::parse("{\"level\": 3}"), .banned = false, .score = 2.5, .avatar = o::none};
-    u64 inserted = await db.execute(insert.as_str(), std.postgres::parameters_of(&ann));
+    u64 inserted = await db.execute(insert, std.postgres::parameters_of(&ann));
     std.test::equal(inserted, 1u64);
     std.postgres::rows read = await db.query(
         "SELECT *, extract(epoch FROM created)::bigint AS created_unix FROM rtest_players", values());
     array<Player> players = read.decode_all::<Player>();
     std.test::equal(len(players), 1usize);
     std.test::equal(players[0usize].id, 7i64);
-    std.test::equal_text(players[0usize].nick.as_str(), "Ann");
-    std.test::equal_text(players[0usize].created.as_str(), "2024-03-10T07:00:00.000000Z");
+    std.test::equal_text(players[0usize].nick, "Ann");
+    std.test::equal_text(players[0usize].created, "2024-03-10T07:00:00.000000Z");
     std.test::equal(players[0usize].created_unix, 1710054000i64);
     std.test::equal(len(players[0usize].tags), 2usize);
-    std.test::equal_text(players[0usize].tags[1usize].as_str(), "a,b ёж");
+    std.test::equal_text(players[0usize].tags[1usize], "a,b ёж");
     std.test::check(players[0usize].score == 2.5, "score");
     switch (players[0usize].avatar) {
     case variant o::some(_): std.test::fail("no avatar");
@@ -636,15 +637,15 @@ async void maps_rows_and_structs()
                          .tags = [], .profile = std.json::parse("{}"), .banned = true, .score = 3.0,
                          .avatar = o::some(std.string::from_str("a7"))};
     std.string::string update = std.postgres::update_statement::<NewPlayer>("rtest_players", "id");
-    u64 updated = await db.execute(update.as_str(), std.postgres::parameters_of(&renamed));
+    u64 updated = await db.execute(update, std.postgres::parameters_of(&renamed));
     std.test::equal(updated, 1u64);
     std.postgres::rows again = await db.query("SELECT *, 0::bigint AS created_unix FROM rtest_players", values());
     Player anna = again.decode::<Player>(0usize);
-    std.test::equal_text(anna.nick.as_str(), "Анна");
+    std.test::equal_text(anna.nick, "Анна");
     std.test::check(anna.banned, "banned");
     std.test::equal(len(anna.tags), 0usize);
     switch (anna.avatar) {
-    case variant o::some(name): std.test::equal_text(name->as_str(), "a7");
+    case variant o::some(name): std.test::equal_text(*name, "a7");
     case variant o::none: std.test::fail("an avatar");
     }
     try {
@@ -656,7 +657,7 @@ async void maps_rows_and_structs()
         std.test::fail("a row without the columns of the fields");
     } catch (std.postgres::pg_error failure) {
         std.test::check(failure.code == std.postgres::error_code::missing_column, "missing_column");
-        std.test::equal_text(failure.detail.as_str(), "nick");
+        std.test::equal_text(failure.detail, "nick");
     }
     await db.execute_script("DROP TABLE rtest_players");
     await (move db).close();
@@ -706,7 +707,7 @@ async void applies_migrations() throws std.postgres::pg_error, std.error::fault,
         std.test::fail("a changed migration");
     } catch (std.postgres::pg_error failure) {
         std.test::check(failure.code == std.postgres::error_code::migration_mismatch, "migration_mismatch");
-        std.test::equal_text(failure.detail.as_str(), "version 2");
+        std.test::equal_text(failure.detail, "version 2");
     }
     try {
         u64 broken = await std.postgres::migrate(&db, steps(false, true));
@@ -721,5 +722,145 @@ async void applies_migrations() throws std.postgres::pg_error, std.error::fault,
         "SELECT count(*) FROM information_schema.columns WHERE table_name = 'rtest_accounts'", values());
     std.test::equal(columns.items[0usize].integer(0usize), 2i64);
     await db.execute_script("DROP TABLE r_schema_migrations; DROP TABLE rtest_accounts");
+    await (move db).close();
+}
+
+// R-SLIB-PG-0017: a struct stored in its table by its attribute.
+@table(name = "rtest_stocks", key = "account, offer", generated = "id, created")
+struct Stock {
+    i64 id = 0i64;
+    std.string::string account;
+    std.string::string offer;
+    i64 amount;
+    std.string::string created = std.string::create();
+};
+
+@table(name = "rtest_marks")
+struct Mark {
+    i64 n;
+    i64 square;
+};
+
+struct Unstored { i64 id; };
+
+@table(name = "rtest_stocks", key = "nope")
+struct Misnamed { std.string::string account; };
+
+protected Stock stock(str account, str offer, i64 amount) throws std.alloc::alloc_error {
+    return Stock {.account = std.string::from_str(account), .offer = std.string::from_str(offer), .amount = amount};
+}
+
+protected void add_stock(array<Stock>* target, Stock item) throws std.alloc::alloc_error {
+    try {
+        target->push(move item);
+    } catch (std.array::push_error<Stock> rejected) {
+        (move rejected) as void;
+        throw std.alloc::alloc_error::out_of_memory;
+    }
+}
+
+protected void add_mark(array<Mark>* target, Mark item) throws std.alloc::alloc_error {
+    try {
+        target->push(move item);
+    } catch (std.array::push_error<Mark> rejected) {
+        (move rejected) as void;
+        throw std.alloc::alloc_error::out_of_memory;
+    }
+}
+
+protected array<std.postgres::value> stock_key(str account, str offer) throws std.alloc::alloc_error {
+    array<std.postgres::value> key = values();
+    add(&key, std.postgres::value::of_text(account));
+    add(&key, std.postgres::value::of_text(offer));
+    return move key;
+}
+
+@test
+async void stores_structs_in_tables()
+    throws std.postgres::pg_error, std.json::error, std.error::fault, std.test::failure {
+    if (enabled() == false) { return; }
+    std.postgres::connection db = await std.postgres::connect(std.postgres::options::from_environment());
+    await db.execute_script("DROP TABLE IF EXISTS rtest_stocks; CREATE TABLE rtest_stocks (id bigserial UNIQUE, "
+                            "account text, offer text, amount bigint NOT NULL, created timestamptz NOT NULL DEFAULT now(), "
+                            "PRIMARY KEY (account, offer))");
+    Stock first = stock("ann", "gems", 3i64);
+    Stock saved = await db.insert(&first);
+    std.test::check(saved.id > 0i64, "the database fills the id");
+    std.test::check(saved.created.len() > 0usize, "and the time of creation");
+    std.test::equal(saved.amount, 3i64);
+    Stock again = stock("ann", "gems", 5i64);
+    Stock merged = await db.upsert(&again);
+    std.test::equal(merged.id, saved.id);
+    std.test::equal(merged.amount, 5i64);
+    array<Stock> more = [];
+    add_stock(&more, stock("bob", "gems", 1i64));
+    add_stock(&more, stock("bob", "coins", 7i64));
+    add_stock(&more, stock("cid", "coins", 2i64));
+    std.test::equal(await db.insert_all(&more), 3u64);
+    array<Stock> rich = await db.select::<Stock>("WHERE amount > $1 ORDER BY amount", one(std.postgres::value::integer(1i64)));
+    std.test::equal(len(rich), 3usize);
+    std.test::equal_text(rich[0usize].account, "cid");
+    std.test::equal_text(rich[2usize].offer, "coins");
+    o<Stock> found = await db.find::<Stock>(stock_key("bob", "coins"));
+    switch (found) {
+    case variant o::some(row): std.test::equal(row->amount, 7i64);
+    case variant o::none: std.test::fail("the row of bob and coins");
+    }
+    o<Stock> absent = await db.find::<Stock>(stock_key("dan", "coins"));
+    if (absent is variant o::some(_)) { std.test::fail("no row of dan"); }
+    Stock changed = stock("bob", "coins", 9i64);
+    std.test::equal(await db.update(&changed), 1u64);
+    std.test::equal(await db.remove(&changed), 1u64);
+    std.test::equal(await db.remove(&changed), 0u64);
+
+    await db.begin();
+    Stock kept = stock("eve", "gems", 1i64);
+    Stock kept_row = await db.insert(&kept);
+    drop kept_row;
+    await db.savepoint("before second");
+    Stock undone = stock("eve", "coins", 1i64);
+    Stock undone_row = await db.insert(&undone);
+    drop undone_row;
+    await db.rollback_to("before second");
+    await db.release("before second");
+    await db.commit();
+    array<Stock> eve = await db.select::<Stock>("WHERE account = $1", one(std.postgres::value::of_text("eve")));
+    std.test::equal(len(eve), 1usize);
+    std.test::equal_text(eve[0usize].offer, "gems");
+
+    try {
+        array<std.postgres::value> short_key = one(std.postgres::value::of_text("ann"));
+        o<Stock> wrong = await db.find::<Stock>(move short_key);
+        drop wrong;
+        std.test::fail("a key of two columns takes two values");
+    } catch (std.postgres::pg_error failure) {
+        std.test::check(failure.code == std.postgres::error_code::invalid_value, "invalid_value");
+    }
+    try {
+        array<Unstored> unstored = await db.select::<Unstored>("", values());
+        drop unstored;
+        std.test::fail("a struct without a table");
+    } catch (std.postgres::pg_error failure) {
+        std.test::check(failure.code == std.postgres::error_code::unsupported, "unsupported");
+    }
+    try {
+        array<Misnamed> misnamed = await db.select::<Misnamed>("", values());
+        drop misnamed;
+        std.test::fail("a key that names no field");
+    } catch (std.postgres::pg_error failure) {
+        std.test::check(failure.code == std.postgres::error_code::missing_column, "missing_column");
+        std.test::equal_text(failure.detail, "nope");
+    }
+
+    // More rows than one statement takes: 2 columns, so at most 32767 rows a statement.
+    await db.execute_script("DROP TABLE IF EXISTS rtest_marks; CREATE TABLE rtest_marks (n bigint, square bigint)");
+    array<Mark> marks = [];
+    for (i64 n = 0i64; n < 33000i64; n += 1i64) { add_mark(&marks, Mark {.n = n, .square = n * n}); }
+    std.test::equal(await db.insert_all(&marks), 33000u64);
+    std.postgres::rows tally = await db.query("SELECT count(*), sum(square) FROM rtest_marks", values());
+    std.test::equal(tally.items[0usize].integer(0usize), 33000i64);
+    array<Mark> empty = [];
+    std.test::equal(await db.insert_all(&empty), 0u64);
+    await db.execute_script("DROP TABLE rtest_marks; DROP TABLE rtest_stocks");
     await (move db).close();
 }

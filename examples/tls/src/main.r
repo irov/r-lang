@@ -26,7 +26,7 @@ async void talk(std.tls::stream<std.net::tcp_stream> session, Command command, s
     u8[1024] reply = {};
     task_scope(1) io {
         if (command == Command::echo) {
-            await session.write_all_from(text.as_bytes());
+            await session.write_all_from(text);
             usize count = await session.read_into(&reply);
             std.string::string answer = std.string::from_str("");
             answer.append_utf8(reply[0usize..count]);

@@ -74,7 +74,7 @@ async i32 show_url(std.string::string text, o<std.string::string> reference)
     i32 status = 0;
     o<str> relative = o::none;
     switch (reference) {
-    case variant o::some(given): relative = o::some(std.string::as_str(given));
+    case variant o::some(given): relative = o::some(*given);
     case variant o::none: break;
     }
     std.string::string report = url_output(text, relative, &status);

@@ -18,7 +18,7 @@ protected void expect_resolved(const std.url::url* base, str reference, str expe
     throws std.test::failure, std.url::url_error, std.alloc::alloc_error {
     std.url::url target = base->resolve(reference);
     std.string::string text = target.text();
-    std.test::equal_text(text.as_str(), expected);
+    std.test::equal_text(text, expected);
 }
 
 protected std.url::error_code rejection(str text) throws std.test::failure, std.alloc::alloc_error {
@@ -53,11 +53,11 @@ void parses_the_parts_of_a_url() throws std.test::failure, std.url::url_error, s
     case variant o::none: std.test::fail("fragment");
     }
     std.string::string target = value.target();
-    std.test::equal_text(target.as_str(), "/a/b%2Fc?x=1&y");
+    std.test::equal_text(target, "/a/b%2Fc?x=1&y");
     std.string::string text = value.text();
-    std.test::equal_text(text.as_str(), "http://User:pw@example.com:8080/a/b%2Fc?x=1&y#top");
+    std.test::equal_text(text, "http://User:pw@example.com:8080/a/b%2Fc?x=1&y#top");
     std.string::string shown = f"{value}";
-    std.test::equal_text(shown.as_str(), text.as_str());
+    std.test::equal_text(shown, text);
 }
 
 @test
@@ -66,12 +66,12 @@ void parses_hosts_ports_and_schemes() throws std.test::failure, std.url::url_err
     std.test::check(ipv6.is_ipv6(), "an IPv6 host");
     std.test::equal_text(ipv6.host(), "::1");
     std.string::string authority = ipv6.authority_text();
-    std.test::equal_text(authority.as_str(), "[::1]:8443");
+    std.test::equal_text(authority, "[::1]:8443");
     std.url::url plain = std.url::parse("https://example.org");
     std.test::equal(port_of(plain.port()), 0u32);
     std.test::equal(port_of(plain.effective_port()), 443u32);
     std.string::string target = plain.target();
-    std.test::equal_text(target.as_str(), "/");
+    std.test::equal_text(target, "/");
     std.url::url mail = std.url::parse("mailto:someone@example.org");
     std.test::check(mail.has_authority() == false, "no authority");
     std.test::equal_text(mail.path(), "someone@example.org");
@@ -102,7 +102,7 @@ void rejects_invalid_urls() throws std.test::failure, std.alloc::alloc_error {
     } catch (std.url::url_error failure) {
         std.test::equal(failure.offset, 10usize);
         std.string::string shown = f"{failure.code}";
-        std.test::equal_text(shown.as_str(), "invalid_character");
+        std.test::equal_text(shown, "invalid_character");
     }
 }
 
@@ -158,21 +158,21 @@ void normalizes_urls() throws std.test::failure, std.url::url_error, std.alloc::
     std.url::url value = std.url::parse("HTTP://Example.COM:80/a/./b/../%7e%41%2f%c3%a9?q=%7E#%2a");
     std.url::url normal = value.normalized();
     std.string::string text = normal.text();
-    std.test::equal_text(text.as_str(), "http://example.com/a/~A%2F%C3%A9?q=~#%2A");
+    std.test::equal_text(text, "http://example.com/a/~A%2F%C3%A9?q=~#%2A");
     std.url::url bare = std.url::parse("https://example.com:8443");
     std.url::url completed = bare.normalized();
     std.string::string shown = completed.text();
-    std.test::equal_text(shown.as_str(), "https://example.com:8443/");
+    std.test::equal_text(shown, "https://example.com:8443/");
 }
 
 @test
 void encodes_and_decodes_percent_triplets() throws std.test::failure, std.url::url_error, std.alloc::alloc_error {
     std.string::string encoded = std.url::percent_encode("a b/c?é~");
-    std.test::equal_text(encoded.as_str(), "a%20b%2Fc%3F%C3%A9~");
-    std.string::string decoded = std.url::percent_decode(encoded.as_str());
-    std.test::equal_text(decoded.as_str(), "a b/c?é~");
+    std.test::equal_text(encoded, "a%20b%2Fc%3F%C3%A9~");
+    std.string::string decoded = std.url::percent_decode(encoded);
+    std.test::equal_text(decoded, "a b/c?é~");
     std.string::string plus = std.url::percent_decode("a+b");
-    std.test::equal_text(plus.as_str(), "a+b");
+    std.test::equal_text(plus, "a+b");
     try {
         std.string::string invalid = std.url::percent_decode("%ff");
         drop invalid;
@@ -194,17 +194,17 @@ void encodes_and_decodes_percent_triplets() throws std.test::failure, std.url::u
 void reads_and_writes_form_queries() throws std.test::failure, std.url::url_error, std.alloc::alloc_error {
     array<std.url::query_pair> pairs = std.url::parse_query("name=J%C3%BCrgen+M&empty=&flag&&a=b=c");
     std.test::equal(len(pairs), 4usize);
-    std.test::equal_text(pairs[0usize].name.as_str(), "name");
-    std.test::equal_text(pairs[0usize].value.as_str(), "Jürgen M");
-    std.test::equal_text(pairs[1usize].name.as_str(), "empty");
-    std.test::equal_text(pairs[1usize].value.as_str(), "");
-    std.test::equal_text(pairs[2usize].name.as_str(), "flag");
-    std.test::equal_text(pairs[2usize].value.as_str(), "");
-    std.test::equal_text(pairs[3usize].value.as_str(), "b=c");
+    std.test::equal_text(pairs[0usize].name, "name");
+    std.test::equal_text(pairs[0usize].value, "Jürgen M");
+    std.test::equal_text(pairs[1usize].name, "empty");
+    std.test::equal_text(pairs[1usize].value, "");
+    std.test::equal_text(pairs[2usize].name, "flag");
+    std.test::equal_text(pairs[2usize].value, "");
+    std.test::equal_text(pairs[3usize].value, "b=c");
     std.string::string query = std.string::create();
     std.url::append_query(&query, "q", "a b&c");
     std.url::append_query(&query, "lang", "ü");
-    std.test::equal_text(query.as_str(), "q=a+b%26c&lang=%C3%BC");
+    std.test::equal_text(query, "q=a+b%26c&lang=%C3%BC");
 }
 
 @test(allocations)
@@ -213,5 +213,5 @@ void parsing_reports_exhausted_memory() throws std.test::failure, std.url::url_e
     std.url::url target = base.resolve("../g?x#y");
     std.url::url normal = target.normalized();
     std.string::string text = normal.text();
-    std.test::equal_text(text.as_str(), "http://a/b/g?x#y");
+    std.test::equal_text(text, "http://a/b/g?x#y");
 }

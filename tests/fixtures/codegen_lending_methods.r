@@ -20,7 +20,7 @@ impl LineSource for Lines {
     o<str> next_line(Lines* this) {
         if (this->served >= this->limit) { return o::none; }
         this->served += 1usize;
-        return o::some(std.string::as_str(&this->buffer));
+        return o::some(this->buffer);
     }
 };
 
@@ -110,7 +110,7 @@ impl core::LendingIterator for Words {
     o<str> next(Words* this) {
         if (this->served >= 3usize) { return o::none; }
         this->served += 1usize;
-        return o::some(std.string::as_str(&this->buffer));
+        return o::some(this->buffer);
     }
 };
 

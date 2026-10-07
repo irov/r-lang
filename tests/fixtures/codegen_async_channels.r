@@ -131,7 +131,7 @@ async i32 owned() throws std.alloc::alloc_error, std.async::start_error {
     o<std.string::string> received = await inbox.receive();
     switch (move received) {
     case variant o::some(move value):
-        str text = value.as_str();
+        str text = value;
         if (len(text) != 5usize) { status += 2; }
         break;
     case variant o::none: status += 4; break;

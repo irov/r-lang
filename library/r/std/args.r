@@ -128,8 +128,8 @@ protected void parser::declare(parser* this, str name, str short_name, str value
            same(name, "help") == true || same(short_name, "h") == true)
         args_error {.code = error_code::invalid_name, .index = index};
     for (const spec* existing in &this->specs) {
-        throw (same(existing->name.as_str(), name) == true ||
-               (len(short_name) != 0usize && same(existing->short_name.as_str(), short_name) == true))
+        throw (same(existing->name, name) == true ||
+               (len(short_name) != 0usize && same(existing->short_name, short_name) == true))
             args_error {.code = error_code::duplicate_name, .index = index};
     }
     append(&this->specs, spec {.name = std.string::from_str(name),
@@ -182,45 +182,45 @@ std.string::string parser::help(const parser* this) throws std.alloc::alloc_erro
         if (entry->kind == kind::positional) {
             if (entry->required == true) {
                 std.string::string word = f" {entry->name}";
-                text.append(word.as_str());
+                text.append(word);
             } else {
                 std.string::string word = f" [{entry->name}]";
-                text.append(word.as_str());
+                text.append(word);
             }
         }
     }
     if (this->takes_remaining == true) {
         std.string::string word = f" [{this->remaining_name}...]";
-        text.append(word.as_str());
+        text.append(word);
     }
     text.append("\n");
     for (const spec* entry in &this->specs) {
         std.string::string left = std.string::create();
         if (entry->kind == kind::positional) {
-            left.append(entry->name.as_str());
+            left.append(entry->name);
         } else {
             if (std.string::len(&entry->short_name) != 0usize) {
                 std.string::string short_form = f"-{entry->short_name}, ";
-                left.append(short_form.as_str());
+                left.append(short_form);
             }
             std.string::string long_form = f"--{entry->name}";
-            left.append(long_form.as_str());
+            left.append(long_form);
             if (entry->kind == kind::option) {
                 std.string::string value = f" {entry->value_name}";
-                left.append(value.as_str());
+                left.append(value);
             }
         }
         text.append("  ");
         pad(&left, 24usize);
-        text.append(left.as_str());
+        text.append(left);
         std.string::string line = f" {entry->help}\n";
-        text.append(line.as_str());
+        text.append(line);
     }
     if (this->takes_remaining == true) {
-        std.string::string left = std.string::from_str(this->remaining_name.as_str());
+        std.string::string left = std.string::from_str(this->remaining_name);
         pad(&left, 24usize);
         std.string::string line = f"  {left} {this->remaining_help}\n";
-        text.append(line.as_str());
+        text.append(line);
     }
     text.append("  -h, --help               print this help\n");
     return move text;
@@ -229,7 +229,7 @@ std.string::string parser::help(const parser* this) throws std.alloc::alloc_erro
 protected o<usize> parser::find_long(const parser* this, const u8[] name) {
     for (usize index = 0usize; index < len(this->specs); index += 1usize) {
         const spec* entry = &this->specs[index];
-        if (entry->kind != kind::positional && same(entry->name.as_str(), name) == true) {
+        if (entry->kind != kind::positional && same(entry->name, name) == true) {
             return o::some(index);
         }
     }
@@ -238,7 +238,7 @@ protected o<usize> parser::find_long(const parser* this, const u8[] name) {
 
 protected o<usize> parser::find_short(const parser* this, u8 letter) {
     for (usize index = 0usize; index < len(this->specs); index += 1usize) {
-        const u8[] short_name = this->specs[index].short_name.as_str();
+        const u8[] short_name = this->specs[index].short_name;
         if (len(short_name) == 1usize && short_name[0] == letter) { return o::some(index); }
     }
     return o::none;
@@ -269,7 +269,7 @@ matches parser::parse(const parser* this, const str[] arguments)
     matches result = {.names = std.array::create(), .slots = std.array::create(),
                       .extra = std.array::create(), .help = false};
     for (const spec* entry in &this->specs) {
-        append(&result.names, std.string::from_str(entry->name.as_str()));
+        append(&result.names, std.string::from_str(entry->name));
         append(&result.slots, slot {.present = false, .takes_value = entry->kind != kind::flag,
                                     .value = std.string::create()});
     }
@@ -374,7 +374,7 @@ protected usize parser::parse_short(const parser* this, matches* result, const s
 
 protected usize matches::slot_of(const matches* this, str name) throws args_error {
     for (usize index = 0usize; index < len(this->names); index += 1usize) {
-        if (same(this->names[index].as_str(), name) == true) { return index; }
+        if (same(this->names[index], name) == true) { return index; }
     }
     throw args_error {.code = error_code::unknown_name, .index = 0usize};
 }
@@ -398,14 +398,14 @@ o<std.string::string> matches::value(const matches* this, str name)
     if (this->slots[index].present == false || this->slots[index].takes_value == false) {
         return o::none;
     }
-    return o::some(std.string::from_str(this->slots[index].value.as_str()));
+    return o::some(std.string::from_str(this->slots[index].value));
 }
 
 /* R-SLIB-ARGS-0003: the positional arguments after the declared ones. */
 array<std.string::string> matches::remaining(const matches* this) throws std.alloc::alloc_error {
     array<std.string::string> copies = std.array::create();
     for (const std.string::string* item in &this->extra) {
-        append(&copies, std.string::from_str(item->as_str()));
+        append(&copies, std.string::from_str(*item));
     }
     return move copies;
 }

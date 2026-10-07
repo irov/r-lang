@@ -57,7 +57,7 @@ protected std.string::string with_task(str before, u64 id, str after)
     throws std.alloc::alloc_error {
     std.string::string text = std.string::from_str(before);
     std.string::string number = f"{id}";
-    text.append(number.as_str());
+    text.append(number);
     text.append(after);
     return move text;
 }
@@ -70,7 +70,7 @@ protected void expect_record(str line, str head, str rest, bool ignore_case)
     if (std.text::starts_with(line, head) == false ||
         len(bytes) != len(head) + 24usize + len(rest)) {
         std.string::string message = f"unexpected record {line}";
-        std.test::fail(message.as_str());
+        std.test::fail(message);
         return;
     }
     usize start = len(head);
@@ -100,7 +100,7 @@ protected void expect_json_member(str line, str name, str value)
         }
     } catch (std.json::error failure) {
         std.string::string message = f"a record is not JSON at {failure.offset}";
-        std.test::fail(message.as_str());
+        std.test::fail(message);
     }
 }
 
@@ -215,29 +215,29 @@ async void writes_text_records() throws std.test::failure, std.error::fault {
     task_scope(1) writing { written.value = await std.log::writer::to_file(move sink, &path); }
     std.string::string content = await read_text(std.fs::path_clone(&path));
     std.test::equal(written.value, 7u64);
-    str text = content.as_str();
+    str text = content;
     std.test::equal(std.text::count_byte(text, 10u8), 7usize);
     std.test::check(std.text::ends_with(text, "\n"), "each line ends with a line feed");
     std.string::string trace = with_task(" level=trace task=", id, " message=t");
-    expect_record(line_at(text, 0usize), "time=", trace.as_str(), false);
+    expect_record(line_at(text, 0usize), "time=", trace, false);
     std.string::string debug = with_task(" level=debug task=", id, " message=d");
-    expect_record(line_at(text, 1usize), "time=", debug.as_str(), false);
+    expect_record(line_at(text, 1usize), "time=", debug, false);
     std.string::string info = with_task(" level=info task=", id, " message=hello");
-    expect_record(line_at(text, 2usize), "time=", info.as_str(), false);
+    expect_record(line_at(text, 2usize), "time=", info, false);
     std.string::string warn = with_task(" level=warn task=", id, " message=\"hello world\"");
-    expect_record(line_at(text, 3usize), "time=", warn.as_str(), false);
+    expect_record(line_at(text, 3usize), "time=", warn, false);
     std.string::string error_record = with_task(" level=error task=", id, " message=\"\"");
-    expect_record(line_at(text, 4usize), "time=", error_record.as_str(), false);
+    expect_record(line_at(text, 4usize), "time=", error_record, false);
     /* Quoting and escapes of text values; numbers and flags as they are. */
     std.string::string fields = with_task(" level=info task=", id,
                                           " message=\"say \\\"hi\\\" \\\\ now\" path=\"/a b\""
                                           " count=-3 big=9223372036854775807 ok=true off=false"
                                           " plain=value empty=\"\" eq=\"a=b\""
                                           " controls=\"l\\nt\\tr\\rz\\u0000b\\u0007\" unicode=é€");
-    expect_record(line_at(text, 5usize), "time=", fields.as_str(), false);
+    expect_record(line_at(text, 5usize), "time=", fields, false);
     /* DEL is a control character; the case of the hexadecimal digits is not specified. */
     std.string::string deleted = with_task(" level=info task=", id, " message=\"\\u007f\"");
-    expect_record(line_at(text, 6usize), "time=", deleted.as_str(), true);
+    expect_record(line_at(text, 6usize), "time=", deleted, true);
 }
 
 @test
@@ -266,26 +266,26 @@ async void writes_json_records() throws std.test::failure, std.error::fault {
     task_scope(1) writing { written.value = await std.log::writer::to_file(move sink, &path); }
     std.string::string content = await read_text(std.fs::path_clone(&path));
     std.test::equal(written.value, 3u64);
-    str text = content.as_str();
+    str text = content;
     std.test::equal(std.text::count_byte(text, 10u8), 3usize);
     std.string::string debug = with_task("\",\"level\":\"debug\",\"task\":", id,
                                          ",\"message\":\"json record\"}");
-    expect_record(line_at(text, 0usize), "{\"time\":\"", debug.as_str(), false);
+    expect_record(line_at(text, 0usize), "{\"time\":\"", debug, false);
     std.string::string warn = with_task("\",\"level\":\"warn\",\"task\":", id,
                                         ",\"message\":\"say \\\"hi\\\" \\\\ now\\n\","
                                         "\"path\":\"/a b\",\"count\":-3,\"ok\":true,\"off\":false,"
                                         "\"key\":\"***\",\"empty\":\"\",\"password\":\"***\","
                                         "\"plain\":\"value\",\"controls\":\"\\t\\u0001\"}");
-    expect_record(line_at(text, 1usize), "{\"time\":\"", warn.as_str(), false);
+    expect_record(line_at(text, 1usize), "{\"time\":\"", warn, false);
     std.string::string error_record = with_task("\",\"level\":\"error\",\"task\":", id,
                                                 ",\"message\":\"\"}");
-    expect_record(line_at(text, 2usize), "{\"time\":\"", error_record.as_str(), false);
+    expect_record(line_at(text, 2usize), "{\"time\":\"", error_record, false);
     /* Each record is one JSON object whose members read back as they were given. */
     std.string::string task_text = f"{id}";
     expect_json_member(line_at(text, 1usize), "message", "say \"hi\" \\ now\n");
     expect_json_member(line_at(text, 1usize), "controls", "\t\x01");
     expect_json_member(line_at(text, 1usize), "count", "-3");
-    expect_json_member(line_at(text, 1usize), "task", task_text.as_str());
+    expect_json_member(line_at(text, 1usize), "task", task_text);
     expect_json_member(line_at(text, 1usize), "level", "warn");
     expect_json_member(line_at(text, 2usize), "message", "");
 }
@@ -319,7 +319,7 @@ async void rewrites_field_names() throws std.test::failure, std.error::fault {
     task_scope(1) writing { written.value = await std.log::writer::to_file(move sink, &path); }
     std.string::string content = await read_text(std.fs::path_clone(&path));
     std.test::equal(written.value, 1u64);
-    str text = content.as_str();
+    str text = content;
     std.test::equal(std.text::count_byte(text, 10u8), 1usize);
     std.string::string expected = with_task(" level=info task=", id,
                                             " message=names _time=t _level=l _task=k _message=m"
@@ -328,7 +328,7 @@ async void rewrites_field_names() throws std.test::failure, std.error::fault {
                                             "aaaaaaaaaaaa=long"
                                             " aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                                             "aaaaaaaaaaa_=cut quo_te=q tab_here=x");
-    expect_record(line_at(text, 0usize), "time=", expected.as_str(), false);
+    expect_record(line_at(text, 0usize), "time=", expected, false);
 }
 
 @test
@@ -371,32 +371,32 @@ async void masks_sensitive_fields() throws std.test::failure, std.error::fault {
     task_scope(1) writing { written.value = await std.log::writer::to_file(move sink, &path); }
     std.string::string content = await read_text(std.fs::path_clone(&path));
     std.test::equal(written.value, 4u64);
-    str text = content.as_str();
+    str text = content;
     std.test::equal(std.text::count_byte(text, 10u8), 4usize);
     std.string::string first = with_task(" level=info task=", id,
                                          " message=masked key=*** password=*** PassWord=***"
                                          " SECRET=*** token=*** authorization=***"
                                          " Authorization=*** tokens=t api_token=t Session=***"
                                          " odd_name=*** odd_name=*** _time=*** user=bob");
-    expect_record(line_at(text, 0usize), "time=", first.as_str(), false);
+    expect_record(line_at(text, 0usize), "time=", first, false);
     std.string::string second = with_task(" level=info task=", id,
                                           " message=other key=*** password=*** PassWord=***"
                                           " SECRET=*** token=*** authorization=***"
                                           " Authorization=*** tokens=t api_token=t Session=s"
                                           " odd_name=o odd_name=n _time=t user=bob");
-    expect_record(line_at(text, 1usize), "time=", second.as_str(), false);
+    expect_record(line_at(text, 1usize), "time=", second, false);
     std.string::string third = with_task(" level=info task=", id,
                                          " message=copy key=*** password=*** PassWord=***"
                                          " SECRET=*** token=*** authorization=***"
                                          " Authorization=*** tokens=t api_token=t Session=***"
                                          " odd_name=*** odd_name=*** _time=*** user=***");
-    expect_record(line_at(text, 2usize), "time=", third.as_str(), false);
+    expect_record(line_at(text, 2usize), "time=", third, false);
     std.string::string fourth = with_task(" level=info task=", id,
                                           " message=again key=*** password=*** PassWord=***"
                                           " SECRET=*** token=*** authorization=***"
                                           " Authorization=*** tokens=t api_token=t Session=***"
                                           " odd_name=*** odd_name=*** _time=*** user=bob");
-    expect_record(line_at(text, 3usize), "time=", fourth.as_str(), false);
+    expect_record(line_at(text, 3usize), "time=", fourth, false);
 }
 
 @test
@@ -423,14 +423,14 @@ async void reports_dropped_records_last() throws std.test::failure, std.error::f
     std.string::string content = await read_text(std.fs::path_clone(&path));
     /* The writer counts the queued lines it wrote, not the last line. */
     std.test::equal(written.value, 2u64);
-    str text = content.as_str();
+    str text = content;
     std.test::equal(std.text::count_byte(text, 10u8), 3usize);
     std.string::string one = with_task("\",\"level\":\"info\",\"task\":", id,
                                        ",\"message\":\"one\"}");
-    expect_record(line_at(text, 0usize), "{\"time\":\"", one.as_str(), false);
+    expect_record(line_at(text, 0usize), "{\"time\":\"", one, false);
     std.string::string two = with_task("\",\"level\":\"info\",\"task\":", id,
                                        ",\"message\":\"two\"}");
-    expect_record(line_at(text, 1usize), "{\"time\":\"", two.as_str(), false);
+    expect_record(line_at(text, 1usize), "{\"time\":\"", two, false);
     std.test::equal_text(line_at(text, 2usize), "message=\"records dropped\" dropped=4");
     std.test::check(std.text::ends_with(text, "\n"), "the last line ends with a line feed");
 }
@@ -460,14 +460,14 @@ async void creates_and_appends_to_the_file() throws std.test::failure, std.error
     std.string::string content = await read_text(std.fs::path_clone(&path));
     std.test::equal(created.value, 1u64);
     std.test::equal(appended.value, 2u64);
-    str text = content.as_str();
+    str text = content;
     std.test::equal(std.text::count_byte(text, 10u8), 3usize);
     std.string::string one = with_task(" level=info task=", id, " message=first");
-    expect_record(line_at(text, 0usize), "time=", one.as_str(), false);
+    expect_record(line_at(text, 0usize), "time=", one, false);
     std.string::string two = with_task(" level=info task=", id, " message=second");
-    expect_record(line_at(text, 1usize), "time=", two.as_str(), false);
+    expect_record(line_at(text, 1usize), "time=", two, false);
     std.string::string three = with_task(" level=warn task=", id, " message=third");
-    expect_record(line_at(text, 2usize), "time=", three.as_str(), false);
+    expect_record(line_at(text, 2usize), "time=", three, false);
 }
 
 /* Logs with a logger shared into its own task and returns the identifier of that task. */
@@ -500,15 +500,15 @@ async void shares_a_logger_with_another_task() throws std.test::failure, std.err
     std.test::equal(written.value, 3u64);
     std.test::check(other.value != id && other.value != 0u64,
                     "the other task has its own identifier");
-    str text = content.as_str();
+    str text = content;
     std.test::equal(std.text::count_byte(text, 10u8), 3usize);
     std.string::string before = with_task(" level=info task=", id, " message=before");
-    expect_record(line_at(text, 0usize), "time=", before.as_str(), false);
+    expect_record(line_at(text, 0usize), "time=", before, false);
     std.string::string elsewhere = with_task(" level=info task=", other.value,
                                              " message=\"from a task\" session=*** user=bob");
-    expect_record(line_at(text, 1usize), "time=", elsewhere.as_str(), false);
+    expect_record(line_at(text, 1usize), "time=", elsewhere, false);
     std.string::string after = with_task(" level=info task=", id, " message=after");
-    expect_record(line_at(text, 2usize), "time=", after.as_str(), false);
+    expect_record(line_at(text, 2usize), "time=", after, false);
 }
 
 @test
@@ -535,7 +535,7 @@ protected void expect_trimmed(str line, str head, str rest) throws std.test::fai
     if (std.text::starts_with(line, head) == false || std.text::ends_with(line, rest) == false ||
         len(bytes) < len(head) + len(tail) + 20usize) {
         std.string::string message = f"unexpected record {line}";
-        std.test::fail(message.as_str());
+        std.test::fail(message);
         return;
     }
     str stamp = core::validate_utf8(bytes[len(head)..len(bytes) - len(tail)]);
@@ -592,7 +592,7 @@ async void writes_records_in_a_chosen_layout() throws std.test::failure, std.err
     task_scope(1) writing { written.value = await std.log::writer::to_file(move sink, &path); }
     std.string::string content = await read_text(std.fs::path_clone(&path));
     std.test::equal(written.value, 2u64);
-    str lines = content.as_str();
+    str lines = content;
     expect_trimmed(line_at(lines, 0usize),
                    "{\"level\":\"info\",\"service\":\"arena\",\"env\":\"eu1\",\"request_id\":\"r-1\","
                    "\"http.status_code\":200,\"_timestamp\":\"x\",\"controls\":\"\\b\\f\\u007f\",\"timestamp\":\"",
@@ -657,7 +657,7 @@ async void writes_a_level_first_format() throws std.test::failure, std.error::fa
     task_scope(1) writing { written.value = await std.log::writer::to_file(move sink, &path); }
     std.string::string content = await read_text(std.fs::path_clone(&path));
     std.test::equal(written.value, 4u64);
-    str lines = content.as_str();
+    str lines = content;
     expect_trimmed(line_at(lines, 0usize),
                    "{\"level\":\"info\",\"service\":\"arena\",\"component\":\"http\",\"request_id\":\"req-2\","
                    "\"usr.id\":\"42\",\"http.method\":\"GET\",\"http.route\":\"/api/users/{id}\","
@@ -697,9 +697,9 @@ async void receives_unobserved_panics() throws std.test::failure, std.error::fau
     (move work).detach();
     task_scope(1) waiting {
         std.log::panic_record record = await reports.next();
-        std.test::equal_text(record.category.as_str(), "explicit");
-        std.test::equal_text(record.text.as_str(), "detached work failed");
-        std.test::check(std.text::starts_with(record.place.as_str(), "module "), "the place of the panic");
+        std.test::equal_text(record.category, "explicit");
+        std.test::equal_text(record.text, "detached work failed");
+        std.test::check(std.text::starts_with(record.place, "module "), "the place of the panic");
     }
     std.test::equal(reports.dropped(), 0u64);
     std.log::panic_reports newer = std.log::panic_reports::listen(2usize);
@@ -707,7 +707,7 @@ async void receives_unobserved_panics() throws std.test::failure, std.error::fau
     (move second).detach();
     task_scope(1) taking {
         std.log::panic_record record = await newer.next();
-        std.test::equal_text(record.text.as_str(), "detached work failed");
+        std.test::equal_text(record.text, "detached work failed");
     }
     o<std.log::panic_record> older = reports.take();
     switch (move older) {

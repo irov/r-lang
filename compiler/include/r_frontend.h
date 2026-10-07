@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define R_FRONTEND_VERSION "0.1.0"
-#define R_FRONTEND_CORE_REVISION "0.1.0-draft.100"
+#define R_FRONTEND_CORE_REVISION "0.1.0-draft.101"
 
 typedef uint32_t RSourceId;
 typedef uint32_t RTokenId;

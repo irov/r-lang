@@ -129,14 +129,14 @@ async void reads_lines_across_refills() throws std.error::fault, std.test::failu
     task_scope(1) io {
         while (await input.read_line(&line) == true) {
             count += 1u32;
-            joined.append(line.as_str());
+            joined.append(line);
             joined.append("|");
         }
         bool again = await input.read_line(&line);
         std.test::check(again == false, "the source has ended");
     }
     std.test::equal(count, 4u32);
-    std.test::equal_text(joined.as_str(), "first|second||last|");
+    std.test::equal_text(joined, "first|second||last|");
     std.test::equal(std.string::len(&line), 0usize);
     std.test::equal(input.buffered(), 0usize);
 }
@@ -168,8 +168,8 @@ async void refuses_overlong_and_invalid_lines() throws std.error::fault, std.tes
         std.test::check(second == true, "the line after it");
     }
     std.test::check(std.bytes::equal(head.as_slice(), "01234567"), "the kept bytes");
-    std.test::equal_text(line.as_str(), "89");
-    std.test::equal_text(next.as_str(), "ok");
+    std.test::equal_text(line, "89");
+    std.test::equal_text(next, "ok");
     u8[9] encoded = {97u8, 255u8, 98u8, 10u8, 111u8, 107u8, 10u8, 122u8, 10u8};
     std.bufio::reader<Trickle> mixed = buffered_text(encoded, 2usize, 8usize);
     try {
@@ -190,7 +190,7 @@ async void refuses_overlong_and_invalid_lines() throws std.error::fault, std.tes
         bool third = await mixed.read_line(&next);
         std.test::check(third == false, "the end");
     }
-    std.test::equal_text(line.as_str(), "ok");
+    std.test::equal_text(line, "ok");
     std.test::equal(std.string::len(&next), 0usize);
 }
 
@@ -316,7 +316,7 @@ async void writer_gathers_small_writes() throws std.error::fault, std.test::fail
         await out.write_str("hi");
         std.test::equal(out.buffered(), 2usize);
         std.test::equal(writes_of(&shared), 1u32);
-        await out.write(large.as_bytes());
+        await out.write(large);
         std.test::equal(out.buffered(), 0usize);
         std.test::equal(writes_of(&shared), 3u32);
         await out.write_str("xy");
@@ -364,7 +364,7 @@ async void round_trips_lines_through_a_file() throws std.error::fault, std.test:
         std.bufio::writer<std.fs::file>::create(move file, 16usize);
     for (u32 number = 1u32; number <= 20u32; number += 1u32) {
         std.string::string text = f"line {number}\r\n";
-        task_scope(1) write { await out.write(text.as_bytes()); }
+        task_scope(1) write { await out.write(text); }
     }
     task_scope(1) io {
         await out.flush();
@@ -380,7 +380,7 @@ async void round_trips_lines_through_a_file() throws std.error::fault, std.test:
         while (await input.read_line(&line) == true) {
             count += 1u32;
             std.string::string expected = f"line {count}";
-            std.test::equal_text(line.as_str(), expected.as_str());
+            std.test::equal_text(line, expected);
         }
     }
     drop input;
@@ -395,11 +395,11 @@ async void exact_capacity_goes_to_the_sink() throws std.error::fault, std.test::
     std.bufio::writer<Recorder> out =
         std.bufio::writer<Recorder>::create(Recorder {.log = std.arc::clone(&shared)}, 8usize);
     std.string::string eight = std.string::from_str("01234567");
-    task_scope(1) io { await out.write(eight.as_bytes()); }
+    task_scope(1) io { await out.write(eight); }
     std.test::equal(writes_of(&shared), 1u32);
     std.test::equal(out.buffered(), 0usize);
     std.string::string nine = std.string::from_str("012345678");
-    task_scope(1) io { await out.write(nine.as_bytes()); }
+    task_scope(1) io { await out.write(nine); }
     std.test::equal(writes_of(&shared), 2u32);
     std.test::equal(out.buffered(), 0usize);
 }

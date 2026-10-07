@@ -327,7 +327,7 @@ protected i32 native_bind(raw void*? statement, i32 index, const value* item) {
         case variant value::real(number):
             return r_std_sqlite_native_bind_real(statement, position, *number as c_double) as i32;
         case variant value::text(data):
-            const u8[] encoded = data->as_bytes();
+            const u8[] encoded = *data;
             return r_std_sqlite_native_bind_text(statement, position, bytes_of(encoded), len(encoded) as c_size)
                 as i32;
         case variant value::blob(data):
@@ -459,7 +459,7 @@ bool row::boolean(const row* this, usize column) throws sqlite_error, std.alloc:
 str row::text(const row* this, usize column) throws sqlite_error, std.alloc::alloc_error {
     const value* found = this->at(column);
     switch (*found) {
-    case variant value::text(data): return data->as_str();
+    case variant value::text(data): return *data;
     default: break;
     }
     throw wrong_type(found);
@@ -509,7 +509,7 @@ protected bool same_text(str left, str right) {
 
 o<usize> rows::column(const rows* this, str name) {
     for (usize index = 0usize; index < len(this->columns); index += 1usize) {
-        if (same_text(this->columns[index].as_str(), name) == true) { return o::some(index); }
+        if (same_text(this->columns[index], name) == true) { return o::some(index); }
     }
     return o::none;
 }
@@ -771,7 +771,7 @@ protected database open_entry(std.string::string path, options settings) throws 
     c_int32 flags = 0i32 as c_int32;
     if (settings.read_only == true) { flags = 1i32 as c_int32; }
     if (settings.read_only == false && settings.create == true) { flags = 2i32 as c_int32; }
-    native_result opened = native_open(path.as_bytes(), flags, timeout_of(settings.busy_timeout_ms));
+    native_result opened = native_open(path, flags, timeout_of(settings.busy_timeout_ms));
     throw (is_null_handle(opened.handle) == true) std.alloc::alloc_error::out_of_memory;
     connection owned = connection {.native = opened.handle};
     check_database(opened.handle, opened.status);
@@ -799,13 +799,13 @@ protected execution execute_entry(arc prepared target, array<value> parameters)
 
 protected statement prepare_entry(arc connection owner, std.string::string sql)
     throws sqlite_error, std.alloc::alloc_error {
-    prepared made = prepare_on(move owner, sql.as_bytes());
+    prepared made = prepare_on(move owner, sql);
     return statement {.core = new arc prepared(move made)};
 }
 
 protected rows query_once_entry(arc connection owner, std.string::string sql, array<value> parameters)
     throws sqlite_error, std.alloc::alloc_error {
-    prepared made = prepare_on(move owner, sql.as_bytes());
+    prepared made = prepare_on(move owner, sql);
     rows result = empty_rows();
     run_prepared(&made, &parameters, &result, true) as void;
     return move result;
@@ -813,13 +813,13 @@ protected rows query_once_entry(arc connection owner, std.string::string sql, ar
 
 protected execution execute_once_entry(arc connection owner, std.string::string sql, array<value> parameters)
     throws sqlite_error, std.alloc::alloc_error {
-    prepared made = prepare_on(move owner, sql.as_bytes());
+    prepared made = prepare_on(move owner, sql);
     rows unused = empty_rows();
     return run_prepared(&made, &parameters, &unused, false);
 }
 
 protected void script_entry(arc connection owner, std.string::string sql) throws sqlite_error, std.alloc::alloc_error {
-    execute_on(connection_handle(&*owner), sql.as_bytes());
+    execute_on(connection_handle(&*owner), sql);
 }
 
 protected void release_entry(database closing) {

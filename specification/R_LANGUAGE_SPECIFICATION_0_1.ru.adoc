@@ -15,7 +15,7 @@
 |Поле |Значение
 |Документ |R Core Language Specification
 |Версия языка |0.1
-|Редакция документа |0.1.0-draft.100
+|Редакция документа |0.1.0-draft.101
 |Статус |Перевод нормативного черновика; не является стабильным стандартом R 1.0
 |Язык документа |Русский перевод; ключевые нормативные термины приведены на английском
 |Целевой backend |ISO/IEC 9899:2018 (C17)
@@ -2765,9 +2765,11 @@ constexpr str message = (exists == true)
 без sign change; `+f32+` to `+f64+`; mutable-to-shared borrow; non-null-to-nullable;
 `+never+` to any; exact array-to-slice borrow при явном `+&+`; `+constexpr str+` to
 ordinary `+str+`, carrying program region; `+str+` to `+const u8[]+` с сохранением
-inferred region и забыванием UTF-8 invariant; place типа `+std.string::string+` to `+str+`
-как view `+std.string::as_str(&place)+` (Library R-SLIB-STRING-0002), region которого —
-shared borrow этого place; и exact error либо значение error с потомками to ancestor error
+inferred region и забыванием UTF-8 invariant; place типа `+std.string::string+` или
+`+std.format::builder+` to `+str+` как view `+as_str(&place)+` своего type (Library
+R-SLIB-STRING-0002, R-SLIB-FMT-0001), region которого — shared borrow этого place, и to
+`+const u8[]+` как bytes этого view за один edge; и exact error либо значение error с
+потомками to ancestor error
 как значение family ancestor (R-AGG-0011). Conversion set в
 `+constexpr str+` содержит только identity; поэтому ordinary `+str+`, byte-slice,
 allocated-text и foreign-storage values сохраняют собственные types. Reverse
@@ -2776,12 +2778,15 @@ conversion edges этого rule shall not быть chained в любой implic
 или common-type determination; каждый operand may traverse не более одного edge. Поэтому и
 `+const u8[] bytes = "abc";+`, и selection common byte-slice type между literal и byte
 slice требуют `+R-DIAG-TYPE-001+`. Source shall сначала initialize named ordinary string,
-затем initialize byte slice из этого name. Edge `+std.string::string+` проходит только place:
-string value, не являющееся place (результат call, f-string и другие temporaries), требует
-`+R-DIAG-TYPE-001+` и shall сначала быть bound к name. Edge borrows place и не moves его
-(R-OWN-0003), поэтому place остаётся usable и не может быть mutated или moved, пока view live;
-edge применяется везде, где применяется implicit conversion, включая arguments, initializers,
-field initializers и returned values.
+затем initialize byte slice из этого name. Edges `+std.string::string+` и
+`+std.format::builder+` проходит только place: value этих types, не являющееся place
+(результат call, f-string и другие temporaries), требует `+R-DIAG-TYPE-001+` и shall сначала
+быть bound к name, и ни один edge не образует exclusive `+u8[]+`, что тоже требует
+`+R-DIAG-TYPE-001+`. Edge borrows place и не moves его (R-OWN-0003), поэтому place остаётся
+usable и не может быть mutated или moved, пока view live; edges применяются везде, где
+применяется implicit conversion, включая arguments и overload selection, в которой они
+участвуют, initializers, field initializers, returned values, value `+switch+`
+(R-STMT-0006) и вход `+match+`, являющийся place (R-EXPR-0031).
 
 [[R-EXPR-0016]]
 *R-EXPR-0016* — Для numeric и character cases, разрешённых этим разделом,
@@ -3046,7 +3051,9 @@ right operand, left operand не place и type mismatch требуют `+R-DIAG-
 константа в скобках является константным шаблоном. Необязательная ветвь `+default:+` —
 wildcard. Контекстное слово `+match+` остаётся обычным допустимым именем. Вход типа
 `+str+` или `+constexpr str+` принимает шаблоны — строковые литералы, сравниваемые
-побайтно, а вход реализации `+core::CaseMatcher+` — константы её типа `+Label+`,
+побайтно (вход, являющийся place типа `+std.string::string+` или `+std.format::builder+`,
+сопоставляется по своему view `+str+`, R-EXPR-0015, а временный или перемещённый вход
+сохраняет свой тип), а вход реализации `+core::CaseMatcher+` — константы её типа `+Label+`,
 проверяемые её `+matches+` (R-TYPE-0046); такие шаблоны никогда не покрывают свой домен,
 ветви проверяются по порядку, а повторная метка требует `+R-DIAG-SWITCH-001+`.
 
@@ -3293,8 +3300,10 @@ expression shall not встречаться в нём (R-EXPR-0014). Значе�
 [[R-STMT-0006]]
 *R-STMT-0006* — `+switch+` expression shall быть integer, char, fieldless enum, tagged
 enum, `+o+` либо closed standard outcome type. Он также может иметь тип `+str+` или
-`+constexpr str+`, метки которого — строковые литералы, сравниваемые побайтно, либо тип
-реализации `+core::CaseMatcher+`, метки которого — константы её типа `+Label+`,
+`+constexpr str+`, метки которого — строковые литералы, сравниваемые побайтно (place типа
+`+std.string::string+` или `+std.format::builder+` выбирается по своему view `+str+`,
+R-EXPR-0015), либо тип реализации `+core::CaseMatcher+`, метки которого — константы её
+типа `+Label+`,
 проверяемые её `+matches+` (R-TYPE-0046); такой switch вычисляет значение один раз,
 проверяет метки в порядке clauses и выполняет clause первой подошедшей метки, его метки
 shall быть различными значениями, и он shall иметь `+default+`, а метка другого типа

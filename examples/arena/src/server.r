@@ -489,7 +489,7 @@ protected async std.http::flow<Call> rename(arc Server shared, std.http::flow<Ca
         return (move current).with(refusal(400u16, "nick"));
     } catch (std.postgres::pg_error failure) {
         bool taken = failure.code == std.postgres::error_code::server &&
-                     std.bytes::equal(failure.sqlstate.as_bytes(), "23505") == true;
+                     std.bytes::equal(failure.sqlstate, "23505") == true;
         (move failure) as void;
         if (taken == true) { return (move current).with(refusal(409u16, "nick taken")); }
     }

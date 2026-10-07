@@ -41,7 +41,7 @@ std.string::string message(str prefix, str body, usize limit)
     buffer.append_utf8(body);
     usize length = buffer.len();
     if (limit < length) { buffer.truncate(limit); }
-    const u8[] encoded = buffer.as_bytes();
+    const u8[] encoded = buffer;
     std.string::string output = std.string::from_utf8(encoded);
     buffer.clear();
     buffer.append("bytes=");

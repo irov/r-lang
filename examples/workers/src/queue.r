@@ -7,7 +7,7 @@ struct Record { usize index; usize bytes; u32 checksum; };
 error WorkerError { QueueFailed, Panicked };
 
 Record inspect(const std.string::string* message, usize index) {
-    const u8[] data = message->as_bytes();
+    const u8[] data = *message;
     usize length = len(data);
     u32 checksum = std.hash::crc32(data);
     return Record { .index = index, .bytes = length, .checksum = checksum };

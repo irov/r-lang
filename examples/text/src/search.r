@@ -40,7 +40,7 @@ std.string::string run(str command, str pattern, str source, str extra)
         array<std.string::string> fields = separator.split(source);
         std.string::string output = std.string::create();
         for (const std.string::string* item in &fields) {
-            str item_text = item->as_str();
+            str item_text = *item;
             output.append(item_text);
             output.append("\n");
         }

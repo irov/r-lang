@@ -39,7 +39,7 @@ impl core::Iterator for counted {
 /* Appends `value ` to the text. */
 protected void note(std.string::string* text, i32 value) throws std.alloc::alloc_error {
     std.string::string piece = f"{value} ";
-    text->append(piece.as_str());
+    text->append(piece);
 }
 
 @test
@@ -47,11 +47,11 @@ void yields_slices_and_ranges() throws std.test::failure, std.alloc::alloc_error
     i32[4] values = {7, -1, 3, 0};
     std.string::string items = std.string::create();
     for (const i32* value in std.iter::of_slice(values)) { note(&items, *value); }
-    std.test::equal_text(items.as_str(), "7 -1 3 0 ");
+    std.test::equal_text(items, "7 -1 3 0 ");
     std.test::equal(std.iter::count(std.iter::of_slice(values[0usize..0usize])), 0usize);
     std.string::string numbers = std.string::create();
     for (i32 value in std.iter::range(-2, 3)) { note(&numbers, value); }
-    std.test::equal_text(numbers.as_str(), "-2 -1 0 1 2 ");
+    std.test::equal_text(numbers, "-2 -1 0 1 2 ");
     std.test::equal(std.iter::count(std.iter::range(4, 4)), 0usize);
     std.test::equal(std.iter::count(std.iter::range(5, 1)), 0usize);
     usize total = 0usize;
@@ -65,11 +65,11 @@ void maps_and_filters() throws std.test::failure, std.alloc::alloc_error {
     fn i32 square(i32 value) { return value * value; }
     std.string::string squares = std.string::create();
     for (i32 value in std.iter::map(std.iter::range(1, 5), &square)) { note(&squares, value); }
-    std.test::equal_text(squares.as_str(), "1 4 9 16 ");
+    std.test::equal_text(squares, "1 4 9 16 ");
     fn bool even(const i32* value) { return *value % 2 == 0; }
     std.string::string evens = std.string::create();
     for (i32 value in std.iter::filter(std.iter::range(-3, 4), &even)) { note(&evens, value); }
-    std.test::equal_text(evens.as_str(), "-2 0 2 ");
+    std.test::equal_text(evens, "-2 0 2 ");
     i32 limit = 100;
     fn bool above(const i32* value) { return *value > limit; }
     std.test::equal(std.iter::count(std.iter::filter(std.iter::range(0, 10), &above)), 0usize);
@@ -86,7 +86,7 @@ void maps_and_filters() throws std.test::failure, std.alloc::alloc_error {
     fn i32 doubled(const i32* value) { return *value * 2; }
     std.string::string twice = std.string::create();
     for (i32 value in std.iter::map(std.iter::of_slice(values), &doubled)) { note(&twice, value); }
-    std.test::equal_text(twice.as_str(), "8 -10 12 ");
+    std.test::equal_text(twice, "8 -10 12 ");
 }
 
 @test
@@ -96,30 +96,30 @@ void takes_skips_chains_and_pairs() throws std.test::failure, std.alloc::alloc_e
     std.test::equal(std.iter::count(std.iter::take(std.iter::range(0, 10), 0usize)), 0usize);
     std.string::string skipped = std.string::create();
     for (i32 value in std.iter::skip(std.iter::range(0, 5), 2usize)) { note(&skipped, value); }
-    std.test::equal_text(skipped.as_str(), "2 3 4 ");
+    std.test::equal_text(skipped, "2 3 4 ");
     std.test::equal(std.iter::count(std.iter::skip(std.iter::range(0, 3), 7usize)), 0usize);
     std.string::string window = std.string::create();
     for (i32 value in std.iter::take(std.iter::skip(std.iter::range(0, 10), 4usize), 3usize)) {
         note(&window, value);
     }
-    std.test::equal_text(window.as_str(), "4 5 6 ");
+    std.test::equal_text(window, "4 5 6 ");
     std.string::string joined = std.string::create();
     for (i32 value in std.iter::chain(std.iter::range(0, 2), std.iter::range(5, 7))) {
         note(&joined, value);
     }
-    std.test::equal_text(joined.as_str(), "0 1 5 6 ");
+    std.test::equal_text(joined, "0 1 5 6 ");
     std.string::string second_only = std.string::create();
     for (i32 value in std.iter::chain(std.iter::range(3, 3), std.iter::range(1, 2))) {
         note(&second_only, value);
     }
-    std.test::equal_text(second_only.as_str(), "1 ");
+    std.test::equal_text(second_only, "1 ");
     i32[2] front = {1, 2};
     i32[1] back = {3};
     std.string::string slices = std.string::create();
     for (const i32* value in std.iter::chain(std.iter::of_slice(front), std.iter::of_slice(back))) {
         note(&slices, *value);
     }
-    std.test::equal_text(slices.as_str(), "1 2 3 ");
+    std.test::equal_text(slices, "1 2 3 ");
     i32[3] values = {5, 6, 7};
     usize weighted = 0usize;
     usize last_index = 0usize;
@@ -138,7 +138,7 @@ void takes_skips_chains_and_pairs() throws std.test::failure, std.alloc::alloc_e
         pairs.append(*both.right);
         pairs.append(";");
     }
-    std.test::equal_text(pairs.as_str(), "1 one;2 two;");
+    std.test::equal_text(pairs, "1 one;2 two;");
     i32 products = 0;
     for (std.iter::pair<i32, i32> both in
          std.iter::zip(std.iter::range(1, 3), std.iter::range(10, 20))) {
@@ -233,7 +233,7 @@ void walks_slices_backwards_and_in_pieces() throws std.test::failure, std.alloc:
     i32[5] values = {1, 2, 3, 4, 5};
     std.string::string backwards = std.string::create();
     for (const i32* value in std.iter::reversed(values)) { note(&backwards, *value); }
-    std.test::equal_text(backwards.as_str(), "5 4 3 2 1 ");
+    std.test::equal_text(backwards, "5 4 3 2 1 ");
     std.test::equal(std.iter::count(std.iter::reversed(values[0usize..0usize])), 0usize);
     std.string::string pieces = std.string::create();
     for (const i32[] piece in std.iter::chunks(values, 2usize)) {
@@ -241,7 +241,7 @@ void walks_slices_backwards_and_in_pieces() throws std.test::failure, std.alloc:
         for (const i32* value in std.iter::of_slice(piece)) { note(&pieces, *value); }
         pieces.append("]");
     }
-    std.test::equal_text(pieces.as_str(), "[1 2 ][3 4 ][5 ]");
+    std.test::equal_text(pieces, "[1 2 ][3 4 ][5 ]");
     std.test::equal(std.iter::count(std.iter::chunks(values, 5usize)), 1usize);
     std.test::equal(std.iter::count(std.iter::chunks(values, 9usize)), 1usize);
     std.test::equal(std.iter::count(std.iter::chunks(values, 0usize)), 0usize);
@@ -252,7 +252,7 @@ void walks_slices_backwards_and_in_pieces() throws std.test::failure, std.alloc:
         for (const i32* value in std.iter::of_slice(run)) { note(&runs, *value); }
         runs.append("]");
     }
-    std.test::equal_text(runs.as_str(), "[1 2 3 ][2 3 4 ][3 4 5 ]");
+    std.test::equal_text(runs, "[1 2 3 ][2 3 4 ][3 4 5 ]");
     std.test::equal(std.iter::count(std.iter::windows(values, 5usize)), 1usize);
     std.test::equal(std.iter::count(std.iter::windows(values, 6usize)), 0usize);
     std.test::equal(std.iter::count(std.iter::windows(values, 0usize)), 0usize);

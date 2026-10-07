@@ -67,24 +67,24 @@ void splits_pieces_and_lines() throws std.test::failure, std.alloc::alloc_error 
         joined.append(piece);
         joined.append("]");
     }
-    std.test::equal_text(joined.as_str(), "[a][bb][][c]");
+    std.test::equal_text(joined, "[a][bb][][c]");
     std.string::string rows = std.string::create();
     for (str line in std.text::lines("one\r\ntwo\n\nthree\n")) {
         rows.append(line);
         rows.append("|");
     }
-    std.test::equal_text(rows.as_str(), "one|two||three|");
+    std.test::equal_text(rows, "one|two||three|");
 }
 
 @test(allocations)
 void builds_new_text() throws std.test::failure, std.alloc::alloc_error {
     str[3] parts = {"a", "b", "c"};
     std.string::string joined = std.text::join(parts[0usize..3usize], ", ");
-    std.test::equal_text(joined.as_str(), "a, b, c");
+    std.test::equal_text(joined, "a, b, c");
     std.string::string replaced = std.text::replace("a-b-c", "-", "+");
-    std.test::equal_text(replaced.as_str(), "a+b+c");
+    std.test::equal_text(replaced, "a+b+c");
     std.string::string upper = std.text::ascii_uppercase("MixEd é");
-    std.test::equal_text(upper.as_str(), "MIXED é");
+    std.test::equal_text(upper, "MIXED é");
     std.string::string lower = std.text::ascii_lowercase("MixEd É");
-    std.test::equal_text(lower.as_str(), "mixed É");
+    std.test::equal_text(lower, "mixed É");
 }

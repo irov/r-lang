@@ -295,7 +295,7 @@ url parse(str text) throws url_error, std.alloc::alloc_error {
 
 /* Removes the last segment of output and the '/' before it, if any. */
 protected void drop_last_segment(std.string::string* output) {
-    const u8[] bytes = std.string::as_bytes(output);
+    const u8[] bytes = *output;
     usize end = len(bytes);
     while (end > 0usize && bytes[end - 1usize] != 47u8) { end -= 1usize; }
     if (end > 0usize) { end -= 1usize; }
@@ -368,13 +368,13 @@ protected std.string::string remove_dot_segments(str path) throws std.alloc::all
 }
 
 protected std.string::string copy_text(const std.string::string* text) throws std.alloc::alloc_error {
-    return std.string::from_str(std.string::as_str(text));
+    return std.string::from_str(*text);
 }
 
 protected o<std.string::string> copy_optional(const (o<std.string::string>)* text)
     throws std.alloc::alloc_error {
     switch (*text) {
-    case variant o::some(value): return o::some(std.string::from_str(std.string::as_str(value)));
+    case variant o::some(value): return o::some(std.string::from_str(*value));
     case variant o::none: return o::none;
     }
 }
@@ -397,13 +397,13 @@ url url::resolve(const url* this, str reference) throws url_error, std.alloc::al
     if (std.string::len(&relative.scheme_text) != 0usize) {
         result.scheme_text = copy_text(&relative.scheme_text);
         copy_authority(&result, &relative);
-        result.path_text = remove_dot_segments(relative.path_text.as_str());
+        result.path_text = remove_dot_segments(relative.path_text);
         result.query_text = copy_optional(&relative.query_text);
     } else {
         result.scheme_text = copy_text(&this->scheme_text);
         if (relative.authority == true) {
             copy_authority(&result, &relative);
-            result.path_text = remove_dot_segments(relative.path_text.as_str());
+            result.path_text = remove_dot_segments(relative.path_text);
             result.query_text = copy_optional(&relative.query_text);
         } else {
             copy_authority(&result, this);
@@ -411,25 +411,25 @@ url url::resolve(const url* this, str reference) throws url_error, std.alloc::al
                 result.path_text = copy_text(&this->path_text);
                 switch (relative.query_text) {
                 case variant o::some(value):
-                    result.query_text = o::some(std.string::from_str(std.string::as_str(value)));
+                    result.query_text = o::some(std.string::from_str(*value));
                 case variant o::none: result.query_text = copy_optional(&this->query_text);
                 }
             } else {
-                const u8[] given = relative.path_text.as_bytes();
+                const u8[] given = relative.path_text;
                 if (given[0usize] == 47u8) {
-                    result.path_text = remove_dot_segments(relative.path_text.as_str());
+                    result.path_text = remove_dot_segments(relative.path_text);
                 } else {
                     std.string::string merged = std.string::create();
                     if (this->authority == true && std.string::len(&this->path_text) == 0usize) {
                         std.string::append_str(&merged, "/");
                     } else {
-                        const u8[] base = this->path_text.as_bytes();
+                        const u8[] base = this->path_text;
                         usize end = len(base);
                         while (end > 0usize && base[end - 1usize] != 47u8) { end -= 1usize; }
-                        std.string::append_str(&merged, piece(this->path_text.as_str(), 0usize, end));
+                        std.string::append_str(&merged, piece(this->path_text, 0usize, end));
                     }
-                    std.string::append_str(&merged, relative.path_text.as_str());
-                    result.path_text = remove_dot_segments(merged.as_str());
+                    std.string::append_str(&merged, relative.path_text);
+                    result.path_text = remove_dot_segments(merged);
                 }
                 result.query_text = copy_optional(&relative.query_text);
             }
@@ -440,25 +440,25 @@ url url::resolve(const url* this, str reference) throws url_error, std.alloc::al
 }
 
 /* R-SLIB-URL-0002: the parts of a URL. */
-str url::scheme(const url* this) { return this->scheme_text.as_str(); }
+str url::scheme(const url* this) { return this->scheme_text; }
 bool url::has_authority(const url* this) { return this->authority; }
 o<str> url::userinfo(const url* this) {
     if (this->userinfo_present == false) { return o::none; }
-    return o::some(this->userinfo_text.as_str());
+    return o::some(this->userinfo_text);
 }
-str url::host(const url* this) { return this->host_text.as_str(); }
+str url::host(const url* this) { return this->host_text; }
 bool url::is_ipv6(const url* this) { return this->ipv6; }
 o<u16> url::port(const url* this) { return this->port_value; }
-str url::path(const url* this) { return this->path_text.as_str(); }
+str url::path(const url* this) { return this->path_text; }
 o<str> url::query(const url* this) {
     switch (this->query_text) {
-    case variant o::some(value): return o::some(std.string::as_str(value));
+    case variant o::some(value): return o::some(*value);
     case variant o::none: return o::none;
     }
 }
 o<str> url::fragment(const url* this) {
     switch (this->fragment_text) {
-    case variant o::some(value): return o::some(std.string::as_str(value));
+    case variant o::some(value): return o::some(*value);
     case variant o::none: return o::none;
     }
 }
@@ -480,7 +480,7 @@ o<u16> default_port(str scheme) {
 o<u16> url::effective_port(const url* this) {
     switch (this->port_value) {
     case variant o::some(value): return o::some(*value);
-    case variant o::none: return default_port(this->scheme_text.as_str());
+    case variant o::none: return default_port(this->scheme_text);
     }
 }
 
@@ -491,12 +491,12 @@ std.string::string url::target(const url* this) throws std.alloc::alloc_error {
     if (std.string::len(&this->path_text) == 0usize) {
         std.string::append_str(&result, "/");
     } else {
-        std.string::append_str(&result, this->path_text.as_str());
+        std.string::append_str(&result, this->path_text);
     }
     switch (this->query_text) {
     case variant o::some(value):
         std.string::append_str(&result, "?");
-        std.string::append_str(&result, std.string::as_str(value));
+        std.string::append_str(&result, *value);
     case variant o::none: break;
     }
     return move result;
@@ -506,13 +506,13 @@ std.string::string url::target(const url* this) throws std.alloc::alloc_error {
 std.string::string url::authority_text(const url* this) throws std.alloc::alloc_error {
     std.string::string result = std.string::create();
     if (this->ipv6 == true) { std.string::append_str(&result, "["); }
-    std.string::append_str(&result, this->host_text.as_str());
+    std.string::append_str(&result, this->host_text);
     if (this->ipv6 == true) { std.string::append_str(&result, "]"); }
     switch (this->port_value) {
     case variant o::some(value):
         u16 port = *value;
         std.string::string number = f":{port}";
-        std.string::append_str(&result, number.as_str());
+        std.string::append_str(&result, number);
     case variant o::none: break;
     }
     return move result;
@@ -522,29 +522,29 @@ std.string::string url::authority_text(const url* this) throws std.alloc::alloc_
 std.string::string url::text(const url* this) throws std.alloc::alloc_error {
     std.string::string result = std.string::create();
     if (std.string::len(&this->scheme_text) != 0usize) {
-        std.string::append_str(&result, this->scheme_text.as_str());
+        std.string::append_str(&result, this->scheme_text);
         std.string::append_str(&result, ":");
     }
     if (this->authority == true) {
         std.string::append_str(&result, "//");
         if (this->userinfo_present == true) {
-            std.string::append_str(&result, this->userinfo_text.as_str());
+            std.string::append_str(&result, this->userinfo_text);
             std.string::append_str(&result, "@");
         }
         std.string::string rest = this->authority_text();
-        std.string::append_str(&result, rest.as_str());
+        std.string::append_str(&result, rest);
     }
-    std.string::append_str(&result, this->path_text.as_str());
+    std.string::append_str(&result, this->path_text);
     switch (this->query_text) {
     case variant o::some(value):
         std.string::append_str(&result, "?");
-        std.string::append_str(&result, std.string::as_str(value));
+        std.string::append_str(&result, *value);
     case variant o::none: break;
     }
     switch (this->fragment_text) {
     case variant o::some(value):
         std.string::append_str(&result, "#");
-        std.string::append_str(&result, std.string::as_str(value));
+        std.string::append_str(&result, *value);
     case variant o::none: break;
     }
     return move result;
@@ -553,7 +553,7 @@ std.string::string url::text(const url* this) throws std.alloc::alloc_error {
 impl core::Format for url {
     void format(const url* this, std.format::builder* out) throws std.alloc::alloc_error {
         std.string::string text = this->text();
-        std.format::append_str(out, text.as_str());
+        std.format::append_str(out, text);
     }
 };
 
@@ -585,7 +585,7 @@ protected std.string::string normalize_encoding(str part) throws std.alloc::allo
 protected o<std.string::string> normalize_optional(const (o<std.string::string>)* part)
     throws std.alloc::alloc_error {
     switch (*part) {
-    case variant o::some(value): return o::some(normalize_encoding(std.string::as_str(value)));
+    case variant o::some(value): return o::some(normalize_encoding(*value));
     case variant o::none: return o::none;
     }
 }
@@ -596,11 +596,11 @@ url url::normalized(const url* this) throws std.alloc::alloc_error {
     url result = empty_url();
     result.scheme_text = copy_text(&this->scheme_text);
     result.authority = this->authority;
-    result.userinfo_text = normalize_encoding(this->userinfo_text.as_str());
+    result.userinfo_text = normalize_encoding(this->userinfo_text);
     result.userinfo_present = this->userinfo_present;
-    result.host_text = normalize_encoding(this->host_text.as_str());
+    result.host_text = normalize_encoding(this->host_text);
     result.ipv6 = this->ipv6;
-    o<u16> default_value = default_port(this->scheme_text.as_str());
+    o<u16> default_value = default_port(this->scheme_text);
     switch (this->port_value) {
     case variant o::some(value):
         bool standard = false;
@@ -611,8 +611,8 @@ url url::normalized(const url* this) throws std.alloc::alloc_error {
         if (standard == false) { result.port_value = o::some(*value); }
     case variant o::none: break;
     }
-    std.string::string path = normalize_encoding(this->path_text.as_str());
-    result.path_text = remove_dot_segments(path.as_str());
+    std.string::string path = normalize_encoding(this->path_text);
+    result.path_text = remove_dot_segments(path);
     switch (default_value) {
     case variant o::some(fallback):
         fallback as void;

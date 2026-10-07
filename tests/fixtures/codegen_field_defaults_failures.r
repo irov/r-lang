@@ -5,7 +5,7 @@ module test.codegen.field_defaults_failures;
    it are destroyed, and a failing default of core::take leaves the destination unchanged. */
 
 protected bool matches(const std.string::string* source, const u8[] expected) {
-    const u8[] actual = std.string::as_bytes(source);
+    const u8[] actual = *source;
     usize actual_length = len(actual);
     usize expected_length = len(expected);
     if (actual_length != expected_length) { return false; }

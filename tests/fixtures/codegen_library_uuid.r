@@ -23,12 +23,12 @@ protected i32 check() throws std.alloc::alloc_error, std.convert::parse_error, s
                      0x1bu8, 0xacu8, 0xf8u8, 0x47u8, 0xdbu8, 0x41u8, 0x48u8, 0xa8u8};
     std.uuid::uuid four = std.uuid::from_random_v4(random);
     std.string::string four_text = f"{four}";
-    if (same(four_text.as_str(), "919108f7-52d1-4320-9bac-f847db4148a8") == false) { return 1; }
+    if (same(four_text, "919108f7-52d1-4320-9bac-f847db4148a8") == false) { return 1; }
     if (std.uuid::version(&four) != 4u8) { return 2; }
     u8[10] tail = {0x0cu8, 0xc3u8, 0x18u8, 0xc4u8, 0xdcu8, 0x0cu8, 0x0cu8, 0x07u8, 0x39u8, 0x8fu8};
     std.uuid::uuid seven = std.uuid::from_time_v7(0x017f22e279b0u64, tail);
     std.string::string seven_text = f"{seven}";
-    if (same(seven_text.as_str(), "017f22e2-79b0-7cc3-98c4-dc0c0c07398f") == false) { return 3; }
+    if (same(seven_text, "017f22e2-79b0-7cc3-98c4-dc0c0c07398f") == false) { return 3; }
     std.uuid::uuid parsed = std.uuid::parse("017F22E2-79B0-7CC3-98C4-DC0C0C07398F");
     if (std.cmp::is_equal(&parsed, &seven) == false) { return 4; }
     std.uuid::uuid nil = std.uuid::nil();
@@ -36,8 +36,8 @@ protected i32 check() throws std.alloc::alloc_error, std.convert::parse_error, s
     std.string::string nil_text = f"{nil}";
     std.string::string max_text = f"{max}";
     i32 status = 0;
-    if (same(nil_text.as_str(), "00000000-0000-0000-0000-000000000000") == false) { status = 5; }
-    if (same(max_text.as_str(), "ffffffff-ffff-ffff-ffff-ffffffffffff") == false) { status = 6; }
+    if (same(nil_text, "00000000-0000-0000-0000-000000000000") == false) { status = 5; }
+    if (same(max_text, "ffffffff-ffff-ffff-ffff-ffffffffffff") == false) { status = 6; }
     if (status != 0) { return status; }
     if (std.cmp::is_less(&nil, &seven) == false || std.cmp::is_less(&seven, &max) == false) {
         return 7;

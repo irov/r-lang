@@ -7,7 +7,7 @@ Operation operation_at(const array<std.string::string>* commands, usize index) t
     o<const std.string::string*> found = commands->get(index);
     switch (found) {
     case variant o::some(value):
-        str text = std.string::as_str(*value);
+        str text = **value;
         o<Operation> parsed = core::enum_from_name::<Operation>(text);
         switch (parsed) {
         case variant o::some(operation): return *operation;
@@ -23,7 +23,7 @@ u32 number_at(const array<std.string::string>* commands, usize index) throws Usa
     o<const std.string::string*> found = commands->get(index);
     switch (found) {
     case variant o::some(value):
-        str text = std.string::as_str(*value);
+        str text = **value;
         return std.convert::parse_u32(text, 10u32);
     case variant o::none: throw Usage { .message = "missing register value" };
     }

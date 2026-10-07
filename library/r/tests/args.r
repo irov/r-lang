@@ -23,10 +23,10 @@ protected void expect_value(const std.args::matches* found, str name, str expect
     throws std.args::args_error, std.test::failure, std.alloc::alloc_error {
     o<std.string::string> value = found->value(name);
     switch (move value) {
-    case variant o::some(move text): std.test::equal_text(text.as_str(), expected);
+    case variant o::some(move text): std.test::equal_text(text, expected);
     case variant o::none:
         std.string::string message = f"{name} has no value";
-        std.test::fail(message.as_str());
+        std.test::fail(message);
     }
 }
 
@@ -37,7 +37,7 @@ protected void expect_no_value(const std.args::matches* found, str name)
     switch (move value) {
     case variant o::some(move text):
         std.string::string message = f"{name} has the value {text}";
-        std.test::fail(message.as_str());
+        std.test::fail(message);
     case variant o::none: break;
     }
 }
@@ -78,8 +78,8 @@ void parses_long_and_grouped_arguments()
     expect_value(&found, "target", "here");
     array<std.string::string> rest = found.remaining();
     std.test::equal(len(rest), 2usize);
-    std.test::equal_text(rest[0].as_str(), "a");
-    std.test::equal_text(rest[1].as_str(), "b");
+    std.test::equal_text(rest[0], "a");
+    std.test::equal_text(rest[1], "b");
     /* Without them, the flags, options and optional arguments are absent. */
     str[2] least = {"tool", "run"};
     std.args::matches bare = parser.parse(least[0usize..2usize]);
@@ -139,7 +139,7 @@ void ends_options_at_double_dash()
     expect_value(&found, "target", "--port");
     array<std.string::string> rest = found.remaining();
     std.test::equal(len(rest), 1usize);
-    std.test::equal_text(rest[0].as_str(), "--");
+    std.test::equal_text(rest[0], "--");
     /* A lone dash is an argument, not an option. */
     str[3] lone = {"tool", "-", "-v"};
     std.args::matches single = parser.parse(lone[0usize..3usize]);
@@ -173,7 +173,7 @@ void asks_for_help() throws std.args::args_error, std.test::failure, std.alloc::
 void writes_the_help_text() throws std.args::args_error, std.test::failure, std.alloc::alloc_error {
     std.args::parser parser = declared();
     std.string::string text = parser.help();
-    std.test::equal_text(text.as_str(),
+    std.test::equal_text(text,
                          "tool - an argument test\n"
                          "usage: tool [options] mode [target] [rest...]\n"
                          "  -v, --verbose            print more\n"
@@ -186,7 +186,7 @@ void writes_the_help_text() throws std.args::args_error, std.test::failure, std.
                          "  -h, --help               print this help\n");
     std.args::parser empty = std.args::parser::create("bare", "nothing declared");
     std.string::string least = empty.help();
-    std.test::equal_text(least.as_str(),
+    std.test::equal_text(least,
                          "bare - nothing declared\n"
                          "usage: bare [options]\n"
                          "  -h, --help               print this help\n");
@@ -370,9 +370,9 @@ void declares_parses_and_copies()
     expect_value(&found, "target", "here");
     array<std.string::string> rest = found.remaining();
     std.test::equal(len(rest), 2usize);
-    std.test::equal_text(rest[1].as_str(), "two");
+    std.test::equal_text(rest[1], "two");
     std.string::string text = parser.help();
-    std.test::check(std.text::starts_with(text.as_str(), "tool - an argument test\n"),
+    std.test::check(std.text::starts_with(text, "tool - an argument test\n"),
                     "the help starts with the program and summary");
 }
 

@@ -116,7 +116,7 @@ async i32 program_types() throws std.error::fault {
     std.string::string single = std.string::from_str("x");
     i32 status = 0;
     task_scope(1) io {
-        await emit(&chunked, letters.as_bytes());
+        await emit(&chunked, letters);
         await chunked.shutdown();
         usize read = await drain(&fixed, buffer.as_slice_mut());
         if (read != 10usize) { status = 1; }
@@ -124,7 +124,7 @@ async i32 program_types() throws std.error::fault {
     if (core::atomic_load(&chunked.calls, core::memory_order::relaxed) != 3u32) { status = 2; }
     if (core::atomic_load(&chunked.sum, core::memory_order::relaxed) != 804u64) { status = 3; }
     try {
-        task_scope(1) io { await emit(&stuck, single.as_bytes()); }
+        task_scope(1) io { await emit(&stuck, single); }
         if (status == 0) { status = 4; }
     } catch (std.io::io_error failure) {
         if (failure.code != std.io::error_code::broken_pipe || failure.native_code != 0i64) {
@@ -159,13 +159,13 @@ std.fs::open_file_options reading() {
 }
 
 async i32 files(std.string::string name) throws std.error::fault {
-    std.fs::path path = std.fs::path_from_utf8(name.as_str());
+    std.fs::path path = std.fs::path_from_utf8(name);
     std.fs::file file = await path.open_file(writing());
     bytes buffer = std.alloc::bytes(8usize, 0u8);
     std.string::string text = std.string::from_str("file bytes");
     i32 status = 0;
     task_scope(1) io {
-        await emit(&file, text.as_bytes());
+        await emit(&file, text);
         await file.shutdown();
     }
     await (move file).close();
@@ -196,7 +196,7 @@ async i32 network() throws std.error::fault {
     std.string::string text = std.string::from_str("over tcp");
     i32 status = 0;
     task_scope(1) io {
-        await channel->write_all_from(text.as_bytes());
+        await channel->write_all_from(text);
         await channel->flush();
         await channel->shutdown();
         usize read = await drain(&connection, buffer.as_slice_mut());

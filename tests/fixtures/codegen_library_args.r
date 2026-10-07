@@ -43,22 +43,22 @@ i32 checks() throws std.args::args_error, std.alloc::alloc_error, Failed {
     throw (found.has("verbose") == false || found.has("dry-run") == false) Failed {.code = 1};
     o<std.string::string> port = found.value("port");
     switch (move port) {
-    case variant o::some(move text): throw (std.bytes::equal(text.as_str(), "80") == false) Failed {.code = 2};
+    case variant o::some(move text): throw (std.bytes::equal(text, "80") == false) Failed {.code = 2};
     case variant o::none: throw Failed {.code = 3};
     }
     o<std.string::string> level = found.value("log.level");
     switch (move level) {
-    case variant o::some(move text): throw (std.bytes::equal(text.as_str(), "debug") == false) Failed {.code = 4};
+    case variant o::some(move text): throw (std.bytes::equal(text, "debug") == false) Failed {.code = 4};
     case variant o::none: throw Failed {.code = 5};
     }
     array<std.string::string> rest = found.remaining();
-    throw (len(rest) != 2usize || std.bytes::equal(rest[1].as_str(), "b") == false) Failed {.code = 6};
+    throw (len(rest) != 2usize || std.bytes::equal(rest[1], "b") == false) Failed {.code = 6};
     /* A short option takes the rest of its argument or the next one; the last value counts. */
     str[6] short_forms = {"tool", "-p8080", "-vp", "9090", "run", "--"};
     std.args::matches second = parser.parse(short_forms[0usize..6usize]);
     o<std.string::string> last = second.value("port");
     switch (move last) {
-    case variant o::some(move text): throw (std.bytes::equal(text.as_str(), "9090") == false) Failed {.code = 7};
+    case variant o::some(move text): throw (std.bytes::equal(text, "9090") == false) Failed {.code = 7};
     case variant o::none: throw Failed {.code = 8};
     }
     throw (second.has("target") == true) Failed {.code = 9};
@@ -70,7 +70,7 @@ i32 checks() throws std.args::args_error, std.alloc::alloc_error, Failed {
     std.args::matches asked = parser.parse(help[0usize..2usize]);
     throw (asked.help_requested() == false) Failed {.code = 11};
     std.string::string text = parser.help();
-    throw (std.text::starts_with(text.as_str(), "tool - an argument test\nusage: tool [options] mode [target] [rest...]\n") == false)
+    throw (std.text::starts_with(text, "tool - an argument test\nusage: tool [options] mode [target] [rest...]\n") == false)
         Failed {.code = 12};
     /* Errors with the index of the argument. */
     str[3] unknown = {"tool", "run", "--colour"};
@@ -125,9 +125,9 @@ i32 checks() throws std.args::args_error, std.alloc::alloc_error, Failed {
     case variant o::some(move value): drop value; throw Failed {.code = 29};
     case variant o::none: break;
     }
-    throw (std.text::contains(text.as_str(), "\n  -p, --port PORT          listening port\n") == false ||
-           std.text::contains(text.as_str(), "\n  --log.level LEVEL        lowest level written\n") == false ||
-           std.text::contains(text.as_str(), "\n  -h, --help               print this help\n") == false)
+    throw (std.text::contains(text, "\n  -p, --port PORT          listening port\n") == false ||
+           std.text::contains(text, "\n  --log.level LEVEL        lowest level written\n") == false ||
+           std.text::contains(text, "\n  -h, --help               print this help\n") == false)
         Failed {.code = 30};
     try {
         parser.remaining("more", "twice");

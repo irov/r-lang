@@ -32,8 +32,8 @@ async std.mcp::tool_outcome echo(arc app shared, std.mcp::call request) throws s
     drop shared;
     std.string::string text = arguments_of(&request);
     try {
-        echo_args args = std.json::unmarshal(text.as_bytes());
-        return std.mcp::tool_outcome::complete(std.mcp::tool_result::of_text(args.text.as_str()));
+        echo_args args = std.json::unmarshal(text);
+        return std.mcp::tool_outcome::complete(std.mcp::tool_result::of_text(args.text));
     } catch (std.json::error rejected) {
         (move rejected) as void;
     }
@@ -44,7 +44,7 @@ async std.mcp::tool_outcome sum(arc app shared, std.mcp::call request) throws st
     drop shared;
     std.string::string text = arguments_of(&request);
     try {
-        sum_args args = std.json::unmarshal(text.as_bytes());
+        sum_args args = std.json::unmarshal(text);
         sum_result total = {.sum = args.a + args.b};
         return std.mcp::tool_outcome::complete(std.mcp::tool_result::of_structured(&total));
     } catch (std.json::error rejected) {
@@ -100,7 +100,7 @@ async std.mcp::tool_outcome slow(arc app shared, std.mcp::call request) throws s
     bool second = request.progress.report(1.0f64, total, "again");
     bool third = request.progress.report(2.0f64, total, "");
     std.string::string text = f"{first} {second} {third}";
-    return std.mcp::tool_outcome::complete(std.mcp::tool_result::of_text(text.as_str()));
+    return std.mcp::tool_outcome::complete(std.mcp::tool_result::of_text(text));
 }
 
 async std.mcp::tool_outcome touch(arc app shared, std.mcp::call request) throws std.error::fault {
@@ -131,7 +131,7 @@ async std.mcp::read_outcome readme(arc app shared, std.mcp::read request) throws
     drop shared;
     array<std.mcp::contents> items = std.array::create::<std.mcp::contents>();
     try {
-        items.push(std.mcp::contents::of_text(request.uri.as_str(), "text/plain", "Read me"));
+        items.push(std.mcp::contents::of_text(request.uri, "text/plain", "Read me"));
         bytes logo = {};
         std.bytes::append(&logo, "PNG");
         items.push(std.mcp::contents::of_blob("file:///logo.png", "image/png", move logo));
@@ -152,7 +152,7 @@ async std.mcp::read_outcome note(arc app shared, std.mcp::read request) throws s
     std.string::string text = f"note {id}";
     array<std.mcp::contents> items = std.array::create::<std.mcp::contents>();
     try {
-        items.push(std.mcp::contents::of_text(request.uri.as_str(), "text/plain", text.as_str()));
+        items.push(std.mcp::contents::of_text(request.uri, "text/plain", text));
     } catch (std.array::push_error<std.mcp::contents> rejected) {
         (move rejected) as void;
     }
@@ -168,7 +168,7 @@ async std.mcp::prompt_outcome greet(arc app shared, std.mcp::prompt_call request
     }
     std.string::string text = f"Say hello to {name}";
     std.mcp::prompt_result result = std.mcp::prompt_result::create("A greeting");
-    result.say(std.mcp::role::user, text.as_str());
+    result.say(std.mcp::role::user, text);
     return std.mcp::prompt_outcome::complete(move result);
 }
 
@@ -176,8 +176,8 @@ async std.mcp::completion names(arc app shared, std.mcp::completion_request requ
     drop shared;
     std.mcp::completion found = std.mcp::completion::create();
     try {
-        if (std.text::starts_with("Ann", request.value.as_str()) == true) { found.values.push(std.string::from_str("Ann")); }
-        if (std.text::starts_with("Bob", request.value.as_str()) == true) { found.values.push(std.string::from_str("Bob")); }
+        if (std.text::starts_with("Ann", request.value) == true) { found.values.push(std.string::from_str("Ann")); }
+        if (std.text::starts_with("Bob", request.value) == true) { found.values.push(std.string::from_str("Bob")); }
     } catch (std.array::push_error<std.string::string> rejected) {
         (move rejected) as void;
     }
@@ -244,7 +244,7 @@ protected std.string::string path_text(const std.json::value* root, str path) th
 protected void expect(const std.json::value* root, str path, str expected)
     throws std.test::failure, std.json::error, std.alloc::alloc_error {
     std.string::string text = path_text(root, path);
-    std.test::equal_text(text.as_str(), expected);
+    std.test::equal_text(text, expected);
 }
 
 /* A request line with the _meta of 2026-07-28, the id, method and further parameters. */
@@ -287,7 +287,7 @@ protected async std.json::value call(const std.net::tcp_stream* peer, std.bufio:
     throws std.error::fault, std.test::failure, std.json::error {
     std.string::string line = request_line(id, method, params);
     task_scope(1) io {
-        await send_text(peer, line.as_str());
+        await send_text(peer, line);
         return await receive(replies);
     }
 }
@@ -450,7 +450,7 @@ protected async void refuses_malformed(const std.net::tcp_stream* peer, std.bufi
 /* The text of member name of a message, <missing> when absent. */
 protected std.string::string kind_of(const std.json::value* message) throws std.json::error, std.alloc::alloc_error {
     std.string::string method = path_text(message, "method");
-    if (std.bytes::equal(method.as_bytes(), "<missing>") == false) { return move method; }
+    if (std.bytes::equal(method, "<missing>") == false) { return move method; }
     return path_text(message, "id");
 }
 
@@ -463,31 +463,31 @@ protected async void listens_and_cancels(const std.net::tcp_stream* peer,
     std.string::string touch_line = request_line("60", "tools/call", "\"name\":\"touch\"");
     std.string::string wait_line = request_line("70", "tools/call", "\"name\":\"wait\"");
     task_scope(1) io {
-        await send_text(peer, line.as_str());
+        await send_text(peer, line);
         std.json::value ack = await receive(replies);
         expect(&ack, "method", "\"notifications/subscriptions/acknowledged\"");
         expect(&ack, "params",
                "{\"notifications\":{\"toolsListChanged\":true,\"resourceSubscriptions\":[\"note://7\"]},\"_meta\":{\"io.modelcontextprotocol/subscriptionId\":\"L1\"}}");
-        await send_text(peer, touch_line.as_str());
+        await send_text(peer, touch_line);
         u32 seen = 0u32;
         for (u32 round = 0u32; round < 3u32; round += 1u32) {
             std.json::value message = await receive(replies);
             std.string::string kind = kind_of(&message);
-            if (std.bytes::equal(kind.as_bytes(), "60") == true) {
+            if (std.bytes::equal(kind, "60") == true) {
                 expect(&message, "result.content.0.text", "\"touched\"");
                 seen += 1u32;
             }
-            if (std.bytes::equal(kind.as_bytes(), "\"notifications/resources/updated\"") == true) {
+            if (std.bytes::equal(kind, "\"notifications/resources/updated\"") == true) {
                 expect(&message, "params", "{\"uri\":\"note://7\",\"_meta\":{\"io.modelcontextprotocol/subscriptionId\":\"L1\"}}");
                 seen += 10u32;
             }
-            if (std.bytes::equal(kind.as_bytes(), "\"notifications/tools/list_changed\"") == true) {
+            if (std.bytes::equal(kind, "\"notifications/tools/list_changed\"") == true) {
                 expect(&message, "params._meta", "{\"io.modelcontextprotocol/subscriptionId\":\"L1\"}");
                 seen += 100u32;
             }
         }
         std.test::equal(seen, 111u32);
-        await send_text(peer, wait_line.as_str());
+        await send_text(peer, wait_line);
         await send_text(peer, "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":70,\"reason\":\"no longer needed\"}}\n");
         std.json::value next = await call(peer, replies, "71", "tools/call", "\"name\":\"echo\",\"arguments\":{\"text\":\"after\"}");
         expect(&next, "id", "71");
@@ -507,7 +507,7 @@ protected async void closes_gracefully(const std.net::tcp_stream* peer,
         expect(&result, "result.resultType", "\"complete\"");
         expect(&result, "result._meta.io", "<missing>");
         std.string::string meta = path_text(&result, "result._meta");
-        std.test::check(std.text::starts_with(meta.as_str(), "{\"io.modelcontextprotocol/subscriptionId\":\"L1\","),
+        std.test::check(std.text::starts_with(meta, "{\"io.modelcontextprotocol/subscriptionId\":\"L1\","),
                         "the result names the subscription");
         std.json::value cancelled = await receive(replies);
         expect(&cancelled, "method", "\"notifications/cancelled\"");
@@ -576,7 +576,7 @@ protected async std.http::response post_request(std.bufio::reader<std.net::tcp_s
                                                 str method, str name, str params)
     throws std.error::fault, std.http::http_error {
     std.string::string line = request_line(id, method, params);
-    std.http::request message = mcp_post(method, name, line.as_str());
+    std.http::request message = mcp_post(method, name, line);
     task_scope(1) io { return await exchange(connection, move message); }
 }
 
@@ -604,7 +604,7 @@ protected array<std.json::value> events_of(const std.http::response* answer)
         switch (move next) {
         case variant o::some(move event):
             try {
-                found.push(std.json::parse(event.data.as_bytes()));
+                found.push(std.json::parse(event.data));
             } catch (std.array::push_error<std.json::value> rejected) {
                 (move rejected) as void;
             }
@@ -649,12 +649,12 @@ protected async void checks_versions(std.bufio::reader<std.net::tcp_stream>* con
     throws std.error::fault, std.test::failure, std.http::http_error, std.json::error {
     task_scope(1) io {
         std.string::string line = request_line("6", "tools/list", "");
-        std.http::request wrong_method = mcp_post("tools/call", "", line.as_str());
+        std.http::request wrong_method = mcp_post("tools/call", "", line);
         std.http::response method_mismatch = await exchange(connection, move wrong_method);
         std.test::equal(method_mismatch.status, 400u16);
         std.http::request no_version = std.http::request::create(std.http::method::post, "/mcp");
         no_version.headers.add("Mcp-Method", "tools/list");
-        std.bytes::append(&no_version.body, line.as_str());
+        std.bytes::append(&no_version.body, line);
         std.http::response versionless = await exchange(connection, move no_version);
         std.test::equal(versionless.status, 400u16);
         std.json::value versionless_body = body_json(&versionless);
@@ -690,7 +690,7 @@ protected async void streams_and_mirrors(std.bufio::reader<std.net::tcp_stream>*
         std.test::equal(mirrored.status, 400u16);
         std.string::string region_line = request_line("10", "tools/call",
             "\"name\":\"region\",\"arguments\":{\"region\":\"Hello, мир\",\"limit\":42}");
-        std.http::request with_headers = mcp_post("tools/call", "region", region_line.as_str());
+        std.http::request with_headers = mcp_post("tools/call", "region", region_line);
         with_headers.headers.add("Mcp-Param-Region", "=?base64?SGVsbG8sINC80LjRgA==?=");
         with_headers.headers.add("Mcp-Param-Limit", "42.0");
         std.http::response routed = await exchange(connection, move with_headers);
@@ -706,15 +706,15 @@ protected async void guards_the_endpoint(std.bufio::reader<std.net::tcp_stream>*
     throws std.error::fault, std.test::failure, std.http::http_error, std.json::error {
     task_scope(1) io {
         std.string::string origin_line = request_line("11", "tools/list", "");
-        std.http::request foreign = mcp_post("tools/list", "", origin_line.as_str());
+        std.http::request foreign = mcp_post("tools/list", "", origin_line);
         foreign.headers.add("Origin", "https://evil.example");
         std.http::response forbidden = await exchange(connection, move foreign);
         std.test::equal(forbidden.status, 403u16);
-        std.http::request local = mcp_post("tools/list", "", origin_line.as_str());
+        std.http::request local = mcp_post("tools/list", "", origin_line);
         local.headers.add("Origin", "http://localhost:3000");
         std.http::response allowed = await exchange(connection, move local);
         std.test::equal(allowed.status, 200u16);
-        std.http::request typed = mcp_post("tools/list", "", origin_line.as_str());
+        std.http::request typed = mcp_post("tools/list", "", origin_line);
         typed.headers.set("Content-Type", "text/plain");
         std.http::response unsupported_type = await exchange(connection, move typed);
         std.test::equal(unsupported_type.status, 415u16);
@@ -788,7 +788,7 @@ async std.mcp::answer approve(arc asker state, std.mcp::elicitation request) thr
 protected str first_text(const std.mcp::tool_result* result) {
     if (len(result->content) == 0usize) { return "<none>"; }
     switch (result->content[0usize]) {
-    case variant std.mcp::content::text(text): return text->as_str();
+    case variant std.mcp::content::text(text): return *text;
     default: return "<other>";
     }
 }
@@ -814,13 +814,13 @@ protected async void client_calls(const std.mcp::client* link)
     task_scope(1) io {
         std.mcp::discovery found = await link->discover();
         std.test::equal(len(found.versions), 1usize);
-        std.test::equal_text(found.versions[0usize].as_str(), "2026-07-28");
-        std.test::equal_text(found.server.name.as_str(), "tests");
-        std.test::equal_text(found.instructions.as_str(), "Test tools.");
+        std.test::equal_text(found.versions[0usize], "2026-07-28");
+        std.test::equal_text(found.server.name, "tests");
+        std.test::equal_text(found.instructions, "Test tools.");
         std.test::equal(found.ttl_ms, 60000u64);
         array<std.mcp::tool> tools = await link->list_tools();
         std.test::equal(len(tools), 8usize);
-        std.test::equal_text(tools[7usize].name.as_str(), "region");
+        std.test::equal_text(tools[7usize].name, "region");
         std.mcp::tool_result echoed = await link->call_tool("echo", arguments("{\"text\":\"hi\"}"));
         std.test::equal_text(first_text(&echoed), "hi");
         std.mcp::tool_result added = await link->call_tool("sum", arguments("{\"a\":1,\"b\":2}"));
@@ -839,9 +839,9 @@ protected async void client_calls(const std.mcp::client* link)
         array<std.mcp::resource> resources = await link->list_resources();
         std.test::equal(len(resources), 1usize);
         array<std.mcp::resource_template> templates = await link->list_templates();
-        std.test::equal_text(templates[0usize].uri_template.as_str(), "note://{id}");
+        std.test::equal_text(templates[0usize].uri_template, "note://{id}");
         array<std.mcp::contents> read = await link->read_resource("note://42");
-        std.test::equal_text(read[0usize].text.as_str(), "note 42");
+        std.test::equal_text(read[0usize].text, "note 42");
         array<std.mcp::contents> blobs = await link->read_resource("file:///readme.txt");
         std.test::check(blobs[1usize].binary, "a blob");
         std.test::equal(len(blobs[1usize].blob), 3usize);
@@ -853,12 +853,12 @@ protected async void client_calls(const std.mcp::client* link)
             std.test::equal(rejected.code, -32602i64);
         }
         array<std.mcp::prompt> prompts = await link->list_prompts();
-        std.test::equal_text(prompts[0usize].name.as_str(), "greet");
+        std.test::equal_text(prompts[0usize].name, "greet");
         std.mcp::prompt_result greeting = await link->get_prompt("greet", arguments("{\"name\":\"Ada\"}"));
         std.test::equal(len(greeting.messages), 1usize);
         std.mcp::completion completed = await link->complete(true, "greet", "name", "B");
         std.test::equal(len(completed.values), 1usize);
-        std.test::equal_text(completed.values[0usize].as_str(), "Bob");
+        std.test::equal_text(completed.values[0usize], "Bob");
     }
 }
 
@@ -897,7 +897,7 @@ protected async void client_listens(const std.mcp::client* link)
                     switch (move found) {
                     case variant std.mcp::change::tools: seen += 1u32;
                     case variant std.mcp::change::updated(move uri):
-                        std.test::equal_text(uri.as_str(), "note://7");
+                        std.test::equal_text(uri, "note://7");
                         seen += 10u32;
                     default: std.test::fail("an unexpected change");
                     }
@@ -954,7 +954,7 @@ async void the_client_speaks_over_http() throws std.error::fault, std.test::fail
     u16 port = endpoint.port;
     std.string::string address = f"http://127.0.0.1:{port}/mcp";
     std.mcp::client_options settings = {};
-    std.mcp::client link = std.mcp::client::over_http(address.as_str(), std.mcp::implementation::create("test-client", "0.1"),
+    std.mcp::client link = std.mcp::client::over_http(address, std.mcp::implementation::create("test-client", "0.1"),
                                                       settings, o::none);
     task_scope(2) group {
         auto serving = std.http::serve(move listener, service_settings, move stop, std.arc::clone(&host), move routes, bounds);
@@ -986,30 +986,30 @@ std.mcp::access check_token(const app* state, str token, str method) throws std.
 protected async void challenges_tokens(std.bufio::reader<std.net::tcp_stream>* connection, u16 port)
     throws std.error::fault, std.test::failure, std.http::http_error, std.json::error {
     std.string::string metadata = f"Bearer resource_metadata=\"http://127.0.0.1:{port}/.well-known/oauth-protected-resource/mcp\", scope=\"tools\"";
-    std.string::string invalid = std.string::from_str(metadata.as_str());
+    std.string::string invalid = std.string::from_str(metadata);
     std.string::append_str(&invalid, ", error=\"invalid_token\"");
-    std.string::string insufficient = std.string::from_str(metadata.as_str());
+    std.string::string insufficient = std.string::from_str(metadata);
     std.string::append_str(&insufficient, ", error=\"insufficient_scope\"");
     std.string::string line = request_line("1", "tools/list", "");
     std.string::string call_line = request_line("2", "tools/call", "\"name\":\"echo\",\"arguments\":{\"text\":\"x\"}");
     task_scope(1) io {
-        std.http::response missing = await exchange(connection, mcp_post("tools/list", "", line.as_str()));
+        std.http::response missing = await exchange(connection, mcp_post("tools/list", "", line));
         std.test::equal(missing.status, 401u16);
-        expect_header(&missing, "WWW-Authenticate", metadata.as_str());
-        std.http::request bad = mcp_post("tools/list", "", line.as_str());
+        expect_header(&missing, "WWW-Authenticate", metadata);
+        std.http::request bad = mcp_post("tools/list", "", line);
         bad.headers.add("Authorization", "Bearer bad");
         std.http::response rejected = await exchange(connection, move bad);
         std.test::equal(rejected.status, 401u16);
-        expect_header(&rejected, "WWW-Authenticate", invalid.as_str());
-        std.http::request weak_list = mcp_post("tools/list", "", line.as_str());
+        expect_header(&rejected, "WWW-Authenticate", invalid);
+        std.http::request weak_list = mcp_post("tools/list", "", line);
         weak_list.headers.add("Authorization", "Bearer weak");
         std.http::response listed = await exchange(connection, move weak_list);
         std.test::equal(listed.status, 200u16);
-        std.http::request weak_call = mcp_post("tools/call", "echo", call_line.as_str());
+        std.http::request weak_call = mcp_post("tools/call", "echo", call_line);
         weak_call.headers.add("Authorization", "bearer weak");
         std.http::response denied = await exchange(connection, move weak_call);
         std.test::equal(denied.status, 403u16);
-        expect_header(&denied, "WWW-Authenticate", insufficient.as_str());
+        expect_header(&denied, "WWW-Authenticate", insufficient);
     }
 }
 
@@ -1024,7 +1024,7 @@ protected async void describes_the_resource(std.bufio::reader<std.net::tcp_strea
         std.test::equal(document.status, 200u16);
         std.json::value found = body_json(&document);
         std.string::string resource = f"\"http://127.0.0.1:{port}/mcp\"";
-        expect(&found, "resource", resource.as_str());
+        expect(&found, "resource", resource);
         expect(&found, "authorization_servers", "[\"https://auth.example\"]");
         expect(&found, "scopes_supported", "[\"tools\"]");
         expect(&found, "bearer_methods_supported", "[\"header\"]");
@@ -1035,10 +1035,10 @@ protected async void describes_the_resource(std.bufio::reader<std.net::tcp_strea
 protected async void clients_with_tokens(std.string::string address)
     throws std.error::fault, std.test::failure, std.json::error, std.mcp::mcp_error {
     std.mcp::client_options settings = {};
-    std.mcp::client anonymous = std.mcp::client::over_http(address.as_str(),
+    std.mcp::client anonymous = std.mcp::client::over_http(address,
                                                            std.mcp::implementation::create("anonymous", "0.1"),
                                                            settings, o::none);
-    std.mcp::client trusted = std.mcp::client::over_http(address.as_str(),
+    std.mcp::client trusted = std.mcp::client::over_http(address,
                                                          std.mcp::implementation::create("trusted", "0.1"),
                                                          settings, o::none);
     trusted.set_token("good");
@@ -1087,7 +1087,7 @@ async void protects_the_http_endpoint() throws std.error::fault, std.test::failu
     u16 port = endpoint.port;
     std.string::string address = f"http://127.0.0.1:{port}/mcp";
     std.mcp::server<app> built = build_server();
-    std.mcp::protection guard = std.mcp::protection::create(address.as_str(), "https://auth.example");
+    std.mcp::protection guard = std.mcp::protection::create(address, "https://auth.example");
     guard.scope("tools");
     built.protect(move guard, check_token);
     arc std.mcp::server<app> host = new arc std.mcp::server<app>(move built);
@@ -1097,7 +1097,7 @@ async void protects_the_http_endpoint() throws std.error::fault, std.test::failu
     std.http::limits bounds = {};
     task_scope(2) group {
         auto serving = std.http::serve(move listener, service_settings, move stop, std.arc::clone(&host), move routes, bounds);
-        auto driver = guarded_clients(endpoint, std.string::from_str(address.as_str()), move stopper);
+        auto driver = guarded_clients(endpoint, std.string::from_str(address), move stopper);
         u32 checked = await move driver;
         std.service::report account = await move serving;
         std.test::equal(checked, 1u32);
@@ -1111,8 +1111,8 @@ async void protects_the_http_endpoint() throws std.error::fault, std.test::failu
 void derives_the_schema_of_results() throws std.test::failure, std.json::error, std.alloc::alloc_error {
     std.json::value schema = std.json::schema::<std.mcp::tool_result>();
     std.string::string text = std.json::stringify(&schema);
-    std.test::check(std.text::contains(text.as_str(), "\"$defs\":{\"std.mcp__content\":{\"oneOf\""), text.as_str());
-    std.test::check(std.text::contains(text.as_str(), "\"items\":{\"$ref\":\"#/$defs/std.mcp__content\"}"), text.as_str());
+    std.test::check(std.text::contains(text, "\"$defs\":{\"std.mcp__content\":{\"oneOf\""), text);
+    std.test::check(std.text::contains(text, "\"items\":{\"$ref\":\"#/$defs/std.mcp__content\"}"), text);
 }
 
 /* ---- Tasks (R-SLIB-MCP-0021..0024) ---- */
@@ -1185,7 +1185,7 @@ protected async std.json::value task_call(const std.net::tcp_stream* peer, std.b
     throws std.error::fault, std.test::failure, std.json::error {
     std.string::string line = task_line(id, method, params);
     task_scope(1) io {
-        await send_text(peer, line.as_str());
+        await send_text(peer, line);
         return await receive(replies);
     }
 }
@@ -1200,12 +1200,12 @@ protected async std.json::value polled(const std.net::tcp_stream* peer, std.bufi
     for (u32 round = 0u32; round < 100u32; round += 1u32) {
         std.json::value state = std.json::null();
         task_scope(1) io {
-            std.json::value got = await task_call(peer, replies, "90", "tasks/get", params.as_str());
+            std.json::value got = await task_call(peer, replies, "90", "tasks/get", params);
             std.json::value old = core::replace(&state, move got);
             drop old;
         }
         std.string::string seen = path_text(&state, "result.status");
-        if (std.bytes::equal(seen.as_bytes(), wanted.as_bytes()) == true) { return move state; }
+        if (std.bytes::equal(seen, wanted) == true) { return move state; }
         drop state;
         await std.time::sleep_for(std.time::duration_from_parts(0i64, 20000000u32));
     }
@@ -1255,7 +1255,7 @@ protected async void runs_a_task(const std.net::tcp_stream* peer, std.bufio::rea
         expect(&created, "result.ttlMs", "3600000");
         expect(&created, "result.pollIntervalMs", "20");
         std.string::string stamp = path_text(&created, "result.createdAt");
-        std.test::check(std.text::ends_with(stamp.as_str(), "Z\""), stamp.as_str());
+        std.test::check(std.text::ends_with(stamp, "Z\""), stamp);
         std.string::string found = path_text(&created, "result.taskId");
         std.string::string old = core::replace(&id, move found);
         drop old;
@@ -1264,16 +1264,16 @@ protected async void runs_a_task(const std.net::tcp_stream* peer, std.bufio::rea
     std.string::string bad = f"\"taskId\":{id},\"inputResponses\":[]";
     std.string::string good = f"\"taskId\":{id},\"inputResponses\":{{\"1.proceed\":{{\"action\":\"accept\",\"content\":{{\"ok\":true}}}}}}";
     task_scope(1) io {
-        std.json::value asking = await polled(peer, replies, id.as_str(), "input_required");
+        std.json::value asking = await polled(peer, replies, id, "input_required");
         expect(&asking, "result.resultType", "\"complete\"");
         expect(&asking, "result.statusMessage", "\"halfway\"");
         std.string::string requests = path_text(&asking, "result.inputRequests");
-        std.test::check(std.text::starts_with(requests.as_str(), "{\"1.proceed\":{\"method\":\"elicitation/create\""), requests.as_str());
-        std.json::value refused = await task_call(peer, replies, "88", "tasks/update", bad.as_str());
+        std.test::check(std.text::starts_with(requests, "{\"1.proceed\":{\"method\":\"elicitation/create\""), requests);
+        std.json::value refused = await task_call(peer, replies, "88", "tasks/update", bad);
         expect(&refused, "error.code", "-32602");
-        std.json::value taken = await task_call(peer, replies, "89", "tasks/update", good.as_str());
+        std.json::value taken = await task_call(peer, replies, "89", "tasks/update", good);
         expect(&taken, "result.resultType", "\"complete\"");
-        std.json::value done = await polled(peer, replies, id.as_str(), "completed");
+        std.json::value done = await polled(peer, replies, id, "completed");
         expect(&done, "result.result.content.0.text", "\"tallied\"");
         expect(&done, "result.inputRequests", "<missing>");
     }
@@ -1423,17 +1423,17 @@ protected async void client_watches_a_task(const std.mcp::client* link)
     std.test::equal(std.string::len(&id), 36usize);
     std.mcp::interests wanted = std.mcp::interests::create();
     try {
-        wanted.tasks.push(std.string::from_str(id.as_str()));
+        wanted.tasks.push(std.string::from_str(id));
     } catch (std.array::push_error<std.string::string> rejected) {
         (move rejected) as void;
     }
     std.mcp::answer yes = {.action = std.mcp::answer_action::accept, .content = o::some(std.json::parse("{\"ok\":true}"))};
     o<std.mcp::subscription> opened = o::none;
     task_scope(1) io {
-        std.mcp::task_state asking = await input_state(link, id.as_str());
-        std.test::equal_text(asking.message.as_str(), "halfway");
+        std.mcp::task_state asking = await input_state(link, id);
+        std.test::equal_text(asking.message, "halfway");
         std.test::equal(len(asking.keys), 1usize);
-        std.test::equal_text(asking.keys[0usize].as_str(), "1.proceed");
+        std.test::equal_text(asking.keys[0usize], "1.proceed");
         std.mcp::subscription got = await link->listen(&wanted);
         o<std.mcp::subscription> old = core::replace(&opened, o::some(move got));
         drop old;
@@ -1442,9 +1442,9 @@ protected async void client_watches_a_task(const std.mcp::client* link)
     case variant o::some(move watched):
         std.test::equal(len(watched.granted.tasks), 1usize);
         task_scope(1) io {
-            await link->answer_task(id.as_str(), "1.proceed", &yes);
+            await link->answer_task(id, "1.proceed", &yes);
             std.string::string text = await completion_of(&watched);
-            std.test::equal_text(text.as_str(), "tallied");
+            std.test::equal_text(text, "tallied");
             await link->unlisten(move watched);
         }
     case variant o::none: std.test::fail("no subscription");
@@ -1464,9 +1464,9 @@ protected async void client_cancels_a_task(const std.mcp::client* link)
         drop old;
     }
     task_scope(1) io {
-        await link->cancel_task(id.as_str());
+        await link->cancel_task(id);
         try {
-            std.mcp::tool_result ended = await link->finish_task(id.as_str(), &answers);
+            std.mcp::tool_result ended = await link->finish_task(id, &answers);
             drop ended;
             std.test::fail("a cancelled task");
         } catch (std.mcp::mcp_error rejected) {
@@ -1528,7 +1528,7 @@ async void the_client_follows_tasks_over_http() throws std.error::fault, std.tes
     u16 port = endpoint.port;
     std.string::string address = f"http://127.0.0.1:{port}/mcp";
     std.mcp::client_options settings = {.tasks = true};
-    std.mcp::client link = std.mcp::client::over_http(address.as_str(), std.mcp::implementation::create("test-client", "0.1"),
+    std.mcp::client link = std.mcp::client::over_http(address, std.mcp::implementation::create("test-client", "0.1"),
                                                       settings, o::none);
     task_scope(3) group {
         auto runner = std.mcp::run_tasks(std.arc::clone(&host), move task_stop);

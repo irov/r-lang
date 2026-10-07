@@ -46,7 +46,7 @@ protected std.string::string listing(const std.sorted::set<i32>* source)
     for (const i32* key in &keys) {
         i32 value = *key;
         std.string::string piece = f"{value} ";
-        text.append(piece.as_str());
+        text.append(piece);
     }
     return move text;
 }
@@ -83,7 +83,7 @@ void set_keeps_keys_sorted_and_unique() throws std.test::failure, std.alloc::all
     std.test::check(insert(&keys, 9) == false, "9 is already present");
     std.test::equal(keys.count(), 5usize);
     std.string::string text = listing(&keys);
-    std.test::equal_text(text.as_str(), "-2 1 3 5 9 ");
+    std.test::equal_text(text, "-2 1 3 5 9 ");
     i32 three = 3;
     i32 four = 4;
     std.test::check(keys.contains(&three), "contains 3");
@@ -124,11 +124,11 @@ void set_removes_keys() throws std.test::failure, std.alloc::alloc_error {
     std.test::check(keys.remove(&two), "the first key is removed");
     std.test::check(keys.remove(&ten), "the last key is removed");
     std.string::string text = listing(&keys);
-    std.test::equal_text(text.as_str(), "4 8 ");
+    std.test::equal_text(text, "4 8 ");
     std.test::check(keys.contains(&six) == false, "6 is no longer contained");
     std.test::check(insert(&keys, 6), "6 can be inserted again");
     std.string::string again = listing(&keys);
-    std.test::equal_text(again.as_str(), "4 6 8 ");
+    std.test::equal_text(again, "4 6 8 ");
     std.sorted::set<i32> empty = std.sorted::set<i32>::create();
     std.test::check(empty.remove(&six) == false, "an empty set removes nothing");
 }

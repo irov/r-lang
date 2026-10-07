@@ -320,7 +320,7 @@ protected void encode_scalar(bytes* out, const value* item) throws std.alloc::al
         head(out, 2u8, len(*data) as u64);
         std.bytes::append(out, std.array::as_slice(data));
     case variant value::text(data):
-        const u8[] raw_bytes = std.string::as_bytes(data);
+        const u8[] raw_bytes = *data;
         head(out, 3u8, len(raw_bytes) as u64);
         std.bytes::append(out, raw_bytes);
     case variant value::simple(number): append_simple(out, *number);
@@ -1098,7 +1098,7 @@ protected std.string::string negative_text(u64 number) throws std.alloc::alloc_e
 protected void append_quoted(std.string::string* out, const std.string::string* text)
     throws std.alloc::alloc_error {
     std.string::push_scalar(out, '"');
-    const u8[] raw_bytes = std.string::as_bytes(text);
+    const u8[] raw_bytes = *text;
     usize run = 0usize;
     for (usize index = 0usize; index <= len(raw_bytes); index += 1usize) {
         bool special = index == len(raw_bytes);
@@ -1143,12 +1143,12 @@ protected void append_float_text(std.string::string* out, f64 number) throws std
         return;
     }
     std.string::string text = f"{number}";
-    const u8[] raw_bytes = std.string::as_bytes(&text);
+    const u8[] raw_bytes = text;
     bool marked = false;
     for (usize index = 0usize; index < len(raw_bytes); index += 1usize) {
         if (raw_bytes[index] == 46u8 || raw_bytes[index] == 101u8) { marked = true; }
     }
-    std.string::append_str(out, text.as_str());
+    std.string::append_str(out, text);
     if (marked == false) { std.string::append_str(out, ".0"); }
 }
 
@@ -1158,10 +1158,10 @@ protected void show_scalar(std.string::string* out, const value* item) throws st
     case variant value::unsigned(number):
         const u64 shown = *number;
         std.string::string text = f"{shown}";
-        std.string::append_str(out, text.as_str());
+        std.string::append_str(out, text);
     case variant value::negative(number):
         std.string::string text = negative_text(*number);
-        std.string::append_str(out, text.as_str());
+        std.string::append_str(out, text);
     case variant value::bytes(data):
         std.string::append_str(out, "h'");
         const u8[] raw_bytes = std.array::as_slice(data);
@@ -1174,7 +1174,7 @@ protected void show_scalar(std.string::string* out, const value* item) throws st
     case variant value::simple(number):
         const u8 shown = *number;
         std.string::string text = f"simple({shown})";
-        std.string::append_str(out, text.as_str());
+        std.string::append_str(out, text);
     case variant value::boolean(truth):
         if (*truth == true) {
             std.string::append_str(out, "true");
@@ -1243,7 +1243,7 @@ protected std.string::string show_tree(const value* item)
             case variant value::tagged(tagged):
                 const u64 tag = tagged->tag;
                 std.string::string text = f"{tag}(";
-                std.string::append_str(&out, text.as_str());
+                std.string::append_str(&out, text);
                 push_job_only(&jobs, SHOW_CLOSE_TAG);
                 pending.push(current);
                 push_job_only(&jobs, SHOW_ITEM);

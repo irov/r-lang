@@ -14,7 +14,7 @@ struct Named {
 };
 
 protected bool same(const std.string::string* text, const std.string::string* expected) {
-    return std.bytes::equal(text->as_bytes(), expected->as_bytes());
+    return std.bytes::equal(*text, *expected);
 }
 
 /* A suspension between building the schema and reading it. */

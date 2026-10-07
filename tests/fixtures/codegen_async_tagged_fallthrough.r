@@ -25,7 +25,7 @@ protected async i32 classify(i32 which) throws std.alloc::alloc_error {
         score += 100;
         break;
     case variant Shape::Label(text):
-        str label = std.string::as_str(text);
+        str label = *text;
         score += len(label) as i32;
         break;
     }

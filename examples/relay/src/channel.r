@@ -24,7 +24,7 @@ async u32 serve(std.net::tcp_connection connection) throws std.error::fault {
         while (await lines.read_line(&line) == true) {
             usize length = std.string::len(&line);
             std.string::string reply = f"{length} {line}";
-            task_scope(1) write { await send_line(&lines.source, reply.as_bytes()); }
+            task_scope(1) write { await send_line(&lines.source, reply); }
             served += 1u32;
         }
         await lines.source.shutdown();
@@ -54,7 +54,7 @@ async std.string::string echo_words(array<std.string::string> words) throws std.
         auto server = serve(move connection);
         task_scope(1) io {
             for (usize index = 0usize; index < len(words); index += 1usize) {
-                await send_line(&link, words[index].as_bytes());
+                await send_line(&link, words[index]);
             }
             await link->shutdown();
         }
@@ -109,7 +109,7 @@ async std.string::string pipe_words(array<std.string::string> words) throws std.
                     new std.stream::duplex<std.io::input, std.io::output>(move pipes);
                 task_scope(1) io {
                     for (usize index = 0usize; index < len(words); index += 1usize) {
-                        await send_line(&link, words[index].as_bytes());
+                        await send_line(&link, words[index]);
                     }
                     await link->flush();
                 }

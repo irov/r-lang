@@ -58,7 +58,7 @@ protected std.string::string draws(u64 seed) throws std.alloc::alloc_error {
     for (usize index = 0usize; index < 8usize; index += 1usize) {
         i32 card = cards[index];
         std.string::string item = f" {card}";
-        std.string::append_str(&out, item.as_str());
+        std.string::append_str(&out, item);
     }
     return move out;
 }
@@ -71,10 +71,10 @@ async i32 main(const str[] arguments) {
             if (same(mode, "generator") == true) {
                 u64 seed = std.convert::parse_u64(arguments[at + 1usize], 10u32);
                 std.string::string line = draws(seed);
-                std.string::append_str(&out, line.as_str());
+                std.string::append_str(&out, line);
             } else {
                 std.string::string line = digest(mode, arguments[at + 1usize], arguments[at + 2usize]);
-                std.string::append_str(&out, line.as_str());
+                std.string::append_str(&out, line);
             }
             std.string::append_str(&out, "\n");
         }

@@ -91,7 +91,7 @@ void config::define(config* this, str key, str default_value, str help)
     usize index = len(this->entries);
     throw (valid_key(key) == false) config_error {.code = error_code::invalid_key, .index = index};
     for (const entry* existing in &this->entries) {
-        throw (same(existing->key.as_str(), key) == true)
+        throw (same(existing->key, key) == true)
             config_error {.code = error_code::duplicate_key, .index = index};
     }
     append(&this->entries, entry {.key = std.string::from_str(key),
@@ -102,7 +102,7 @@ void config::define(config* this, str key, str default_value, str help)
 
 protected o<usize> config::find(const config* this, const u8[] key) {
     for (usize index = 0usize; index < len(this->entries); index += 1usize) {
-        if (same(this->entries[index].key.as_str(), key) == true) { return o::some(index); }
+        if (same(this->entries[index].key, key) == true) { return o::some(index); }
     }
     return o::none;
 }
@@ -143,15 +143,15 @@ protected void config::apply_json(config* this, std.json::value root)
                 append(&names, std.string::from_str(std.json::key_at(&item.node, index)));
             }
             for (const std.string::string* name in &names) {
-                std.string::string key = std.string::from_str(item.prefix.as_str());
+                std.string::string key = std.string::from_str(item.prefix);
                 if (std.string::len(&key) != 0usize) { key.append("."); }
-                key.append(name->as_str());
-                std.json::value member = std.json::take_field(&item.node, name->as_str());
+                key.append(*name);
+                std.json::value member = std.json::take_field(&item.node, *name);
                 std.json::value_kind kind = std.json::kind(&member);
                 if (kind == std.json::value_kind::object) {
                     append(&work, pending {.node = move member, .prefix = move key});
                 } else {
-                    this->collect(&updates, key.as_str(), &member);
+                    this->collect(&updates, key, &member);
                     drop member;
                     drop key;
                 }
@@ -211,15 +211,15 @@ async void config::load_file(config* this, const std.fs::path* path)
    `_`. */
 protected std.string::string variable_name(str prefix, str key) throws std.alloc::alloc_error {
     std.string::string upper = std.text::ascii_uppercase(key);
-    std.string::string joined = std.text::replace(upper.as_str(), ".", "_");
+    std.string::string joined = std.text::replace(upper, ".", "_");
     return f"{prefix}_{joined}";
 }
 
 /* R-SLIB-CONFIG-0002: the variables `PREFIX_KEY` of the declared keys that are set. */
 void config::load_environment(config* this, str prefix) throws std.error::fault {
     for (usize index = 0usize; index < len(this->entries); index += 1usize) {
-        std.string::string name = variable_name(prefix, this->entries[index].key.as_str());
-        o<std.string::string> value = std.env::get(name.as_str());
+        std.string::string name = variable_name(prefix, this->entries[index].key);
+        o<std.string::string> value = std.env::get(name);
         switch (move value) {
         case variant o::some(move text):
             this->entries[index].value = move text;
@@ -235,7 +235,7 @@ void config::load_arguments(config* this, const std.args::matches* matches)
     throws std.alloc::alloc_error {
     for (usize index = 0usize; index < len(this->entries); index += 1usize) {
         try {
-            str key = this->entries[index].key.as_str();
+            str key = this->entries[index].key;
             if (matches->has(key) == true) {
                 o<std.string::string> value = matches->value(key);
                 switch (move value) {
@@ -253,7 +253,7 @@ void config::load_arguments(config* this, const std.args::matches* matches)
 /* R-SLIB-CONFIG-0003: the current text of a declared key. */
 str config::get(const config* this, str key) throws config_error {
     usize index = this->index_of(key);
-    return this->entries[index].value.as_str();
+    return this->entries[index].value;
 }
 
 /* R-SLIB-CONFIG-0003: where the current value of a declared key came from. */
@@ -266,7 +266,7 @@ source config::source_of(const config* this, str key) throws config_error {
 i64 config::get_i64(const config* this, str key) throws config_error {
     usize index = this->index_of(key);
     try {
-        return std.convert::parse_i64(this->entries[index].value.as_str(), 10u32);
+        return std.convert::parse_i64(this->entries[index].value, 10u32);
     } catch (std.convert::parse_error failure) {
         failure as void;
     }
@@ -276,7 +276,7 @@ i64 config::get_i64(const config* this, str key) throws config_error {
 u64 config::get_u64(const config* this, str key) throws config_error {
     usize index = this->index_of(key);
     try {
-        return std.convert::parse_u64(this->entries[index].value.as_str(), 10u32);
+        return std.convert::parse_u64(this->entries[index].value, 10u32);
     } catch (std.convert::parse_error failure) {
         failure as void;
     }
@@ -286,7 +286,7 @@ u64 config::get_u64(const config* this, str key) throws config_error {
 /* R-SLIB-CONFIG-0003: `true` or `false`, anything else invalid_value. */
 bool config::get_bool(const config* this, str key) throws config_error {
     usize index = this->index_of(key);
-    str text = this->entries[index].value.as_str();
+    str text = this->entries[index].value;
     if (same(text, "true") == true) { return true; }
     throw (same(text, "false") == false)
         config_error {.code = error_code::invalid_value, .index = index};
@@ -305,12 +305,12 @@ std.string::string config::describe(const config* this) throws std.alloc::alloc_
     std.string::string text = std.string::create();
     for (const entry* item in &this->entries) {
         str origin = core::enum_name(item->origin);
-        if (sensitive(item->key.as_str()) == true) {
+        if (sensitive(item->key) == true) {
             std.string::string line = f"{item->key}=*** ({origin})\n";
-            text.append(line.as_str());
+            text.append(line);
         } else {
             std.string::string line = f"{item->key}={item->value} ({origin})\n";
-            text.append(line.as_str());
+            text.append(line);
         }
     }
     return move text;
@@ -392,7 +392,7 @@ protected std.json::value scalar_value(const std.json::value* described, str nam
         }
         if (text_member_is(described, "type", "boolean") == true) {
             std.string::string lower = std.text::ascii_lowercase(std.text::trim(text));
-            str word = lower.as_str();
+            str word = lower;
             switch (word) {
             case "true": return std.json::from_bool(true);
             case "1": return std.json::from_bool(true);
@@ -407,9 +407,9 @@ protected std.json::value scalar_value(const std.json::value* described, str nam
         }
         if (text_member_is(described, "type", "integer") == true) {
             std.string::string digits = trimmed(text);
-            const u8[] digit_bytes = digits.as_bytes();
+            const u8[] digit_bytes = digits;
             if (len(digit_bytes) > 0usize && digit_bytes[0usize] == 45u8) {
-                i64 parsed = std.convert::parse_i64(digits.as_str(), 10u32);
+                i64 parsed = std.convert::parse_i64(digits, 10u32);
                 switch (schema_member(described, "minimum")) {
                 case variant o::some(minimum):
                     i64 least = std.convert::parse_i64(std.json::text(*minimum), 10u32);
@@ -417,7 +417,7 @@ protected std.json::value scalar_value(const std.json::value* described, str nam
                 case variant o::none: parsed as void;
                 }
             } else {
-                u64 parsed = std.convert::parse_u64(digits.as_str(), 10u32);
+                u64 parsed = std.convert::parse_u64(digits, 10u32);
                 switch (schema_member(described, "maximum")) {
                 case variant o::some(maximum):
                     u64 most = std.convert::parse_u64(std.json::text(*maximum), 10u32);
@@ -425,12 +425,12 @@ protected std.json::value scalar_value(const std.json::value* described, str nam
                 case variant o::none: parsed as void;
                 }
             }
-            std.json::number number = std.json::parse_number(digits.as_bytes());
+            std.json::number number = std.json::parse_number(digits);
             return std.json::from_number(&number);
         }
         if (text_member_is(described, "type", "number") == true) {
             std.string::string digits = trimmed(text);
-            std.json::number number = std.json::parse_number(digits.as_bytes());
+            std.json::number number = std.json::parse_number(digits);
             return std.json::from_number(&number);
         }
         const u8[] json_text = text;
@@ -456,7 +456,7 @@ protected std.json::value converted(const std.json::value* property, str name, s
     try {
         std.json::value items = std.json::array();
         std.string::string whole = trimmed(text);
-        const u8[] all = whole.as_bytes();
+        const u8[] all = whole;
         if (len(all) == 0usize) { return move items; }
         switch (schema_member(described, "items")) {
         case variant o::some(item_schema):
@@ -465,7 +465,7 @@ protected std.json::value converted(const std.json::value* property, str name, s
                 if (index == len(all) || all[index] == 44u8) {
                     str piece = core::validate_utf8(all[start..index]);
                     std.string::string item = trimmed(piece);
-                    std.json::append(&items, scalar_value(*item_schema, name, item.as_str()));
+                    std.json::append(&items, scalar_value(*item_schema, name, item));
                     start = index + 1usize;
                 }
             }
@@ -507,7 +507,7 @@ protected void place(std.json::value* document, const std.json::value* described
     try {
         switch (move text) {
         case variant o::some(move value):
-            std.json::insert(document, key_bytes, converted(property, name, value.as_str()));
+            std.json::insert(document, key_bytes, converted(property, name, value));
         case variant o::none:
             if (nullable(property) == true) {
                 std.json::insert(document, key_bytes, std.json::null());
@@ -559,7 +559,7 @@ protected std.json::value empty_object() throws field_error, std.alloc::alloc_er
 protected T read_document(std.json::value document) throws field_error, std.alloc::alloc_error {
     try {
         std.string::string text = std.json::stringify(&document);
-        T result = std.json::unmarshal(text.as_bytes());
+        T result = std.json::unmarshal(text);
         return move result;
     } catch (std.json::error rejected) {
         (move rejected) as void;
@@ -589,7 +589,7 @@ T from_environment(str prefix) throws field_error, std.alloc::alloc_error {
             switch (std.json::get(*properties, index)) {
             case variant o::some(property):
                 std.string::string name = environment_name(prefix, key);
-                place(&document, &described, key, *property, name.as_str(), environment_value(name.as_str()));
+                place(&document, &described, key, *property, name, environment_value(name));
             case variant o::none: key as void;
             }
         }
@@ -613,7 +613,7 @@ T config::decode(const config* this) throws field_error, std.alloc::alloc_error 
                 o<std.string::string> value = o::none;
                 switch (this->find(key_bytes)) {
                 case variant o::some(at):
-                    value = o::some(std.string::from_str(this->entries[*at].value.as_str()));
+                    value = o::some(std.string::from_str(this->entries[*at].value));
                 case variant o::none: break;
                 }
                 place(&document, &described, key, *property, key, move value);

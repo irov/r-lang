@@ -75,7 +75,7 @@ std.string::string name_of(i32 n) throws std.alloc::alloc_error {
 i32 computed(i32 n) throws std.alloc::alloc_error {
     std.string::string text = name_of(n);
     i32 code = 0;
-    switch (text.as_str()) {
+    switch (text) {
     case "one": code = 1;
     default: code = 9;
     }

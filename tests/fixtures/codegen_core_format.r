@@ -7,7 +7,7 @@ module test.codegen.core_format;
    core::Format with nominal and standard members, borrowed and owned. */
 
 protected bool matches(const std.string::string* source, const u8[] expected) {
-    const u8[] actual = std.string::as_bytes(source);
+    const u8[] actual = *source;
     usize actual_length = len(actual);
     usize expected_length = len(expected);
     if (actual_length != expected_length) { return false; }
@@ -23,7 +23,7 @@ struct Point { i32 x; i32 y; };
 impl core::Format for Point {
     void format(const Point* this, std.format::builder* out) throws std.alloc::alloc_error {
         std.string::string text = f"({this->x}, {this->y})";
-        std.format::append_str(out, text.as_str());
+        std.format::append_str(out, text);
     }
 };
 
@@ -45,11 +45,11 @@ impl core::Format for Shape {
         switch (*this) {
             case variant Shape::circle(r): {
                 std.string::string t = f"circle {r}";
-                std.format::append_str(out, t.as_str());
+                std.format::append_str(out, t);
             }
             case variant Shape::square(s): {
                 std.string::string t = f"square {s}";
-                std.format::append_str(out, t.as_str());
+                std.format::append_str(out, t);
             }
             case variant Shape::empty: { std.format::append_str(out, "empty"); }
         }

@@ -29,7 +29,7 @@ protected std.string::string listed(const array<std.regex::span>* spans)
     std.string::string text = std.string::create();
     for (const std.regex::span* found in spans) {
         std.string::string item = f"[{found->start},{found->end})";
-        text.append(item.as_str());
+        text.append(item);
     }
     return move text;
 }
@@ -40,7 +40,7 @@ protected std.string::string bracketed(const array<std.string::string>* pieces)
     std.string::string text = std.string::create();
     for (const std.string::string* piece in pieces) {
         text.append("[");
-        text.append(piece->as_str());
+        text.append(*piece);
         text.append("]");
     }
     return move text;
@@ -58,10 +58,10 @@ protected void expect_compile_error(str pattern, std.regex::error_code code, usi
         std.regex::regex compiled = std.regex::compile(pattern);
         drop compiled;
         std.string::string message = f"{pattern} compiled";
-        std.test::fail(message.as_str());
+        std.test::fail(message);
     } catch (std.regex::error failure) {
         std.string::string message = f"the error code of {pattern}";
-        std.test::check(failure.code == code, message.as_str());
+        std.test::check(failure.code == code, message);
         std.test::equal(failure.offset, offset);
     }
 }
@@ -100,17 +100,17 @@ void finds_all_matches_in_order()
     std.regex::regex digits = std.regex::compile("\\d+");
     array<std.regex::span> numbers = std.regex::find_all(&digits, "a1b22c333");
     std.string::string numbers_text = listed(&numbers);
-    std.test::equal_text(numbers_text.as_str(), "[1,2)[3,5)[6,9)");
+    std.test::equal_text(numbers_text, "[1,2)[3,5)[6,9)");
     // After an empty match the search advances one scalar; the empty match at the end counts.
     std.regex::regex empty = std.regex::compile("");
     array<std.regex::span> positions = std.regex::find_all(&empty, "é🙂");
     std.string::string positions_text = listed(&positions);
-    std.test::equal_text(positions_text.as_str(), "[0,0)[2,2)[6,6)");
+    std.test::equal_text(positions_text, "[0,0)[2,2)[6,6)");
     // Empty matches next to a nonempty match are included.
     std.regex::regex stars = std.regex::compile("a*");
     array<std.regex::span> runs = std.regex::find_all(&stars, "baab");
     std.string::string runs_text = listed(&runs);
-    std.test::equal_text(runs_text.as_str(), "[0,0)[1,3)[3,3)[4,4)");
+    std.test::equal_text(runs_text, "[0,0)[1,3)[3,3)[4,4)");
     array<std.regex::span> nothing = std.regex::find_all(&digits, "none");
     std.test::equal(len(nothing), 0usize);
 }
@@ -120,26 +120,26 @@ void replaces_splits_and_escapes_text()
     throws std.test::failure, std.alloc::alloc_error, std.regex::error {
     std.regex::regex number = std.regex::compile("[0-9]+");
     std.string::string redacted = std.regex::replace_all(&number, "item=42 count=7", "#");
-    std.test::equal_text(redacted.as_str(), "item=# count=#");
+    std.test::equal_text(redacted, "item=# count=#");
     // The replacement is literal text: no dollar or backslash substitution.
     std.string::string literal = std.regex::replace_all(&number, "a1é2", "$0\\1");
-    std.test::equal_text(literal.as_str(), "a$0\\1é$0\\1");
+    std.test::equal_text(literal, "a$0\\1é$0\\1");
     std.regex::regex separator = std.regex::compile("[,;]\\s*");
     array<std.string::string> fields = std.regex::split(&separator, "one, two;three");
     std.string::string fields_text = bracketed(&fields);
-    std.test::equal_text(fields_text.as_str(), "[one][two][three]");
+    std.test::equal_text(fields_text, "[one][two][three]");
     // Leading, trailing and adjacent empty pieces stay; no match leaves the whole text.
     std.regex::regex comma = std.regex::compile(",");
     array<std.string::string> pieces = std.regex::split(&comma, ",a,,b,");
     std.string::string pieces_text = bracketed(&pieces);
-    std.test::equal_text(pieces_text.as_str(), "[][a][][b][]");
+    std.test::equal_text(pieces_text, "[][a][][b][]");
     array<std.string::string> whole = std.regex::split(&comma, "abc");
     std.string::string whole_text = bracketed(&whole);
-    std.test::equal_text(whole_text.as_str(), "[abc]");
+    std.test::equal_text(whole_text, "[abc]");
     // An escaped text compiles to a pattern that matches exactly that text.
     std.string::string escaped = std.regex::escape_literal("a+b[0].(x)?é");
-    std.test::equal_text(escaped.as_str(), "a\\+b\\[0\\]\\.\\(x\\)\\?é");
-    std.regex::regex exact = std.regex::compile(escaped.as_str());
+    std.test::equal_text(escaped, "a\\+b\\[0\\]\\.\\(x\\)\\?é");
+    std.regex::regex exact = std.regex::compile(escaped);
     std.test::check(std.regex::full_match(&exact, "a+b[0].(x)?é") == true,
                     "the escaped pattern matches its text");
     std.test::check(std.regex::is_match(&exact, "aab0x") == false,
@@ -268,7 +268,7 @@ void compiles_and_rewrites_under_allocation_failures()
     std.regex::regex separator = std.regex::compile("[,;] *");
     array<std.string::string> fields = std.regex::split(&separator, "a, b;c");
     std.string::string fields_text = bracketed(&fields);
-    std.test::equal_text(fields_text.as_str(), "[a][b][c]");
+    std.test::equal_text(fields_text, "[a][b][c]");
     std.string::string joined = std.regex::replace_all(&separator, "a, b;c", "+");
-    std.test::equal_text(joined.as_str(), "a+b+c");
+    std.test::equal_text(joined, "a+b+c");
 }

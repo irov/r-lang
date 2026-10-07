@@ -78,7 +78,7 @@ protected raw const c_uint8*? bytes_of(const u8[] data) {
 /* Maps a range of the file at path, on the blocking call pool. */
 protected mapping map_entry(std.string::string path, u64 offset, usize length, bool writable)
     throws std.fs::fs_error {
-    const u8[] text = path.as_bytes();
+    const u8[] text = path;
     raw void*? base = null;
     c_size total = 0usize as c_size;
     raw c_uint8*? start = null;

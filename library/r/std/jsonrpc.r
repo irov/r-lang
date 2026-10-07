@@ -35,8 +35,8 @@ request_id request_id::from_text(str value) throws std.alloc::alloc_error {
 /* R-SLIB-JSONRPC-0002: the spelling of a number id or the text of a string id. */
 str request_id::spelling(const request_id* this) {
     switch (*this) {
-    case variant request_id::number(value): return value->as_str();
-    case variant request_id::text(value): return value->as_str();
+    case variant request_id::number(value): return *value;
+    case variant request_id::text(value): return *value;
     }
 }
 
@@ -55,8 +55,8 @@ bool request_id::is_text(const request_id* this) {
 /* R-SLIB-JSONRPC-0002: a copy of the id. */
 request_id request_id::copy(const request_id* this) throws std.alloc::alloc_error {
     switch (*this) {
-    case variant request_id::number(value): return request_id::number(std.string::from_str(value->as_str()));
-    case variant request_id::text(value): return request_id::text(std.string::from_str(value->as_str()));
+    case variant request_id::number(value): return request_id::number(std.string::from_str(*value));
+    case variant request_id::text(value): return request_id::text(std.string::from_str(*value));
     }
 }
 
@@ -64,9 +64,9 @@ request_id request_id::copy(const request_id* this) throws std.alloc::alloc_erro
 std.json::value request_id::to_json(const request_id* this) throws std.json::error, std.alloc::alloc_error {
     switch (*this) {
     case variant request_id::number(value):
-        std.json::number parsed = std.json::parse_number(value->as_bytes());
+        std.json::number parsed = std.json::parse_number(*value);
         return std.json::from_number(&parsed);
-    case variant request_id::text(value): return std.json::from_string(value->as_bytes());
+    case variant request_id::text(value): return std.json::from_string(*value);
     }
 }
 
@@ -117,13 +117,13 @@ error_response error_response::of(const rpc_error* problem) throws std.alloc::al
     case variant o::none: break;
     }
     return error_response {.id = move id, .code = problem->code,
-                           .message = std.string::from_str(problem->message.as_str()), .data = o::none};
+                           .message = std.string::from_str(problem->message), .data = o::none};
 }
 
 /* A copy of a JSON value. */
 protected std.json::value copy_value(const std.json::value* value) throws std.json::error, std.alloc::alloc_error {
     std.string::string text = std.json::stringify(value);
-    return std.json::parse(text.as_bytes());
+    return std.json::parse(text);
 }
 
 /* The member of an object that shall be a string, or none when it is absent or of another kind. */
@@ -324,13 +324,13 @@ std.string::string encode(const message* value) throws std.json::error, std.allo
     switch (*value) {
     case variant message::request(item):
         std.json::insert(&object, "id", item->id.to_json());
-        std.json::insert(&object, "method", std.json::from_string(item->method.as_bytes()));
+        std.json::insert(&object, "method", std.json::from_string(item->method));
         switch (item->params) {
         case variant o::some(params): std.json::insert(&object, "params", copy_value(params));
         case variant o::none: break;
         }
     case variant message::notification(item):
-        std.json::insert(&object, "method", std.json::from_string(item->method.as_bytes()));
+        std.json::insert(&object, "method", std.json::from_string(item->method));
         switch (item->params) {
         case variant o::some(params): std.json::insert(&object, "params", copy_value(params));
         case variant o::none: break;
@@ -345,9 +345,9 @@ std.string::string encode(const message* value) throws std.json::error, std.allo
         }
         std.json::value body = std.json::object();
         std.string::string code = f"{item->code}";
-        std.json::number number = std.json::parse_number(code.as_bytes());
+        std.json::number number = std.json::parse_number(code);
         std.json::insert(&body, "code", std.json::from_number(&number));
-        std.json::insert(&body, "message", std.json::from_string(item->message.as_bytes()));
+        std.json::insert(&body, "message", std.json::from_string(item->message));
         switch (item->data) {
         case variant o::some(data): std.json::insert(&body, "data", copy_value(data));
         case variant o::none: break;
@@ -386,7 +386,7 @@ async void write_message(const W* output, const message* value) throws std.json:
     std.string::string text = encode(value);
     std.string::append_str(&text, "\n");
     task_scope(1) io {
-        await output->write_all_from(text.as_bytes());
+        await output->write_all_from(text);
         await output->flush();
     }
 }

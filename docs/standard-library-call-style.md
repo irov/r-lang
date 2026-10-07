@@ -66,7 +66,7 @@ builder.append('\n');
 builder.append(total);          // A floating-point value.
 builder.append(quantity, 10u32); // An integer with an explicit radix.
 
-str view = builder.as_str();
+str view = builder;
 // Finish after the last use of the borrowed view.
 std.string::string text = (move builder).finish();
 ```
@@ -77,9 +77,10 @@ retain `std.alloc::alloc_error`; numeric appends retain
 `std.format::format_error`. Existing transactional updates, UTF-8 guarantees,
 allocation behavior, and runtime symbols remain unchanged.
 
-An owning string is not implicitly moved by a formatting operation. Keep the
-existing explicit borrowed-view conversion where needed; receiver convenience
-must not silently introduce a conversion for other arguments.
+An owning string is not implicitly moved by a formatting operation. A place of
+`std.string::string` or `std.format::builder` is viewed as `str` or `const u8[]`
+where one is expected (Core R-EXPR-0015), as `str view = builder;` above; receiver
+convenience must not silently introduce any other conversion for other arguments.
 
 ## Module-by-module migration
 

@@ -17,7 +17,7 @@ protected async i32 half(i32 value) { return value / 2; }
 
 protected async i32 fields(std.string::string line) throws std.async::start_error {
     i32 total = 0;
-    for (str field in std.text::split(line.as_str(), ",")) {
+    for (str field in std.text::split(line, ",")) {
         total += 1;
         if (same(std.text::trim(field), "") == true) { total += 100; }
     }
@@ -29,18 +29,18 @@ protected async i32 encoded(bytes data)
     throws std.alloc::alloc_error, std.convert::parse_error, std.async::start_error {
     std.string::string text = std.encoding::encode_base64(data.as_slice());
     i32 pause = await half(0);
-    bytes back = std.encoding::decode_base64(text.as_str());
+    bytes back = std.encoding::decode_base64(text);
     std.string::string hex = std.encoding::encode_hex(back.as_slice());
     i32 again = await half(0);
     i32 status = pause + again;
-    if (same(hex.as_str(), "010203") == false) { status += 1; }
+    if (same(hex, "010203") == false) { status += 1; }
     return status;
 }
 
 protected async i32 captured(std.string::string subject)
     throws std.regex::error, std.alloc::alloc_error, std.async::start_error {
     std.regex::regex pair = std.regex::compile("(\\w+)=(\\w+)");
-    o<array<o<std.regex::span>>> found = std.regex::captures(&pair, subject.as_str());
+    o<array<o<std.regex::span>>> found = std.regex::captures(&pair, subject);
     i32 status = await half(0);
     switch (found) {
     case variant o::some(groups):
@@ -77,7 +77,7 @@ protected async i32 cursor_and_string() throws std.bytes::bytes_error, std.alloc
     std.string::insert_str(&text, 1usize, "-");
     status += await half(0);
     std.string::replace_range(&text, 0usize, 1usize, "A");
-    if (same(text.as_str(), "A-b") == false) { status += 2; }
+    if (same(text, "A-b") == false) { status += 2; }
     return status;
 }
 

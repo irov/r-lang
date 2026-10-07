@@ -103,7 +103,7 @@ void shuffles_reproducibly() throws std.test::failure, std.alloc::alloc_error {
     other.shuffle(&words);
     std.string::string order = std.string::create();
     for (usize index = 0usize; index < 5usize; index += 1usize) { order.append(words[index]); }
-    std.test::equal_text(order.as_str(), "beacd");
+    std.test::equal_text(order, "beacd");
     // A shuffle from any generator keeps every item exactly once.
     u32[16] items = {};
     for (usize index = 0usize; index < 16usize; index += 1usize) { items[index] = index as u32; }

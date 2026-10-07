@@ -2169,7 +2169,6 @@
       ],
       "walkthroughs": [
         "c_callbacks",
-        "format",
         "generics",
         "json",
         "methods",

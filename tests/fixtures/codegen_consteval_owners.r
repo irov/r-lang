@@ -103,7 +103,7 @@ usize text_length(str first, str second) {
         std.string::string text = std.string::from_str(first);
         std.string::append_str(&text, second);
         std.string::push_scalar(&text, 'é');
-        str view = std.string::as_str(&text);
+        str view = text;
         usize size = len(view) * 10usize + std.string::len(&text);
         return size;
     } catch (std.alloc::alloc_error failure) {

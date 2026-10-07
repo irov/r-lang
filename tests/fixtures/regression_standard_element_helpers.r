@@ -32,7 +32,7 @@ i32 main() {
     }
     u32 checks = 0u32;
     if (len(names) == 2usize && len(values) == 3usize) { checks += 1u32; }
-    if (std.bytes::equal(names[1usize].as_bytes(), "second name") == true) { checks += 1u32; }
+    if (std.bytes::equal(names[1usize], "second name") == true) { checks += 1u32; }
     if (std.bytes::equal(std.json::text(&values[2usize]), "three") == true) { checks += 1u32; }
     if (std.bytes::equal(std.json::text(&values[0usize]), "one") == true) { checks += 1u32; }
     if (checks == 4u32) { return 0; }

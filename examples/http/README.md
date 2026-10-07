@@ -48,9 +48,9 @@ task_scope(1) begin {
 }
 for (usize index = 0usize; index < len(state->items); index += 1usize) {
     ...
-    std.string::string text = std.http::sse_event("price", event_id.as_str(), data.as_str());
+    std.string::string text = std.http::sse_event("price", event_id, data);
     task_scope(1) io {
-        bool sent = await writer.send_text(text.as_str());
+        bool sent = await writer.send_text(text);
         if (sent == false) { return; }
     }
 }

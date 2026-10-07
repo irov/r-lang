@@ -88,23 +88,23 @@ protected i32 check_pieces() {
 protected i32 check_owned() throws std.alloc::alloc_error {
     str[3] words = {"x", "", "z"};
     std.string::string joined = std.text::join(words, "--");
-    if (same(joined.as_str(), "x----z") == false) { return 40; }
+    if (same(joined, "x----z") == false) { return 40; }
     str[1] lone = {"only"};
     std.string::string single = std.text::join(lone, ",");
-    if (same(single.as_str(), "only") == false) { return 41; }
+    if (same(single, "only") == false) { return 41; }
     const str[] nothing = words[0usize..0usize];
     std.string::string blank = std.text::join(nothing, ",");
-    if (same(blank.as_str(), "") == false) { return 42; }
+    if (same(blank, "") == false) { return 42; }
     std.string::string replaced = std.text::replace("aaa", "aa", "b");
-    if (same(replaced.as_str(), "ba") == false) { return 43; }
+    if (same(replaced, "ba") == false) { return 43; }
     std.string::string kept = std.text::replace("abc", "", "-");
-    if (same(kept.as_str(), "abc") == false) { return 44; }
+    if (same(kept, "abc") == false) { return 44; }
     std.string::string grown = std.text::replace("é-é", "é", "ee");
-    if (same(grown.as_str(), "ee-ee") == false) { return 45; }
+    if (same(grown, "ee-ee") == false) { return 45; }
     std.string::string upper = std.text::ascii_uppercase("abc é z");
-    if (same(upper.as_str(), "ABC é Z") == false) { return 46; }
+    if (same(upper, "ABC é Z") == false) { return 46; }
     std.string::string lower = std.text::ascii_lowercase("ABC É Z");
-    if (same(lower.as_str(), "abc É z") == false) { return 47; }
+    if (same(lower, "abc É z") == false) { return 47; }
     return 0;
 }
 

@@ -55,7 +55,7 @@ protected async Service discover(std.net::socket_address name_server)
         for (usize index = 0usize; index < len(texts); index += 1usize) {
             std.string::string line = texts[index].text();
             if (std.text::starts_with(line, "path=") == true) {
-                const u8[] bytes_of = line.as_bytes();
+                const u8[] bytes_of = line;
                 std.string::string path = std.string::create();
                 std.string::append_utf8(&path, bytes_of[5usize..len(bytes_of)]);
                 std.string::string old = core::replace(&found.path, move path);
@@ -224,7 +224,7 @@ protected async i32 accept(std.string::string key) throws std.error::fault {
 
 /* Prints an unmasked final text frame of the text in hexadecimal. */
 protected async i32 frame(std.string::string text) throws std.error::fault {
-    bytes encoded = std.websocket::encode_frame(1u8, true, text.as_bytes(), false);
+    bytes encoded = std.websocket::encode_frame(1u8, true, text, false);
     await std.console::println(std.encoding::encode_hex(encoded.as_slice()));
     return 0;
 }

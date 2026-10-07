@@ -33,7 +33,7 @@ protected async void echo_messages(const std.websocket::websocket* socket) throw
                 case std.websocket::message_kind::text:
                     std.string::string reply = std.string::from_str("echo: ");
                     std.string::append_str(&reply, item.text());
-                    task_scope(1) io { await socket->send_text(reply.as_str()); }
+                    task_scope(1) io { await socket->send_text(reply); }
                 case std.websocket::message_kind::binary:
                     task_scope(1) io { await socket->send_binary(item.data.as_slice()); }
                 case std.websocket::message_kind::close: return;
@@ -134,7 +134,7 @@ protected async u32 talk(std.net::socket_address endpoint, std.sync::sender<std.
     str probe_text = "are you there";
     const u8[] probe = probe_text;
     task_scope(1) connect {
-        std.websocket::websocket opened = await open_client(&web, address.as_str(), "chat");
+        std.websocket::websocket opened = await open_client(&web, address, "chat");
         task_scope(1) io {
             await opened.send_text("hello");
             std.websocket::message first = await next_message(&opened);
@@ -169,7 +169,7 @@ protected async u32 talk(std.net::socket_address endpoint, std.sync::sender<std.
 @test
 void computes_the_accept_key() throws std.test::failure, std.alloc::alloc_error {
     std.string::string value = std.websocket::accept_key("dGhlIHNhbXBsZSBub25jZQ==");
-    std.test::equal_text(value.as_str(), "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=");
+    std.test::equal_text(value, "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=");
 }
 
 @test
@@ -224,7 +224,7 @@ protected async u32 send_many(const std.websocket::websocket* socket, u32 count)
     throws std.error::fault, std.websocket::websocket_error {
     for (u32 index = 0u32; index < count; index += 1u32) {
         std.string::string text = f"message {index}";
-        task_scope(1) io { await socket->send_text(text.as_str()); }
+        task_scope(1) io { await socket->send_text(text); }
     }
     return count;
 }
@@ -238,7 +238,7 @@ protected async u32 receive_many(const std.websocket::websocket* socket, u32 cou
         std.string::string expected = f"echo: message {index}";
         task_scope(1) io {
             std.websocket::message item = await next_message(socket);
-            if (std.bytes::equal(item.data.as_slice(), expected.as_bytes()) == true) { matched += 1u32; }
+            if (std.bytes::equal(item.data.as_slice(), expected) == true) { matched += 1u32; }
         }
     }
     return matched;
@@ -295,8 +295,8 @@ protected async u32 raw_session(std.net::socket_address endpoint, bool unmasked)
             bool got = await input.read_line(&line);
             std.test::check(got, "the head of the answer");
             if (std.string::len(&line) == 0usize) { break; }
-            if (std.bytes::equal(line.as_bytes(), "HTTP/1.1 101 Switching Protocols") == true) { switched = true; }
-            if (std.bytes::equal(line.as_bytes(), "Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=") == true) {
+            if (std.bytes::equal(line, "HTTP/1.1 101 Switching Protocols") == true) { switched = true; }
+            if (std.bytes::equal(line, "Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=") == true) {
                 accepted = true;
             }
         }
@@ -341,7 +341,7 @@ protected async u32 protocol_checks(std.net::socket_address endpoint, std.sync::
     std.string::string address = chat_url(endpoint);
     u32 checked = 0u32;
     task_scope(1) connect {
-        std.websocket::websocket opened = await open_client(&web, address.as_str(), "chat");
+        std.websocket::websocket opened = await open_client(&web, address, "chat");
         task_scope(2) both {
             auto sender = send_many(&opened, 20u32);
             u32 matched = await receive_many(&opened, 20u32);
@@ -361,7 +361,7 @@ protected async u32 protocol_checks(std.net::socket_address endpoint, std.sync::
     }
     try {
         task_scope(1) refused {
-            std.websocket::websocket unexpected = await open_client(&web, address.as_str(), "");
+            std.websocket::websocket unexpected = await open_client(&web, address, "");
             drop unexpected;
         }
         std.test::fail("a handshake without the subprotocol is refused");

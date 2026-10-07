@@ -30,9 +30,9 @@ protected i32 check_vectors() throws std.alloc::alloc_error, std.convert::parse_
     str[7] unpadded = {"", "Zg", "Zm8", "Zm9v", "Zm9vYg", "Zm9vYmE", "Zm9vYmFy"};
     for (usize index = 0usize; index < 7usize; index += 1usize) {
         std.string::string standard = std.encoding::encode_base64(plain[index]);
-        if (same(standard.as_str(), padded[index]) == false) { return 1; }
+        if (same(standard, padded[index]) == false) { return 1; }
         std.string::string url = std.encoding::encode_base64_url(plain[index]);
-        if (same(url.as_str(), unpadded[index]) == false) { return 2; }
+        if (same(url, unpadded[index]) == false) { return 2; }
         bytes back = std.encoding::decode_base64(padded[index]);
         if (std.bytes::equal(back.as_slice(), plain[index]) == false) { return 3; }
         bytes loose = std.encoding::decode_base64_url(unpadded[index]);
@@ -42,15 +42,15 @@ protected i32 check_vectors() throws std.alloc::alloc_error, std.convert::parse_
     }
     u8[3] high = {251u8, 255u8, 190u8};
     std.string::string plus = std.encoding::encode_base64(high);
-    if (same(plus.as_str(), "+/++") == false) { return 6; }
+    if (same(plus, "+/++") == false) { return 6; }
     std.string::string dash = std.encoding::encode_base64_url(high);
-    if (same(dash.as_str(), "-_--") == false) { return 7; }
+    if (same(dash, "-_--") == false) { return 7; }
     std.string::string hex = std.encoding::encode_hex(high);
-    if (same(hex.as_str(), "fbffbe") == false) { return 8; }
+    if (same(hex, "fbffbe") == false) { return 8; }
     bytes unhex = std.encoding::decode_hex("FBffBe");
     if (std.bytes::equal(unhex.as_slice(), high) == false) { return 9; }
     std.string::string pct = std.encoding::percent_encode("a b/é~-._Z9");
-    if (same(pct.as_str(), "a%20b%2F%C3%A9~-._Z9") == false) { return 10; }
+    if (same(pct, "a%20b%2F%C3%A9~-._Z9") == false) { return 10; }
     bytes unpct = std.encoding::percent_decode("a%20b%2f%C3%a9~+");
     if (std.bytes::equal(unpct.as_slice(), "a b/é~+") == false) { return 11; }
     return 0;
@@ -84,13 +84,13 @@ protected i32 check_round_trip() throws std.alloc::alloc_error, std.convert::par
     for (usize length = 0usize; length <= 256usize; length += 37usize) {
         const u8[] part = every[0usize..length];
         std.string::string standard = std.encoding::encode_base64(part);
-        bytes back = std.encoding::decode_base64(standard.as_str());
+        bytes back = std.encoding::decode_base64(standard);
         if (std.bytes::equal(back.as_slice(), part) == false) { return 40; }
         std.string::string url = std.encoding::encode_base64_url(part);
-        bytes url_back = std.encoding::decode_base64_url(url.as_str());
+        bytes url_back = std.encoding::decode_base64_url(url);
         if (std.bytes::equal(url_back.as_slice(), part) == false) { return 41; }
         std.string::string hex = std.encoding::encode_hex(part);
-        bytes hex_back = std.encoding::decode_hex(hex.as_str());
+        bytes hex_back = std.encoding::decode_hex(hex);
         if (std.bytes::equal(hex_back.as_slice(), part) == false) { return 42; }
     }
     return 0;

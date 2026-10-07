@@ -113,53 +113,53 @@ protected std.string::string payload_hex(const std.cose::message* received) thro
 protected std.string::string run(const array<std.string::string>* arguments)
     throws std.alloc::alloc_error, std.crypto::crypto_error, std.cose::cose_error, std.cbor::cbor_error {
     const std.string::string[] at = std.array::as_slice(arguments);
-    switch (at[0usize].as_str()) {
+    switch (at[0usize]) {
     case "sign1":
-        bytes seed = parse_hex(at[1usize].as_str());
+        bytes seed = parse_hex(at[1usize]);
         std.cose::headers fields = std.cose::headers::create();
-        add_headers(&fields, at[2usize].as_str(), true);
-        add_headers(&fields, at[3usize].as_str(), false);
-        bytes payload = parse_hex(at[4usize].as_str());
-        bytes external = parse_hex(at[5usize].as_str());
+        add_headers(&fields, at[2usize], true);
+        add_headers(&fields, at[3usize], false);
+        bytes payload = parse_hex(at[4usize]);
+        bytes external = parse_hex(at[5usize]);
         std.crypto::signing_key key = std.crypto::signing_key::from_seed(seed.as_slice());
         bytes message = std.cose::sign1(move fields, payload.as_slice(), &key, external.as_slice());
         return hex(message.as_slice());
     case "verify_sign1":
-        bytes public_key = parse_hex(at[1usize].as_str());
-        bytes external = parse_hex(at[2usize].as_str());
-        bytes data = parse_hex(at[3usize].as_str());
+        bytes public_key = parse_hex(at[1usize]);
+        bytes external = parse_hex(at[2usize]);
+        bytes data = parse_hex(at[3usize]);
         std.cose::message received = std.cose::verify_sign1(data.as_slice(), public_key.as_slice(), external.as_slice());
         return payload_hex(&received);
     case "mac0":
-        bytes key = parse_hex(at[1usize].as_str());
+        bytes key = parse_hex(at[1usize]);
         std.cose::headers fields = std.cose::headers::create();
-        add_headers(&fields, at[2usize].as_str(), true);
-        add_headers(&fields, at[3usize].as_str(), false);
-        bytes payload = parse_hex(at[4usize].as_str());
-        bytes external = parse_hex(at[5usize].as_str());
+        add_headers(&fields, at[2usize], true);
+        add_headers(&fields, at[3usize], false);
+        bytes payload = parse_hex(at[4usize]);
+        bytes external = parse_hex(at[5usize]);
         bytes message = std.cose::mac0(move fields, payload.as_slice(), key.as_slice(), external.as_slice());
         return hex(message.as_slice());
     case "verify_mac0":
-        bytes key = parse_hex(at[1usize].as_str());
-        bytes external = parse_hex(at[2usize].as_str());
-        bytes data = parse_hex(at[3usize].as_str());
+        bytes key = parse_hex(at[1usize]);
+        bytes external = parse_hex(at[2usize]);
+        bytes data = parse_hex(at[3usize]);
         std.cose::message received = std.cose::verify_mac0(data.as_slice(), key.as_slice(), external.as_slice());
         return payload_hex(&received);
     case "encrypt0":
-        bytes key = parse_hex(at[1usize].as_str());
-        bytes iv = parse_hex(at[2usize].as_str());
+        bytes key = parse_hex(at[1usize]);
+        bytes iv = parse_hex(at[2usize]);
         std.cose::headers fields = std.cose::headers::create();
-        add_headers(&fields, at[3usize].as_str(), true);
-        add_headers(&fields, at[4usize].as_str(), false);
-        bytes plaintext = parse_hex(at[5usize].as_str());
-        bytes external = parse_hex(at[6usize].as_str());
+        add_headers(&fields, at[3usize], true);
+        add_headers(&fields, at[4usize], false);
+        bytes plaintext = parse_hex(at[5usize]);
+        bytes external = parse_hex(at[6usize]);
         bytes message = std.cose::encrypt0(move fields, plaintext.as_slice(), key.as_slice(), iv.as_slice(),
                                            external.as_slice());
         return hex(message.as_slice());
     case "decrypt0":
-        bytes key = parse_hex(at[1usize].as_str());
-        bytes external = parse_hex(at[2usize].as_str());
-        bytes data = parse_hex(at[3usize].as_str());
+        bytes key = parse_hex(at[1usize]);
+        bytes external = parse_hex(at[2usize]);
+        bytes data = parse_hex(at[3usize]);
         bytes plaintext = std.cose::decrypt0(data.as_slice(), key.as_slice(), external.as_slice());
         return hex(plaintext.as_slice());
     default: return std.string::from_str("unknown");
@@ -172,7 +172,7 @@ async i32 main() {
         switch (move line) {
         case variant o::some(move text):
             try {
-                array<std.string::string> arguments = words(text.as_str());
+                array<std.string::string> arguments = words(text);
                 await std.console::println(run(&arguments));
             } catch (std.cose::cose_error failure) {
                 std.cose::error_code code = failure.code;

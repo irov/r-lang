@@ -165,7 +165,7 @@ protected std.string::string arguments_of(const std.mcp::call* request) throws s
 async std.mcp::tool_outcome remember(arc memory state, std.mcp::call request) throws std.error::fault {
     std.string::string text = arguments_of(&request);
     try {
-        remember_args args = std.json::unmarshal(text.as_bytes());
+        remember_args args = std.json::unmarshal(text);
         u64 id = add_note(&*state, args.text);
         state->changes.resources_changed();
         state->changes.resource_updated("memory://notes");
@@ -180,7 +180,7 @@ async std.mcp::tool_outcome remember(arc memory state, std.mcp::call request) th
 async std.mcp::tool_outcome recall(arc memory state, std.mcp::call request) throws std.error::fault {
     std.string::string text = arguments_of(&request);
     try {
-        recall_args args = std.json::unmarshal(text.as_bytes());
+        recall_args args = std.json::unmarshal(text);
         recalled result = find_notes(&*state, args.query, args.limit);
         return std.mcp::tool_outcome::complete(std.mcp::tool_result::of_structured(&result));
     } catch (std.json::error rejected) {
@@ -361,7 +361,7 @@ async std.mcp::completion topics(arc memory state, std.mcp::completion_request r
             if (len(bytes) == 0usize || std.text::starts_with(word, request.value) == false) { continue; }
             bool known = false;
             for (usize other = 0usize; other < len(found.values); other += 1usize) {
-                if (std.bytes::equal(found.values[other].as_bytes(), word) == true) { known = true; }
+                if (std.bytes::equal(found.values[other], word) == true) { known = true; }
             }
             if (known == false) {
                 try {

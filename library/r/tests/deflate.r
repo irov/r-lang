@@ -38,12 +38,12 @@ protected void expect_inflate_error(str label, const u8[] input, std.deflate::fo
         array<u8> result = std.deflate::inflate(input, form, limit);
         drop result;
         std.string::string message = f"{label}: the stream decoded";
-        std.test::fail(message.as_str());
+        std.test::fail(message);
     } catch (std.deflate::error failure) {
         std.string::string message = f"{label}: the error code";
-        std.test::check(failure.code == code, message.as_str());
+        std.test::check(failure.code == code, message);
         std.string::string offset = f"{label}: the offset";
-        std.test::check(failure.offset <= len(input), offset.as_str());
+        std.test::check(failure.offset <= len(input), offset);
     }
 }
 
@@ -92,10 +92,10 @@ void round_trips_every_format_and_level()
                 std.deflate::inflate(packed.as_slice(), forms[form_index], len(text));
             std.string::string context = f"format {form_index} level {level}";
             std.test::check(std.bytes::equal(restored.as_slice(), text.as_slice()) == true,
-                            context.as_str());
+                            context);
             // Level 0 stores; the other levels find the repetitions.
             bool smaller = len(packed) * 4usize < len(text);
-            std.test::check(smaller == (level != 0), context.as_str());
+            std.test::check(smaller == (level != 0), context);
         }
     }
     // The wrappers begin with their headers.

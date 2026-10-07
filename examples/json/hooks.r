@@ -6,7 +6,7 @@ struct UserId { u64 value; };
 std.json::value UserId::json_marshal(const UserId* value)
     throws std.json::error, std.alloc::alloc_error {
     std.string::string text = std.json::marshal(&value->value);
-    const u8[] source = text.as_bytes();
+    const u8[] source = text;
     std.json::value result = std.json::parse(source);
     return move result;
 }
@@ -14,7 +14,7 @@ std.json::value UserId::json_marshal(const UserId* value)
 UserId UserId::json_unmarshal(const std.json::value* value)
     throws std.json::error, std.alloc::alloc_error {
     std.string::string text = value->stringify();
-    const u8[] source = text.as_bytes();
+    const u8[] source = text;
     u64 number = std.json::unmarshal(source);
     UserId result = {.value = number};
     return result;
@@ -31,12 +31,12 @@ async i32 example() throws std.json::error, std.alloc::alloc_error {
     User user = std.json::unmarshal("{\"id\":\"18446744073709551615\"}");
     if (user.id.value != 18446744073709551615u64) { return 1; }
     std.string::string text = std.json::marshal(&user);
-    const u8[] source = text.as_bytes();
+    const u8[] source = text;
     User again = std.json::unmarshal(source);
     if (again.id.value != user.id.value) { return 2; }
     User zero = {.id = {.value = 0}};
     std.string::string empty = std.json::marshal(&zero);
-    const u8[] object = empty.as_bytes();
+    const u8[] object = empty;
     if (len(object) != 2) { return 3; }
     return 0;
 }

@@ -18,7 +18,7 @@ protected std.http::client web() throws std.alloc::alloc_error {
    the third renews it. */
 async std.string::string service_tokens(std.string::string key_file, std.string::string scope)
     throws std.oauth2::oauth2_error, std.http::http_error, std.tls::tls_error, std.error::fault {
-    std.oauth2::service_account account = std.oauth2::service_account::from_json(key_file.as_bytes());
+    std.oauth2::service_account account = std.oauth2::service_account::from_json(key_file);
     std.string::string email = std.string::from_str(account.client_email);
     std.oauth2::token_source tokens = std.oauth2::token_source::from_service_account(web(), move account,
                                                                                     scope, "");
@@ -34,7 +34,7 @@ async std.string::string client_token(std.string::string endpoint, std.string::s
     std.http::client http = web();
     std.oauth2::token_request request = std.oauth2::token_request::create(endpoint,
                                                                          std.oauth2::grant::client_credentials);
-    request.set_client(client, secret.as_bytes());
+    request.set_client(client, secret);
     request.set_scope("admin");
     std.time::system_time now = std.time::system_now();
     std.string::string out = std.string::create();

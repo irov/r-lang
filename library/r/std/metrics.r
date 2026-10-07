@@ -119,7 +119,7 @@ protected std.string::string labels_text(const array<label>* labels, metric_kind
     std.string::string text = std.string::create();
     const label[] listed = std.array::as_slice(labels);
     for (usize index = 0usize; index < len(listed); index += 1usize) {
-        str name = listed[index].name.as_str();
+        str name = listed[index].name;
         const u8[] raw_bytes = name;
         bool reserved = len(raw_bytes) >= 2usize && raw_bytes[0usize] == 95u8 && raw_bytes[1usize] == 95u8;
         if (valid_name(name, false) == false || reserved == true ||
@@ -127,14 +127,14 @@ protected std.string::string labels_text(const array<label>* labels, metric_kind
             throw refusal(error_code::invalid_label);
         }
         for (usize earlier = 0usize; earlier < index; earlier += 1usize) {
-            if (same_text(listed[earlier].name.as_str(), name) == true) {
+            if (same_text(listed[earlier].name, name) == true) {
                 throw refusal(error_code::invalid_label);
             }
         }
         if (index > 0usize) { std.string::append_str(&text, ","); }
         std.string::append_str(&text, name);
         std.string::append_str(&text, "=\"");
-        append_escaped(&text, listed[index].value.as_str(), true);
+        append_escaped(&text, listed[index].value, true);
         std.string::append_str(&text, "\"");
     }
     return move text;
@@ -216,7 +216,7 @@ protected std.string::string number_text(f64 value) throws std.alloc::alloc_erro
     if (value > 1.7976931348623157e308) { return std.string::from_str("+Inf"); }
     if (value < -1.7976931348623157e308) { return std.string::from_str("-Inf"); }
     std.string::string shortest = f"{value}";
-    return expanded(shortest.as_bytes());
+    return expanded(shortest);
 }
 
 /* ---- Registration ---- */
@@ -236,9 +236,9 @@ protected arc metric admit(array<arc metric>* listed, metric made) throws metric
     const (arc metric)[] present = std.array::as_slice(listed);
     for (usize index = 0usize; index < len(present); index += 1usize) {
         const metric* other = &*present[index];
-        if (same_text(other->name.as_str(), made.name.as_str()) == true) {
-            if (other->kind != made.kind || same_text(other->help.as_str(), made.help.as_str()) == false ||
-                same_text(other->labels.as_str(), made.labels.as_str()) == true) {
+        if (same_text(other->name, made.name) == true) {
+            if (other->kind != made.kind || same_text(other->help, made.help) == false ||
+                same_text(other->labels, made.labels) == true) {
                 throw refusal(error_code::conflict);
             }
         }
@@ -426,13 +426,13 @@ histogram histogram::share(const histogram* this) {
 /* One sample line: name, suffix, the labels and an extra label, and the value. */
 protected void sample(std.string::string* out, const metric* item, str suffix, str extra, str value)
     throws std.alloc::alloc_error {
-    std.string::append_str(out, item->name.as_str());
+    std.string::append_str(out, item->name);
     std.string::append_str(out, suffix);
-    const u8[] labels = item->labels.as_bytes();
+    const u8[] labels = item->labels;
     const u8[] added = extra;
     if (len(labels) > 0usize || len(added) > 0usize) {
         std.string::append_str(out, "{");
-        std.string::append_str(out, item->labels.as_str());
+        std.string::append_str(out, item->labels);
         if (len(labels) > 0usize && len(added) > 0usize) { std.string::append_str(out, ","); }
         std.string::append_str(out, extra);
         std.string::append_str(out, "}");
@@ -446,13 +446,13 @@ protected void render_metric(std.string::string* out, const metric* item) throws
     if (item->kind == metric_kind::counter) {
         u64 total = core::atomic_load(&item->total, core::memory_order::relaxed);
         std.string::string value = f"{total}";
-        sample(out, item, "", "", value.as_str());
+        sample(out, item, "", "", value);
         return;
     }
     if (item->kind == metric_kind::gauge) {
         i64 level = core::atomic_load(&item->level, core::memory_order::relaxed);
         std.string::string value = f"{level}";
-        sample(out, item, "", "", value.as_str());
+        sample(out, item, "", "", value);
         return;
     }
     histogram_state taken = snapshot(item);
@@ -463,14 +463,14 @@ protected void render_metric(std.string::string* out, const metric* item) throws
         std.string::string bound = number_text(bounds[index]);
         std.string::string extra = f"le=\"{bound}\"";
         std.string::string value = f"{cumulative}";
-        sample(out, item, "_bucket", extra.as_str(), value.as_str());
+        sample(out, item, "_bucket", extra, value);
     }
     u64 count = taken.count;
     std.string::string all = f"{count}";
-    sample(out, item, "_bucket", "le=\"+Inf\"", all.as_str());
+    sample(out, item, "_bucket", "le=\"+Inf\"", all);
     std.string::string sum = number_text(taken.sum);
-    sample(out, item, "_sum", "", sum.as_str());
-    sample(out, item, "_count", "", all.as_str());
+    sample(out, item, "_sum", "", sum);
+    sample(out, item, "_count", "", all);
 }
 
 protected str kind_name(metric_kind kind) {
@@ -485,20 +485,20 @@ protected void render_list(std.string::string* out, const array<arc metric>* lis
         const metric* first = &*present[index];
         bool seen = false;
         for (usize earlier = 0usize; earlier < index; earlier += 1usize) {
-            if (same_text(present[earlier]->name.as_str(), first->name.as_str()) == true) { seen = true; }
+            if (same_text(present[earlier]->name, first->name) == true) { seen = true; }
         }
         if (seen == false) {
             std.string::append_str(out, "# HELP ");
-            std.string::append_str(out, first->name.as_str());
+            std.string::append_str(out, first->name);
             std.string::append_str(out, " ");
-            append_escaped(out, first->help.as_str(), false);
+            append_escaped(out, first->help, false);
             std.string::append_str(out, "\n# TYPE ");
-            std.string::append_str(out, first->name.as_str());
+            std.string::append_str(out, first->name);
             std.string::append_str(out, " ");
             std.string::append_str(out, kind_name(first->kind));
             std.string::append_str(out, "\n");
             for (usize member = index; member < len(present); member += 1usize) {
-                if (same_text(present[member]->name.as_str(), first->name.as_str()) == true) {
+                if (same_text(present[member]->name, first->name) == true) {
                     render_metric(out, &*present[member]);
                 }
             }

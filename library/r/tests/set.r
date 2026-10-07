@@ -27,7 +27,7 @@ protected std.string::string listing(const std.set::set<i32>* source)
     for (const i32* value in source->iter()) {
         i32 number = *value;
         std.string::string piece = f"{number} ";
-        text.append(piece.as_str());
+        text.append(piece);
     }
     return move text;
 }
@@ -87,15 +87,15 @@ void iterates_in_insertion_order() throws std.test::failure, std.alloc::alloc_er
     add(&numbers, 20) as void;
     add(&numbers, 10) as void;
     std.string::string first = listing(&numbers);
-    std.test::equal_text(first.as_str(), "30 10 20 ");
+    std.test::equal_text(first, "30 10 20 ");
     i32 ten = 10;
     numbers.remove(&ten);
     std.string::string second = listing(&numbers);
-    std.test::equal_text(second.as_str(), "30 20 ");
+    std.test::equal_text(second, "30 20 ");
     add(&numbers, 10) as void;
     add(&numbers, 30) as void;
     std.string::string third = listing(&numbers);
-    std.test::equal_text(third.as_str(), "30 20 10 ");
+    std.test::equal_text(third, "30 20 10 ");
 }
 
 @test
@@ -110,7 +110,7 @@ void clears_and_is_reused() throws std.test::failure, std.alloc::alloc_error {
     std.test::check(numbers.contains(&five) == false, "5 was cleared");
     std.test::check(add(&numbers, 5), "5 is new after clearing");
     std.string::string text = listing(&numbers);
-    std.test::equal_text(text.as_str(), "5 ");
+    std.test::equal_text(text, "5 ");
     numbers.clear();
     numbers.clear();
     std.test::check(numbers.is_empty(), "clearing twice is harmless");
@@ -158,5 +158,5 @@ void grows_and_shrinks() throws std.test::failure, std.alloc::alloc_error {
     std.test::check(numbers.contains(&twelve), "12 was kept");
     std.test::check(numbers.contains(&thirteen) == false, "13 was removed");
     std.string::string text = listing(&numbers);
-    std.test::equal_text(text.as_str(), "0 4 8 12 16 20 24 28 32 36 ");
+    std.test::equal_text(text, "0 4 8 12 16 20 24 28 32 36 ");
 }

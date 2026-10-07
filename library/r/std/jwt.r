@@ -227,7 +227,7 @@ protected bool verifier::accepts(const verifier* this, algorithm alg, const u8[]
         if (*limited != alg) { return false; }
     case variant o::none: break;
     }
-    if (len(kid) > 0usize && std.bytes::equal(this->kid.as_bytes(), kid) == false) { return false; }
+    if (len(kid) > 0usize && std.bytes::equal(this->kid, kid) == false) { return false; }
     return material_fits(alg, &this->key);
 }
 
@@ -313,7 +313,7 @@ protected std.string::string header_of(const signer* key) throws jwt_error, std.
         const u8[] alg_bytes = alg_name;
         std.json::insert(&head, "alg", std.json::from_string(alg_bytes));
         std.json::insert(&head, "typ", std.json::from_string("JWT"));
-        const u8[] kid = key->kid.as_bytes();
+        const u8[] kid = key->kid;
         if (len(kid) > 0usize) { std.json::insert(&head, "kid", std.json::from_string(kid)); }
         return std.json::stringify(&head);
     } catch (std.json::error rejected) {
@@ -325,14 +325,14 @@ protected std.string::string header_of(const signer* key) throws jwt_error, std.
 /* The compact JWS of a payload: header, payload and signature in base64url, joined by dots. */
 protected std.string::string compact(const signer* key, const u8[] payload) throws jwt_error, std.alloc::alloc_error {
     std.string::string head = header_of(key);
-    std.string::string input = base64url(head.as_bytes());
+    std.string::string input = base64url(head);
     input.append(".");
     std.string::string encoded = base64url(payload);
-    input.append(encoded.as_str());
-    bytes signature = signature_of(key, input.as_bytes());
+    input.append(encoded);
+    bytes signature = signature_of(key, input);
     input.append(".");
     std.string::string signature_text = base64url(signature.as_slice());
-    input.append(signature_text.as_str());
+    input.append(signature_text);
     return move input;
 }
 
@@ -341,7 +341,7 @@ std.string::string sign(const signer* key, const std.json::value* claims) throws
     throw (std.json::kind(claims) != std.json::value_kind::object) failure(error_code::malformed);
     try {
         std.string::string payload = std.json::stringify(claims);
-        return compact(key, payload.as_bytes());
+        return compact(key, payload);
     } catch (std.json::error rejected) {
         (move rejected) as void;
     }
@@ -353,7 +353,7 @@ std.string::string sign(const signer* key, const std.json::value* claims) throws
 std.string::string sign_claims(const signer* key, const T* claims) throws jwt_error, std.alloc::alloc_error {
     try {
         std.string::string payload = std.json::marshal(claims);
-        const u8[] text = payload.as_bytes();
+        const u8[] text = payload;
         throw (len(text) == 0usize || text[0usize] != 123u8) failure(error_code::malformed);
         return compact(key, text);
     } catch (std.json::error rejected) {
@@ -490,7 +490,7 @@ protected bool audience_matches(const std.json::value* claim, const array<std.st
         str text = std.json::text(claim);
         const u8[] named = text;
         for (usize index = 0usize; index < len(*audiences); index += 1usize) {
-            if (std.bytes::equal((*audiences)[index].as_bytes(), named) == true) { return true; }
+            if (std.bytes::equal((*audiences)[index], named) == true) { return true; }
         }
         return false;
     }
@@ -502,7 +502,7 @@ protected bool audience_matches(const std.json::value* claim, const array<std.st
             str text = std.json::text(*entry);
             const u8[] named = text;
             for (usize index = 0usize; index < len(*audiences); index += 1usize) {
-                if (std.bytes::equal((*audiences)[index].as_bytes(), named) == true) { return true; }
+                if (std.bytes::equal((*audiences)[index], named) == true) { return true; }
             }
         case variant o::none: break;
         }
@@ -528,7 +528,7 @@ protected void check_claims(const std.json::value* claims, const validation* rul
         throw (current + leeway < start) failure(error_code::not_yet_valid);
     case variant o::none: break;
     }
-    const u8[] issuer = rules->issuer.as_bytes();
+    const u8[] issuer = rules->issuer;
     if (len(issuer) > 0usize) {
         switch (std.json::find(claims, "iss")) {
         case variant o::some(found):
@@ -722,7 +722,7 @@ protected void put_text(std.json::value* object, str name, const u8[] text) thro
 protected void put_base64url(std.json::value* object, str name, const u8[] data)
     throws std.alloc::alloc_error, std.json::error {
     std.string::string encoded = base64url(data);
-    put_text(object, name, encoded.as_bytes());
+    put_text(object, name, encoded);
 }
 
 /* R-SLIB-JWT-0007: the public JWK of a key for its algorithm, with `kid` when it is not empty;

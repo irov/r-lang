@@ -133,7 +133,7 @@ bool row::boolean(const row* this, usize index) throws pg_error, std.alloc::allo
 str row::text(const row* this, usize index) throws pg_error, std.alloc::alloc_error {
     const value* found = this->at(index);
     switch (*found) {
-    case variant value::text(text): return text->as_str();
+    case variant value::text(text): return *text;
     default: break;
     }
     throw wrong_type(found);
@@ -284,7 +284,7 @@ protected void put_real(bytes* out, f64 shown) throws std.alloc::alloc_error {
         return;
     }
     std.string::string text = f"{shown}";
-    std.bytes::append(out, text.as_bytes());
+    std.bytes::append(out, text);
 }
 
 /* The text of a parameter; null_value is sent as NULL and has none. */
@@ -297,14 +297,14 @@ protected bytes parameter_text(const value* given) throws std.alloc::alloc_error
     case variant value::integer(number):
         i64 shown = *number;
         std.string::string text = f"{shown}";
-        std.bytes::append(&out, text.as_bytes());
+        std.bytes::append(&out, text);
     case variant value::real(number): put_real(&out, *number);
-    case variant value::text(text): std.bytes::append(&out, text->as_bytes());
+    case variant value::text(text): std.bytes::append(&out, *text);
     case variant value::binary(data):
         /* The text form of bytea: \x and two hexadecimal digits per byte. */
         put_text(&out, "\\x");
         std.string::string hex = std.encoding::encode_hex(std.array::as_slice(data));
-        std.bytes::append(&out, hex.as_bytes());
+        std.bytes::append(&out, hex);
     }
     return move out;
 }
@@ -339,7 +339,7 @@ protected value value_of(u32 type_oid, const u8[] cell) throws pg_error, std.all
             failure(error_code::protocol, "the server sent bytea that is not hexadecimal");
         std.string::string digits = text_of(cell[2usize..len(cell)]);
         try {
-            return value::binary(std.encoding::decode_hex(digits.as_str()));
+            return value::binary(std.encoding::decode_hex(digits));
         } catch (std.convert::parse_error rejected) {
             rejected as void;
         }
@@ -347,18 +347,18 @@ protected value value_of(u32 type_oid, const u8[] cell) throws pg_error, std.all
     }
     std.string::string text = text_of(cell);
     if (type_oid == 16u32) {
-        return value::boolean(same(text.as_str(), "t"));
+        return value::boolean(same(text, "t"));
     }
     if (type_oid == 20u32 || type_oid == 21u32 || type_oid == 23u32 || type_oid == 26u32) {
         try {
-            return value::integer(std.convert::parse_i64(text.as_str(), 10u32));
+            return value::integer(std.convert::parse_i64(text, 10u32));
         } catch (std.convert::parse_error rejected) {
             rejected as void;
         }
         throw failure(error_code::protocol, "the server sent an integer that does not parse");
     }
     if (type_oid == 700u32 || type_oid == 701u32) {
-        return value::real(real_of(text.as_str()));
+        return value::real(real_of(text));
     }
     return value::text(move text);
 }
@@ -396,7 +396,7 @@ options options::from_environment() throws pg_error, std.alloc::alloc_error {
     switch (move port) {
     case variant o::some(move text):
         try {
-            made.port = std.convert::parse_u16(text.as_str(), 10u32);
+            made.port = std.convert::parse_u16(text, 10u32);
         } catch (std.convert::parse_error rejected) {
             rejected as void;
             throw failure(error_code::invalid_value, "PGPORT is not a port number");
@@ -406,9 +406,9 @@ options options::from_environment() throws pg_error, std.alloc::alloc_error {
     o<std.string::string> host = variable("PGHOST");
     switch (move host) {
     case variant o::some(move text):
-        const u8[] host_bytes = text.as_bytes();
+        const u8[] host_bytes = text;
         if (len(host_bytes) > 0usize && host_bytes[0usize] == 47u8) {
-            str directory = text.as_str();
+            str directory = text;
             u16 number = made.port;
             made.socket = f"{directory}/.s.PGSQL.{number}";
             drop text;
@@ -578,7 +578,7 @@ protected void asynchronous(link* conn, const message* incoming) throws pg_error
 /* ---- Startup and authentication ---- */
 
 protected bool is_empty(const std.string::string* text) {
-    const u8[] raw_text = text->as_bytes();
+    const u8[] raw_text = *text;
     return len(raw_text) == 0usize;
 }
 
@@ -587,14 +587,14 @@ protected bytes startup_message(const options* settings) throws pg_error, std.al
     put_u32(&out, 0u32);
     put_u32(&out, 196608u32);
     put_string(&out, "user");
-    put_string(&out, settings->user.as_str());
+    put_string(&out, settings->user);
     if (is_empty(&settings->database) == false) {
         put_string(&out, "database");
-        put_string(&out, settings->database.as_str());
+        put_string(&out, settings->database);
     }
     if (is_empty(&settings->application_name) == false) {
         put_string(&out, "application_name");
-        put_string(&out, settings->application_name.as_str());
+        put_string(&out, settings->application_name);
     }
     put_string(&out, "client_encoding");
     put_string(&out, "UTF8");
@@ -617,15 +617,15 @@ protected bytes password_message(const u8[] secret) throws pg_error, std.alloc::
 
 protected void put_hex(bytes* out, const u8[] data) throws std.alloc::alloc_error {
     std.string::string hex = std.encoding::encode_hex(data);
-    std.bytes::append(out, hex.as_bytes());
+    std.bytes::append(out, hex);
 }
 
 /* The md5 method: "md5" and the hexadecimal MD5 of the hexadecimal MD5 of password and user,
    followed by the salt. */
 protected bytes md5_answer(const options* settings, const u8[] salt) throws pg_error, std.alloc::alloc_error {
     bytes inner = {};
-    std.bytes::append(&inner, settings->password.as_bytes());
-    std.bytes::append(&inner, settings->user.as_bytes());
+    std.bytes::append(&inner, settings->password);
+    std.bytes::append(&inner, settings->user);
     std.hash::md5_digest first = std.hash::md5(inner.as_slice());
     bytes outer = {};
     put_hex(&outer, &first.bytes);
@@ -701,11 +701,11 @@ protected bytes scram_first(scram* state) throws pg_error, std.alloc::alloc_erro
     u8[18] random = {};
     std.random::fill(&random);
     state->nonce = std.encoding::encode_base64(&random);
-    str nonce = state->nonce.as_str();
+    str nonce = state->nonce;
     state->first_bare = f"n=,r={nonce}";
     bytes data = {};
     put_text(&data, "n,,");
-    std.bytes::append(&data, state->first_bare.as_bytes());
+    std.bytes::append(&data, state->first_bare);
     bytes out = {};
     usize at = start_message(&out, 112u8);
     put_string(&out, "SCRAM-SHA-256");
@@ -743,24 +743,24 @@ protected bytes scram_final(scram* state, const options* settings, const u8[] se
     std.string::string nonce = required(attribute(server_first, 114u8));
     std.string::string salt_text = required(attribute(server_first, 115u8));
     std.string::string count_text = required(attribute(server_first, 105u8));
-    const u8[] ours = state->nonce.as_bytes();
-    const u8[] theirs = nonce.as_bytes();
+    const u8[] ours = state->nonce;
+    const u8[] theirs = nonce;
     throw (len(theirs) <= len(ours) || std.bytes::equal(theirs[0usize..len(ours)], ours) == false)
         failure(error_code::authentication, "the server changed the SCRAM nonce");
-    bytes salt = base64_of(salt_text.as_str());
-    u32 iterations = iterations_of(count_text.as_str());
+    bytes salt = base64_of(salt_text);
+    u32 iterations = iterations_of(count_text);
     throw (iterations == 0u32) failure(error_code::authentication, "the server asked for no SCRAM iteration");
-    bytes salted = salted_password(settings->password.as_bytes(), salt.as_slice(), iterations);
+    bytes salted = salted_password(settings->password, salt.as_slice(), iterations);
     bytes client_key = hmac_text(salted.as_slice(), "Client Key");
     std.hash::sha256_digest stored = std.hash::sha256(client_key.as_slice());
-    str nonce_text = nonce.as_str();
+    str nonce_text = nonce;
     std.string::string without_proof = f"c=biws,r={nonce_text}";
     bytes auth = {};
-    std.bytes::append(&auth, state->first_bare.as_bytes());
+    std.bytes::append(&auth, state->first_bare);
     put_text(&auth, ",");
     std.bytes::append(&auth, server_first);
     put_text(&auth, ",");
-    std.bytes::append(&auth, without_proof.as_bytes());
+    std.bytes::append(&auth, without_proof);
     bytes signature = hmac(&stored.bytes, auth.as_slice());
     bytes proof = std.bytes::with_capacity(32usize);
     for (usize index = 0usize; index < len(signature); index += 1usize) {
@@ -770,9 +770,9 @@ protected bytes scram_final(scram* state, const options* settings, const u8[] se
     state->server_signature = hmac(server_key.as_slice(), auth.as_slice());
     std.string::string proof_text = std.encoding::encode_base64(proof.as_slice());
     bytes data = {};
-    std.bytes::append(&data, without_proof.as_bytes());
+    std.bytes::append(&data, without_proof);
     put_text(&data, ",p=");
-    std.bytes::append(&data, proof_text.as_bytes());
+    std.bytes::append(&data, proof_text);
     bytes out = {};
     usize at = start_message(&out, 112u8);
     std.bytes::append(&out, data.as_slice());
@@ -783,7 +783,7 @@ protected bytes scram_final(scram* state, const options* settings, const u8[] se
 /* Checks the server-final-message: the server proves that it knows the password too. */
 protected void scram_check(const scram* state, const u8[] server_final) throws pg_error, std.alloc::alloc_error {
     std.string::string verifier = required(attribute(server_final, 118u8));
-    bytes expected = base64_of(verifier.as_str());
+    bytes expected = base64_of(verifier);
     throw (std.bytes::equal(expected.as_slice(), state->server_signature.as_slice()) == false)
         failure(error_code::authentication, "the server did not prove that it knows the password");
 }
@@ -794,7 +794,7 @@ protected bytes answer_of(link* conn, const options* settings, scram* exchange, 
     u32 code = get_u32(body, 0usize);
     switch (code) {
     case 0u32: break;
-    case 3u32: return password_message(settings->password.as_bytes());
+    case 3u32: return password_message(settings->password);
     case 5u32:
         throw (len(body) < 8usize) failure(error_code::protocol, "the server sent no MD5 salt");
         return md5_answer(settings, body[4usize..8usize]);
@@ -882,12 +882,12 @@ protected async own dyn(std.stream::Stream)* open_transport(std.string::string h
     if (is_empty(&socket) == false) {
         throw (secure == true) failure(error_code::connection, "TLS is for TCP connections");
         task_scope(1) local_io {
-            std.net::unix_stream local = await std.net::unix_connect(socket.as_str(), o::none);
+            std.net::unix_stream local = await std.net::unix_connect(socket, o::none);
             return new std.net::unix_stream(move local);
         }
     }
     task_scope(1) io {
-        std.net::tcp_stream tcp = await std.net::tcp_connect_name(host.as_str(), port);
+        std.net::tcp_stream tcp = await std.net::tcp_connect_name(host, port);
         if (secure == false) { return new std.net::tcp_stream(move tcp); }
         u32 accepted = 0u32;
         task_scope(1) negotiation {
@@ -897,7 +897,7 @@ protected async own dyn(std.stream::Stream)* open_transport(std.string::string h
         switch (tls) {
         case variant o::some(configured):
             std.tls::stream<std.net::tcp_stream> secured =
-                await std.tls::connect(move tcp, &**configured, host.as_str());
+                await std.tls::connect(move tcp, &**configured, host);
             return new std.tls::stream<std.net::tcp_stream>(move secured);
         case variant o::none: break;
         }
@@ -906,7 +906,7 @@ protected async own dyn(std.stream::Stream)* open_transport(std.string::string h
 }
 
 protected std.string::string copy_of(const std.string::string* text) throws std.alloc::alloc_error {
-    return std.string::from_str(text->as_str());
+    return std.string::from_str(*text);
 }
 
 /* The transport, with a failure of TLS as a connection failure. */
@@ -919,7 +919,7 @@ protected async own dyn(std.stream::Stream)* opened(std.string::string host, u16
         std.tls::error_code code = rejected.code;
         str name = core::enum_name(code);
         std.string::string text = f"TLS failed: {name}";
-        throw failure(error_code::connection, text.as_str());
+        throw failure(error_code::connection, text);
     }
 }
 
@@ -1142,7 +1142,7 @@ protected async rows run_query(arc shared_state core, std.string::string sql, ar
     throws pg_error, std.error::fault {
     std.async::mutex_guard<link> guard = await core->session.lock();
     ensure_usable(guard.get());
-    bytes request = extended_request(statement.as_str(), sql.as_str(), parse, &parameters);
+    bytes request = extended_request(statement, sql, parse, &parameters);
     rows result = empty_rows();
     task_scope(1) io {
         await send(guard.get_mut(), request.as_slice());
@@ -1164,7 +1164,7 @@ protected async void run_script(arc shared_state core, std.string::string sql) t
     ensure_usable(guard.get());
     bytes request = {};
     usize at = start_message(&request, 81u8);
-    put_string(&request, sql.as_str());
+    put_string(&request, sql);
     finish_message(&request, at);
     rows ignored = empty_rows();
     task_scope(1) io {
@@ -1234,8 +1234,8 @@ protected async statement run_prepare(arc shared_state core, std.string::string 
     std.string::string name = f"r_{number}";
     bytes request = {};
     usize parse = start_message(&request, 80u8);
-    put_string(&request, name.as_str());
-    put_string(&request, sql.as_str());
+    put_string(&request, name);
+    put_string(&request, sql);
     put_u16(&request, 0u16);
     finish_message(&request, parse);
     usize sync = start_message(&request, 83u8);
@@ -1275,7 +1275,7 @@ protected async void run_close_statement(arc shared_state core, std.string::stri
     bytes request = {};
     usize close = start_message(&request, 67u8);
     std.bytes::append_u8(&request, 83u8);
-    put_string(&request, name.as_str());
+    put_string(&request, name);
     finish_message(&request, close);
     usize sync = start_message(&request, 83u8);
     finish_message(&request, sync);
@@ -1317,7 +1317,7 @@ protected std.string::string quoted(str name) throws pg_error, std.alloc::alloc_
 task<void throws pg_error, std.error::fault> connection::listen(const connection* this, str channel)
     throws pg_error, std.async::start_error, std.alloc::alloc_error {
     std.string::string name = quoted(channel);
-    str quoted_name = name.as_str();
+    str quoted_name = name;
     std.string::string sql = f"LISTEN {quoted_name}";
     return run_script(std.arc::clone(&this->core), move sql);
 }
@@ -1325,7 +1325,7 @@ task<void throws pg_error, std.error::fault> connection::listen(const connection
 task<void throws pg_error, std.error::fault> connection::unlisten(const connection* this, str channel)
     throws pg_error, std.async::start_error, std.alloc::alloc_error {
     std.string::string name = quoted(channel);
-    str quoted_name = name.as_str();
+    str quoted_name = name;
     std.string::string sql = f"UNLISTEN {quoted_name}";
     return run_script(std.arc::clone(&this->core), move sql);
 }
@@ -1422,7 +1422,7 @@ protected async u64 run_copy_in(arc shared_state core, std.string::string sql, b
     throws pg_error, std.error::fault {
     std.async::mutex_guard<link> guard = await core->session.lock();
     ensure_usable(guard.get());
-    bytes request = query_message(sql.as_str());
+    bytes request = query_message(sql);
     bytes stream = copy_data(data.as_slice());
     rows result = empty_rows();
     task_scope(1) io {
@@ -1454,7 +1454,7 @@ protected async void copy_rows(link* conn, bytes* out) throws pg_error, std.erro
 protected async bytes run_copy_out(arc shared_state core, std.string::string sql) throws pg_error, std.error::fault {
     std.async::mutex_guard<link> guard = await core->session.lock();
     ensure_usable(guard.get());
-    bytes request = query_message(sql.as_str());
+    bytes request = query_message(sql);
     bytes data = {};
     rows result = empty_rows();
     task_scope(1) io {
@@ -1838,7 +1838,7 @@ value value::of_array(const array<value>* items) throws pg_error, std.alloc::all
 usize rows::column_index(const rows* this, str name) throws pg_error, std.alloc::alloc_error {
     const u8[] wanted = name;
     for (usize index = 0usize; index < len(this->columns); index += 1usize) {
-        if (std.bytes::equal(this->columns[index].name.as_bytes(), wanted) == true) { return index; }
+        if (std.bytes::equal(this->columns[index].name, wanted) == true) { return index; }
     }
     pg_error missing = failure(error_code::missing_column, "the result has no column of that name");
     missing.detail.append(name);
@@ -1953,56 +1953,56 @@ protected std.json::value cell_json(const value* cell, u32 oid, const std.json::
         case variant value::integer(number):
             i64 shown = *number;
             std.string::string text = f"{shown}";
-            if (schema_is(non_null(property), "string") == true) { return std.json::from_string(text.as_bytes()); }
-            return json_number(text.as_str());
+            if (schema_is(non_null(property), "string") == true) { return std.json::from_string(text); }
+            return json_number(text);
         case variant value::real(number):
             f64 shown = *number;
             throw (shown != shown || shown - shown != 0.0) failure(error_code::invalid_value, "a real is not finite");
             std.string::string text = f"{shown}";
-            return json_number(text.as_str());
+            return json_number(text);
         case variant value::binary(data):
             if (schema_is(non_null(property), "string") == true) {
                 std.string::string encoded = std.encoding::encode_base64(std.array::as_slice(data));
-                return std.json::from_string(encoded.as_bytes());
+                return std.json::from_string(encoded);
             }
             std.json::value items = std.json::array();
             const u8[] raw_data = std.array::as_slice(data);
             for (usize index = 0usize; index < len(raw_data); index += 1usize) {
                 u8 byte = raw_data[index];
                 std.string::string text = f"{byte}";
-                std.json::append(&items, json_number(text.as_str()));
+                std.json::append(&items, json_number(text));
             }
             return move items;
         case variant value::text(text):
             const std.json::value* described = non_null(property);
             if (is_time_oid(oid) == true) {
-                std.time::system_time at = time_of(text->as_bytes());
+                std.time::system_time at = time_of(*text);
                 if (schema_is(described, "integer") == true) {
                     std.string::string seconds = f"{at.unix_seconds}";
-                    return json_number(seconds.as_str());
+                    return json_number(seconds);
                 }
                 if (schema_is(described, "number") == true) {
                     /* Seconds with nine digits of fraction; a negative instant keeps whole seconds. */
                     if (at.unix_seconds < 0i64 || at.nanoseconds == 0u32) {
                         std.string::string whole = f"{at.unix_seconds}";
-                        return json_number(whole.as_str());
+                        return json_number(whole);
                     }
                     u32 fraction = at.nanoseconds + 1000000000u32;
                     std.string::string digits = f"{fraction}";
                     std.string::string seconds = f"{at.unix_seconds}.";
-                    const u8[] digit_bytes = digits.as_bytes();
+                    const u8[] digit_bytes = digits;
                     seconds.append(core::validate_utf8(digit_bytes[1usize..len(digit_bytes)]));
-                    return json_number(seconds.as_str());
+                    return json_number(seconds);
                 }
                 std.string::string written = std.time::format_rfc3339(at, 6u32);
-                return std.json::from_string(written.as_bytes());
+                return std.json::from_string(written);
             }
             bool wants_string = schema_is(described, "string");
             if (wants_string == false && is_json_oid(oid) == true) {
-                return std.json::parse(text->as_bytes());
+                return std.json::parse(*text);
             }
             if (is_array_oid(oid) == true && schema_is(described, "array") == true) {
-                array<o<std.string::string>> elements = array_elements(text->as_bytes());
+                array<o<std.string::string>> elements = array_elements(*text);
                 std.json::value items = std.json::array();
                 const std.json::value* item_schema = described;
                 switch (std.json::find(described, "items")) {
@@ -2011,13 +2011,13 @@ protected std.json::value cell_json(const value* cell, u32 oid, const std.json::
                 }
                 for (usize index = 0usize; index < len(elements); index += 1usize) {
                     switch (elements[index]) {
-                    case variant o::some(element): std.json::append(&items, text_for(non_null(item_schema), element->as_str()));
+                    case variant o::some(element): std.json::append(&items, text_for(non_null(item_schema), *element));
                     case variant o::none: std.json::append(&items, std.json::null());
                     }
                 }
                 return move items;
             }
-            return text_for(described, text->as_str());
+            return text_for(described, *text);
         }
     } catch (std.json::error rejected) {
         (move rejected) as void;
@@ -2055,7 +2055,7 @@ protected std.json::value row_document(const rows* table, usize at, const std.js
                     const u8[] wanted = key;
                     usize found = len(table->columns);
                     for (usize column = 0usize; column < len(table->columns); column += 1usize) {
-                        if (found == len(table->columns) && std.bytes::equal(table->columns[column].name.as_bytes(), wanted) == true) {
+                        if (found == len(table->columns) && std.bytes::equal(table->columns[column].name, wanted) == true) {
                             found = column;
                         }
                     }
@@ -2097,7 +2097,7 @@ protected std.json::value row_document(const rows* table, usize at, const std.js
 protected T read_row(std.json::value document) throws pg_error, std.alloc::alloc_error {
     try {
         std.string::string text = std.json::stringify(&document);
-        T result = std.json::unmarshal(text.as_bytes());
+        T result = std.json::unmarshal(text);
         return move result;
     } catch (std.json::error rejected) {
         (move rejected) as void;
@@ -2154,7 +2154,7 @@ protected void put_identifier(std.string::string* out, str name) throws pg_error
     }
     std.bytes::append_u8(&quoted_name, 34u8);
     std.string::string shown = text_of_bytes(quoted_name.as_slice());
-    out->append(shown.as_str());
+    out->append(shown);
 }
 
 /* R-SLIB-PG-0015: INSERT INTO table ("f1", ...) VALUES ($1, ...) for the fields of T in order. */
@@ -2173,7 +2173,7 @@ std.string::string insert_statement(str table) throws pg_error, std.alloc::alloc
             put_identifier(&names, std.json::key_at(*properties, index));
             usize number = index + 1usize;
             std.string::string slot = f"${number}";
-            slots.append(slot.as_str());
+            slots.append(slot);
         }
     case variant o::none: break;
     }
@@ -2195,11 +2195,11 @@ std.string::string update_statement(str table, str key) throws pg_error, std.all
             if (same(name, key) == true) {
                 key_number = number;
             } else {
-                const u8[] written = sets.as_bytes();
+                const u8[] written = sets;
                 if (len(written) > 0usize) { sets.append(", "); }
                 put_identifier(&sets, name);
                 std.string::string slot = f" = ${number}";
-                sets.append(slot.as_str());
+                sets.append(slot);
             }
         }
     case variant o::none: break;
@@ -2264,7 +2264,7 @@ array<value> parameters_of(const T* item) throws pg_error, std.alloc::alloc_erro
     array<value> parameters = [];
     try {
         std.string::string text = std.json::marshal(item);
-        std.json::value document = std.json::parse(text.as_bytes());
+        std.json::value document = std.json::parse(text);
         throw (std.json::kind(&document) != std.json::value_kind::object)
             failure(error_code::invalid_value, "the struct is not written as an object");
         switch (std.json::find(&described, "properties")) {
@@ -2303,7 +2303,7 @@ struct migration {
 };
 
 protected std.string::string checksum_of(const std.string::string* sql) throws std.alloc::alloc_error {
-    std.hash::sha256_digest digest = std.hash::sha256(sql->as_bytes());
+    std.hash::sha256_digest digest = std.hash::sha256(*sql);
     return std.encoding::encode_hex(&digest.bytes);
 }
 
@@ -2313,7 +2313,7 @@ protected const i64 migration_lock = 125806466509938i64;
 protected pg_error mismatch(str message, u64 version) throws std.alloc::alloc_error {
     pg_error refused = failure(error_code::migration_mismatch, message);
     std.string::string shown = f"version {version}";
-    refused.detail.append(shown.as_str());
+    refused.detail.append(shown);
     return move refused;
 }
 
@@ -2333,7 +2333,7 @@ protected array<usize> pending_of(const array<migration>* steps, const rows* app
         throw (found == len(*steps)) mismatch("the database has a migration that the list does not", version);
         str recorded = applied->items[index].text(1usize);
         std.string::string expected = checksum_of(&(*steps)[found].sql);
-        throw (same(expected.as_str(), recorded) == false) mismatch("an applied migration has changed", version);
+        throw (same(expected, recorded) == false) mismatch("an applied migration has changed", version);
         if (version > highest) { highest = version; }
     }
     array<usize> pending = [];
@@ -2375,8 +2375,8 @@ protected async u64 run_migrate(arc shared_state core, array<migration> steps) t
         for (usize index = 0usize; index < len(pending); index += 1usize) {
             usize position = pending[index];
             u64 version_number = steps[position].version;
-            std.string::string sql = std.string::from_str(steps[position].sql.as_str());
-            std.string::string name = std.string::from_str(steps[position].name.as_str());
+            std.string::string sql = std.string::from_str(steps[position].sql);
+            std.string::string name = std.string::from_str(steps[position].name);
             std.string::string checksum = checksum_of(&steps[position].sql);
             std.string::string version_text = f"{version_number}";
             array<value> recorded = [];
@@ -2412,4 +2412,421 @@ protected async u64 run_migrate(arc shared_state core, array<migration> steps) t
 task<u64 throws pg_error, std.error::fault> migrate(const connection* conn, array<migration> steps)
     throws std.async::start_error {
     return run_migrate(std.arc::clone(&conn->core), move steps);
+}
+
+/* ---- Tables of structs (R-SLIB-PG-0017) ---- */
+
+/* R-SLIB-PG-0017: the table of a struct, the columns of its key and the columns the database
+   fills, as comma-separated JSON names. The operations below read it at translation time (Core
+   R-AGG-0013, R-REFL-0005), so a statement names no column the struct does not have. */
+@attribute(type)
+struct table {
+    str name;
+    str key = "";
+    str generated = "";
+};
+
+/* One field of a row: its column, its parameter and its role in the table. */
+protected struct table_column {
+    std.string::string name;
+    value parameter;
+    bool keyed;
+    bool generated;
+};
+
+/* What an operation writes: the table, the key columns in the order of the attribute, the
+   generated columns and the fields of the row in order. */
+protected struct table_row {
+    std.string::string name;
+    array<std.string::string> keys;
+    array<std.string::string> generated;
+    array<table_column> columns;
+};
+
+@generic<T>
+protected void push_item(array<T>* items, T made) throws std.alloc::alloc_error {
+    try {
+        items->push(move made);
+    } catch (std.array::push_error<T> rejected) {
+        switch (move rejected) {
+        case variant std.array::push_error::allocation_failed(move payload): throw payload.reason;
+        }
+    }
+}
+
+/* The columns of a comma-separated list, without the spaces around each. */
+protected array<std.string::string> columns_in(str names) throws pg_error, std.alloc::alloc_error {
+    array<std.string::string> found = [];
+    const u8[] spelled = names;
+    usize start = 0usize;
+    while (start < len(spelled)) {
+        usize end = start;
+        while (end < len(spelled) && spelled[end] != 44u8) { end += 1usize; }
+        usize first = start;
+        usize last = end;
+        while (first < last && spelled[first] == 32u8) { first += 1usize; }
+        while (last > first && spelled[last - 1usize] == 32u8) { last -= 1usize; }
+        if (last > first) { push_item(&found, text_of_bytes(spelled[first..last])); }
+        start = end + 1usize;
+    }
+    return move found;
+}
+
+protected bool names_column(const array<std.string::string>* names, str column) {
+    for (usize index = 0usize; index < len(*names); index += 1usize) {
+        if (same((*names)[index], column) == true) { return true; }
+    }
+    return false;
+}
+
+/* The table of T with its key and generated columns, or unsupported when T names none. */
+@generic<T>
+protected table_row table_row_of() throws pg_error, std.alloc::alloc_error {
+    table_row made = {.name = std.string::create(), .keys = [], .generated = [], .columns = []};
+    bool marked = false;
+    o<table> described = core::type_attribute::<table, T>();
+    switch (described) {
+    case variant o::some(found):
+        made.name.append(found->name);
+        made.keys = columns_in(found->key);
+        made.generated = columns_in(found->generated);
+        marked = true;
+    case variant o::none: break;
+    }
+    throw (marked == false)
+        failure(error_code::unsupported, "the struct names no table; mark it @std.postgres::table");
+    return move made;
+}
+
+/* Every listed column is a JSON name of the schema, or missing_column with its name. */
+protected void require_columns(const array<std.string::string>* names, const std.json::value* described)
+    throws pg_error, std.alloc::alloc_error {
+    for (usize index = 0usize; index < len(*names); index += 1usize) {
+        bool found = false;
+        switch (std.json::find(described, "properties")) {
+        case variant o::some(properties):
+            for (usize at = 0usize; at < std.json::len(*properties); at += 1usize) {
+                if (same(std.json::key_at(*properties, at), (*names)[index]) == true) { found = true; }
+            }
+        case variant o::none: break;
+        }
+        if (found == false) {
+            pg_error missing = failure(error_code::missing_column, "the table names a column the struct does not have");
+            missing.detail.append((*names)[index]);
+            throw move missing;
+        }
+    }
+}
+
+/* The table of T for an operation that only reads rows. */
+@generic<T: json_decode>
+protected table_row read_table_of() throws pg_error, std.alloc::alloc_error {
+    table_row made = table_row_of::<T>();
+    std.json::value described = schema_for::<T>();
+    require_columns(&made.keys, &described);
+    require_columns(&made.generated, &described);
+    return move made;
+}
+
+/* The table of T with the columns and parameters of one row, made as by parameters_of. */
+@generic<T: json_encode>
+protected table_row row_of(const T* item) throws pg_error, std.alloc::alloc_error {
+    table_row made = table_row_of::<T>();
+    std.json::value described = encode_schema::<T>();
+    require_columns(&made.keys, &described);
+    require_columns(&made.generated, &described);
+    try {
+        std.string::string text = std.json::marshal(item);
+        std.json::value document = std.json::parse(text);
+        throw (std.json::kind(&document) != std.json::value_kind::object)
+            failure(error_code::invalid_value, "the struct is not written as an object");
+        switch (std.json::find(&described, "properties")) {
+        case variant o::some(properties):
+            for (usize index = 0usize; index < std.json::len(*properties); index += 1usize) {
+                str name = std.json::key_at(*properties, index);
+                const u8[] wanted = name;
+                switch (std.json::get(*properties, index)) {
+                case variant o::some(property):
+                    value converted = value::null_value;
+                    switch (std.json::find(&document, wanted)) {
+                    case variant o::some(found): converted = parameter_of(*found, *property);
+                    case variant o::none: break;
+                    }
+                    push_item(&made.columns, table_column {
+                        .name = std.string::from_str(name), .parameter = move converted,
+                        .keyed = names_column(&made.keys, name), .generated = names_column(&made.generated, name)});
+                case variant o::none: break;
+                }
+            }
+        case variant o::none: break;
+        }
+    } catch (std.json::error rejected) {
+        (move rejected) as void;
+        throw failure(error_code::invalid_value, "the struct cannot be written as JSON");
+    }
+    return move made;
+}
+
+protected void require_key(const table_row* made) throws pg_error, std.alloc::alloc_error {
+    throw (len(made->keys) == 0usize)
+        failure(error_code::invalid_value, "the table names no key; give @std.postgres::table a key");
+}
+
+/* `$n` for the next parameter of a statement. */
+protected void put_slot(std.string::string* out, usize number) throws std.alloc::alloc_error {
+    std.string::string slot = f"${number}";
+    out->append(slot);
+}
+
+/* The parameter of a column, taken out of the row. */
+protected value take_parameter(table_row* made, str column) {
+    for (usize index = 0usize; index < len(made->columns); index += 1usize) {
+        if (same(made->columns[index].name, column) == true) {
+            return core::replace(&made->columns[index].parameter, value::null_value);
+        }
+    }
+    return value::null_value;
+}
+
+/* `"k1" = $i AND "k2" = $j`, the parameters of the key appended in key order. */
+protected void put_key_condition(table_row* made, std.string::string* out, array<value>* parameters)
+    throws pg_error, std.alloc::alloc_error {
+    for (usize index = 0usize; index < len(made->keys); index += 1usize) {
+        if (index > 0usize) { out->append(" AND "); }
+        std.string::string column = std.string::from_str(made->keys[index]);
+        put_identifier(out, column);
+        out->append(" = ");
+        push_value(parameters, take_parameter(made, column));
+        put_slot(out, len(*parameters));
+    }
+}
+
+/* `(names) VALUES (slots)` over the columns that are not generated; the parameters are appended. */
+protected void put_insert_values(table_row* made, std.string::string* names, std.string::string* slots,
+                                 array<value>* parameters) throws pg_error, std.alloc::alloc_error {
+    bool first = true;
+    for (usize index = 0usize; index < len(made->columns); index += 1usize) {
+        if (made->columns[index].generated == true) { continue; }
+        if (first == false) {
+            names->append(", ");
+            slots->append(", ");
+        }
+        first = false;
+        put_identifier(names, made->columns[index].name);
+        push_value(parameters, core::replace(&made->columns[index].parameter, value::null_value));
+        put_slot(slots, len(*parameters));
+    }
+}
+
+/* INSERT INTO name (columns) VALUES (...) for one row. */
+protected std.string::string insert_text(table_row* made, array<value>* parameters) throws pg_error, std.alloc::alloc_error {
+    std.string::string names = std.string::create();
+    std.string::string slots = std.string::create();
+    put_insert_values(made, &names, &slots, parameters);
+    return f"INSERT INTO {made->name} ({names}) VALUES ({slots})";
+}
+
+@generic<T: json_decode & send & unborrowed>
+protected async T run_returning(arc shared_state core, std.string::string sql, array<value> parameters)
+    throws pg_error, std.error::fault {
+    rows found = await run_query(move core, move sql, move parameters, std.string::create(), true);
+    return found.decode::<T>(0usize);
+}
+
+@generic<T: json_decode & send & unborrowed>
+protected async o<T> run_find(arc shared_state core, std.string::string sql, array<value> parameters)
+    throws pg_error, std.error::fault {
+    rows found = await run_query(move core, move sql, move parameters, std.string::create(), true);
+    if (len(found.items) == 0usize) { return o::none; }
+    return o::some(found.decode::<T>(0usize));
+}
+
+@generic<T: json_decode & send & unborrowed>
+protected async array<T> run_select(arc shared_state core, std.string::string sql, array<value> parameters)
+    throws pg_error, std.error::fault {
+    rows found = await run_query(move core, move sql, move parameters, std.string::create(), true);
+    return found.decode_all::<T>();
+}
+
+protected async u64 run_statements(arc shared_state core, array<std.string::string> statements,
+                                   array<array<value>> parameter_sets) throws pg_error, std.error::fault {
+    u64 total = 0u64;
+    for (usize index = 0usize; index < len(statements); index += 1usize) {
+        total += await run_execute(std.arc::clone(&core), core::replace(&statements[index], std.string::create()),
+                                   core::replace(&parameter_sets[index], []), std.string::create(), true);
+    }
+    return total;
+}
+
+/* R-SLIB-PG-0017: inserts a row of a table and reads it back with what the database filled. */
+@generic<T: json_encode & json_decode & send & unborrowed>
+task<T throws pg_error, std.error::fault> connection::insert(const connection* this, const T* row)
+    throws pg_error, std.async::start_error, std.alloc::alloc_error {
+    table_row made = row_of(row);
+    array<value> parameters = [];
+    std.string::string sql = insert_text(&made, &parameters);
+    sql.append(" RETURNING *");
+    return run_returning::<T>(std.arc::clone(&this->core), move sql, move parameters);
+}
+
+/* R-SLIB-PG-0017: inserts rows in as few statements as their parameters allow. */
+@generic<T: json_encode>
+task<u64 throws pg_error, std.error::fault> connection::insert_all(const connection* this, const array<T>* items)
+    throws pg_error, std.async::start_error, std.alloc::alloc_error {
+    array<std.string::string> statements = [];
+    array<array<value>> parameter_sets = [];
+    std.string::string sql = std.string::create();
+    array<value> parameters = [];
+    for (usize index = 0usize; index < len(*items); index += 1usize) {
+        table_row made = row_of(&(*items)[index]);
+        usize width = 0usize;
+        for (usize column = 0usize; column < len(made.columns); column += 1usize) {
+            if (made.columns[column].generated == false) { width += 1usize; }
+        }
+        if (len(parameters) > 0usize && len(parameters) + width > 65535usize) {
+            push_item(&statements, core::replace(&sql, std.string::create()));
+            push_item(&parameter_sets, core::replace(&parameters, []));
+        }
+        if (len(parameters) == 0usize) {
+            std.string::string names = std.string::create();
+            std.string::string slots = std.string::create();
+            put_insert_values(&made, &names, &slots, &parameters);
+            std.string::string head = f"INSERT INTO {made.name} ({names}) VALUES ({slots})";
+            sql.append(head);
+        } else {
+            std.string::string unused_names = std.string::create();
+            std.string::string slots = std.string::create();
+            put_insert_values(&made, &unused_names, &slots, &parameters);
+            std.string::string group = f", ({slots})";
+            sql.append(group);
+        }
+    }
+    if (len(parameters) > 0usize) {
+        push_item(&statements, core::replace(&sql, std.string::create()));
+        push_item(&parameter_sets, core::replace(&parameters, []));
+    }
+    drop sql;
+    drop parameters;
+    return run_statements(std.arc::clone(&this->core), move statements, move parameter_sets);
+}
+
+/* R-SLIB-PG-0017: updates the row with the key of `row` and returns how many rows changed. */
+@generic<T: json_encode>
+task<u64 throws pg_error, std.error::fault> connection::update(const connection* this, const T* row)
+    throws pg_error, std.async::start_error, std.alloc::alloc_error {
+    table_row made = row_of(row);
+    require_key(&made);
+    std.string::string sets = std.string::create();
+    array<value> parameters = [];
+    for (usize index = 0usize; index < len(made.columns); index += 1usize) {
+        if (made.columns[index].keyed == true || made.columns[index].generated == true) { continue; }
+        if (len(parameters) > 0usize) { sets.append(", "); }
+        put_identifier(&sets, made.columns[index].name);
+        sets.append(" = ");
+        push_value(&parameters, core::replace(&made.columns[index].parameter, value::null_value));
+        put_slot(&sets, len(parameters));
+    }
+    throw (len(parameters) == 0usize)
+        failure(error_code::invalid_value, "the table has no column outside its key to update");
+    std.string::string condition = std.string::create();
+    put_key_condition(&made, &condition, &parameters);
+    std.string::string sql = f"UPDATE {made.name} SET {sets} WHERE {condition}";
+    return run_execute(std.arc::clone(&this->core), move sql, move parameters, std.string::create(), true);
+}
+
+/* R-SLIB-PG-0017: inserts the row or, when its key is taken, updates that row; reads it back. */
+@generic<T: json_encode & json_decode & send & unborrowed>
+task<T throws pg_error, std.error::fault> connection::upsert(const connection* this, const T* row)
+    throws pg_error, std.async::start_error, std.alloc::alloc_error {
+    table_row made = row_of(row);
+    require_key(&made);
+    array<value> parameters = [];
+    std.string::string sql = insert_text(&made, &parameters);
+    sql.append(" ON CONFLICT (");
+    for (usize index = 0usize; index < len(made.keys); index += 1usize) {
+        if (index > 0usize) { sql.append(", "); }
+        put_identifier(&sql, made.keys[index]);
+    }
+    sql.append(") DO UPDATE SET ");
+    bool listed = false;
+    for (usize index = 0usize; index < len(made.columns); index += 1usize) {
+        if (made.columns[index].keyed == true || made.columns[index].generated == true) { continue; }
+        if (listed == true) { sql.append(", "); }
+        put_identifier(&sql, made.columns[index].name);
+        sql.append(" = EXCLUDED.");
+        put_identifier(&sql, made.columns[index].name);
+        listed = true;
+    }
+    if (listed == false) {
+        put_identifier(&sql, made.keys[0usize]);
+        sql.append(" = EXCLUDED.");
+        put_identifier(&sql, made.keys[0usize]);
+    }
+    sql.append(" RETURNING *");
+    return run_returning::<T>(std.arc::clone(&this->core), move sql, move parameters);
+}
+
+/* R-SLIB-PG-0017: deletes the row with the key of `row` and returns how many rows went. */
+@generic<T: json_encode>
+task<u64 throws pg_error, std.error::fault> connection::remove(const connection* this, const T* row)
+    throws pg_error, std.async::start_error, std.alloc::alloc_error {
+    table_row made = row_of(row);
+    require_key(&made);
+    array<value> parameters = [];
+    std.string::string condition = std.string::create();
+    put_key_condition(&made, &condition, &parameters);
+    std.string::string sql = f"DELETE FROM {made.name} WHERE {condition}";
+    return run_execute(std.arc::clone(&this->core), move sql, move parameters, std.string::create(), true);
+}
+
+/* R-SLIB-PG-0017: the row whose key columns hold `key`, in their order, or none. */
+@generic<T: json_decode & send & unborrowed>
+task<o<T> throws pg_error, std.error::fault> connection::find(const connection* this, array<value> key)
+    throws pg_error, std.async::start_error, std.alloc::alloc_error {
+    table_row made = read_table_of::<T>();
+    require_key(&made);
+    throw (len(key) != len(made.keys))
+        failure(error_code::invalid_value, "find takes one value for each column of the key");
+    std.string::string condition = std.string::create();
+    for (usize index = 0usize; index < len(made.keys); index += 1usize) {
+        if (index > 0usize) { condition.append(" AND "); }
+        put_identifier(&condition, made.keys[index]);
+        condition.append(" = ");
+        put_slot(&condition, index + 1usize);
+    }
+    std.string::string sql = f"SELECT * FROM {made.name} WHERE {condition}";
+    return run_find::<T>(std.arc::clone(&this->core), move sql, move key);
+}
+
+/* R-SLIB-PG-0017: the rows of the table that `tail` selects, with the parameters $1 to $N. */
+@generic<T: json_decode & send & unborrowed>
+task<array<T> throws pg_error, std.error::fault> connection::select(const connection* this, str tail,
+                                                                     array<value> parameters)
+    throws pg_error, std.async::start_error, std.alloc::alloc_error {
+    table_row made = read_table_of::<T>();
+    std.string::string sql = f"SELECT * FROM {made.name} ";
+    sql.append(tail);
+    return run_select::<T>(std.arc::clone(&this->core), move sql, move parameters);
+}
+
+/* R-SLIB-PG-0017: savepoints inside a transaction, the name quoted as an identifier. */
+protected std.string::string savepoint_script(str command, str name) throws pg_error, std.alloc::alloc_error {
+    std.string::string script = std.string::from_str(command);
+    put_identifier(&script, name);
+    return move script;
+}
+
+task<void throws pg_error, std.error::fault> connection::savepoint(const connection* this, str name)
+    throws pg_error, std.async::start_error, std.alloc::alloc_error {
+    return run_script(std.arc::clone(&this->core), savepoint_script("SAVEPOINT ", name));
+}
+
+task<void throws pg_error, std.error::fault> connection::release(const connection* this, str name)
+    throws pg_error, std.async::start_error, std.alloc::alloc_error {
+    return run_script(std.arc::clone(&this->core), savepoint_script("RELEASE SAVEPOINT ", name));
+}
+
+task<void throws pg_error, std.error::fault> connection::rollback_to(const connection* this, str name)
+    throws pg_error, std.async::start_error, std.alloc::alloc_error {
+    return run_script(std.arc::clone(&this->core), savepoint_script("ROLLBACK TO SAVEPOINT ", name));
 }

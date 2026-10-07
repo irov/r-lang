@@ -87,7 +87,7 @@ async std.http::response add(arc Catalog state, std.http::request incoming)
     throws std.error::fault {
     try {
         std.string::string text = std.string::from_utf8(incoming.body.as_slice());
-        NewItem given = std.json::unmarshal(text.as_str());
+        NewItem given = std.json::unmarshal(text);
         const Catalog* shared = &*state;
         u32 created = core::atomic_fetch_add(&shared->created, 1u32, core::memory_order::relaxed);
         std.string::string name = core::replace(&given.name, std.string::create());

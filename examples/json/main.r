@@ -31,7 +31,7 @@ struct Configuration {
 };
 
 protected bool matches(const std.string::string* value, const u8[] expected) {
-    const u8[] actual = value->as_bytes();
+    const u8[] actual = *value;
     if (len(actual) != len(expected)) { return false; }
     usize i = 0;
     while (i < len(actual)) {

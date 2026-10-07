@@ -11,7 +11,7 @@ i32 main() {
     try {
         try {
             std.string::string source = std.string::from_str("(ab|cd){2,4}");
-            str pattern = std.string::as_str(&source);
+            str pattern = source;
             std.regex::regex compiled = std.regex::compile(pattern);
             drop source;
             array<std.regex::span> matches = std.regex::find_all(&compiled, "abcd ababcd cdcd");

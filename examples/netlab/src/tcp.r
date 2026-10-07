@@ -31,7 +31,7 @@ async Receipt receive(const std.net::tcp_stream* stream, u8[] buffer)
 // The protocol version byte followed by the message.
 bytes versioned(std.string::string message) throws std.alloc::alloc_error {
     bytes packet = std.alloc::bytes(1usize, 1u8);
-    packet.append(message.as_str());
+    packet.append(message);
     return move packet;
 }
 

@@ -89,14 +89,14 @@ protected array<std.sqlite::value> parameters(const array<std.string::string>* a
     array<std.sqlite::value> values = [];
     const std.string::string[] at = std.array::as_slice(arguments);
     for (usize index = first; index < len(at); index += 1usize) {
-        values.push(parse_value(at[index].as_str()));
+        values.push(parse_value(at[index]));
     }
     return move values;
 }
 
 protected std.string::string sql_of(const array<std.string::string>* arguments) throws std.alloc::alloc_error, std.string::string_error {
     const std.string::string[] at = std.array::as_slice(arguments);
-    bytes text = parse_hex(at[1usize].as_str());
+    bytes text = parse_hex(at[1usize]);
     return std.string::from_utf8(text.as_slice());
 }
 
@@ -110,7 +110,7 @@ protected std.string::string show(const std.sqlite::value* item) throws std.allo
         f64 real = *number;
         return f"r{real}";
     case variant std.sqlite::value::text(data):
-        std.string::string digits = hex(data->as_bytes());
+        std.string::string digits = hex(*data);
         return f"t{digits}";
     case variant std.sqlite::value::blob(data):
         std.string::string digits = hex(data->as_slice());
@@ -122,9 +122,9 @@ protected std.string::string show(const std.sqlite::value* item) throws std.allo
 protected std.string::string listing(const std.sqlite::rows* found) throws std.alloc::alloc_error {
     std.string::string text = std.string::from_str("columns");
     for (usize column = 0usize; column < len(found->columns); column += 1usize) {
-        std.string::string name = hex(found->columns[column].as_bytes());
+        std.string::string name = hex(found->columns[column]);
         std.string::append_str(&text, " ");
-        std.string::append_str(&text, name.as_str());
+        std.string::append_str(&text, name);
     }
     for (usize index = 0usize; index < len(found->items); index += 1usize) {
         std.string::append_str(&text, "\nrow");
@@ -132,7 +132,7 @@ protected std.string::string listing(const std.sqlite::rows* found) throws std.a
         for (usize column = 0usize; column < row->count(); column += 1usize) {
             std.string::string shown = show(&row->values[column]);
             std.string::append_str(&text, " ");
-            std.string::append_str(&text, shown.as_str());
+            std.string::append_str(&text, shown);
         }
     }
     std.string::append_str(&text, "\nend");
@@ -155,28 +155,28 @@ async i32 main() {
             o<std.string::string> line = await std.console::read_line();
             switch (move line) {
             case variant o::some(move text):
-                array<std.string::string> arguments = words(text.as_str());
+                array<std.string::string> arguments = words(text);
                 const std.string::string[] at = std.array::as_slice(&arguments);
-                str command = at[0usize].as_str();
+                str command = at[0usize];
                 try {
                     switch (command) {
                     case "script":
                         std.string::string sql = sql_of(&arguments);
-                        await db.execute_script(sql.as_str());
+                        await db.execute_script(sql);
                         await std.console::println(f"ok");
                     case "query":
                         std.string::string sql = sql_of(&arguments);
-                        std.sqlite::rows found = await db.query(sql.as_str(), parameters(&arguments, 2usize));
+                        std.sqlite::rows found = await db.query(sql, parameters(&arguments, 2usize));
                         await std.console::println(listing(&found));
                     case "execute":
                         std.string::string sql = sql_of(&arguments);
-                        std.sqlite::execution done = await db.execute(sql.as_str(), parameters(&arguments, 2usize));
+                        std.sqlite::execution done = await db.execute(sql, parameters(&arguments, 2usize));
                         u64 changes = done.changes;
                         i64 last = done.last_row_id;
                         await std.console::println(f"done {changes} {last}");
                     case "prepare":
                         std.string::string sql = sql_of(&arguments);
-                        std.sqlite::statement made = await db.prepare(sql.as_str());
+                        std.sqlite::statement made = await db.prepare(sql);
                         core::replace(&prepared, o::some(move made)) as void;
                         await std.console::println(f"ok");
                     case "run":
@@ -190,7 +190,7 @@ async i32 main() {
                             await std.console::println(f"error no_prepared 0");
                         }
                     case "begin":
-                        await db.begin(mode_of(at[1usize].as_str()));
+                        await db.begin(mode_of(at[1usize]));
                         await std.console::println(f"ok");
                     case "commit":
                         await db.commit();

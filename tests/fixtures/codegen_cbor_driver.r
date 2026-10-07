@@ -59,7 +59,7 @@ async i32 main() {
         o<std.string::string> line = await std.console::read_line();
         switch (move line) {
         case variant o::some(move text):
-            bytes input = parse_hex(text.as_str());
+            bytes input = parse_hex(text);
             await std.console::println(report(input.as_slice()));
         case variant o::none: return 0;
         }

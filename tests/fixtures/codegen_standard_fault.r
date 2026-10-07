@@ -36,7 +36,7 @@ i32 main() {
     try {
         failures += parse("42") == 42 ? 0 : 1;
         std.string::string text = copy("abc");
-        str view = text.as_str();
+        str view = text;
         failures += len(view) == 3usize ? 0 : 2;
         i32 bad = parse("x");
         failures += bad >= 0 ? 4 : 4;

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "core_revision": "0.1.0-draft.100",
+  "core_revision": "0.1.0-draft.101",
   "annex": "A",
   "annex_sha256": "7c977ea7123cc116c59e8616de7d4743044d86051367d13239aac59cbe8f336e",
   "production_count": 302,

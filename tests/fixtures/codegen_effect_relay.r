@@ -40,7 +40,7 @@ usize forward(i32 kind) throws quota_error, io_error, std.convert::parse_error,
     throw (kind == 9) quota_error {.limit = 7u32};
     fail(kind);
     held.append("!");
-    const str text = held.as_str();
+    const str text = held;
     return len(text);
 }
 
@@ -50,7 +50,7 @@ i32 family_code(io_error failure) {
     } catch (net_error e) {
         return 200 + (e.port as i32);
     } catch (disk_error e) {
-        str path = e.path.as_str();
+        str path = e.path;
         return 100 + (len(path) as i32);
     } catch (io_error e) {
         return e.code;
@@ -62,7 +62,7 @@ i32 classify(i32 kind) throws quota_error, std.convert::parse_error, std.alloc::
     try {
         std.string::string held = std.string::from_str("classify");
         usize length = forward(kind);
-        const str text = held.as_str();
+        const str text = held;
         return (length + len(text)) as i32;
     } catch (tls_error e) {
         return 300 + e.session.id;
@@ -137,7 +137,7 @@ async usize aforward(i32 kind) throws quota_error, io_error, std.convert::parse_
         await afail(kind);
     }
     held.append("!");
-    const str text = held.as_str();
+    const str text = held;
     return len(text);
 }
 
@@ -148,7 +148,7 @@ async i32 aclassify(i32 kind) throws quota_error, std.convert::parse_error,
         try {
             std.string::string held = std.string::from_str("classify");
             usize length = await aforward(kind);
-            const str text = held.as_str();
+            const str text = held;
             return (length + len(text)) as i32;
         } finally {
             drop_count(false) as void;

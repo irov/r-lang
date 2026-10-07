@@ -16,23 +16,23 @@ i32 main() {
         try {
             str[3] words = {"alpha", "beta", "gamma"};
             std.string::string joined = std.text::join(words, ", ");
-            std.string::string replaced = std.text::replace(joined.as_str(), "a", "AA");
-            std.string::string upper = std.text::ascii_uppercase(replaced.as_str());
-            std.string::string lower = std.text::ascii_lowercase(upper.as_str());
-            if (same(lower.as_str(), "aalphaa, betaa, gaammaa") == false) {
+            std.string::string replaced = std.text::replace(joined, "a", "AA");
+            std.string::string upper = std.text::ascii_uppercase(replaced);
+            std.string::string lower = std.text::ascii_lowercase(upper);
+            if (same(lower, "aalphaa, betaa, gaammaa") == false) {
                 throw TestAssertionFailed {.code = 1};
             }
-            std.string::string encoded = std.encoding::encode_base64(lower.as_str());
-            std.string::string url = std.encoding::encode_base64_url(lower.as_str());
-            bytes decoded = std.encoding::decode_base64(encoded.as_str());
-            bytes url_decoded = std.encoding::decode_base64_url(url.as_str());
+            std.string::string encoded = std.encoding::encode_base64(lower);
+            std.string::string url = std.encoding::encode_base64_url(lower);
+            bytes decoded = std.encoding::decode_base64(encoded);
+            bytes url_decoded = std.encoding::decode_base64_url(url);
             if (std.bytes::equal(decoded.as_slice(), url_decoded.as_slice()) == false) {
                 throw TestAssertionFailed {.code = 2};
             }
             std.string::string hex = std.encoding::encode_hex(decoded.as_slice());
-            bytes unhex = std.encoding::decode_hex(hex.as_str());
+            bytes unhex = std.encoding::decode_hex(hex);
             std.string::string percent = std.encoding::percent_encode("a b/é");
-            bytes unpercent = std.encoding::percent_decode(percent.as_str());
+            bytes unpercent = std.encoding::percent_decode(percent);
             if (len(unhex) != len(decoded) || len(unpercent) != 6usize) {
                 throw TestAssertionFailed {.code = 3};
             }

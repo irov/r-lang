@@ -26,10 +26,10 @@ protected void expect_error(str text, std.convert::parse_error_code code, usize 
         std.uuid::uuid parsed = std.uuid::parse(text);
         parsed as void;
         std.string::string message = f"\"{text}\" parsed";
-        std.test::fail(message.as_str());
+        std.test::fail(message);
     } catch (std.convert::parse_error failure) {
         std.string::string message = f"the error code of \"{text}\"";
-        std.test::check(failure.code == code, message.as_str());
+        std.test::check(failure.code == code, message);
         std.test::equal(failure.index, index);
     }
 }
@@ -38,11 +38,11 @@ protected void expect_error(str text, std.convert::parse_error_code code, usize 
 void builds_the_rfc_examples() throws std.test::failure, std.alloc::alloc_error {
     std.uuid::uuid four = example_v4();
     std.string::string four_text = f"{four}";
-    std.test::equal_text(four_text.as_str(), "919108f7-52d1-4320-9bac-f847db4148a8");
+    std.test::equal_text(four_text, "919108f7-52d1-4320-9bac-f847db4148a8");
     std.test::equal(std.uuid::version(&four), 4u8);
     std.uuid::uuid seven = example_v7(0x017f22e279b0u64);
     std.string::string seven_text = f"{seven}";
-    std.test::equal_text(seven_text.as_str(), "017f22e2-79b0-7cc3-98c4-dc0c0c07398f");
+    std.test::equal_text(seven_text, "017f22e2-79b0-7cc3-98c4-dc0c0c07398f");
     std.test::equal(std.uuid::version(&seven), 7u8);
     // Only the lower 48 bits of the time and the unmasked random bits are kept.
     u8[10] noisy = {0xfcu8, 0xc3u8, 0xd8u8, 0xc4u8, 0xdcu8, 0x0cu8, 0x0cu8, 0x07u8, 0x39u8,
@@ -51,10 +51,10 @@ void builds_the_rfc_examples() throws std.test::failure, std.alloc::alloc_error 
     std.test::equal(masked, seven);
     std.uuid::uuid nil = std.uuid::nil();
     std.string::string nil_text = f"{nil}";
-    std.test::equal_text(nil_text.as_str(), "00000000-0000-0000-0000-000000000000");
+    std.test::equal_text(nil_text, "00000000-0000-0000-0000-000000000000");
     std.uuid::uuid max = std.uuid::max();
     std.string::string max_text = f"{max}";
-    std.test::equal_text(max_text.as_str(), "ffffffff-ffff-ffff-ffff-ffffffffffff");
+    std.test::equal_text(max_text, "ffffffff-ffff-ffff-ffff-ffffffffffff");
     std.test::equal(std.uuid::version(&nil), 0u8);
     std.test::equal(std.uuid::version(&max), 15u8);
 }
@@ -72,7 +72,7 @@ void parses_the_text_form()
     // The text of an identifier parses back to it.
     std.uuid::uuid four = example_v4();
     std.string::string four_text = f"{four}";
-    std.uuid::uuid again = std.uuid::parse(four_text.as_str());
+    std.uuid::uuid again = std.uuid::parse(four_text);
     std.test::equal(again, four);
     std.uuid::uuid max = std.uuid::parse("FFFFFFFF-ffff-FFFF-ffff-FFFFFFFFFFFF");
     std.test::equal(max, std.uuid::max());
@@ -172,5 +172,5 @@ void reports_parse_errors() throws std.test::failure, std.alloc::alloc_error {
 void formats_under_allocation_failures() throws std.test::failure, std.alloc::alloc_error {
     std.uuid::uuid four = example_v4();
     std.string::string text = f"id {four}";
-    std.test::equal_text(text.as_str(), "id 919108f7-52d1-4320-9bac-f847db4148a8");
+    std.test::equal_text(text, "id 919108f7-52d1-4320-9bac-f847db4148a8");
 }

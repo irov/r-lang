@@ -1,7 +1,7 @@
 module test.codegen.string_place_views;
 
 /* R-EXPR-0015 (L41): a place of type std.string::string where str is expected is the view
-   std.string::as_str(&place); the place is borrowed, not moved, and stays usable. */
+   place; the place is borrowed, not moved, and stays usable. */
 
 struct Record {
     std.string::string name;
@@ -74,7 +74,7 @@ i32 run() throws std.alloc::alloc_error {
     std.format::builder builder = std.format::create();
     builder.append(word);
     builder.append(record.name);
-    str built = builder.as_str();
+    str built = builder;
     if (same(built, "viewsrecord") == false) { return 11; }
     return 0;
 }

@@ -15,13 +15,13 @@ protected std.time::system_time at(i64 seconds, u32 nanoseconds) {
 protected void writes_rfc3339(i64 seconds, u32 nanoseconds, u32 digits, str expected)
     throws std.time::time_error, std.test::failure, std.alloc::alloc_error {
     std.string::string text = std.time::format_rfc3339(at(seconds, nanoseconds), digits);
-    std.test::equal_text(text.as_str(), expected);
+    std.test::equal_text(text, expected);
 }
 
 protected void writes_http(i64 seconds, u32 nanoseconds, str expected)
     throws std.time::time_error, std.test::failure, std.alloc::alloc_error {
     std.string::string text = std.time::format_http_date(at(seconds, nanoseconds));
-    std.test::equal_text(text.as_str(), expected);
+    std.test::equal_text(text, expected);
 }
 
 protected void refuses(i64 seconds, u32 nanoseconds, u32 digits, bool http,
@@ -62,10 +62,10 @@ protected void rejects(str text, bool http, std.convert::parse_error_code code, 
             std.time::parse_rfc3339(text) as void;
         }
         std.string::string message = f"{text} is not a valid time";
-        std.test::fail(message.as_str());
+        std.test::fail(message);
     } catch (std.convert::parse_error failure) {
         std.string::string message = f"the code of the error in {text}";
-        std.test::check(failure.code == code, message.as_str());
+        std.test::check(failure.code == code, message);
         std.test::equal(failure.index, index);
     }
 }
@@ -157,15 +157,15 @@ void round_trips_through_text()
            std.alloc::alloc_error {
     std.time::system_time now = std.time::system_now();
     std.string::string exact = std.time::format_rfc3339(now, 9u32);
-    std.time::system_time back = std.time::parse_rfc3339(exact.as_str());
+    std.time::system_time back = std.time::parse_rfc3339(exact);
     std.test::equal(back.unix_seconds, now.unix_seconds);
     std.test::equal(back.nanoseconds, now.nanoseconds);
     std.string::string http = std.time::format_http_date(now);
-    std.time::system_time whole = std.time::parse_http_date(http.as_str());
+    std.time::system_time whole = std.time::parse_http_date(http);
     std.test::equal(whole.unix_seconds, now.unix_seconds);
     std.test::equal(whole.nanoseconds, 0u32);
     std.string::string again = std.time::format_http_date(whole);
-    std.test::equal_text(again.as_str(), http.as_str());
+    std.test::equal_text(again, http);
 }
 
 protected i64 nanoseconds_since(std.time::instant start) throws std.time::time_error {
@@ -423,15 +423,15 @@ void formats_local_times_by_pattern()
     std.time::zone utc = std.time::utc_zone();
     std.time::local_time wall = utc.to_local(at(1791212645i64, 123456789u32));
     std.string::string full = std.time::format_local(wall, "dd.MM.yyyy HH:mm:ss.SSSSSSSSS");
-    std.test::equal_text(full.as_str(), "05.10.2026 15:04:05.123456789");
+    std.test::equal_text(full, "05.10.2026 15:04:05.123456789");
     std.string::string short_form = std.time::format_local(wall, "yyyy.MM.dd HH:mm:ss");
-    std.test::equal_text(short_form.as_str(), "2026.10.05 15:04:05");
+    std.test::equal_text(short_form, "2026.10.05 15:04:05");
     std.string::string millis = std.time::format_local(wall, "HH:mm:ss.SSS");
-    std.test::equal_text(millis.as_str(), "15:04:05.123");
+    std.test::equal_text(millis, "15:04:05.123");
     std.time::zone eastern = std.time::fixed_zone(28800i32, "CST");
     std.time::local_time shanghai = eastern.to_local(at(1791212645i64, 0u32));
     std.string::string local = std.time::format_local(shanghai, "dd.MM.yyyy HH:mm");
-    std.test::equal_text(local.as_str(), "05.10.2026 23:04");
+    std.test::equal_text(local, "05.10.2026 23:04");
     wall.month = 13u8;
     try {
         std.string::string wrong = std.time::format_local(wall, "yyyy-MM-dd");

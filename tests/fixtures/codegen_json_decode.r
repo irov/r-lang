@@ -97,14 +97,14 @@ std.json::value CustomNumber::json_marshal(const CustomNumber* value)
     i32 calls = default_counter(1);
     calls as void;
     std.string::string encoded = std.json::marshal(&value->value);
-    const u8[] source = std.string::as_bytes(&encoded);
+    const u8[] source = encoded;
     std.json::value result = std.json::parse(source);
     return move result;
 }
 CustomNumber CustomNumber::json_unmarshal(const std.json::value* value)
     throws std.json::error, std.alloc::alloc_error {
     std.string::string encoded = std.json::stringify(value);
-    const u8[] source = std.string::as_bytes(&encoded);
+    const u8[] source = encoded;
     u64 number = std.json::unmarshal(source);
     CustomNumber result = {.value = number};
     return result;
@@ -121,7 +121,7 @@ struct Hooks {
 struct EmptyCustom { std.string::string text; };
 std.json::value EmptyCustom::json_marshal(const EmptyCustom* value)
     throws std.json::error, std.alloc::alloc_error {
-    const u8[] text = std.string::as_bytes(&value->text);
+    const u8[] text = value->text;
     std.json::value result = std.json::from_string(text);
     return move result;
 }
@@ -149,7 +149,7 @@ struct Delegating { T value; };
 std.json::value Delegating<T>::json_marshal(const Delegating<T>* value)
     throws std.json::error, std.alloc::alloc_error {
     std.string::string encoded = std.json::marshal(&value->value);
-    const u8[] bytes = std.string::as_bytes(&encoded);
+    const u8[] bytes = encoded;
     std.json::value result = std.json::parse(bytes);
     return move result;
 }
@@ -174,7 +174,7 @@ struct DynamicJson {
 };
 
 protected bool matches(const std.string::string* source, const u8[] expected) {
-    const u8[] actual = std.string::as_bytes(source);
+    const u8[] actual = *source;
     usize size = len(actual);
     usize other = len(expected);
     if (size != other) { return false; }
@@ -201,7 +201,7 @@ protected i32 exercise() throws std.json::error, std.alloc::alloc_error {
     std.string::string encoded = std.json::marshal(&storage_user.value);
     bool correct_4 = matches(&encoded, "{\"id\":\"18446744073709551615\",\"display_name\":\"Alice\",\"score\":null,\"active\":true,\"initial\":\"A\"}");
     if (correct_4 == false) { return 16; }
-    const u8[] encoded_bytes = std.string::as_bytes(&encoded);
+    const u8[] encoded_bytes = encoded;
     User roundtrip = std.json::unmarshal(encoded_bytes);
     if (roundtrip.id != storage_user.value.id) { return 17; }
     std.string::string empty_omission = std.string::from_str("");

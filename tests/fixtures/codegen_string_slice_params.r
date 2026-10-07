@@ -68,7 +68,7 @@ async i32 main() {
     if (apply(shortest, view) != 1usize) { return 6; }
     // Elements borrowed from an owned string keep that string as their origin.
     std.string::string owned = std.string::from_str("owned text");
-    str[2] mixed = {std.string::as_str(&owned), "x"};
+    str[2] mixed = {owned, "x"};
     str owned_best = longest(mixed[0usize..2usize]);
     if (len(owned_best) != 10usize) { return 7; }
     try {

@@ -10,7 +10,7 @@ import std.string;
 usize widths(const std.string::string[] texts) {
     usize total = 0usize;
     for (usize index = 0usize; index < len(texts); index += 1usize) {
-        str text = std.string::as_str(&texts[index]);
+        str text = texts[index];
         total += len(text);
     }
     return total;

@@ -134,7 +134,7 @@ usize headers::remove(headers* this, str name) throws std.alloc::alloc_error {
         header entry = core::replace(&this->entries[index],
                                      header {.name = std.string::create(),
                                              .value = std.string::create()});
-        if (std.text::equal_ignore_ascii_case(entry.name.as_str(), name) == true) {
+        if (std.text::equal_ignore_ascii_case(entry.name, name) == true) {
             removed += 1usize;
             drop entry;
             continue;
@@ -156,8 +156,8 @@ void headers::set(headers* this, str name, str value) throws http_error, std.all
 /* R-SLIB-HTTP-0002: the value of the first field with the name, compared without ASCII case. */
 o<str> headers::get(const headers* this, str name) {
     for (usize index = 0usize; index < len(this->entries); index += 1usize) {
-        if (std.text::equal_ignore_ascii_case(this->entries[index].name.as_str(), name) == true) {
-            return o::some(this->entries[index].value.as_str());
+        if (std.text::equal_ignore_ascii_case(this->entries[index].name, name) == true) {
+            return o::some(this->entries[index].value);
         }
     }
     return o::none;
@@ -176,10 +176,10 @@ bool headers::contains(const headers* this, str name) {
    elements, compared without ASCII case (as Connection and Transfer-Encoding do). */
 bool headers::has_token(const headers* this, str name, str token) {
     for (usize index = 0usize; index < len(this->entries); index += 1usize) {
-        if (std.text::equal_ignore_ascii_case(this->entries[index].name.as_str(), name) == false) {
+        if (std.text::equal_ignore_ascii_case(this->entries[index].name, name) == false) {
             continue;
         }
-        for (str element in std.text::split(this->entries[index].value.as_str(), ",")) {
+        for (str element in std.text::split(this->entries[index].value, ",")) {
             if (std.text::equal_ignore_ascii_case(std.text::trim(element), token) == true) {
                 return true;
             }
@@ -190,8 +190,8 @@ bool headers::has_token(const headers* this, str name, str token) {
 
 /* The number of fields and each by its position. */
 usize headers::count(const headers* this) { return len(this->entries); }
-str headers::name_at(const headers* this, usize index) { return this->entries[index].name.as_str(); }
-str headers::value_at(const headers* this, usize index) { return this->entries[index].value.as_str(); }
+str headers::name_at(const headers* this, usize index) { return this->entries[index].name; }
+str headers::value_at(const headers* this, usize index) { return this->entries[index].value; }
 
 /* A path parameter that a route captured. */
 protected struct param { std.string::string name; std.string::string value; };
@@ -215,17 +215,17 @@ request request::create(method value, str target) throws std.alloc::alloc_error 
 
 /* R-SLIB-HTTP-0003: the target before its query, and the query after '?'. */
 str request::path(const request* this) {
-    const u8[] bytes = this->target.as_bytes();
+    const u8[] bytes = this->target;
     switch (std.bytes::find(bytes, 63u8)) {
-    case variant o::some(at): return piece(this->target.as_str(), 0usize, *at);
-    case variant o::none: return this->target.as_str();
+    case variant o::some(at): return piece(this->target, 0usize, *at);
+    case variant o::none: return this->target;
     }
 }
 
 o<str> request::query(const request* this) {
-    const u8[] bytes = this->target.as_bytes();
+    const u8[] bytes = this->target;
     switch (std.bytes::find(bytes, 63u8)) {
-    case variant o::some(at): return o::some(piece(this->target.as_str(), *at + 1usize, len(bytes)));
+    case variant o::some(at): return o::some(piece(this->target, *at + 1usize, len(bytes)));
     case variant o::none: return o::none;
     }
 }
@@ -233,8 +233,8 @@ o<str> request::query(const request* this) {
 /* R-SLIB-HTTP-0006: the value of a path parameter that the route of the request captured. */
 o<str> request::param(const request* this, str name) {
     for (usize index = 0usize; index < len(this->params); index += 1usize) {
-        if (std.bytes::equal(this->params[index].name.as_bytes(), name) == true) {
-            return o::some(this->params[index].value.as_str());
+        if (std.bytes::equal(this->params[index].name, name) == true) {
+            return o::some(this->params[index].value);
         }
     }
     return o::none;
@@ -245,10 +245,10 @@ o<str> request::param(const request* this, str name) {
    name, without the double quotes around the value. */
 o<str> request::cookie(const request* this, str name) {
     for (usize index = 0usize; index < len(this->headers.entries); index += 1usize) {
-        if (std.text::equal_ignore_ascii_case(this->headers.entries[index].name.as_str(), "Cookie") == false) {
+        if (std.text::equal_ignore_ascii_case(this->headers.entries[index].name, "Cookie") == false) {
             continue;
         }
-        for (str pair in std.text::split(this->headers.entries[index].value.as_str(), ";")) {
+        for (str pair in std.text::split(this->headers.entries[index].value, ";")) {
             str item = std.text::trim(pair);
             const u8[] bytes = item;
             switch (std.bytes::find(bytes, 61u8)) {
@@ -295,30 +295,30 @@ protected void append_attribute(std.string::string* line, str name, const (o<std
         line->append("; ");
         line->append(name);
         line->append("=");
-        line->append(text->as_str());
+        line->append(*text);
     case variant o::none: break;
     }
 }
 
 /* R-SLIB-HTTP-0016 (M42): adds a Set-Cookie field for the cookie; its name shall be a token. */
 void response::set_cookie(response* this, const cookie* value) throws http_error, std.alloc::alloc_error {
-    throw (std.mime::is_token(value->name.as_str()) == false) failure(error_code::invalid_header);
-    std.string::string line = std.string::from_str(value->name.as_str());
+    throw (std.mime::is_token(value->name) == false) failure(error_code::invalid_header);
+    std.string::string line = std.string::from_str(value->name);
     line.append("=");
-    line.append(value->value.as_str());
+    line.append(value->value);
     append_attribute(&line, "Path", &value->path);
     append_attribute(&line, "Domain", &value->domain);
     switch (value->max_age) {
     case variant o::some(seconds):
         i64 count = *seconds;
         std.string::string age = f"; Max-Age={count}";
-        line.append(age.as_str());
+        line.append(age);
     case variant o::none: break;
     }
     if (value->secure == true) { line.append("; Secure"); }
     if (value->http_only == true) { line.append("; HttpOnly"); }
     append_attribute(&line, "SameSite", &value->same_site);
-    this->headers.add("Set-Cookie", line.as_str());
+    this->headers.add("Set-Cookie", line);
 }
 
 /* One part of a streamed response: its head, then its chunks. */
@@ -884,7 +884,7 @@ async void write_request(const T* output, const request* message, str host)
     std.string::string head = std.string::create();
     std.string::append_str(&head, method_name(message->method));
     std.string::append_str(&head, " ");
-    std.string::append_str(&head, message->target.as_str());
+    std.string::append_str(&head, message->target);
     std.string::append_str(&head, " HTTP/1.1\r\n");
     if (message->headers.contains("Host") == false) { append_field(&head, "Host", host); }
     append_fields(&head, &message->headers);
@@ -892,11 +892,11 @@ async void write_request(const T* output, const request* message, str host)
     if (size != 0usize || message->method == method::post || message->method == method::put ||
         message->method == method::patch) {
         std.string::string length = f"Content-Length: {size}\r\n";
-        std.string::append_str(&head, length.as_str());
+        std.string::append_str(&head, length);
     }
     std.string::append_str(&head, "\r\n");
     task_scope(1) io {
-        await output->write_all_from(head.as_bytes());
+        await output->write_all_from(head);
         if (size != 0usize) { await output->write_all_from(message->body.as_slice()); }
         await output->flush();
     }
@@ -912,7 +912,7 @@ async void write_response(const T* output, const response* message, bool head, b
     u16 status = message->status;
     str phrase = reason(status);
     std.string::string line = f"HTTP/1.1 {status} {phrase}\r\n";
-    std.string::append_str(&text, line.as_str());
+    std.string::append_str(&text, line);
     append_fields(&text, &message->headers);
     if (close == true && message->headers.has_token("Connection", "close") == false) {
         append_field(&text, "Connection", "close");
@@ -920,11 +920,11 @@ async void write_response(const T* output, const response* message, bool head, b
     usize size = len(message->body);
     if (message->status >= 200u16 && message->status != 204u16 && message->status != 304u16) {
         std.string::string length = f"Content-Length: {size}\r\n";
-        std.string::append_str(&text, length.as_str());
+        std.string::append_str(&text, length);
     }
     std.string::append_str(&text, "\r\n");
     task_scope(1) io {
-        await output->write_all_from(text.as_bytes());
+        await output->write_all_from(text);
         if (head == false && size != 0usize) {
             await output->write_all_from(message->body.as_slice());
         }
@@ -942,14 +942,14 @@ async void write_chunked_head(const T* output, const response* message, bool clo
     u16 status = message->status;
     str phrase = reason(status);
     std.string::string line = f"HTTP/1.1 {status} {phrase}\r\n";
-    std.string::append_str(&text, line.as_str());
+    std.string::append_str(&text, line);
     append_fields(&text, &message->headers);
     if (close == true && message->headers.has_token("Connection", "close") == false) {
         append_field(&text, "Connection", "close");
     }
     append_field(&text, "Transfer-Encoding", "chunked");
     std.string::append_str(&text, "\r\n");
-    task_scope(1) io { await output->write_all_from(text.as_bytes()); }
+    task_scope(1) io { await output->write_all_from(text); }
 }
 
 /* R-SLIB-HTTP-0005: writes one chunk of a chunked body; an empty chunk writes nothing. */
@@ -976,7 +976,7 @@ async void write_chunk(const T* output, const u8[] data) throws std.error::fault
     str end_text = "\r\n";
     const u8[] line_end = end_text;
     task_scope(1) io {
-        await output->write_all_from(line.as_bytes());
+        await output->write_all_from(line);
         await output->write_all_from(data);
         await output->write_all_from(line_end);
     }
@@ -1207,7 +1207,7 @@ protected o<usize> find_route(const router<S>* routes, const request* incoming,
     method sent = incoming->method;
     for (usize index = 0usize; index < len(routes->routes); index += 1usize) {
         array<param> found = std.array::create::<param>();
-        if (match_path(routes->routes[index].pattern.as_str(), incoming->path(), &found) == false) {
+        if (match_path(routes->routes[index].pattern, incoming->path(), &found) == false) {
             continue;
         }
         method wanted = routes->routes[index].method;
@@ -1229,7 +1229,7 @@ protected void add_date(headers* fields) throws std.alloc::alloc_error {
     try {
         std.time::system_time wall = std.time::system_now();
         std.string::string date = std.time::format_http_date(wall);
-        fields->add("Date", date.as_str());
+        fields->add("Date", date);
     } catch (std.time::time_error rejected) {
         rejected as void;
     } catch (http_error rejected) {
@@ -1299,7 +1299,7 @@ async void upgrade::refuse(upgrade this, response answer) throws std.error::faul
 protected bool same_path(const (o<std.string::string>)* wanted, str path) {
     switch (*wanted) {
     case variant o::some(text):
-        const u8[] left = text->as_bytes();
+        const u8[] left = *text;
         const u8[] right = path;
         if (len(left) != len(right)) { return false; }
         for (usize index = 0usize; index < len(left); index += 1usize) {
@@ -1337,7 +1337,7 @@ protected o<response> endpoint_answer(const router<S>* routes, const request* in
                 // The media type is a valid field value.
                 rejected as void;
             }
-            std.bytes::append(&answer.body, text.as_bytes());
+            std.bytes::append(&answer.body, text);
             return o::some(move answer);
         case variant o::none: break;
         }
@@ -1384,7 +1384,7 @@ protected routing route_request(const shared<S>* context, request* incoming)
         }
         response refused = response::text(405u16, reason(405u16));
         try {
-            refused.headers.add("Allow", allowed.as_str());
+            refused.headers.add("Allow", allowed);
         } catch (http_error rejected) {
             // Method names are valid field values.
             rejected as void;
@@ -1519,7 +1519,7 @@ protected async bool write_streamed(std.bufio::reader<T>* input, arc shared<S> c
                                     usize index, request incoming, bool head, bool wanted)
     throws std.error::fault {
     method sent = incoming.method;
-    std.string::string target = std.string::from_str(incoming.target.as_str());
+    std.string::string target = std.string::from_str(incoming.target);
     auto streamer = context->routes.routes[index].streamer;
     std.sync::sync_channel<part> factory = std.sync::sync_channel::<part>(4usize);
     std.sync::sync_sender<part> sender = std.sync::sync_sender(&factory);
@@ -1534,7 +1534,7 @@ protected async bool write_streamed(std.bufio::reader<T>* input, arc shared<S> c
     case variant o::some(chosen):
         task_scope(3) stream {
             auto producer = (*chosen)(std.arc::clone(&context->state), move incoming, move writer);
-            auto relay = relay_parts(&input->source, move receiver, &*context, sent, target.as_str(), head, wanted);
+            auto relay = relay_parts(&input->source, move receiver, &*context, sent, target, head, wanted);
             auto watcher = peer_left(&input->source, &taken);
             select (stream) {
             case relayed done = await move relay:
@@ -1574,7 +1574,7 @@ protected async bool write_streamed(std.bufio::reader<T>* input, arc shared<S> c
     }
     if (began == false) {
         response refusal = response::text(500u16, reason(500u16));
-        finish_hooks(&*context, sent, target.as_str(), &refusal);
+        finish_hooks(&*context, sent, target, &refusal);
         drop target;
         task_scope(1) plain { return await write_plain(input, move refusal, head, false); }
     }
@@ -1644,13 +1644,13 @@ protected async bool exchange(std.bufio::reader<T>* input, arc shared<S> context
         bool wanted = keeps_alive(&incoming);
         bool head = incoming.method == method::head;
         method sent = incoming.method;
-        std.string::string target = std.string::from_str(incoming.target.as_str());
+        std.string::string target = std.string::from_str(incoming.target);
         routing plan = route_request(&*context, &incoming);
         o<response> early = core::replace(&plan.answer, o::none);
         switch (move early) {
         case variant o::some(move answer):
             drop incoming;
-            finish_hooks(&*context, sent, target.as_str(), &answer);
+            finish_hooks(&*context, sent, target, &answer);
             task_scope(1) io { return await write_plain(input, move answer, head, wanted); }
         case variant o::none: break;
         }
@@ -1673,7 +1673,7 @@ protected async bool exchange(std.bufio::reader<T>* input, arc shared<S> context
         }
         task_scope(1) io {
             response result = await call_handler(std.arc::clone(&context), plan.index, move incoming);
-            finish_hooks(&*context, sent, target.as_str(), &result);
+            finish_hooks(&*context, sent, target, &result);
             return await write_plain(input, move result, head, wanted);
         }
     }
@@ -1825,7 +1825,7 @@ protected notes notes_share(const notes* this) {
 
 protected void put_note(array<note>* entries, str name, str value) throws std.alloc::alloc_error {
     for (usize index = 0usize; index < len(*entries); index += 1usize) {
-        if (std.bytes::equal((*entries)[index].name.as_bytes(), name) == true) {
+        if (std.bytes::equal((*entries)[index].name, name) == true) {
             std.string::string old = core::replace(&(*entries)[index].value, std.string::from_str(value));
             drop old;
             return;
@@ -1861,8 +1861,8 @@ usize notes::count(const notes* this) {
 protected o<std.string::string> note_part(const array<note>* entries, usize index, u32 part)
     throws std.alloc::alloc_error {
     if (index >= len(*entries)) { return o::none; }
-    if (part == 0u32) { return o::some(std.string::from_str((*entries)[index].name.as_str())); }
-    return o::some(std.string::from_str((*entries)[index].value.as_str()));
+    if (part == 0u32) { return o::some(std.string::from_str((*entries)[index].name)); }
+    return o::some(std.string::from_str((*entries)[index].value));
 }
 
 protected o<std.string::string> notes_part(const notes* this, usize index, u32 part) throws std.alloc::alloc_error {
@@ -1892,7 +1892,7 @@ o<std.string::string> notes::get(const notes* this, str name) throws std.alloc::
         o<std.string::string> found = notes_part(this, index, 0u32);
         switch (move found) {
         case variant o::some(move named):
-            if (std.bytes::equal(named.as_bytes(), name) == true) { return notes_part(this, index, 1u32); }
+            if (std.bytes::equal(named, name) == true) { return notes_part(this, index, 1u32); }
             drop named;
         case variant o::none: break;
         }
@@ -2089,7 +2089,7 @@ protected o<usize> find_endpoint(const app<S, C>* routes, const request* incomin
     o<usize> best = o::none;
     for (usize index = 0usize; index < len(routes->endpoints); index += 1usize) {
         array<param> found = std.array::create::<param>();
-        if (match_path(routes->endpoints[index].pattern.as_str(), incoming->path(), &found) == false) {
+        if (match_path(routes->endpoints[index].pattern, incoming->path(), &found) == false) {
             continue;
         }
         method wanted = routes->endpoints[index].method;
@@ -2097,8 +2097,8 @@ protected o<usize> find_endpoint(const app<S, C>* routes, const request* incomin
             bool better = true;
             switch (best) {
             case variant o::some(previous):
-                better = more_specific(routes->endpoints[index].pattern.as_str(),
-                                       routes->endpoints[*previous].pattern.as_str());
+                better = more_specific(routes->endpoints[index].pattern,
+                                       routes->endpoints[*previous].pattern);
             case variant o::none: break;
             }
             if (better == true) {
@@ -2110,7 +2110,7 @@ protected o<usize> find_endpoint(const app<S, C>* routes, const request* incomin
             }
             continue;
         }
-        if (std.text::contains(std.string::as_str(allowed), method_name(wanted)) == false) {
+        if (std.text::contains(*allowed, method_name(wanted)) == false) {
             if (std.string::len(allowed) != 0usize) { std.string::append_str(allowed, ", "); }
             std.string::append_str(allowed, method_name(wanted));
         }
@@ -2132,7 +2132,7 @@ protected o<std.string::string> slash_target(const app<S, C>* routes, const requ
         std.string::append_str(&other, path);
         std.string::append_str(&other, "/");
     }
-    request probe = request::create(incoming->method, other.as_str());
+    request probe = request::create(incoming->method, other);
     array<param> found = std.array::create::<param>();
     std.string::string allowed = std.string::create();
     o<usize> chosen = find_endpoint(routes, &probe, &found, &allowed);
@@ -2192,7 +2192,7 @@ protected o<usize> choose_endpoint(const app<S, C>* routes, request* incoming, r
             }
             response redirect = response::text(status, reason(status));
             try {
-                redirect.headers.add("Location", location.as_str());
+                redirect.headers.add("Location", location);
             } catch (http_error rejected) {
                 // A path of a request is a valid field value.
                 rejected as void;
@@ -2207,7 +2207,7 @@ protected o<usize> choose_endpoint(const app<S, C>* routes, request* incoming, r
     if (std.string::len(&allowed) != 0usize && routes->method_status == true) {
         response refused = response::text(405u16, reason(405u16));
         try {
-            refused.headers.add("Allow", allowed.as_str());
+            refused.headers.add("Allow", allowed);
         } catch (http_error rejected) {
             // Method names are valid field values.
             rejected as void;
@@ -2237,7 +2237,7 @@ protected async response run_flow(const app<S, C>* routes, arc S state, request 
                                    .answered = false};
         array<bool> entered = std.array::create::<bool>();
         for (usize index = 0usize; index < len(routes->stages); index += 1usize) {
-            bool matches = under_prefix(routes->stages[index].prefix.as_str(), current.request.path());
+            bool matches = under_prefix(routes->stages[index].prefix, current.request.path());
             append(&entered, matches);
             if (matches == false) { continue; }
             switch (routes->stages[index].before) {
@@ -2255,7 +2255,7 @@ protected async response run_flow(const app<S, C>* routes, arc S state, request 
             switch (chosen) {
             case variant o::some(index):
                 drop miss;
-                current.route.append(routes->endpoints[*index].pattern.as_str());
+                current.route.append(routes->endpoints[*index].pattern);
                 auto handler = routes->endpoints[*index].handler;
                 flow<C> handled = await handler(std.arc::clone(&state), move current);
                 current = move handled;
@@ -2287,7 +2287,7 @@ protected async response run_flow(const app<S, C>* routes, arc S state, request 
 protected bool origin_allowed(const cors_policy* policy, str origin) {
     if (len(policy->origins) == 0usize) { return true; }
     for (usize index = 0usize; index < len(policy->origins); index += 1usize) {
-        if (std.bytes::equal(policy->origins[index].as_bytes(), origin) == true) { return true; }
+        if (std.bytes::equal(policy->origins[index], origin) == true) { return true; }
     }
     return false;
 }
@@ -2332,11 +2332,11 @@ protected o<response> preflight(const (o<cors_policy>)* configured, const reques
                 mark_origin(&*policy, *from, &answer);
                 try {
                     switch (policy->methods) {
-                    case variant o::some(listed): answer.headers.set("Access-Control-Allow-Methods", listed->as_str());
+                    case variant o::some(listed): answer.headers.set("Access-Control-Allow-Methods", *listed);
                     case variant o::none: answer.headers.set("Access-Control-Allow-Methods", *wanted);
                     }
                     switch (policy->headers) {
-                    case variant o::some(listed): answer.headers.set("Access-Control-Allow-Headers", listed->as_str());
+                    case variant o::some(listed): answer.headers.set("Access-Control-Allow-Headers", *listed);
                     case variant o::none:
                         switch (incoming->headers.get("Access-Control-Request-Headers")) {
                         case variant o::some(fields): answer.headers.set("Access-Control-Allow-Headers", *fields);
@@ -2345,7 +2345,7 @@ protected o<response> preflight(const (o<cors_policy>)* configured, const reques
                     }
                     u32 age = policy->max_age;
                     std.string::string seconds = f"{age}";
-                    answer.headers.set("Access-Control-Max-Age", seconds.as_str());
+                    answer.headers.set("Access-Control-Max-Age", seconds);
                 } catch (http_error rejected) {
                     // The values come from the policy and from valid field values.
                     rejected as void;
@@ -2386,7 +2386,7 @@ async response app<S, C>::dispatch(const app<S, C>* this, arc S state, request i
     case variant o::none: break;
     }
     method sent = incoming.method;
-    std.string::string target = std.string::from_str(incoming.target.as_str());
+    std.string::string target = std.string::from_str(incoming.target);
     arc S kept = std.arc::clone(&state);
     notes noted = notes_create();
     notes shared_notes = notes_share(&noted);
@@ -2418,12 +2418,12 @@ async response app<S, C>::dispatch(const app<S, C>* this, arc S state, request i
         switch (this->panic_hook) {
         case variant o::some(hook):
             auto chosen = *hook;
-            chosen(&*kept, sent, target.as_str(), &noted, &report);
+            chosen(&*kept, sent, target, &noted, &report);
         case variant o::none:
             constexpr str category = std.thread::panic_category(&report);
             str text = std.thread::panic_text(&report);
             str verb = method_name(sent);
-            str where = target.as_str();
+            str where = target;
             std.string::string line = f"R panic: {category} in {verb} {where}";
             if (len(text) != 0usize) {
                 std.string::append_str(&line, ": ");
@@ -2440,8 +2440,8 @@ async response app<S, C>::dispatch(const app<S, C>* this, arc S state, request i
     if (has_origin == true) {
         switch (this->cross_origin) {
         case variant o::some(policy):
-            if (origin_allowed(&*policy, origin.as_str()) == true) {
-                mark_origin(&*policy, origin.as_str(), &result);
+            if (origin_allowed(&*policy, origin) == true) {
+                mark_origin(&*policy, origin, &result);
             }
         case variant o::none: break;
         }
@@ -2601,7 +2601,7 @@ protected std.string::string origin_of(const std.url::url* address) throws std.a
 protected o<std.bufio::reader<own dyn(std.stream::Stream)*>> take_idle(client* owner, str origin) {
     for (usize index = 0usize; index < len(owner->slots); index += 1usize) {
         if (occupied(&owner->slots[index]) == true &&
-            std.bytes::equal(owner->origins[index].as_bytes(), origin) == true) {
+            std.bytes::equal(owner->origins[index], origin) == true) {
             return core::replace(&owner->slots[index], o::none);
         }
     }
@@ -2732,17 +2732,17 @@ protected async response client::exchange_once(client* this, const std.url::url*
     std.string::string old_target = core::replace(&pending->target, move target);
     drop old_target;
     std.string::string host = address->authority_text();
-    pending->headers.set("Host", host.as_str());
+    pending->headers.set("Host", host);
     if (this->settings.accept_gzip == true && pending->headers.contains("Accept-Encoding") == false) {
         pending->headers.add("Accept-Encoding", "gzip");
     }
     limits bounds = this->settings.bounds;
-    o<std.bufio::reader<own dyn(std.stream::Stream)*>> reused = take_idle(this, origin.as_str());
+    o<std.bufio::reader<own dyn(std.stream::Stream)*>> reused = take_idle(this, origin);
     switch (move reused) {
     case variant o::some(move channel):
         try {
             task_scope(1) io {
-                return await this->use_connection(move channel, origin.as_str(), pending, &bounds);
+                return await this->use_connection(move channel, origin, pending, &bounds);
             }
         } catch (http_error rejected) {
             throw (rejected.code != error_code::unexpected_end) rejected;
@@ -2753,7 +2753,7 @@ protected async response client::exchange_once(client* this, const std.url::url*
     }
     task_scope(1) io {
         std.bufio::reader<own dyn(std.stream::Stream)*> channel = await open_connection(this, address, port);
-        return await this->use_connection(move channel, origin.as_str(), pending, &bounds);
+        return await this->use_connection(move channel, origin, pending, &bounds);
     }
 }
 
@@ -2877,7 +2877,7 @@ async handshake client::upgrade(client* this, request message, str address)
     std.string::string old_target = core::replace(&pending.target, move target);
     drop old_target;
     std.string::string host = current.authority_text();
-    pending.headers.set("Host", host.as_str());
+    pending.headers.set("Host", host);
     limits bounds = this->settings.bounds;
     o<std.bufio::reader<own dyn(std.stream::Stream)*>> opened = o::none;
     task_scope(1) connect {
@@ -2940,7 +2940,7 @@ async streamed client::open(const client* this, request message, str address)
     std.string::string old_target = core::replace(&pending.target, move target);
     drop old_target;
     std.string::string host = current.authority_text();
-    pending.headers.set("Host", host.as_str());
+    pending.headers.set("Host", host);
     limits bounds = this->settings.bounds;
     o<std.bufio::reader<own dyn(std.stream::Stream)*>> opened = o::none;
     task_scope(1) connect {
@@ -3131,7 +3131,7 @@ o<sse_message> sse_parser::next(sse_parser* this) throws http_error, std.alloc::
         case variant o::none: return o::none;
         case variant o::some(move text_line):
             bool blank = std.string::len(&text_line) == 0usize;
-            bool ready = sse_line(this, text_line.as_str());
+            bool ready = sse_line(this, text_line);
             if (ready == true) {
                 usize size = std.string::len(&this->data);
                 std.string::string data = core::replace(&this->data, std.string::create());
@@ -3145,7 +3145,7 @@ o<sse_message> sse_parser::next(sse_parser* this) throws http_error, std.alloc::
                 if (std.string::len(&kind) == 0usize) { std.string::append_str(&kind, "message"); }
                 this->has_data = false;
                 return o::some(sse_message {.event = move kind,
-                                            .id = std.string::from_str(this->last_id.as_str()),
+                                            .id = std.string::from_str(this->last_id),
                                             .data = move data});
             }
             if (blank == true) {

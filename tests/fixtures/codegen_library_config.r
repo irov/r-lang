@@ -80,9 +80,9 @@ async i32 checks() throws std.config::config_error, std.args::args_error, std.er
     throw (settings.source_of("log.level") != std.config::source::arguments) Failed {.code = 12};
     settings.set("api.token", "hunter2", std.config::source::arguments);
     std.string::string text = settings.describe();
-    throw (std.text::contains(text.as_str(), "api.token=*** (arguments)\n") == false ||
-           std.text::contains(text.as_str(), "hunter2") == true ||
-           std.text::contains(text.as_str(), "port=9000 (file)\n") == false)
+    throw (std.text::contains(text, "api.token=*** (arguments)\n") == false ||
+           std.text::contains(text, "hunter2") == true ||
+           std.text::contains(text, "port=9000 (file)\n") == false)
         Failed {.code = 13};
     /* Typed reads of a text that is not one report invalid_value with the declaration. */
     try {

@@ -19,7 +19,7 @@ void replace_range(std.string::string* target, usize start, usize end, str text)
     throws std.string::boundary_error, std.alloc::alloc_error {
     usize length = std.string::len(target);
     throw (start > end || end > length) std.string::boundary_error::out_of_bounds;
-    str current = std.string::as_str(target);
+    str current = *target;
     const u8[] bytes = current;
     throw ((start < length && (bytes[start] & 192u8) == 128u8) ||
            (end < length && (bytes[end] & 192u8) == 128u8))

@@ -119,7 +119,7 @@ async void connects_to_the_first_candidate_that_accepts()
     bytes received = {};
     usize count = 0usize;
     task_scope(1) io {
-        await std.net::tcp_write_all_from(&client, message.as_bytes());
+        await std.net::tcp_write_all_from(&client, message);
         await std.net::tcp_shutdown(&client, std.net::shutdown_direction::write);
         count += await read_all(&accepted.stream, &received);
     }

@@ -455,19 +455,19 @@ async websocket connect(std.http::client* web, str address, str protocol)
     u8[16] nonce = {};
     std.random::fill(&nonce);
     std.string::string key = std.encoding::encode_base64(&nonce);
-    std.string::string expected = accept_key(key.as_str());
+    std.string::string expected = accept_key(key);
     const u8[] protocol_bytes = protocol;
     bool wants_protocol = len(protocol_bytes) != 0usize;
     std.http::request asking = std.http::request::create(std.http::method::get, "/");
     put(&asking.headers, "Upgrade", "websocket");
     put(&asking.headers, "Connection", "Upgrade");
-    put(&asking.headers, "Sec-WebSocket-Key", key.as_str());
+    put(&asking.headers, "Sec-WebSocket-Key", key);
     put(&asking.headers, "Sec-WebSocket-Version", "13");
     if (wants_protocol == true) { put(&asking.headers, "Sec-WebSocket-Protocol", protocol); }
     o<std.http::upgraded> connection = o::none;
     task_scope(1) io {
-        std.http::handshake answered = await web->upgrade(move asking, target.as_str());
-        bool accepted = switched_to(&answered.answer, expected.as_str(), protocol);
+        std.http::handshake answered = await web->upgrade(move asking, target);
+        bool accepted = switched_to(&answered.answer, expected, protocol);
         throw (accepted == false) failure(error_code::handshake_failed);
         o<std.http::upgraded> taken = core::replace(&answered.connection, o::none);
         o<std.http::upgraded> old = core::replace(&connection, move taken);
@@ -536,11 +536,11 @@ async websocket accept(std.http::request incoming, std.http::upgrade connection,
         throw failure(error_code::handshake_failed);
     }
     drop incoming;
-    std.string::string answer = accept_key(key.as_str());
+    std.string::string answer = accept_key(key);
     std.http::headers reply = std.http::headers::create();
     put(&reply, "Upgrade", "websocket");
     put(&reply, "Connection", "Upgrade");
-    put(&reply, "Sec-WebSocket-Accept", answer.as_str());
+    put(&reply, "Sec-WebSocket-Accept", answer);
     if (wants_protocol == true) { put(&reply, "Sec-WebSocket-Protocol", protocol); }
     std.http::upgraded switched = await (move connection).accept(move reply);
     return websocket::create(move switched, false);

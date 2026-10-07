@@ -8,7 +8,7 @@ async std.string::string notify(std.string::string path, std.string::string mess
     throws std.error::fault {
     str where = path;
     std.net::unix_datagram socket = await std.net::unix_datagram_connect(where);
-    const u8[] payload = message.as_bytes();
+    const u8[] payload = message;
     usize length = len(payload);
     task_scope(1) send { await socket.send_from(payload); }
     await (move socket).close();

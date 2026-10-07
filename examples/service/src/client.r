@@ -10,13 +10,13 @@ async o<std.string::string> exchange(std.net::socket_address endpoint, std.strin
     array<u8> reply = std.alloc::bytes(64usize, 0u8);
     usize length = 0usize;
     bool hold = false;
-    switch (request.as_str()) {
+    switch (request) {
     case "hold": hold = true;
     default: break;
     }
     task_scope(1) io {
         if (hold == false) {
-            await std.net::tcp_write_all_from(&stream, request.as_str());
+            await std.net::tcp_write_all_from(&stream, request);
             await stream.shutdown(std.net::shutdown_direction::write);
         }
         length += await example.service.wire::read_all(&stream, reply.as_slice_mut());

@@ -30,7 +30,7 @@ protected void listing(std.string::string* out, const u8[] data) throws std.allo
     for (usize index = 0usize; index < len(data); index += 1usize) {
         u32 value = data[index] as u32;
         std.string::string piece = f" {value}";
-        std.string::append_str(out, piece.as_str());
+        std.string::append_str(out, piece);
     }
 }
 
@@ -57,7 +57,7 @@ protected void decoded(std.string::string* out, str mode, str text) throws std.a
         if (failure.code == std.convert::parse_error_code::trailing_character) { code = 1u32; }
         usize index = failure.index;
         std.string::string piece = f"error {code} {index}";
-        std.string::append_str(out, piece.as_str());
+        std.string::append_str(out, piece);
     }
 }
 
@@ -71,11 +71,11 @@ async i32 main(const str[] arguments) {
                 same(mode, "hex") == true) {
                 bytes data = numbers(input);
                 std.string::string text = encode(mode, data.as_slice());
-                std.string::append_str(&out, text.as_str());
+                std.string::append_str(&out, text);
             } else {
                 if (same(mode, "pct") == true) {
                     std.string::string text = std.encoding::percent_encode(input);
-                    std.string::append_str(&out, text.as_str());
+                    std.string::append_str(&out, text);
                 } else {
                     decoded(&out, mode, input);
                 }

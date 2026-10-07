@@ -14,13 +14,13 @@ async i32 main() {
     std.string::reserve(&joined, 32usize);
     o<std.string::string> first = await std.console::read_line();
     switch (move first) {
-    case variant o::some(move text): std.string::append_str(&joined, text.as_str());
+    case variant o::some(move text): std.string::append_str(&joined, text);
     case variant o::none: return 1;
     }
     std.string::append_str(&joined, "|");
     o<std.string::string> second = await std.console::read_line();
     switch (move second) {
-    case variant o::some(move text): std.string::append_str(&joined, text.as_str());
+    case variant o::some(move text): std.string::append_str(&joined, text);
     case variant o::none: return 2;
     }
     std.string::append_str(&joined, "|");

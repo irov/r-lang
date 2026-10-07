@@ -17,9 +17,9 @@ async i32 main() {
         std.string::string customer = std.string::from_str("Ada");
         std.format::builder builder = std.format::with_capacity(64usize);
         std.format::append(&builder, "Receipt for ");
-        builder.append(customer.as_str());
+        builder.append(customer);
         builder.append('\n');
-        str view = builder.as_str();
+        str view = builder;
         if (std.bytes::equal(view, "Receipt for Ada\n") == false) { return 3; }
         std.string::string receipt = (move builder).finish();
         usize receipt_size = receipt.len();

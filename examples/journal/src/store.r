@@ -101,13 +101,13 @@ std.fs::open_file_options reading() {
 }
 
 std.fs::path data_path(const std.string::string* directory) throws std.fs::path_error, std.alloc::alloc_error {
-    str base = directory->as_str();
+    str base = *directory;
     std.string::string name = f"{base}/store.dat";
     return std.fs::path_from_utf8(name);
 }
 
 std.fs::path journal_path(const std.string::string* directory) throws std.fs::path_error, std.alloc::alloc_error {
-    str base = directory->as_str();
+    str base = *directory;
     std.string::string name = f"{base}/store.journal";
     return std.fs::path_from_utf8(name);
 }

@@ -99,7 +99,7 @@ protected async std.string::string exchange(std.net::socket_address endpoint, st
     bytes reply = {};
     usize count = 0usize;
     task_scope(1) io {
-        await std.net::tcp_write_all_from(&client, message.as_bytes());
+        await std.net::tcp_write_all_from(&client, message);
         await std.net::tcp_shutdown(&client, std.net::shutdown_direction::write);
         count += await read_all(&client, &reply);
     }
@@ -123,7 +123,7 @@ protected async u32 echo_clients(std.net::socket_address endpoint,
     for (u32 index = 0u32; index < 3u32; index += 1u32) {
         task_scope(1) talk {
             std.string::string reply = await exchange(endpoint, "hello");
-            if (std.bytes::equal(reply.as_bytes(), "!hello") == true) { answered += 1u32; }
+            if (std.bytes::equal(reply, "!hello") == true) { answered += 1u32; }
         }
     }
     request(&stopper, std.service::stop::drain);
@@ -242,7 +242,7 @@ protected async std.string::string queued_clients(std.net::socket_address endpoi
     bytes rest = {};
     bytes reply = {};
     task_scope(1) io {
-        await std.net::tcp_write_all_from(&second, message.as_bytes());
+        await std.net::tcp_write_all_from(&second, message);
         await std.net::tcp_shutdown(&second, std.net::shutdown_direction::write);
         await std.net::tcp_shutdown(&first, std.net::shutdown_direction::write);
         usize count = await read_all(&first, &rest);
@@ -270,7 +270,7 @@ async void holds_connections_until_a_slot_is_free() throws std.error::fault, std
         auto client = queued_clients(endpoint, move stopper);
         std.string::string reply = await move client;
         std.service::report account = await move server;
-        std.test::equal_text(reply.as_str(), "!!second");
+        std.test::equal_text(reply, "!!second");
         std.test::equal(account.accepted, 2u64);
         std.test::equal(account.rejected, 0u64);
         std.test::equal(account.completed, 2u64);
@@ -541,11 +541,11 @@ protected async void echo_any(arc Origins state, std.service::connection connect
 /* Sends text over the Unix-domain socket, ends its write direction and returns the reply. */
 protected async std.string::string unix_exchange(std.string::string path, std.string::string text)
     throws std.error::fault {
-    std.net::unix_stream client = await std.net::unix_connect(path.as_str(), o::none);
+    std.net::unix_stream client = await std.net::unix_connect(path, o::none);
     bytes reply = {};
     u8[16] chunk = {};
     task_scope(1) io {
-        await std.net::unix_write_all_from(&client, text.as_bytes(), o::none);
+        await std.net::unix_write_all_from(&client, text, o::none);
         await std.net::unix_shutdown(&client, std.net::shutdown_direction::write, o::none);
     }
     bool open = true;
@@ -565,10 +565,10 @@ protected async u32 both_clients(std.net::socket_address endpoint, std.string::s
     u32 answered = 0u32;
     task_scope(1) talk {
         std.string::string reply = await exchange(endpoint, "tcp");
-        if (std.bytes::equal(reply.as_bytes(), "!tcp") == true) { answered += 1u32; }
+        if (std.bytes::equal(reply, "!tcp") == true) { answered += 1u32; }
     }
     std.string::string unix_reply = await unix_exchange(move path, std.string::from_str("unix"));
-    if (std.bytes::equal(unix_reply.as_bytes(), "!unix") == true) { answered += 1u32; }
+    if (std.bytes::equal(unix_reply, "!unix") == true) { answered += 1u32; }
     request(&stopper, std.service::stop::drain);
     return answered;
 }

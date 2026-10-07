@@ -273,11 +273,11 @@ bytes encode_answer(const question* asked, const array<record>* answers, u8 rcod
     put_u16(&out, len(*answers) as u16);
     put_u16(&out, 0u16);
     put_u16(&out, 0u16);
-    put_name(&out, asked->name.as_str());
+    put_name(&out, asked->name);
     put_u16(&out, asked->kind);
     put_u16(&out, class_in);
     for (usize index = 0usize; index < len(*answers); index += 1usize) {
-        put_name(&out, (*answers)[index].name.as_str());
+        put_name(&out, (*answers)[index].name);
         put_u16(&out, (*answers)[index].kind);
         put_u16(&out, class_in);
         put_u32(&out, (*answers)[index].ttl);
@@ -332,7 +332,7 @@ protected void decode_data(const u8[] message, usize start, usize size, record* 
             put_u16(&entry->data, entry->port);
         }
         if (entry->kind == 15u16) { put_u16(&entry->data, entry->priority); }
-        put_name(&entry->data, entry->target.as_str());
+        put_name(&entry->data, entry->target);
         return;
     }
     std.bytes::append(&entry->data, message[start..end]);
@@ -360,7 +360,7 @@ array<record> parse_response(const u8[] message, u16 id, str name, u16 kind)
     std.string::string asked = std.string::create();
     read_name(message, &at, &asked);
     str wanted_name = without_final_dot(name);
-    throw (std.text::equal_ignore_ascii_case(asked.as_str(), wanted_name) == false ||
+    throw (std.text::equal_ignore_ascii_case(asked, wanted_name) == false ||
            read_u16(message, at) != kind || read_u16(message, at + 2usize) != class_in)
         failure(error_code::malformed_response);
     at += 4usize;
@@ -375,7 +375,7 @@ array<record> parse_response(const u8[] message, u16 id, str name, u16 kind)
         at += 10usize;
         throw (at + size > len(message)) failure(error_code::malformed_response);
         if (matching == true) {
-            record entry = empty_record(owner.as_str(), kind, read_u32(message, fields + 4usize));
+            record entry = empty_record(owner, kind, read_u32(message, fields + 4usize));
             decode_data(message, at, size, &entry);
             append(&result, move entry);
         }
@@ -459,7 +459,7 @@ async resolver resolver::system() throws dns_error, std.error::fault {
         rejected as void;
         throw failure(error_code::no_servers);
     }
-    array<std.net::socket_address> servers = parse_resolv_conf(text.as_str());
+    array<std.net::socket_address> servers = parse_resolv_conf(text);
     throw (len(servers) == 0usize) failure(error_code::no_servers);
     return resolver::with_servers(move servers);
 }
@@ -602,7 +602,7 @@ protected std.cmp::ordering srv_order(const srv_record* left, const srv_record* 
         if (left->weight > right->weight) { return std.cmp::ordering::less; }
         return std.cmp::ordering::greater;
     }
-    i32 compared = std.bytes::compare(left->target.as_bytes(), right->target.as_bytes());
+    i32 compared = std.bytes::compare(left->target, right->target);
     if (compared < 0) { return std.cmp::ordering::less; }
     if (compared > 0) { return std.cmp::ordering::greater; }
     return std.cmp::ordering::equal;
@@ -622,7 +622,7 @@ async array<srv_record> resolver::lookup_srv(const resolver* this, str name)
     }
     array<srv_record> result = std.array::create::<srv_record>();
     for (usize index = 0usize; index < len(found); index += 1usize) {
-        std.string::string target = std.string::from_str(found[index].target.as_str());
+        std.string::string target = std.string::from_str(found[index].target);
         append(&result, srv_record {.priority = found[index].priority, .weight = found[index].weight,
                                     .port = found[index].port, .target = move target});
     }
@@ -697,7 +697,7 @@ std.string::string reverse_name(std.net::ip_address address) throws std.alloc::a
         for (usize index = 0usize; index < 4usize; index += 1usize) {
             u8 value = octets[3usize - index];
             std.string::string part = f"{value}.";
-            std.string::append_str(&name, part.as_str());
+            std.string::append_str(&name, part);
         }
         std.string::append_str(&name, "in-addr.arpa");
         return move name;
@@ -722,13 +722,13 @@ async array<std.string::string> resolver::reverse(const resolver* this, std.net:
     std.string::string name = reverse_name(address);
     array<record> found = std.array::create::<record>();
     task_scope(1) io {
-        array<record> answers = await this->lookup(name.as_str(), 12u16);
+        array<record> answers = await this->lookup(name, 12u16);
         array<record> old = core::replace(&found, move answers);
         drop old;
     }
     array<std.string::string> result = std.array::create::<std.string::string>();
     for (usize index = 0usize; index < len(found); index += 1usize) {
-        append(&result, std.string::from_str(found[index].target.as_str()));
+        append(&result, std.string::from_str(found[index].target));
     }
     return move result;
 }

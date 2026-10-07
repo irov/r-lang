@@ -53,7 +53,7 @@ protected std.string::string field(const u8[] form, str name) throws std.alloc::
 
 protected bool same(const std.string::string* text, str expected) {
     const u8[] wanted = expected;
-    return std.bytes::equal(text->as_bytes(), wanted);
+    return std.bytes::equal(*text, wanted);
 }
 
 protected std.http::response answer(str access, u32 count, str refresh, i64 expires_in) throws std.alloc::alloc_error {
@@ -61,15 +61,15 @@ protected std.http::response answer(str access, u32 count, str refresh, i64 expi
     const u8[] refresh_bytes = refresh;
     if (len(refresh_bytes) > 0usize) {
         std.string::string more = f",\"refresh_token\":\"{refresh}\"";
-        body.append(more.as_str());
+        body.append(more);
     }
     body.append("}");
-    return std.http::response::json(200u16, body.as_str());
+    return std.http::response::json(200u16, body);
 }
 
 protected std.http::response refusal(str code) throws std.alloc::alloc_error {
     std.string::string body = f"{{\"error\":\"{code}\",\"error_description\":\"refused by the test endpoint\"}}";
-    return std.http::response::json(400u16, body.as_str());
+    return std.http::response::json(400u16, body);
 }
 
 /* The token endpoint of the tests. */
@@ -82,11 +82,11 @@ protected async std.http::response token_endpoint(arc Endpoint state, std.http::
     if (same(&kind, "client_credentials") == true) {
         std.string::string expected = std.string::from_str("Basic ");
         std.string::string pair = std.encoding::encode_base64("client:s%3Acret");
-        expected.append(pair.as_str());
+        expected.append(pair);
         switch (incoming.headers.get("Authorization")) {
         case variant o::some(given):
             const u8[] given_bytes = *given;
-            if (std.bytes::equal(given_bytes, expected.as_bytes()) == false) { return refusal("invalid_client"); }
+            if (std.bytes::equal(given_bytes, expected) == false) { return refusal("invalid_client"); }
         case variant o::none: return refusal("invalid_client");
         }
         return answer("cc", count, "", 3600i64);
@@ -110,9 +110,9 @@ protected async std.http::response token_endpoint(arc Endpoint state, std.http::
         std.string::string assertion = field(form, "assertion");
         std.jwt::validation rules = std.jwt::validation::create();
         rules.set_issuer("robot@example.test");
-        rules.add_audience(shared->audience.as_str());
+        rules.add_audience(shared->audience);
         try {
-            std.json::value claims = std.jwt::verify(&shared->accounts, assertion.as_str(), &rules, std.time::system_now());
+            std.json::value claims = std.jwt::verify(&shared->accounts, assertion, &rules, std.time::system_now());
             switch (std.json::find(&claims, "scope")) {
             case variant o::some(scope):
                 str scope_text = std.json::text(*scope);
@@ -137,7 +137,7 @@ protected async std.net::tcp_listener open_listener() throws std.error::fault {
 
 protected bool starts(const std.string::string* text, str prefix) {
     const u8[] wanted = prefix;
-    return std.bytes::starts_with(text->as_bytes(), wanted);
+    return std.bytes::starts_with(*text, wanted);
 }
 
 /* One task's access token from a source that several tasks share. */
@@ -155,7 +155,7 @@ protected async u32 clients(std.string::string endpoint, std.string::string key_
     u32 checked = 0u32;
     std.time::system_time now = std.time::system_now();
     // Client credentials with a secret that HTTP Basic carries form-encoded.
-    std.oauth2::token_request plain = std.oauth2::token_request::create(endpoint.as_str(), std.oauth2::grant::client_credentials);
+    std.oauth2::token_request plain = std.oauth2::token_request::create(endpoint, std.oauth2::grant::client_credentials);
     plain.set_client("client", "s:cret");
     plain.set_scope("scope.read");
     task_scope(1) io {
@@ -171,7 +171,7 @@ protected async u32 clients(std.string::string endpoint, std.string::string key_
     // A code the endpoint does not know is its error, with status 400.
     std.oauth2::code_grant bad_code = {.code = std.string::from_str("zzz"), .redirect_uri = std.string::create(),
                                        .verifier = std.string::from_str("pkce")};
-    std.oauth2::token_request refused = std.oauth2::token_request::create(endpoint.as_str(),
+    std.oauth2::token_request refused = std.oauth2::token_request::create(endpoint,
                                                                          std.oauth2::grant::authorization_code(move bad_code));
     refused.set_client("app", "");
     try {
@@ -190,7 +190,7 @@ protected async u32 clients(std.string::string endpoint, std.string::string key_
     // rotates, and a good token is reused.
     std.oauth2::code_grant code = {.code = std.string::from_str("abc"), .redirect_uri = std.string::create(),
                                    .verifier = std.string::from_str("pkce")};
-    std.oauth2::token_request exchange = std.oauth2::token_request::create(endpoint.as_str(),
+    std.oauth2::token_request exchange = std.oauth2::token_request::create(endpoint,
                                                                           std.oauth2::grant::authorization_code(move code));
     exchange.set_client("app", "");
     std.oauth2::token_source tokens = std.oauth2::token_source::from_request(move web, move exchange);
@@ -204,9 +204,9 @@ protected async u32 clients(std.string::string endpoint, std.string::string key_
     std.test::check(same(&fourth_token, "rotated-5"), "rotated token");
     checked += 1u32;
     // A service account signs an assertion the endpoint verifies; its token is reused.
-    std.oauth2::service_account account = std.oauth2::service_account::from_json(key_text.as_bytes());
+    std.oauth2::service_account account = std.oauth2::service_account::from_json(key_text);
     std.test::check(same(&account.client_email, "robot@example.test"), "client_email");
-    std.test::check(same(&account.token_uri, endpoint.as_str()), "token_uri");
+    std.test::check(same(&account.token_uri, endpoint), "token_uri");
     std.http::client account_web = std.http::client::create(options);
     std.oauth2::token_source robot = std.oauth2::token_source::from_service_account(move account_web, move account,
                                                                                    "scope.read", "");
@@ -216,7 +216,7 @@ protected async u32 clients(std.string::string endpoint, std.string::string key_
     std.test::check(same(&robot_again, "sa-6"), "reused service account token");
     checked += 1u32;
     // Two tasks that need a token at once from a shared source send one request.
-    std.oauth2::service_account second_account = std.oauth2::service_account::from_json(key_text.as_bytes());
+    std.oauth2::service_account second_account = std.oauth2::service_account::from_json(key_text);
     std.http::client shared_web = std.http::client::create(options);
     std.oauth2::token_source fresh = std.oauth2::token_source::from_service_account(move shared_web, move second_account,
                                                                                    "scope.read", "");
@@ -260,13 +260,13 @@ async void obtains_and_reuses_tokens()
     std.crypto::rsa_key rsa = std.crypto::rsa_key::generate(2048usize);
     std.crypto::private_key key = std.crypto::private_key::rsa(move rsa);
     std.crypto::public_key public_part = key.public_key();
-    std.string::string file = key_file(&key, token_uri.as_str());
+    std.string::string file = key_file(&key, token_uri);
     std.jwt::key_set accounts = std.jwt::key_set::create();
     std.jwt::verifier check = std.jwt::verifier::with_public_key(std.jwt::algorithm::rs256, move public_part);
     check.set_key_id("key-1");
     accounts.add(move check);
     arc Endpoint state = new arc Endpoint {.requests = 0u32, .accounts = move accounts,
-                                           .audience = std.string::from_str(token_uri.as_str())};
+                                           .audience = std.string::from_str(token_uri)};
     std.http::router<Endpoint> routes = std.http::router<Endpoint>::create();
     routes.add(std.http::method::post, "/token", token_endpoint);
     std.sync::channel<std.service::stop> factory = std.sync::channel::<std.service::stop>();

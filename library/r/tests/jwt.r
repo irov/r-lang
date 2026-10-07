@@ -68,7 +68,7 @@ protected bool round_trip(std.jwt::signer key, std.jwt::verifier check)
     std.jwt::key_set keys = std.jwt::key_set::create();
     keys.add(move check);
     std.jwt::validation rules = std.jwt::validation::create();
-    std.json::value read = std.jwt::verify(&keys, token.as_str(), &rules, std.time::system_now());
+    std.json::value read = std.jwt::verify(&keys, token, &rules, std.time::system_now());
     return std.json::len(&read) == 2usize;
 }
 
@@ -150,28 +150,28 @@ void checks_the_registered_claims() throws std.test::failure, std.alloc::alloc_e
     std.jwt::validation rules = std.jwt::validation::create();
     rules.set_issuer("arena");
     rules.add_audience("admin");
-    std.test::check(outcome(token.as_str(), &rules, 1500i64) == std.jwt::error_code::invalid_key, "valid");
-    std.test::check(outcome(token.as_str(), &rules, 2059i64) == std.jwt::error_code::invalid_key, "within leeway");
-    std.test::check(outcome(token.as_str(), &rules, 2060i64) == std.jwt::error_code::expired, "expired");
-    std.test::check(outcome(token.as_str(), &rules, 939i64) == std.jwt::error_code::not_yet_valid, "not yet valid");
+    std.test::check(outcome(token, &rules, 1500i64) == std.jwt::error_code::invalid_key, "valid");
+    std.test::check(outcome(token, &rules, 2059i64) == std.jwt::error_code::invalid_key, "within leeway");
+    std.test::check(outcome(token, &rules, 2060i64) == std.jwt::error_code::expired, "expired");
+    std.test::check(outcome(token, &rules, 939i64) == std.jwt::error_code::not_yet_valid, "not yet valid");
     std.jwt::validation other_issuer = std.jwt::validation::create();
     other_issuer.set_issuer("someone");
-    std.test::check(outcome(token.as_str(), &other_issuer, 1500i64) == std.jwt::error_code::invalid_issuer, "issuer");
+    std.test::check(outcome(token, &other_issuer, 1500i64) == std.jwt::error_code::invalid_issuer, "issuer");
     std.jwt::validation other_audience = std.jwt::validation::create();
     other_audience.add_audience("billing");
-    std.test::check(outcome(token.as_str(), &other_audience, 1500i64) == std.jwt::error_code::invalid_audience,
+    std.test::check(outcome(token, &other_audience, 1500i64) == std.jwt::error_code::invalid_audience,
                     "audience");
     std.json::value open = std.json::object();
     std.json::insert(&open, "sub", std.json::from_string("x"));
     std.string::string forever = issued(&open);
     std.jwt::validation required = std.jwt::validation::create();
-    std.test::check(outcome(forever.as_str(), &required, 1500i64) == std.jwt::error_code::missing_claim, "missing exp");
+    std.test::check(outcome(forever, &required, 1500i64) == std.jwt::error_code::missing_claim, "missing exp");
     required.require_expiration = false;
-    std.test::check(outcome(forever.as_str(), &required, 1500i64) == std.jwt::error_code::invalid_key, "no exp needed");
+    std.test::check(outcome(forever, &required, 1500i64) == std.jwt::error_code::invalid_key, "no exp needed");
     // A changed payload, an `alg` of none, a malformed token and a forged signature.
-    std.string::string changed = std.string::from_str(token.as_str());
+    std.string::string changed = std.string::from_str(token);
     changed.append("x");
-    std.test::check(outcome(changed.as_str(), &rules, 1500i64) != std.jwt::error_code::invalid_key, "changed");
+    std.test::check(outcome(changed, &rules, 1500i64) != std.jwt::error_code::invalid_key, "changed");
     std.test::check(outcome("eyJhbGciOiJub25lIn0.eyJzdWIiOiJ4In0.", &required, 1500i64) ==
                         std.jwt::error_code::unsupported_algorithm, "alg none");
     std.test::check(outcome("not a token", &required, 1500i64) == std.jwt::error_code::malformed, "malformed");
@@ -200,13 +200,13 @@ void signs_typed_claims_and_chooses_keys_by_kid() throws std.test::failure, std.
     std.json::append(&keys_array, std.jwt::jwk(&second_public, std.jwt::algorithm::es256, "two"));
     std.json::insert(&published, "keys", move keys_array);
     std.string::string jwks = std.json::stringify(&published);
-    std.jwt::key_set keys = std.jwt::key_set::from_jwks(jwks.as_bytes());
+    std.jwt::key_set keys = std.jwt::key_set::from_jwks(jwks);
     std.test::equal(keys.size(), 2usize);
     std.jwt::signer signer = std.jwt::signer::with_private_key(std.jwt::algorithm::es256, move second_key);
     signer.set_key_id("two");
     Session session = {.account = std.string::from_str("42"), .nick = std.string::from_str("Ann"), .exp = 4102444800u64};
     std.string::string token = std.jwt::sign_claims(&signer, &session);
-    std.json::value head = std.jwt::header(token.as_str());
+    std.json::value head = std.jwt::header(token);
     switch (std.json::find(&head, "kid")) {
     case variant o::some(kid):
         str named = std.json::text(*kid);
@@ -214,13 +214,13 @@ void signs_typed_claims_and_chooses_keys_by_kid() throws std.test::failure, std.
     case variant o::none: std.test::fail("a kid");
     }
     std.jwt::validation rules = std.jwt::validation::create();
-    Session read = std.jwt::verify_claims::<Session>(&keys, token.as_str(), &rules, std.time::system_now());
-    std.test::equal_text(read.account.as_str(), "42");
-    std.test::equal_text(read.nick.as_str(), "Ann");
+    Session read = std.jwt::verify_claims::<Session>(&keys, token, &rules, std.time::system_now());
+    std.test::equal_text(read.account, "42");
+    std.test::equal_text(read.nick, "Ann");
     signer.set_key_id("three");
     std.string::string unknown = std.jwt::sign_claims(&signer, &session);
     try {
-        Session refused = std.jwt::verify_claims::<Session>(&keys, unknown.as_str(), &rules, std.time::system_now());
+        Session refused = std.jwt::verify_claims::<Session>(&keys, unknown, &rules, std.time::system_now());
         drop refused;
         std.test::fail("a kid that no key has");
     } catch (std.jwt::jwt_error failure) {

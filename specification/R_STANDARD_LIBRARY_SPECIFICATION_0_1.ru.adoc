@@ -15,7 +15,7 @@
 |Поле |Значение
 |Документ |R Standard Library Specification
 |Версия языка |0.1
-|Редакция документа |0.1.0-draft.69
+|Редакция документа |0.1.0-draft.70
 |Статус |Перевод нормативного черновика; не является стабильным стандартом R 1.0
 |Язык документа |Русский перевод; ключевые нормативные термины приведены на английском
 |Требуемый стандарт языка |R Core Language Specification 0.1
@@ -8061,6 +8061,48 @@ advisory lock уровня сессии 125806466509938 сервера, чтоб
 после любого `+pg_error+`; fault завершает сессию, а с ней и блокировку. Поэтому sql шага не может
 сам завершить транзакцию или выполнить оператор, который блок транзакции отвергает.
 
+[[R-SLIB-PG-0017]]
+*R-SLIB-PG-0017* — Таблицы структур:
+
+* `+std.postgres::table+`;
+* `+std.postgres::connection::insert<T: json_encode & json_decode>(const std.postgres::connection* this, const T* row) -> task<T throws std.postgres::pg_error, std.error::fault> throws std.postgres::pg_error, std.async::start_error, std.alloc::alloc_error+`;
+* `+std.postgres::connection::insert_all<T: json_encode>(const std.postgres::connection* this, const array<T>* items) -> task<u64 throws std.postgres::pg_error, std.error::fault> throws std.postgres::pg_error, std.async::start_error, std.alloc::alloc_error+`;
+* `+std.postgres::connection::update<T: json_encode>(const std.postgres::connection* this, const T* row) -> task<u64 throws std.postgres::pg_error, std.error::fault> throws std.postgres::pg_error, std.async::start_error, std.alloc::alloc_error+`;
+* `+std.postgres::connection::upsert<T: json_encode & json_decode>(const std.postgres::connection* this, const T* row) -> task<T throws std.postgres::pg_error, std.error::fault> throws std.postgres::pg_error, std.async::start_error, std.alloc::alloc_error+`;
+* `+std.postgres::connection::remove<T: json_encode>(const std.postgres::connection* this, const T* row) -> task<u64 throws std.postgres::pg_error, std.error::fault> throws std.postgres::pg_error, std.async::start_error, std.alloc::alloc_error+`;
+* `+std.postgres::connection::find<T: json_decode>(const std.postgres::connection* this, array<std.postgres::value> key) -> task<o<T> throws std.postgres::pg_error, std.error::fault> throws std.postgres::pg_error, std.async::start_error, std.alloc::alloc_error+`;
+* `+std.postgres::connection::select<T: json_decode>(const std.postgres::connection* this, str tail, array<std.postgres::value> parameters) -> task<array<T> throws std.postgres::pg_error, std.error::fault> throws std.postgres::pg_error, std.async::start_error, std.alloc::alloc_error+`;
+* `+std.postgres::connection::savepoint(const std.postgres::connection* this, str name) -> task<void throws std.postgres::pg_error, std.error::fault> throws std.async::start_error, std.alloc::alloc_error+`;
+* `+std.postgres::connection::release(const std.postgres::connection* this, str name) -> task<void throws std.postgres::pg_error, std.error::fault> throws std.async::start_error, std.alloc::alloc_error+`;
+* `+std.postgres::connection::rollback_to(const std.postgres::connection* this, str name) -> task<void throws std.postgres::pg_error, std.error::fault> throws std.async::start_error, std.alloc::alloc_error+`.
+
+`+table+` — Copy-тип атрибута (Core R-AGG-0013) с целью `+type+` и публичными полями
+`+str name+`, `+str key+` и `+str generated+`, два последних по умолчанию пустые. Struct T с
+пометкой `+@std.postgres::table(...)+` хранится в таблице `+name+`, которая пишется в оператор
+как задана, так что схема может её уточнить. Колонки T — JSON-имена его полей
+(R-SLIB-PG-0015); `+key+` и `+generated+` перечисляют колонки через запятую с необязательными
+пробелами: ключ отличает строку, а генерируемые колонки заполняет база, и программа их не
+пишет. T без атрибута — `+unsupported+`, перечисленная колонка, не являющаяся JSON-именем T, —
+`+missing_column+` с именем в detail, а операция, которой нужен ключ таблицы без ключа, —
+`+invalid_value+`; каждая ошибка бросается при запуске операции.
+
+insert пишет `+INSERT INTO name (columns) VALUES ($1, ...) RETURNING *+` по колонкам T, не
+являющимся генерируемыми, в порядке полей, с параметрами, как у parameters_of, и читает
+возвращённую строку в T, как decode. insert_all пишет все строки одним оператором со списком
+VALUES, по порядку разбивая его на несколько операторов, когда в одном было бы больше 65535
+параметров, и возвращает число вставленных строк; пустой массив ничего не пишет. update пишет
+`+UPDATE name SET "c" = $i, ... WHERE "k" = $j AND ...+` по колонкам, не являющимся ни ключом,
+ни генерируемыми, и возвращает число изменённых строк. upsert пишет INSERT из insert, за ним
+`+ON CONFLICT (keys) DO UPDATE SET "c" = EXCLUDED."c", ... RETURNING *+` по колонкам, не
+являющимся ни ключом, ни генерируемыми, а если таких нет — по первой колонке ключа, и читает
+строку. remove пишет `+DELETE FROM name WHERE "k" = $j AND ...+` и возвращает число удалённых
+строк. find пишет `+SELECT * FROM name WHERE "k" = $1 AND ...+` со значениями `+key+` в порядке
+колонок ключа — другое их число есть `+invalid_value+` — и возвращает первую строку или none.
+select пишет `+SELECT * FROM name+`, пробел и tail как задан, с параметрами $1..$N, и читает все
+строки. savepoint, release и rollback_to выполняют `+SAVEPOINT "name"+`,
+`+RELEASE SAVEPOINT "name"+` и `+ROLLBACK TO SAVEPOINT "name"+` как скрипты R-SLIB-PG-0006:
+внутри транзакции откат к точке сохранения отменяет операторы после неё и сохраняет транзакцию.
+
 === 21.33 JSON Web Tokens: `+std.jwt+`
 
 [[R-SLIB-JWT-0001]]
@@ -8678,7 +8720,7 @@ contract unsafe `+map_file+` сохраняет range в файле и неиз�
 |R source, транслируемый с program поверх native provider `+std.fs.native+`
 (R-SLIB-RSRC-0003)
 
-|`+std.postgres+`: R-SLIB-PG-0001..0016
+|`+std.postgres+`: R-SLIB-PG-0001..0017
 |Move options, connections, statements, rows и notifications; соединение разделяется своими handles
 через `+arc+`, и каждая операция удерживает его новой ссылкой; views строки заимствуют строку
 |Ошибки сервера — `+std.postgres::pg_error+` с SQLSTATE, message, detail и hint; неудачи transport —

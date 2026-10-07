@@ -110,17 +110,17 @@ protected async i32 serve_http(u16 port) throws std.error::fault {
 protected async i32 schema(std.string::string tool) throws std.error::fault {
     try {
         std.json::value found = std.json::null();
-        if (std.bytes::equal(tool.as_bytes(), "remember") == true) {
+        if (std.bytes::equal(tool, "remember") == true) {
             std.json::value derived = std.json::schema::<example.assistant.memory::remember_args>();
             std.json::value old = core::replace(&found, move derived);
             drop old;
         }
-        if (std.bytes::equal(tool.as_bytes(), "recall") == true) {
+        if (std.bytes::equal(tool, "recall") == true) {
             std.json::value derived = std.json::schema::<example.assistant.memory::recall_args>();
             std.json::value old = core::replace(&found, move derived);
             drop old;
         }
-        if (std.bytes::equal(tool.as_bytes(), "forget") == true) {
+        if (std.bytes::equal(tool, "forget") == true) {
             std.json::value derived = std.json::schema::<example.assistant.memory::forget_args>();
             std.json::value old = core::replace(&found, move derived);
             drop old;
@@ -144,11 +144,11 @@ struct inspection {
 };
 
 protected inspection inspection_of(const array<std.string::string>* arguments) throws std.alloc::alloc_error {
-    bool over_http = std.bytes::equal((*arguments)[1usize].as_bytes(), "inspect");
+    bool over_http = std.bytes::equal((*arguments)[1usize], "inspect");
     usize end = len(*arguments);
     usize tool_at = 0usize;
     for (usize index = 2usize; index < len(*arguments); index += 1usize) {
-        if (std.bytes::equal((*arguments)[index].as_bytes(), "--") == true && index + 2usize < len(*arguments)) {
+        if (std.bytes::equal((*arguments)[index], "--") == true && index + 2usize < len(*arguments)) {
             end = index;
             tool_at = index + 1usize;
             break;

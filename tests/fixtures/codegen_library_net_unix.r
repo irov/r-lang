@@ -64,7 +64,7 @@ async i32 streams() throws std.error::fault {
     if (read.value == false) { return 5; }
     std.string::string expected_text = std.string::from_str("ok");
     bytes expected = (move expected_text).into_bytes();
-    if (std.bytes::equal(line.as_bytes(), expected.as_slice()) == false) { return 6; }
+    if (std.bytes::equal(line, expected.as_slice()) == false) { return 6; }
     drop lines;
     await std.net::unix_close(move server);
     await (move listener).close();

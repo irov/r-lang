@@ -40,7 +40,7 @@ i32 triage(io_error failure) throws io_error {
     } catch (net_error e) {
         return 200 + (e.port as i32);
     } catch (disk_error e) {
-        str path = e.path.as_str();
+        str path = e.path;
         return 100 + (len(path) as i32);
     }
 }

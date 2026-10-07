@@ -83,7 +83,7 @@ hears `* name left`.
 ```r
 task_scope(2) session {
     auto sending = forward(&socket, move updates);
-    await listen(&socket, hall, name.as_str());
+    await listen(&socket, hall, name);
     session.cancel_all();
     await session.all();
 }

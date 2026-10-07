@@ -43,19 +43,19 @@ protected i32 edge_cases() throws std.regex::error, std.alloc::alloc_error {
     while (index < 128usize) { std.string::append_str(&nested, "("); index += 1usize; }
     usize index_2 = 0usize;
     while (index_2 < 128usize) { std.string::append_str(&nested, ")"); index_2 += 1usize; }
-    str nested_text = std.string::as_str(&nested);
+    str nested_text = nested;
     bool valid = expect(nested_text, "", 0, 0, true);
     if (valid == false) { return 90; }
     std.string::string too_deep = std.string::from_str("(");
     std.string::append_str(&too_deep, nested_text);
-    str deep_text = std.string::as_str(&too_deep);
+    str deep_text = too_deep;
     bool valid_2 = invalid(deep_text, std.regex::error_code::program_limit);
     if (valid_2 == false) { return 91; }
 
     std.string::string long_pattern = std.string::create();
     usize index_3 = 0usize;
     while (index_3 < 16385usize) { std.string::append_str(&long_pattern, "a"); index_3 += 1usize; }
-    str long_text = std.string::as_str(&long_pattern);
+    str long_text = long_pattern;
     bool rejected = false;
     try { std.regex::regex expression = std.regex::compile(long_text);
     test_observe(&expression); }
@@ -67,7 +67,7 @@ protected i32 edge_cases() throws std.regex::error, std.alloc::alloc_error {
     usize index_4 = 0usize;
     while (index_4 < 4097usize) { std.string::append_str(&ranges, "a"); index_4 += 1usize; }
     std.string::append_str(&ranges, "]");
-    str ranges_text = std.string::as_str(&ranges);
+    str ranges_text = ranges;
     bool valid_3 = invalid(ranges_text, std.regex::error_code::program_limit);
     if (valid_3 == false) { return 93; }
     bool rejected_2 = false;
@@ -99,19 +99,19 @@ protected i32 edge_cases() throws std.regex::error, std.alloc::alloc_error {
         index_5 += 1usize;
     }
     std.string::string replacement = std.regex::replace_all(&adjacent, "a", "#");
-    str replacement_text = std.string::as_str(&replacement);
+    str replacement_text = replacement;
     bool valid_4 = std.text::equal_ignore_ascii_case(replacement_text, "##");
     if (valid_4 == false) { return 99; }
     array<std.string::string> pieces = std.regex::split(&adjacent, "a");
     if (len(pieces) != 3usize) { return 100; }
     for (const std.string::string* piece in &pieces) {
-        str text = std.string::as_str(piece);
+        str text = *piece;
         if (len(text) != 0usize) { return 101; }
     }
     array<std.string::string> unchanged = std.regex::split(&anchored, "b");
     if (len(unchanged) != 1usize) { return 102; }
     for (const std.string::string* piece in &unchanged) {
-        str text = std.string::as_str(piece);
+        str text = *piece;
         valid_4 = std.text::equal_ignore_ascii_case(text, "b");
         if (valid_4 == false) { return 103; }
     }
@@ -283,7 +283,7 @@ i32 run() {
             index += 1usize;
         }
         std.string::string inserted = std.regex::replace_all(&empty, "é", "$1");
-        str inserted_text = std.string::as_str(&inserted);
+        str inserted_text = inserted;
         bool valid_73 = std.text::equal_ignore_ascii_case(inserted_text, "$1é$1");
         if (valid_73 == false) { return 77; }
         std.regex::regex separators = std.regex::compile(",+");
@@ -291,14 +291,14 @@ i32 run() {
         if (len(pieces) != 4usize) { return 78; }
         usize index_6 = 0usize;
         for (const std.string::string* part in &pieces) {
-            str actual = std.string::as_str(part);
+            str actual = *part;
             constexpr str expected = index_6 == 1usize ? "one" : (index_6 == 2usize ? "two" : "");
             valid_73 = std.text::equal_ignore_ascii_case(actual, expected);
             if (valid_73 == false) { return 79; }
             index_6 += 1usize;
         }
         std.string::string escaped = std.regex::escape_literal("a+b[0].🙂");
-        str escaped_text = std.string::as_str(&escaped);
+        str escaped_text = escaped;
         std.regex::regex literal = std.regex::compile(escaped_text);
         drop escaped;
         TestStorage2 storage_valid_73_2 = {.value = std.regex::full_match(&literal, "a+b[0].🙂")};

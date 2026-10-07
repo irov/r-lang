@@ -49530,30 +49530,48 @@ static bool r_body_lower_value(RBodyContext *body,
            r_body_finish_value(body, contextual_type, result);
 }
 
-/* R-EXPR-0015 (L41): a place of type std.string::string where str is expected becomes the view
- * std.string::as_str(&place). The place is borrowed, never moved, so the borrow rules of an
+/* R-EXPR-0015 (L41, L43): a place of a standard type with a str view (std.string::string,
+ * std.format::builder) where str or a byte slice is expected becomes the view as_str(&place); a
+ * string where bytes are expected becomes std.string::as_bytes(&place), and a builder's view
+ * then takes the str edge. The place is borrowed, never moved, so the borrow rules of an
  * explicit `.as_str()` apply unchanged. */
-static bool r_body_view_string_place(RBodyContext *body, RExpressionResult *result) {
+static bool r_body_view_string_place(RBodyContext *body,
+                                     RTypeId owner_type,
+                                     RStandardCallOperation operation,
+                                     bool bytes,
+                                     RExpressionResult *result) {
     const RSourceSpan span = r_body_hir_node(body, result->node)->span;
     const RExpressionResult place = *result;
     RExpressionResult borrowed = {0};
     RHirNodeId child_storage[1];
     RHirVector children;
-    RTypeId string_type;
     RTypeId borrow_type;
-    RTypeId str_type;
+    RTypeId view_type;
 
-    if (!r_semantic_intern_named_standard_type(
-            body->frontend, "std.string::string", &string_type) ||
-        !r_semantic_intern_derived_type(body->frontend,
+    if (!r_semantic_intern_derived_type(body->frontend,
                                         R_SEMANTIC_TYPE_BORROW,
-                                        string_type,
+                                        owner_type,
                                         R_TYPE_ID_INVALID,
                                         UINT64_C(0),
                                         R_SEMANTIC_TYPE_FLAG_SHARED,
                                         &borrow_type) ||
-        !r_semantic_type_from_token(body->frontend, R_TOKEN_KW_STR, &str_type)) {
+        !r_semantic_type_from_token(body->frontend, R_TOKEN_KW_STR, &view_type)) {
         return false;
+    }
+    if (bytes && (operation == R_STANDARD_CALL_STRING_AS_STR)) {
+        RTypeId byte_type;
+
+        operation = R_STANDARD_CALL_STRING_AS_BYTES;
+        if (!r_semantic_type_from_token(body->frontend, R_TOKEN_KW_U8, &byte_type) ||
+            !r_semantic_intern_derived_type(body->frontend,
+                                            R_SEMANTIC_TYPE_SLICE,
+                                            byte_type,
+                                            R_TYPE_ID_INVALID,
+                                            UINT64_C(0),
+                                            R_SEMANTIC_TYPE_FLAG_SHARED,
+                                            &view_type)) {
+            return false;
+        }
     }
     if (!r_body_require_initialized_symbol(body, place.symbol, span)) {
         result->valid = false;
@@ -49571,26 +49589,67 @@ static bool r_body_view_string_place(RBodyContext *body, RExpressionResult *resu
     children.count = UINT32_C(1);
     children.capacity = UINT32_C(1);
     r_body_expression_invalid(result);
-    return r_body_append_standard_call(body,
-                                       span,
-                                       str_type,
-                                       str_type,
-                                       R_STANDARD_CALL_STRING_AS_STR,
-                                       &children,
-                                       &borrowed,
-                                       result);
+    return r_body_append_standard_call(
+        body, span, view_type, view_type, operation, &children, &borrowed, result);
 }
 
-static bool r_body_is_string_owner(RBodyContext *body, RTypeId type, bool *owner) {
-    RTypeId string_type;
+/* The standard owner types with a str view (R-EXPR-0015): *operation is their as_str, or
+   R_STANDARD_CALL_INVALID for any other type. The name is compared, not interned, so that asking
+   adds no type to the program. */
+static bool r_body_string_view_owner(RBodyContext *body,
+                                     RTypeId type,
+                                     RTypeId *owner_type,
+                                     RStandardCallOperation *operation) {
+    static const char string_name[] = "std.string::string";
+    static const char builder_name[] = "std.format::builder";
+    const RTypeId value_type = r_semantic_value_type(body->frontend, type);
+    const RSemanticType *semantic = r_semantic_type(body->frontend, value_type);
+    const char *name = NULL;
+    size_t length = 0U;
 
-    *owner = false;
-    if (!r_semantic_intern_named_standard_type(
-            body->frontend, "std.string::string", &string_type)) {
+    *owner_type = R_TYPE_ID_INVALID;
+    *operation = R_STANDARD_CALL_INVALID;
+    if ((semantic == NULL) || (semantic->kind != R_SEMANTIC_TYPE_STANDARD) ||
+        (semantic->length > (uint64_t)UINT32_MAX) ||
+        !r_semantic_intern_text(body->frontend, (uint32_t)semantic->length, &name, &length)) {
+        return true;
+    }
+    if ((length == sizeof(string_name) - 1U) && (memcmp(name, string_name, length) == 0)) {
+        *owner_type = value_type;
+        *operation = R_STANDARD_CALL_STRING_AS_STR;
+    } else if ((length == sizeof(builder_name) - 1U) && (memcmp(name, builder_name, length) == 0)) {
+        *owner_type = value_type;
+        *operation = R_STANDARD_CALL_FORMAT_AS_STR;
+    }
+    return true;
+}
+
+/* Views a value of an owner type with a str view as str, or as bytes when bytes are expected
+   (R-EXPR-0015); a value that is not a place is rejected, and a value of another type is left
+   as it is. */
+static bool r_body_view_string_owner(RBodyContext *body, bool bytes, RExpressionResult *result) {
+    RTypeId owner_type;
+    RStandardCallOperation operation;
+
+    if (!result->valid) {
+        return true;
+    }
+    if (!r_body_string_view_owner(body, result->type, &owner_type, &operation)) {
         return false;
     }
-    *owner = r_semantic_value_type(body->frontend, type) == string_type;
-    return true;
+    if (operation == R_STANDARD_CALL_INVALID) {
+        return true;
+    }
+    if (!result->is_place) {
+        result->valid = false;
+        return r_body_diagnostic(body,
+                                 "R-DIAG-TYPE-001",
+                                 "R-EXPR-0015",
+                                 "only a place of a string or builder converts to str; bind "
+                                 "the temporary to a name first",
+                                 r_body_hir_node(body, result->node)->span);
+    }
+    return r_body_view_string_place(body, owner_type, operation, bytes, result);
 }
 
 static bool
@@ -49604,34 +49663,32 @@ r_body_finish_value_impl(RBodyContext *body, RTypeId contextual_type, RExpressio
             (expected != NULL) && (expected->kind == R_SEMANTIC_TYPE_SLICE) &&
             (expected->flags == R_SEMANTIC_TYPE_FLAG_SHARED) &&
             (r_semantic_value_kind(body->frontend, expected->base) == R_SEMANTIC_TYPE_U8);
-        bool string_owner = false;
+
+        const bool expects_exclusive_bytes =
+            (expected != NULL) && (expected->kind == R_SEMANTIC_TYPE_SLICE) &&
+            ((expected->flags & R_SEMANTIC_TYPE_FLAG_SHARED) == 0U) &&
+            (r_semantic_value_kind(body->frontend, expected->base) == R_SEMANTIC_TYPE_U8);
 
         if ((expects_str || expects_bytes) &&
-            !r_body_is_string_owner(body, result->type, &string_owner)) {
+            !r_body_view_string_owner(body, expects_bytes, result)) {
             return false;
         }
-        /* The string edges are not chained (R-EXPR-0015): a string is not a byte slice. */
-        if (string_owner && expects_bytes) {
-            result->valid = false;
-            return r_body_diagnostic(body,
-                                     "R-DIAG-TYPE-001",
-                                     "R-EXPR-0015",
-                                     "a std.string::string converts to str, not to a byte slice; "
-                                     "take as_bytes() of it",
-                                     r_body_hir_node(body, result->node)->span);
-        }
-        if (string_owner && result->is_place && !r_body_view_string_place(body, result)) {
-            return false;
-        }
-        if (string_owner && result->valid && !result->is_place &&
-            (r_semantic_value_kind(body->frontend, result->type) != R_SEMANTIC_TYPE_STR)) {
-            result->valid = false;
-            return r_body_diagnostic(body,
-                                     "R-DIAG-TYPE-001",
-                                     "R-EXPR-0015",
-                                     "only a std.string::string place converts to str; bind "
-                                     "the temporary string to a name first",
-                                     r_body_hir_node(body, result->node)->span);
+        if (expects_exclusive_bytes) {
+            RTypeId owner_type;
+            RStandardCallOperation operation;
+            if (!r_body_string_view_owner(body, result->type, &owner_type, &operation)) {
+                return false;
+            }
+            if (operation != R_STANDARD_CALL_INVALID) {
+                /* The view of R-EXPR-0015 is shared; it never lends the owner's bytes for
+                   writing. */
+                result->valid = false;
+                return r_body_diagnostic(body,
+                                         "R-DIAG-TYPE-001",
+                                         "R-EXPR-0015",
+                                         "a string or builder views only as str or const u8[]",
+                                         r_body_hir_node(body, result->node)->span);
+            }
         }
     }
     if (result->valid &&
@@ -56934,6 +56991,10 @@ static bool r_body_lower_switch_statement(RBodyContext *body,
     } else if (!r_ast_find_direct_child(
                    body->frontend, statement, R_SYNTAX_EXPRESSION, &expression) ||
                !r_body_lower_expression(body, expression, R_TYPE_ID_INVALID, &value)) {
+        goto cleanup;
+    }
+    /* R-STMT-0006 (L43): a string or builder place selects by its str view. */
+    if ((select == NULL) && !r_body_view_string_owner(body, false, &value)) {
         goto cleanup;
     }
     if (!value.valid) {

@@ -95,7 +95,7 @@ protected std.string::string checked(const std.jsonrpc::message* value, const u8
     throws std.json::error, std.alloc::alloc_error {
     std.string::string text = described(value);
     std.string::string canonical = std.jsonrpc::encode(value);
-    if (std.bytes::equal(canonical.as_bytes(), line) == false) { std.string::append_str(&text, " (rewritten)"); }
+    if (std.bytes::equal(canonical, line) == false) { std.string::append_str(&text, " (rewritten)"); }
     return move text;
 }
 

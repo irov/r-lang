@@ -16,7 +16,7 @@ struct Named {
 
 protected bool same(const std.string::string* text, str expected) {
     const u8[] wanted = expected;
-    return std.bytes::equal(text->as_bytes(), wanted);
+    return std.bytes::equal(*text, wanted);
 }
 
 @generic<T: json_decode>
@@ -40,18 +40,18 @@ i32 run() throws std.json::error, std.alloc::alloc_error {
     std.json::value point = std.json::schema::<Point>();
     std.string::string direct = std.json::stringify(&point);
     std.string::string generic = schema_text::<Point>();
-    if (same(&generic, direct.as_str()) == false) { return 1; }
+    if (same(&generic, direct) == false) { return 1; }
     std.json::value named = std.json::schema::<Named>();
     std.string::string named_direct = std.json::stringify(&named);
     std.string::string named_generic = schema_text::<Named>();
-    if (same(&named_generic, named_direct.as_str()) == false) { return 2; }
-    if (same(&named_generic, generic.as_str()) == true) { return 3; }
+    if (same(&named_generic, named_direct) == false) { return 2; }
+    if (same(&named_generic, generic) == true) { return 3; }
     std.json::value points = std.json::schema::<array<Point>>();
     std.string::string points_direct = std.json::stringify(&points);
     std.string::string points_generic = list_schema_text::<Point>();
-    if (same(&points_generic, points_direct.as_str()) == false) { return 4; }
+    if (same(&points_generic, points_direct) == false) { return 4; }
     std.string::string nested = through::<Named>();
-    if (same(&nested, named_direct.as_str()) == false) { return 5; }
+    if (same(&nested, named_direct) == false) { return 5; }
     std.string::string scalar = schema_text::<u16>();
     if (same(&scalar, "{\"type\":\"integer\",\"minimum\":0,\"maximum\":65535}") == false) { return 6; }
     return 0;

@@ -555,14 +555,14 @@ impl Ordered for (A, B, C, D, E, F, G, H) {
 @if (!(core::profile is freestanding) && !(core::profile is allocation)) {
     impl Equal for std.string::string {
         bool eq(const std.string::string* this, const std.string::string* other) {
-            ordering order = compare_bytes(this->as_bytes(), other->as_bytes());
+            ordering order = compare_bytes(*this, *other);
             return order == ordering::equal;
         }
     };
 
     impl Ordered for std.string::string {
         ordering cmp(const std.string::string* this, const std.string::string* other) {
-            return compare_bytes(this->as_bytes(), other->as_bytes());
+            return compare_bytes(*this, *other);
         }
     };
 }

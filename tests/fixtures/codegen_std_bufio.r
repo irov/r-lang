@@ -19,7 +19,7 @@ std.fs::open_file_options reading() {
 }
 
 bool same(const std.string::string* text, str expected) {
-    return std.bytes::equal(text->as_bytes(), expected);
+    return std.bytes::equal(*text, expected);
 }
 
 /* Lines of standard input: a carriage return before the line feed, an empty line and a last
@@ -48,7 +48,7 @@ async i32 input_lines() throws std.error::fault {
 /* A writer of capacity 8: small writes gather, a large one goes directly, flush hands on the
    rest; bytes left in a destroyed writer are discarded. */
 async i32 write_file(std.string::string name) throws std.error::fault {
-    std.fs::path path = std.fs::path_from_utf8(name.as_str());
+    std.fs::path path = std.fs::path_from_utf8(name);
     std.fs::file file = await path.open_file(writing());
     std.bufio::writer<std.fs::file> out = std.bufio::writer<std.fs::file>::create(move file, 8usize);
     std.string::string large = std.string::from_str("0123456789ab");
@@ -57,7 +57,7 @@ async i32 write_file(std.string::string name) throws std.error::fault {
     task_scope(1) io {
         await out.write_str("HDR1");
         if (out.buffered() != 4usize) { status = 10; }
-        await out.write(large.as_bytes());
+        await out.write(large);
         if (out.buffered() != 0usize) { status = 11; }
         await out.write_str(";key;value\n");
         await out.write(invalid.as_slice());
@@ -73,7 +73,7 @@ async i32 write_file(std.string::string name) throws std.error::fault {
 /* The file written above: an exact header, delimited fields, plain reads, an invalid line, a
    line longer than the capacity and an end in the middle of an exact read. */
 async i32 read_file(std.string::string name) throws std.error::fault {
-    std.fs::path path = std.fs::path_from_utf8(name.as_str());
+    std.fs::path path = std.fs::path_from_utf8(name);
     std.fs::file source = await path.open_file(reading());
     std.bufio::reader<std.fs::file> input =
         std.bufio::reader<std.fs::file>::create(move source, 16usize);
@@ -143,7 +143,7 @@ async u32 serve(std.net::tcp_connection connection) throws std.error::fault {
         while (await lines.read_line(&line) == true) {
             usize length = std.string::len(&line);
             std.string::string reply = f"{length}\n";
-            task_scope(1) write { await lines.source.write_all_from(reply.as_bytes()); }
+            task_scope(1) write { await lines.source.write_all_from(reply); }
             served += 1u32;
         }
     }
@@ -171,10 +171,10 @@ async i32 network() throws std.error::fault {
         auto server = serve(move connection);
         std.string::string request = std.string::from_str("ping\nhello world\n\n");
         task_scope(1) io {
-            await replies.source.write_all_from(request.as_bytes());
+            await replies.source.write_all_from(request);
             await replies.source.shutdown();
             while (await replies.read_line(&reply) == true) {
-                std.string::append_str(&all, reply.as_str());
+                std.string::append_str(&all, reply);
                 std.string::append_str(&all, ",");
             }
         }

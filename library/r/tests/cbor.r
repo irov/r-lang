@@ -31,13 +31,13 @@ protected void expect_error(const u8[] input, std.cbor::error_code code, bool st
 void decodes_and_shows_items() throws std.test::failure, std.alloc::alloc_error, std.cbor::cbor_error {
     u8[9] nested = {0x83u8, 0x01u8, 0x82u8, 0x02u8, 0x03u8, 0xa1u8, 0x61u8, 0x61u8, 0xf5u8};
     std.string::string text = shown(nested[..]);
-    std.test::equal_text(text.as_str(), "[1, [2, 3], {\"a\": true}]");
+    std.test::equal_text(text, "[1, [2, 3], {\"a\": true}]");
     u8[3] half = {0xf9u8, 0x3eu8, 0x00u8};
     std.string::string float_text = shown(half[..]);
-    std.test::equal_text(float_text.as_str(), "1.5");
+    std.test::equal_text(float_text, "1.5");
     u8[6] tagged = {0xc1u8, 0x1au8, 0x51u8, 0x4bu8, 0x67u8, 0xb0u8};
     std.string::string tag_text = shown(tagged[..]);
-    std.test::equal_text(tag_text.as_str(), "1(1363896240)");
+    std.test::equal_text(tag_text, "1(1363896240)");
 }
 
 @test
@@ -70,7 +70,7 @@ void streams_items() throws std.test::failure, std.alloc::alloc_error, std.cbor:
     std.test::equal(writer.length(), 14usize);
     bytes out = writer.finish();
     std.string::string text = shown(out.as_slice());
-    std.test::equal_text(text.as_str(), "[-1000, 1e5, 24(h'6f6b')]");
+    std.test::equal_text(text, "[-1000, 1e5, 24(h'6f6b')]");
     std.test::equal(writer.length(), 0usize);
 }
 

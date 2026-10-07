@@ -57,7 +57,7 @@ async void stores_and_reads_every_storage_class()
     std.sqlite::rows found = await db.query(
         "SELECT id, name, score, data, ok, typeof(data) FROM item ORDER BY id", values());
     std.test::equal(len(found.columns), 6usize);
-    std.test::equal_text(found.columns[5usize].as_str(), "typeof(data)");
+    std.test::equal_text(found.columns[5usize], "typeof(data)");
     std.test::equal(len(found.items), 2usize);
     const std.sqlite::row* row = &found.items[0usize];
     std.test::equal(row->count(), 6usize);
@@ -212,7 +212,7 @@ async void reports_refusals_and_failures()
     } catch (std.sqlite::sqlite_error failure) {
         std.test::check(failure.code == std.sqlite::error_code::constraint, "constraint");
         std.test::equal(failure.native_code, 1555i32);
-        std.test::equal_text(failure.message.as_str(), "UNIQUE constraint failed: person.name");
+        std.test::equal_text(failure.message, "UNIQUE constraint failed: person.name");
     }
     try {
         (await db.execute("INSERT INTO person VALUES ('bob', -1)", values())) as void;

@@ -298,7 +298,7 @@ protected o<std.string::string> setting(str name) throws std.alloc::alloc_error 
         o<std.string::string> found = std.env::get(name);
         switch (move found) {
         case variant o::some(move value):
-            const u8[] text = value.as_bytes();
+            const u8[] text = value;
             if (len(text) > 0usize) { return o::some(move value); }
             drop value;
         case variant o::none: break;
@@ -321,7 +321,7 @@ async config system_client_config() throws tls_error, std.error::fault {
     o<std.string::string> chosen = setting("SSL_CERT_FILE");
     switch (move chosen) {
     case variant o::some(move name):
-        std.fs::path path = std.fs::path_from_utf8(name.as_str());
+        std.fs::path path = std.fs::path_from_utf8(name);
         bytes content = await std.fs::read_file(&path, bundle_limit);
         trusted += trust_bundle(&made, content.as_slice());
     case variant o::none:

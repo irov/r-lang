@@ -1344,7 +1344,7 @@ protected void put_pem(bytes* out, str label, const u8[] der) throws std.alloc::
     std.bytes::append(out, name);
     std.bytes::append(out, dashes);
     std.string::string encoded = std.encoding::encode_base64(der);
-    const u8[] digits = encoded.as_bytes();
+    const u8[] digits = encoded;
     for (usize at = 0usize; at < len(digits); at += 64usize) {
         usize stop = at + 64usize;
         if (stop > len(digits)) { stop = len(digits); }
