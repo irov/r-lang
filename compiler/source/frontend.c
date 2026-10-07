@@ -1357,6 +1357,7 @@ const char *r_syntax_kind_name(RSyntaxKind kind) {
                                                            "enum_variant",
                                                            "object_declaration",
                                                            "destructuring_declaration",
+                                                           "destructuring_field",
                                                            "function_declaration",
                                                            "parameter_list",
                                                            "parameter",

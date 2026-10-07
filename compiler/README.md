@@ -1,7 +1,7 @@
 # R Frontend Parser 0.1
 
 This directory contains the bootstrap frontend for the normative English R Core
-Specification `0.1.0-draft.101`.
+Specification `0.1.0-draft.102`.
 
 ```text
 UTF-8 source
@@ -1482,6 +1482,18 @@ block. A switch on a place of a closed standard outcome without outer `move` bor
 shadow `r_view` value with the code of the moving switch, which is never dropped; in an async
 function the payload borrow of MIR gets a companion `_view` field in the frame or the resume
 stack.
+
+Core draft.102 (L40) adds the field form `auto {.field = name, .other, .0 = first} = value;` of
+the same declaration. The parser writes each item as a `destructuring_field` (a field name or a
+tuple index, then an optional bound name) inside the `destructuring_declaration`, and
+`r_destructuring_lower_fields` (`semantic/tuples.inc`) resolves the items against the struct or
+tuple aggregate with the visibility check of a member access, evaluates the value into the
+hidden `$fields`, and transfers every field in declaration order through `r_match_field_place`
+and `r_match_transfer`: a named one into its local, the others into hidden `$fields_rest_*`
+locals of the block, so all of them drop at its end. The emptied object is then forgotten as a
+pattern partition is (`r_match_forget_partition`), which is why a type with a drop hook of its
+own is refused. The payload that a variant of a standard outcome binds is such a struct, so
+`auto {.iterator = rest, .entry} = move item;` continues a directory enumeration.
 
 Core draft.76 (L24) lets `std.async::detach(move member)` consume a member of a task group
 without ending its supervision: the escape check of `semantic/task_scope.inc` treats detach like a

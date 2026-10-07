@@ -236,6 +236,78 @@ async void reports_errors_and_keeps_the_connection()
 }
 
 @test
+async void names_the_objects_of_an_error()
+    throws std.postgres::pg_error, std.error::fault, std.test::failure {
+    if (enabled() == false) { return; }
+    std.postgres::connection db = await std.postgres::connect(std.postgres::options::from_environment());
+    await db.execute_script("DROP TABLE IF EXISTS named; DROP DOMAIN IF EXISTS positive;"
+                            "CREATE TABLE named(id int CONSTRAINT named_id_key UNIQUE, label text NOT NULL);"
+                            "CREATE DOMAIN positive AS int CONSTRAINT positive_value CHECK (VALUE > 0)");
+    (await db.execute("INSERT INTO named VALUES (1, 'a')", values())) as void;
+    try {
+        (await db.execute("INSERT INTO named VALUES (1, 'b')", values())) as void;
+        std.test::check(false, "a duplicate key is refused");
+    } catch (std.postgres::pg_error refused) {
+        std.test::equal_text(refused.sqlstate, "23505");
+        std.test::equal_text(refused.constraint, "named_id_key");
+        std.test::equal_text(refused.table, "named");
+        std.test::equal_text(refused.schema, "public");
+        std.test::equal_text(refused.column, "");
+    }
+    try {
+        (await db.execute("INSERT INTO named VALUES (2, NULL)", values())) as void;
+        std.test::check(false, "a missing label is refused");
+    } catch (std.postgres::pg_error refused) {
+        std.test::equal_text(refused.sqlstate, "23502");
+        std.test::equal_text(refused.column, "label");
+        std.test::equal_text(refused.table, "named");
+        std.test::equal_text(refused.constraint, "");
+    }
+    try {
+        (await db.query("SELECT (-1)::positive", values())) as void;
+        std.test::check(false, "a value outside the domain is refused");
+    } catch (std.postgres::pg_error refused) {
+        std.test::equal_text(refused.sqlstate, "23514");
+        std.test::equal_text(refused.data_type, "positive");
+        std.test::equal_text(refused.constraint, "positive_value");
+    }
+    await db.execute_script("DROP TABLE named; DROP DOMAIN positive");
+    await (move db).close();
+}
+
+@test
+async void sets_parameters_of_the_session()
+    throws std.postgres::pg_error, std.error::fault, std.test::failure {
+    if (enabled() == false) { return; }
+    std.postgres::options zoned = std.postgres::options::from_environment();
+    zoned.set("timezone", "UTC");
+    zoned.set("TimeZone", "Asia/Shanghai");
+    zoned.set("statement_timeout", "7s");
+    usize count = len(zoned.settings);
+    std.test::equal(count, 2usize);
+    std.postgres::connection db = await std.postgres::connect(move zoned);
+    std.postgres::rows zone = await db.query("SHOW TimeZone", values());
+    std.test::equal_text(zone.items[0usize].text(0usize), "Asia/Shanghai");
+    std.postgres::rows timeout = await db.query("SHOW statement_timeout", values());
+    std.test::equal_text(timeout.items[0usize].text(0usize), "7s");
+    /* The day of a time in the zone of the session, as DATE(created_at) gives it. */
+    std.postgres::rows day = await db.query("SELECT DATE(TIMESTAMPTZ '2026-01-01 20:00:00+00')::text", values());
+    std.test::equal_text(day.items[0usize].text(0usize), "2026-01-02");
+    await (move db).close();
+
+    std.postgres::options fixed = std.postgres::options::from_environment();
+    fixed.set("datestyle", "German");
+    try {
+        std.postgres::connection refused = await std.postgres::connect(move fixed);
+        await (move refused).close();
+        std.test::check(false, "a setting of DateStyle is refused");
+    } catch (std.postgres::pg_error refused) {
+        std.test::check(refused.code == std.postgres::error_code::invalid_value, "invalid_value");
+        std.test::equal_text(refused.detail, "datestyle");
+    }
+}
+
+@test
 async void runs_transactions() throws std.postgres::pg_error, std.error::fault, std.test::failure {
     if (enabled() == false) { return; }
     std.postgres::connection db = await std.postgres::connect(std.postgres::options::from_environment());

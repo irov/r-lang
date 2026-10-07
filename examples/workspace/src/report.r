@@ -1,4 +1,5 @@
 module example.workspace.report;
+import std.slice;
 
 std.string::string timestamp(o<std.time::system_time> value) throws std.alloc::alloc_error {
     switch (value) {
@@ -38,4 +39,42 @@ async std.string::string first(std.fs::directory_iter iterator)
     case variant std.fs::directory_next_result::end: return std.string::from_str("empty\n");
     case variant std.fs::directory_next_result::failed(move failure): throw failure.error;
     }
+}
+
+/* Every entry of the directory as a `name kind` line, sorted by name, or `empty`. Each entry hands
+   back the iterator for the next one, and the declaration takes it out of the entry (Core
+   R-STMT-0022). */
+async std.string::string entries(std.fs::directory_iter iterator)
+    throws std.fs::fs_error, std.async::start_error, std.fs::path_error, std.alloc::alloc_error {
+    array<std.string::string> lines = [];
+    walk: while (true) {
+        std.fs::directory_next_result result = await (move iterator).next();
+        switch (move result) {
+        case variant std.fs::directory_next_result::entry(move item):
+            auto {.iterator = rest, .entry} = move item;
+            iterator = move rest;
+            std.string::string name = std.fs::path_to_utf8(&entry.name);
+            constexpr str kind = kind_name(entry.kind);
+            std.string::string line = f"{name} {kind}\n";
+            try {
+                lines.push(move line);
+            } catch (std.array::push_error<std.string::string> refused) {
+                (move refused) as void;
+                throw std.alloc::alloc_error::out_of_memory;
+            }
+        case variant std.fs::directory_next_result::end: break walk;
+        case variant std.fs::directory_next_result::failed(move failure):
+            auto {.error, .iterator = rest} = move failure;
+            drop rest;
+            throw error;
+        }
+    }
+    if (len(lines) == 0usize) { return std.string::from_str("empty\n"); }
+    {
+        std.string::string[] ordered = lines.as_slice_mut();
+        std.slice::sort(ordered);
+    }
+    std.string::string output = std.string::create();
+    for (usize index = 0usize; index < len(lines); index += 1usize) { output.append(lines[index]); }
+    return move output;
 }

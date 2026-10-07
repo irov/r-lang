@@ -1,8 +1,8 @@
 {
   "version": 1,
   "scope": "CST node presence; not semantic or branch coverage",
-  "total_nodes": 102,
-  "application_nodes": 102,
+  "total_nodes": 103,
+  "application_nodes": 103,
   "nodes": [
     {
       "node": "aggregate_initializer",
@@ -733,7 +733,8 @@
         "orders",
         "registry",
         "telemetry",
-        "tournament"
+        "tournament",
+        "workspace"
       ],
       "walkthroughs": []
     },
@@ -801,7 +802,15 @@
     {
       "node": "destructuring_declaration",
       "applications": [
-        "tally"
+        "tally",
+        "workspace"
+      ],
+      "walkthroughs": []
+    },
+    {
+      "node": "destructuring_field",
+      "applications": [
+        "workspace"
       ],
       "walkthroughs": []
     },
@@ -860,6 +869,7 @@
         "unzip",
         "warehouse",
         "workers",
+        "workspace",
         "zip"
       ],
       "walkthroughs": [
@@ -1970,7 +1980,8 @@
     {
       "node": "labeled_statement",
       "applications": [
-        "netlab"
+        "netlab",
+        "workspace"
       ],
       "walkthroughs": []
     },

@@ -1,5 +1,6 @@
 module std.tls;
 import std.stream;
+import std.text;
 
 /* R-SLIB-TLS-0001: the native provider of the module, an engine over Mbed TLS 3.6 that
    exchanges records through memory (Core R-FFI-0028..0044). Its configurations and sessions
@@ -312,19 +313,76 @@ protected o<std.string::string> setting(str name) throws std.alloc::alloc_error 
 /* The largest bundle the module reads. */
 protected const usize bundle_limit = 16777216usize;
 
+/* The directories of a list that SSL_CERT_DIR writes, separated by ':', without empty ones. */
+protected array<std.string::string> directory_list(str listing) throws std.alloc::alloc_error {
+    array<std.string::string> found = [];
+    for (str piece in std.text::split(listing, ":")) {
+        const u8[] spelled = piece;
+        if (len(spelled) > 0usize) {
+            try {
+                found.push(std.string::from_str(piece));
+            } catch (std.array::push_error<std.string::string> refused) {
+                (move refused) as void;
+                throw std.alloc::alloc_error::out_of_memory;
+            }
+        }
+    }
+    return move found;
+}
+
 /* R-SLIB-TLS-0007: a client configuration that trusts the certificate authorities of the system:
-   the PEM bundle named by SSL_CERT_FILE, or else the first bundle file of the system that can
-   be read. */
+   the PEM bundle named by SSL_CERT_FILE and the files of the directories named by SSL_CERT_DIR,
+   or, when neither is set, the first bundle file of the system that can be read. */
 async config system_client_config() throws tls_error, std.error::fault {
     config made = client_config();
     usize trusted = 0usize;
+    bool named = false;
     o<std.string::string> chosen = setting("SSL_CERT_FILE");
     switch (move chosen) {
     case variant o::some(move name):
+        named = true;
         std.fs::path path = std.fs::path_from_utf8(name);
         bytes content = await std.fs::read_file(&path, bundle_limit);
         trusted += trust_bundle(&made, content.as_slice());
-    case variant o::none:
+    case variant o::none: break;
+    }
+    o<std.string::string> listed = setting("SSL_CERT_DIR");
+    switch (move listed) {
+    case variant o::some(move listing):
+        named = true;
+        array<std.string::string> folders = directory_list(listing);
+        drop listing;
+        for (usize index = 0usize; index < len(folders); index += 1usize) {
+            std.fs::path folder = std.fs::path_from_utf8(folders[index]);
+            std.fs::directory opened = await std.fs::open_directory(&folder, o::none);
+            std.fs::directory_iter iterator = await std.fs::iterate(&opened, o::none);
+            walk: while (true) {
+                std.fs::directory_next_result step = await std.fs::next(move iterator, o::none);
+                switch (move step) {
+                case variant std.fs::directory_next_result::entry(move item):
+                    /* Core R-STMT-0022: the entry hands back the iterator for the next one. */
+                    auto {.iterator = rest, .entry} = move item;
+                    iterator = move rest;
+                    if (entry.kind == std.fs::file_kind::regular || entry.kind == std.fs::file_kind::symlink) {
+                        std.fs::path file = std.fs::path_join(&folder, &entry.name);
+                        try {
+                            bytes content = await std.fs::read_file(&file, bundle_limit);
+                            trusted += trust_bundle(&made, content.as_slice());
+                        } catch (std.fs::fs_error unreadable) {
+                            unreadable as void;
+                        }
+                    }
+                case variant std.fs::directory_next_result::end: break walk;
+                case variant std.fs::directory_next_result::failed(move failure):
+                    auto {.error, .iterator = rest} = move failure;
+                    drop rest;
+                    throw error;
+                }
+            }
+        }
+    case variant o::none: break;
+    }
+    if (named == false) {
         bool found = false;
         for (usize index = 0usize; index < 6usize && found == false; index += 1usize) {
             try {

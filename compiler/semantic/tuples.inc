@@ -592,6 +592,230 @@ cleanup:
     return success;
 }
 
+/* One `.field = name` (or `.field`) of a field destructuring declaration: the field it selects
+   and the name it binds. */
+typedef struct RDestructuringField {
+    RAstTokenView designator;
+    RAstTokenView name;
+    uint32_t index;
+} RDestructuringField;
+
+/* R-STMT-0022 (L40): `auto {.field = name, ...} = value;` evaluates a struct or tuple once into a
+   hidden object and moves or copies each field into a new local of the enclosing block, as the
+   tuple form does; a field the declaration does not name moves into a hidden local of the block,
+   so it is dropped at the end of the block like the named ones. The emptied object is forgotten
+   (R-EXPR-0031), which a type with a user drop hook does not allow. */
+static bool r_destructuring_lower_fields(RBodyContext *body,
+                                         RAstRef statement,
+                                         const RAstNodeView *view,
+                                         size_t scope_base) {
+    RFrontendContext *context = body->frontend;
+    RDestructuringField fields[64];
+    uint32_t field_count = 0U;
+    RAstRef initializer = {0};
+    RExpressionResult value = {0};
+    RExpressionResult root_place = {0};
+    RSymbolId root;
+
+    for (uint32_t index = 0U; index < view->child_count; ++index) {
+        RAstRef child;
+        RAstNodeView field_view;
+        RAstTokenView token;
+        if (!r_ast_ref_child(context, statement, index, &child)) {
+            return r_body_invariant(body);
+        }
+        if (r_ast_ref_token(context, child, &token)) {
+            continue;
+        }
+        if (!r_ast_ref_view(context, child, &field_view)) {
+            return r_body_invariant(body);
+        }
+        if (field_view.kind != R_SYNTAX_DESTRUCTURING_FIELD) {
+            if (initializer.node == R_AST_NODE_ID_INVALID) {
+                initializer = child;
+            }
+            continue;
+        }
+        if (field_count == 64U) {
+            return r_body_diagnostic(body,
+                                     "R-DIAG-LIMIT-001",
+                                     "R-STMT-0022",
+                                     "a destructuring declaration binds at most 64 names",
+                                     field_view.span);
+        }
+        RDestructuringField *field = &fields[field_count++];
+        bool designated = false;
+        bool named = false;
+        for (uint32_t part = 0U; part < field_view.child_count; ++part) {
+            RAstRef piece;
+            RAstTokenView piece_token;
+            if (!r_ast_ref_child(context, child, part, &piece) ||
+                !r_ast_ref_token(context, piece, &piece_token)) {
+                continue;
+            }
+            if ((piece_token.kind == R_TOKEN_IDENTIFIER ||
+                 piece_token.kind == R_TOKEN_INTEGER_LITERAL) &&
+                !designated) {
+                field->designator = piece_token;
+                designated = true;
+            } else if (piece_token.kind == R_TOKEN_IDENTIFIER && designated) {
+                field->name = piece_token;
+                named = true;
+            }
+        }
+        if (!designated) {
+            return r_body_invariant(body);
+        }
+        if (!named) {
+            field->name = field->designator;
+        }
+    }
+    if ((initializer.node == R_AST_NODE_ID_INVALID) || (field_count == 0U)) {
+        return r_body_diagnostic(body,
+                                 "R-DIAG-TYPE-001",
+                                 "R-STMT-0022",
+                                 "a destructuring declaration names at least one field",
+                                 view->span);
+    }
+    if ((body->statement_splice == NULL) || (body->splice_statement != statement.node)) {
+        return r_body_diagnostic(body,
+                                 "R-DIAG-TYPE-001",
+                                 "R-STMT-0022",
+                                 "a destructuring declaration is a statement of a block",
+                                 view->span);
+    }
+    r_body_expression_invalid(&value);
+    if (!r_body_lower_value(body, initializer, R_TYPE_ID_INVALID, &value)) {
+        return false;
+    }
+    if (!value.valid) {
+        return true;
+    }
+    const RSemanticAggregate *aggregate = r_semantic_aggregate_for_type(context, value.type);
+    if ((aggregate == NULL) || (aggregate->kind != R_SEMANTIC_AGGREGATE_STRUCT)) {
+        return r_body_diagnostic(body,
+                                 "R-DIAG-TYPE-001",
+                                 "R-STMT-0022",
+                                 "a destructuring declaration binds the fields of a struct or tuple",
+                                 view->span);
+    }
+    if (aggregate->drop_function != 0U) {
+        return r_body_diagnostic(body,
+                                 "R-DIAG-TYPE-001",
+                                 "R-STMT-0022",
+                                 "a destructuring declaration cannot take apart a value with a user "
+                                 "drop hook",
+                                 view->span);
+    }
+    for (uint32_t index = 0U; index < field_count; ++index) {
+        RDestructuringField *field = &fields[index];
+        bool found = false;
+        if (field->designator.kind == R_TOKEN_INTEGER_LITERAL) {
+            uint32_t element;
+            found = aggregate->is_tuple &&
+                    r_tuple_index(context, &field->designator, &element) &&
+                    (element < aggregate->field_count);
+            field->index = found ? element : 0U;
+        } else {
+            for (uint32_t member = 0U; !found && (member < aggregate->field_count); ++member) {
+                const RSemanticField *candidate =
+                    &context->semantic_fields[aggregate->first_field + member];
+                if (candidate->name_intern_id == field->designator.intern_id) {
+                    if (candidate->is_protected && (aggregate->module_source != body->source)) {
+                        return r_body_diagnostic(body,
+                                                 "R-DIAG-NAME-001",
+                                                 "R-NAME-0003",
+                                                 "protected struct field is not visible",
+                                                 field->designator.span);
+                    }
+                    found = true;
+                    field->index = member;
+                }
+            }
+        }
+        if (!found) {
+            return r_body_diagnostic(body,
+                                     "R-DIAG-NAME-001",
+                                     "R-STMT-0022",
+                                     "the value has no field of this name or index",
+                                     field->designator.span);
+        }
+        for (uint32_t earlier = 0U; earlier < index; ++earlier) {
+            if (fields[earlier].index == field->index) {
+                return r_body_diagnostic(body,
+                                         "R-DIAG-TYPE-001",
+                                         "R-STMT-0022",
+                                         "a destructuring declaration binds a field once",
+                                         field->designator.span);
+            }
+        }
+    }
+    RHirVector *statements = body->statement_splice;
+    if (!r_iteration_declare_hidden(body,
+                                    body->active_symbols.count,
+                                    "$fields",
+                                    r_semantic_value_type(context, value.type),
+                                    statement.node,
+                                    view->span,
+                                    &value,
+                                    statements,
+                                    &root) ||
+        !r_body_symbol_place(body, root, view->span, &root_place)) {
+        return false;
+    }
+    /* Fields move in declaration order, named or not, so that the partition is complete. */
+    for (uint32_t member = 0U; member < aggregate->field_count; ++member) {
+        const RDestructuringField *bound = NULL;
+        RExpressionResult field = {0};
+        RExpressionResult piece = {0};
+        RHirNodeId local = R_HIR_NODE_ID_INVALID;
+        for (uint32_t index = 0U; (bound == NULL) && (index < field_count); ++index) {
+            if (fields[index].index == member) {
+                bound = &fields[index];
+            }
+        }
+        const RSourceSpan span = (bound != NULL) ? bound->name.span : view->span;
+        if (!r_match_field_place(body, root_place, member, span, &field) ||
+            !r_match_transfer(body, field, span, &piece)) {
+            return false;
+        }
+        if (bound == NULL) {
+            RSymbolId rest;
+            char label[48];
+            (void)snprintf(label, sizeof(label), "$fields_rest_%zu", body->active_symbols.count);
+            if (!r_iteration_declare_hidden(body,
+                                            scope_base,
+                                            label,
+                                            piece.type,
+                                            statement.node,
+                                            span,
+                                            &piece,
+                                            statements,
+                                            &rest)) {
+                return false;
+            }
+            continue;
+        }
+        if (!r_body_declare_local(body,
+                                  scope_base,
+                                  bound->name,
+                                  piece.type,
+                                  statement.node,
+                                  false,
+                                  false,
+                                  span,
+                                  &piece,
+                                  false,
+                                  false,
+                                  &local) ||
+            ((local != R_HIR_NODE_ID_INVALID) &&
+             !r_hir_vector_push(context, statements, local))) {
+            return false;
+        }
+    }
+    return r_match_forget_partition(body, root, view->span, statements);
+}
+
 /* R-STMT-0022 (L37.3): `auto (a, b, ...) = value;` evaluates the tuple once into a hidden object
    and moves or copies each element, in order, into a new local of the enclosing block, the
    partition a pattern performs (R-EXPR-0031); the emptied tuple is then forgotten. The locals
@@ -612,6 +836,10 @@ static bool r_tuple_lower_destructuring(RBodyContext *body,
     *node_id = R_HIR_NODE_ID_INVALID;
     if (!r_ast_ref_view(context, statement, &view)) {
         return r_body_invariant(body);
+    }
+    RAstRef field_probe;
+    if (r_ast_find_direct_child(context, statement, R_SYNTAX_DESTRUCTURING_FIELD, &field_probe)) {
+        return r_destructuring_lower_fields(body, statement, &view, scope_base);
     }
     for (uint32_t index = 0U; index < view.child_count; ++index) {
         RAstRef child;

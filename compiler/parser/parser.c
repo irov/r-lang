@@ -4485,15 +4485,41 @@ static bool r_parse_await_operation(RParser *parser) {
     return r_parser_close(parser, node);
 }
 
-/* R-STMT-0022 (L37.3): `auto (a, b, ...) = initializer;` binds the elements of a tuple. */
+/* R-STMT-0022: `auto (a, b, ...) = initializer;` binds the elements of a tuple (L37.3), and
+   `auto {.field = name, .other, ...} = initializer;` the fields of a struct or tuple (L40). */
 static bool r_parse_destructuring_declaration(RParser *parser) {
     size_t node = r_parser_open(parser, R_SYNTAX_DESTRUCTURING_DECLARATION);
     (void)r_parser_expect(parser, R_TOKEN_KW_AUTO, "expected 'auto'");
-    (void)r_parser_expect(parser, R_TOKEN_LPAREN, "expected '(' before the bound names");
-    do {
-        (void)r_parser_expect(parser, R_TOKEN_IDENTIFIER, "expected a name to bind");
-    } while (r_parser_eat(parser, R_TOKEN_COMMA));
-    (void)r_parser_expect(parser, R_TOKEN_RPAREN, "expected ')' after the bound names");
+    if (r_parser_eat(parser, R_TOKEN_LBRACE)) {
+        do {
+            if (r_parser_at(parser, R_TOKEN_RBRACE)) {
+                break;
+            }
+            const size_t field = r_parser_open(parser, R_SYNTAX_DESTRUCTURING_FIELD);
+            (void)r_parser_expect(parser, R_TOKEN_DOT, "expected '.' before a field to bind");
+            if (r_parser_eat(parser, R_TOKEN_INTEGER_LITERAL)) {
+                if (r_parser_eat(parser, R_TOKEN_EQUAL)) {
+                    (void)r_parser_expect(parser, R_TOKEN_IDENTIFIER, "expected a name to bind");
+                } else {
+                    (void)r_parser_missing(
+                        parser, R_TOKEN_EQUAL, "an element of a tuple is bound with '= name'");
+                }
+            } else {
+                (void)r_parser_expect(parser, R_TOKEN_IDENTIFIER, "expected a field to bind");
+                if (r_parser_eat(parser, R_TOKEN_EQUAL)) {
+                    (void)r_parser_expect(parser, R_TOKEN_IDENTIFIER, "expected a name to bind");
+                }
+            }
+            (void)r_parser_close(parser, field);
+        } while (r_parser_eat(parser, R_TOKEN_COMMA));
+        (void)r_parser_expect(parser, R_TOKEN_RBRACE, "expected '}' after the bound fields");
+    } else {
+        (void)r_parser_expect(parser, R_TOKEN_LPAREN, "expected '(' before the bound names");
+        do {
+            (void)r_parser_expect(parser, R_TOKEN_IDENTIFIER, "expected a name to bind");
+        } while (r_parser_eat(parser, R_TOKEN_COMMA));
+        (void)r_parser_expect(parser, R_TOKEN_RPAREN, "expected ')' after the bound names");
+    }
     (void)r_parser_expect(parser, R_TOKEN_EQUAL, "destructuring declaration requires initializer");
     if (!r_parse_initializer(parser, R_EXPRESSION_NORMAL)) {
         (void)r_parser_syntax_error(parser, "expected object initializer");
@@ -4504,7 +4530,8 @@ static bool r_parse_destructuring_declaration(RParser *parser) {
 
 static bool r_parse_object_declaration(RParser *parser, bool with_semicolon) {
     if (with_semicolon && r_parser_at(parser, R_TOKEN_KW_AUTO) &&
-        (r_parser_peek_n_kind(parser, 1U) == R_TOKEN_LPAREN)) {
+        ((r_parser_peek_n_kind(parser, 1U) == R_TOKEN_LPAREN) ||
+         (r_parser_peek_n_kind(parser, 1U) == R_TOKEN_LBRACE))) {
         return r_parse_destructuring_declaration(parser);
     }
     size_t node = r_parser_open(parser, R_SYNTAX_OBJECT_DECLARATION);

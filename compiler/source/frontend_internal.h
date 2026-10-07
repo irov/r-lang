@@ -237,6 +237,8 @@ typedef enum RSyntaxKind {
     R_SYNTAX_OBJECT_DECLARATION,
     /* R-STMT-0022 (L37.3): `auto (a, b) = tuple;`. */
     R_SYNTAX_DESTRUCTURING_DECLARATION,
+    /* R-STMT-0022 (L40): one `.field = name` or `.field` of `auto {...} = value;`. */
+    R_SYNTAX_DESTRUCTURING_FIELD,
     R_SYNTAX_FUNCTION_DECLARATION,
     R_SYNTAX_PARAMETER_LIST,
     R_SYNTAX_PARAMETER,

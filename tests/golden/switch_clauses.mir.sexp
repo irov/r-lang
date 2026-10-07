@@ -1,4 +1,4 @@
-(mir version=1 core_revision="0.1.0-draft.101"
+(mir version=1 core_revision="0.1.0-draft.102"
   (function name="test.codegen.switch_clauses::main" visibility=exported return=i32 state=definition
     (block bb0
       (local place=%local0 name="index" type=i32)

@@ -1,4 +1,4 @@
-(mir version=1 core_revision="0.1.0-draft.101"
+(mir version=1 core_revision="0.1.0-draft.102"
   (function name="test.async_copy_args::encode" visibility=protected return=i32 async=true start=(carrier (task i32) (effects (standard "std.async::start_error"))) state=definition
     (block bb0
       (parameter place=%arg0 name="hundreds" type=i32)

@@ -15,7 +15,7 @@ Normative draft of the R standard library
 |Field |Value
 |Document|R Standard Library Specification
 |Language version|0.1
-|Document revision|0.1.0-draft.70
+|Document revision|0.1.0-draft.72
 |Status|Normative draft; not a stable R 1.0 standard
 |Document language|English; normative original
 |Required language standard|R Core Language Specification 0.1
@@ -5736,9 +5736,12 @@ releases its engine state when it is dropped, whether or not it was shut down.
 *R-SLIB-TLS-0007* — `+async std.tls::system_client_config() -> std.tls::config throws
 std.tls::tls_error, std.error::fault+` returns a client configuration of R-SLIB-TLS-0003 that
 trusts the certificate authorities of the system. When the environment variable
-`+SSL_CERT_FILE+` is set and not empty, the authorities are the certificates of the PEM file it
-names, and a failure to read that file is reported. Otherwise they are those of the first file
-of the system that can be read among `+/etc/ssl/cert.pem+`, the bundle of macOS, and
+`+SSL_CERT_FILE+` or `+SSL_CERT_DIR+` is set and not empty, the authorities are the certificates
+of the PEM file that `+SSL_CERT_FILE+` names and of every regular file and symbolic link in the
+directories that `+SSL_CERT_DIR+` lists, separated by `+:+`, with empty elements skipped, as the
+hashed links of OpenSSL are kept; a failure to read the file or to open or enumerate a
+directory is reported, and a file of a directory that cannot be read is passed over. Otherwise
+they are those of the first file of the system that can be read among `+/etc/ssl/cert.pem+`, the bundle of macOS, and
 `+/etc/ssl/certs/ca-certificates.crt+`, `+/etc/pki/tls/certs/ca-bundle.crt+`,
 `+/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem+`, `+/etc/ssl/ca-bundle.pem+` and
 `+/etc/pki/tls/cacert.pem+`, the bundles of common Linux distributions. Each certificate of the
@@ -7795,9 +7798,13 @@ the transport and ends the session, after which every operation of the connectio
 `+server+`, `+connection+`, `+protocol+`, `+authentication+`, `+unsupported+`, `+closed+`,
 `+invalid_value+`, `+column_range+`, `+null_value+`, `+missing_column+` and
 `+migration_mismatch+`, and `+std.postgres::pg_error+` is an error with the public fields `+std.postgres::error_code code+`, `+std.string::string sqlstate+`,
-`+std.string::string message+`, `+std.string::string detail+` and `+std.string::string hint+`.
-An ErrorResponse of the server is `+server+` with the SQLSTATE, message, detail and hint that it
-carries, which are empty when absent; `+connection+` is a server that cannot be reached or
+`+std.string::string message+`, `+std.string::string detail+`, `+std.string::string hint+`,
+`+std.string::string schema+`, `+std.string::string table+`, `+std.string::string column+`,
+`+std.string::string data_type+` and `+std.string::string constraint+`. An ErrorResponse of the
+server is `+server+` with the SQLSTATE, message, detail and hint that it carries and with the
+names of the schema, table, column, data type and constraint that it concerns (its fields S, t,
+c, d and n), which are empty when absent, so that a unique violation (SQLSTATE 23505) names its
+constraint; `+connection+` is a server that cannot be reached or
 refuses TLS, `+protocol+` a message of the server that does not follow the protocol, which ends
 the session, `+authentication+` a SCRAM exchange that does not verify, `+unsupported+` an
 authentication method or mechanism that this client lacks, `+closed+` an operation of a
@@ -7850,28 +7857,38 @@ views of the row.
 defaults, `+std.string::string host+` (127.0.0.1), `+u16 port+` (5432),
 `+std.string::string socket+` (empty), `+std.string::string user+` (postgres),
 `+std.string::string password+`, `+std.string::string database+` and
-`+std.string::string application_name+` (empty). A nonempty socket names the socket file of the
-server, such as `+/tmp/.s.PGSQL.5432+`, and host and port are not used; an empty database
-connects to the database of the user's name. `+std.postgres::connection+` is a Move, Send+Sync
-handle of a session.
+`+std.string::string application_name+` (empty) and `+array<std.postgres::setting> settings+`
+(empty), and `+std.postgres::setting+` a Move struct with the public fields
+`+std.string::string name+` and `+std.string::string value+`. A nonempty socket names the socket
+file of the server, such as `+/tmp/.s.PGSQL.5432+`, and host and port are not used; an empty
+database connects to the database of the user's name. `+std.postgres::connection+` is a Move,
+Send+Sync handle of a session.
 
 * `+std.postgres::options::from_environment() -> std.postgres::options throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::options::set(std.postgres::options* this, str name, str value) -> void throws std.alloc::alloc_error+`;
 * `+std.postgres::connect(std.postgres::options settings) -> task<std.postgres::connection throws std.postgres::pg_error, std.error::fault> throws std.async::start_error+`;
 * `+std.postgres::connect_tls(std.postgres::options settings, arc std.tls::config tls) -> task<std.postgres::connection throws std.postgres::pg_error, std.error::fault> throws std.async::start_error+`;
 * `+std.postgres::connection::share(const std.postgres::connection* this) -> std.postgres::connection+`;
 * `+std.postgres::connection::close(std.postgres::connection this) -> task<void throws std.postgres::pg_error, std.error::fault> throws std.async::start_error+`.
 
 from_environment reads the variables of libpq: PGHOST, a directory of the socket when it starts
-with `+/+`, PGPORT, PGUSER, PGPASSWORD, PGDATABASE and PGAPPNAME; a variable that is not set
-keeps its default, and a PGPORT that is no port is `+invalid_value+`. connect opens the
-transport, sends the startup message with the user, the database, the application name, the
-client encoding UTF8 and the DateStyle `+ISO, MDY+`, and answers the authentication the server asks for: none, the cleartext
+with `+/+`, PGPORT, PGUSER, PGPASSWORD, PGDATABASE and PGAPPNAME, and PGTZ as the setting TimeZone; a
+variable that is not set keeps its default, and a PGPORT that is no port is `+invalid_value+`.
+set appends the setting name with value, or replaces the value of a setting whose name differs
+from name only in ASCII case. connect opens the transport, sends the startup message with the
+user, the database, the application name, the client encoding UTF8, the DateStyle
+`+ISO, MDY+` and then every setting in order, as run-time parameters of the session (a
+TimeZone setting thus fixes the zone in which the server reads and shows times and dates, such
+as `+DATE(created_at)+`), and answers the authentication the server asks for: none, the cleartext
 password, md5, or SASL with SCRAM-SHA-256 (RFC 5802, RFC 7677) without channel binding, whose
 server signature it verifies; the password is used as its UTF-8 bytes, without the SASLprep
 normalization of RFC 4013. A server that refuses the user is a `+server+` error, such as
 SQLSTATE 28P01 for a wrong password. connect_tls asks for TLS first and connects with tls to the
 host name, which the certificate of the server shall name; a server that refuses TLS, a failed
-handshake and a socket path are `+connection+`. share returns another handle of the same
+handshake and a socket path are `+connection+`. A setting with an empty name, with a name that
+the startup message sets itself (user, database, application_name, client_encoding, DateStyle
+or replication, in any ASCII case) or with a zero byte in name or value is `+invalid_value+` with
+the name in detail, thrown before the transport is opened. share returns another handle of the same
 connection. close ends the session with Terminate; the other handles then fail with `+closed+`.
 The server ends the session as soon as it reads Terminate and may close the transport first, so
 close reports no failure of the transport. A connection whose last handle is dropped closes its

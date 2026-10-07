@@ -109,7 +109,7 @@ def database_checks():
         expect(['register', '43', 'Борис', 'boris@example.test', '2024-03-11T23:30:00+05:00'], 0, 'user 2\n',
                environment=environment)
         expect(['register', '44', 'Ann', 'x@example.test', '2024-03-12T00:00:00Z'], 65, '',
-               'database: server 23505\n', environment)
+               'database: server 23505 users_nickname_key\n', environment)
         assert database.psql("SELECT account_id, avatar, extract(epoch FROM created_at)::bigint FROM users "
                              "ORDER BY id") == '42|1_avatar|1710054000\n43|1_avatar|1710181800\n'
         expect(['user', '1'], 0, 'Ann joined 2024-03-10\nnever synced\n', environment=environment)
@@ -126,6 +126,17 @@ def database_checks():
                environment=environment)
         expect(['user', '2'], 0, 'Борис joined 2024-03-11\nlast sync 2024-04-01T12:00:00Z session '
                '0190f7e1-1234-7abc-8def-0123456789ac\nbadges\nstats wins\n', environment=environment)
+        # The session counts days in ARENA_TIME_ZONE: 2024-03-11T18:30Z is already the 12th in Tokyo.
+        expect(['user', '2'], 0, 'Борис joined 2024-03-12\nlast sync 2024-04-01T12:00:00Z session '
+               '0190f7e1-1234-7abc-8def-0123456789ac\nbadges\nstats wins\n',
+               environment=dict(environment, ARENA_TIME_ZONE='Asia/Tokyo'))
+        # Without ARENA_TIME_ZONE the zone of PGTZ stays; ARENA_TIME_ZONE wins over it.
+        expect(['user', '2'], 0, 'Борис joined 2024-03-12\nlast sync 2024-04-01T12:00:00Z session '
+               '0190f7e1-1234-7abc-8def-0123456789ac\nbadges\nstats wins\n',
+               environment=dict(environment, PGTZ='Asia/Tokyo'))
+        expect(['user', '2'], 0, 'Борис joined 2024-03-11\nlast sync 2024-04-01T12:00:00Z session '
+               '0190f7e1-1234-7abc-8def-0123456789ac\nbadges\nstats wins\n',
+               environment=dict(environment, PGTZ='Asia/Tokyo', ARENA_TIME_ZONE='UTC'))
         expect(['user', '9'], 65, '', 'no user 9\n', environment)
         expect(['ban', '2', 'suspicious', '2024-04-02T00:00:00Z'], 0,
                'UPDATE users SET "ban_type" = $2, "last_ban_check" = $3 WHERE "id" = $1\nchanged 1\n',

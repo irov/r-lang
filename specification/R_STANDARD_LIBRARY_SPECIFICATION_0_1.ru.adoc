@@ -15,7 +15,7 @@
 |Поле |Значение
 |Документ |R Standard Library Specification
 |Версия языка |0.1
-|Редакция документа |0.1.0-draft.70
+|Редакция документа |0.1.0-draft.72
 |Статус |Перевод нормативного черновика; не является стабильным стандартом R 1.0
 |Язык документа |Русский перевод; ключевые нормативные термины приведены на английском
 |Требуемый стандарт языка |R Core Language Specification 0.1
@@ -5786,8 +5786,11 @@ session сохраняет свою неудачу: каждая последу�
 *R-SLIB-TLS-0007* — `+async std.tls::system_client_config() -> std.tls::config throws
 std.tls::tls_error, std.error::fault+` возвращает клиентскую конфигурацию из R-SLIB-TLS-0003,
 которая доверяет удостоверяющим центрам системы. Когда переменная окружения `+SSL_CERT_FILE+`
-задана и не пуста, это сертификаты файла PEM, который она называет, и неудача чтения этого
-файла сообщается. Иначе это сертификаты первого читаемого файла системы из
+или `+SSL_CERT_DIR+` задана и не пуста, это сертификаты файла PEM, который называет
+`+SSL_CERT_FILE+`, и каждого обычного файла и символической ссылки в каталогах, которые
+перечисляет `+SSL_CERT_DIR+` через `+:+`, без пустых элементов, как хранятся хешированные ссылки
+OpenSSL; неудача чтения файла или открытия и обхода каталога сообщается, а файл каталога,
+который не читается, пропускается. Иначе это сертификаты первого читаемого файла системы из
 `+/etc/ssl/cert.pem+`, набора macOS, и `+/etc/ssl/certs/ca-certificates.crt+`,
 `+/etc/pki/tls/certs/ca-bundle.crt+`, `+/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem+`,
 `+/etc/ssl/ca-bundle.pem+` и `+/etc/pki/tls/cacert.pem+`, наборов распространённых
@@ -7799,9 +7802,13 @@ SSLRequest протокола или через Unix-domain socket. Каждая
 `+connection+`, `+protocol+`, `+authentication+`, `+unsupported+`, `+closed+`,
 `+invalid_value+`, `+column_range+`, `+null_value+`, `+missing_column+` и
 `+migration_mismatch+`, а `+std.postgres::pg_error+` — error с публичными полями `+std.postgres::error_code code+`, `+std.string::string sqlstate+`,
-`+std.string::string message+`, `+std.string::string detail+` и `+std.string::string hint+`.
-ErrorResponse сервера — `+server+` с SQLSTATE, message, detail и hint, которые он несёт; отсутствующие
-поля пусты; `+connection+` — недостижимый сервер или отказ от TLS, `+protocol+` — сообщение сервера
+`+std.string::string message+`, `+std.string::string detail+`, `+std.string::string hint+`,
+`+std.string::string schema+`, `+std.string::string table+`, `+std.string::string column+`,
+`+std.string::string data_type+` и `+std.string::string constraint+`. ErrorResponse сервера —
+`+server+` с SQLSTATE, message, detail и hint, которые он несёт, и с именами схемы, таблицы,
+столбца, типа данных и ограничения, к которым он относится (его поля S, t, c, d и n);
+отсутствующие поля пусты, так что нарушение уникальности (SQLSTATE 23505) называет своё
+ограничение; `+connection+` — недостижимый сервер или отказ от TLS, `+protocol+` — сообщение сервера
 вне протокола, которое завершает сессию, `+authentication+` — обмен SCRAM, не прошедший проверку,
 `+unsupported+` — метод или механизм аутентификации, которого нет у клиента, `+closed+` — операция
 соединения, чья сессия завершилась, `+invalid_value+`, `+column_range+` и `+null_value+` — отказы
@@ -7852,26 +7859,36 @@ JSON в своих текстовых формах. Операции строк�
 умолчанию: `+std.string::string host+` (127.0.0.1), `+u16 port+` (5432),
 `+std.string::string socket+` (пусто), `+std.string::string user+` (postgres),
 `+std.string::string password+`, `+std.string::string database+` и
-`+std.string::string application_name+` (пусто). Непустой socket называет socket-файл сервера,
-например `+/tmp/.s.PGSQL.5432+`, и тогда host и port не используются; пустая database подключает к
-базе с именем пользователя. `+std.postgres::connection+` — Move, Send+Sync handle сессии.
+`+std.string::string application_name+` (пусто) и `+array<std.postgres::setting> settings+`
+(пусто), а `+std.postgres::setting+` — Move struct с публичными полями
+`+std.string::string name+` и `+std.string::string value+`. Непустой socket называет socket-файл
+сервера, например `+/tmp/.s.PGSQL.5432+`, и тогда host и port не используются; пустая database
+подключает к базе с именем пользователя. `+std.postgres::connection+` — Move, Send+Sync handle
+сессии.
 
 * `+std.postgres::options::from_environment() -> std.postgres::options throws std.postgres::pg_error, std.alloc::alloc_error+`;
+* `+std.postgres::options::set(std.postgres::options* this, str name, str value) -> void throws std.alloc::alloc_error+`;
 * `+std.postgres::connect(std.postgres::options settings) -> task<std.postgres::connection throws std.postgres::pg_error, std.error::fault> throws std.async::start_error+`;
 * `+std.postgres::connect_tls(std.postgres::options settings, arc std.tls::config tls) -> task<std.postgres::connection throws std.postgres::pg_error, std.error::fault> throws std.async::start_error+`;
 * `+std.postgres::connection::share(const std.postgres::connection* this) -> std.postgres::connection+`;
 * `+std.postgres::connection::close(std.postgres::connection this) -> task<void throws std.postgres::pg_error, std.error::fault> throws std.async::start_error+`.
 
 from_environment читает переменные libpq: PGHOST (каталог socket, если начинается с `+/+`), PGPORT,
-PGUSER, PGPASSWORD, PGDATABASE и PGAPPNAME; не заданная переменная оставляет значение по умолчанию,
-а PGPORT, не являющийся портом, — `+invalid_value+`. connect открывает transport, отправляет startup
-message с пользователем, базой, именем приложения, client encoding UTF8 и DateStyle
-`+ISO, MDY+` и отвечает на аутентификацию, которую запрашивает сервер: никакую, cleartext password, md5 или SASL с
+PGUSER, PGPASSWORD, PGDATABASE и PGAPPNAME, а PGTZ — как настройку TimeZone; не заданная переменная
+оставляет значение по умолчанию, а PGPORT, не являющийся портом, — `+invalid_value+`. set добавляет
+настройку name со значением value или заменяет значение настройки, имя которой отличается от name
+только регистром ASCII. connect открывает transport, отправляет startup message с пользователем,
+базой, именем приложения, client encoding UTF8, DateStyle `+ISO, MDY+` и затем всеми настройками по
+порядку как run-time parameters сессии (настройка TimeZone поэтому задаёт зону, в которой сервер
+читает и показывает время и даты, например `+DATE(created_at)+`), и отвечает на аутентификацию, которую запрашивает сервер: никакую, cleartext password, md5 или SASL с
 SCRAM-SHA-256 (RFC 5802, RFC 7677) без channel binding, чью server signature он проверяет;
 пароль используется как его UTF-8 bytes, без нормализации SASLprep из RFC 4013. Отказ
 сервера пользователю — ошибка `+server+`, например SQLSTATE 28P01 при неверном пароле. connect_tls
 сначала просит TLS и подключается с tls к имени хоста, которое shall называть certificate сервера;
-отказ от TLS, неудачный handshake и путь socket — `+connection+`. share возвращает другой handle того
+отказ от TLS, неудачный handshake и путь socket — `+connection+`. Настройка с пустым именем, с
+именем, которое startup message задаёт сам (user, database, application_name, client_encoding,
+DateStyle или replication, в любом регистре ASCII), или с нулевым байтом в имени или значении —
+`+invalid_value+` с именем в detail, брошенный до открытия transport. share возвращает другой handle того
 же соединения. close завершает сессию сообщением Terminate; остальные handles затем завершаются с
 `+closed+`. Сервер завершает сессию, как только прочитает Terminate, и может закрыть transport
 первым, поэтому close не сообщает о сбое transport. Соединение, чей последний handle удалён,

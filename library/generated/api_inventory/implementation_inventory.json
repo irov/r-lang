@@ -2,8 +2,8 @@
   "schema_version": 3,
   "generated_from": {
     "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-    "revision": "0.1.0-draft.70",
-    "sha256": "200e83573ec92a4de5a08a5e35dbb5f0c04b79ca76dbec32faa30d25020a673d"
+    "revision": "0.1.0-draft.72",
+    "sha256": "a1223079d45a77a6b7c878957a81092fd7434be307774eaa24b7faa61c2bbd44"
   },
   "extraction": {
     "qualified_item_pattern": "(?<![A-Za-z0-9_.])((?:core|std\\.[a-z][a-z0-9]*)::[A-Za-z_][A-Za-z0-9_]*)",
@@ -53419,6 +53419,24 @@
         "kind": "r_source",
         "source": "library/r/std/postgres.r",
         "r_symbol": "std.postgres::rows",
+        "generic_arity": 0
+      },
+      "pod": false,
+      "checked_error": false
+    },
+    {
+      "record_id": "std.postgres::setting#type",
+      "id": "std.postgres::setting",
+      "facet": "type",
+      "module": "std.postgres",
+      "item_kind": "public_type",
+      "normative_rules": [
+        "R-SLIB-PG-0005"
+      ],
+      "implementation": {
+        "kind": "r_source",
+        "source": "library/r/std/postgres.r",
+        "r_symbol": "std.postgres::setting",
         "generic_arity": 0
       },
       "pod": false,

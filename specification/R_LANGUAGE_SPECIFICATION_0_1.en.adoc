@@ -15,7 +15,7 @@ Normative draft of the R programming language
 |Field |Value
 |Document|R Core Language Specification
 |Language version|0.1
-|Document revision|0.1.0-draft.101
+|Document revision|0.1.0-draft.102
 |Status|Normative draft; not a stable R 1.0 standard
 |Document language|English; normative original
 |Target backend|ISO/IEC 9899:2018 (C17)
@@ -3590,7 +3590,18 @@ declaration has names; otherwise `+R-DIAG-TYPE-001+` is required. The declaratio
 local per name, in order, in the enclosing block or `+switch+` clause, each of the type of its
 element and initialized from it: a Copy element is copied and a Move element moved. A tuple
 place of a Move type requires `+move+` (R-OWN-0003) and is consumed without a drop of the
-emptied tuple; a Copy tuple place is copied and stays usable. The names follow R-NAME-0004 in
+emptied tuple; a Copy tuple place is copied and stays usable. A field destructuring declaration
+`+auto {.name = local, .other, .0 = first} = value;+` evaluates its initializer once, which
+shall be a struct, such as the payload with named fields that a variant binds, or a tuple,
+without a drop hook of its own (R-INIT-0009); otherwise `+R-DIAG-TYPE-001+` is required. Each
+item names a field, or an element of a tuple by its index, and declares the local named after
+`+=+`, or a local of the field's own name when `+=+` is absent; an index requires `+=+` and a
+name. A field that the value lacks, an index of a struct and a protected field of another
+module (R-NAME-0003) require `+R-DIAG-NAME-001+`, and a field named twice `+R-DIAG-TYPE-001+`.
+The fields move or copy in declaration order, as the elements of a tuple do: a named field
+into its local, a field that is not named into a hidden object of the block that is dropped at
+its end. Thus `+auto {.iterator = rest, .entry} = move item;+` takes both parts of the payload of
+`+std.fs::directory_next_result::entry+` (Library R-SLIB-FS-0007). The names follow R-NAME-0004 in
 that scope. A declaration of more than 64 names requires `+R-DIAG-LIMIT-001+`, and one that is
 not directly a statement of a block or clause requires `+R-DIAG-TYPE-001+`.
 
@@ -6216,7 +6227,11 @@ object-declaration  = [ storage-specifier ], ( type | "auto" ), identifier, "=",
                       initializer, ";"
                     | destructuring-declaration ;
 destructuring-declaration = "auto", "(", identifier, { ",", identifier }, ")", "=",
-                            initializer, ";" ;
+                            initializer, ";"
+                          | "auto", "{", destructuring-field, { ",", destructuring-field },
+                            [ "," ], "}", "=", initializer, ";" ;
+destructuring-field = ".", identifier, [ "=", identifier ]
+                    | ".", integer-literal, "=", identifier ;
 storage-specifier   = "static" | "thread_local" ;
 initializer         = expression | aggregate-initializer | dict-expression ;
 aggregate-initializer = "{", [ initializer-item, { ",", initializer-item }, [ "," ] ], "}"

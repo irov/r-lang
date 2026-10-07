@@ -208,8 +208,8 @@ protected async i32 database(Command selected, array<std.string::string> argumen
         await std.console::eprintln(f"key: {code}");
         return 65;
     } catch (std.postgres::pg_error failure) {
-        /* A server error names its SQLSTATE, such as 23505 for a nickname that is taken; the
-           refusals of the client name what they refused. */
+        /* A server error names its SQLSTATE, such as 23505 for a nickname that is taken, and the
+           constraint it violated; the refusals of the client name what they refused. */
         std.postgres::error_code code = failure.code;
         if (code == std.postgres::error_code::connection) {
             await std.console::eprintln(f"database: {code}");
@@ -217,7 +217,13 @@ protected async i32 database(Command selected, array<std.string::string> argumen
         }
         if (code == std.postgres::error_code::server) {
             str state = failure.sqlstate;
-            await std.console::eprintln(f"database: server {state}");
+            if (failure.constraint.len() == 0usize) {
+                await std.console::eprintln(f"database: server {state}");
+                return 65;
+            }
+            /* A violated constraint is named, such as the unique nickname of a user. */
+            str violated = failure.constraint;
+            await std.console::eprintln(f"database: server {state} {violated}");
             return 65;
         }
         const u8[] detail_bytes = failure.detail;

@@ -141,7 +141,7 @@ database: migration_mismatch version 2
 `register ACCOUNT NICK EMAIL CREATED` writes a `NewUser` with the INSERT that
 `insert_statement` makes from the JSON names of its fields, and the parameters of
 `parameters_of` in the same order; a nickname that is taken is the unique violation of the
-server, `database: server 23505`. `ban ID TYPE AT` updates the row by its id with the statement
+server, which names the constraint it violated: `database: server 23505 users_nickname_key`. `ban ID TYPE AT` updates the row by its id with the statement
 of `update_statement`, which it prints. The table and the key come from attributes that the
 program declares in [mapping.r](src/mapping.r) (Core R-AGG-0013) and reads at translation time
 (R-REFL-0005), so no statement names them:
@@ -190,7 +190,10 @@ restocked 2 of gems
 
 `sync ID AT SESSION BADGES STATS` sends typed parameters: the instant of RFC 3339, the uuid of the
 session, the badges as a `text[]` and new counters merged into the `jsonb` stats. `user ID` reads
-them back through the typed reads of the columns, found by name:
+them back through the typed reads of the columns, found by name. The day a user joined is
+`DATE(created_at)`, a day of the zone of the session: every connection sets `TimeZone` in its
+startup message to `ARENA_TIME_ZONE`, or keeps the zone of `PGTZ`, or uses UTC, so with
+`ARENA_TIME_ZONE=Asia/Tokyo` a user who registered at 18:30 UTC joined on the next day:
 
 ```text
 Ann joined 2024-03-10

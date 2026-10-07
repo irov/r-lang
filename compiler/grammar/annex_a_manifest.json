@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "core_revision": "0.1.0-draft.101",
+  "core_revision": "0.1.0-draft.102",
   "annex": "A",
-  "annex_sha256": "7c977ea7123cc116c59e8616de7d4743044d86051367d13239aac59cbe8f336e",
-  "production_count": 302,
+  "annex_sha256": "474ce8adb917d2b53c8cde3bc79fa61b94a9d0fda0863aedf614ddb0735b8929",
+  "production_count": 303,
   "sections": {
     "A.2": {
       "production_count": 36,
@@ -17,8 +17,8 @@
       ]
     },
     "A.3": {
-      "production_count": 78,
-      "production_names_sha256": "ff2a7f84d73f1e7e2e0e58d753e311182d835f76644778e832dcc409e9a23c5b",
+      "production_count": 79,
+      "production_names_sha256": "89d42d9b24a64100d35fac6f97c806efc26754ca6f6cc89fc5e2288f77d26576",
       "implementation": [
         "compiler/parser/parser.c:declarations",
         "compiler/parser/static_conditions.inc"

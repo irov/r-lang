@@ -1,9 +1,9 @@
 {
   "version": 4,
   "scope": "source references and resolved program operations and types; execution checked separately",
-  "total_records": 1567,
-  "covered_records": 1567,
-  "application_records": 1567,
+  "total_records": 1568,
+  "covered_records": 1568,
+  "application_records": 1568,
   "items": [
     {
       "record_id": "core::adopt#operation",
@@ -1666,7 +1666,8 @@
         "statistics",
         "streams",
         "tokens",
-        "tournament"
+        "tournament",
+        "workspace"
       ],
       "resolved_type_examples": []
     },
@@ -1731,7 +1732,8 @@
         "tokens",
         "tournament",
         "wordstats",
-        "workers"
+        "workers",
+        "workspace"
       ],
       "resolved_type_examples": []
     },
@@ -1827,7 +1829,8 @@
         "tokens",
         "tournament",
         "wordstats",
-        "workers"
+        "workers",
+        "workspace"
       ],
       "resolved_type_examples": []
     },
@@ -1869,7 +1872,8 @@
         "tokens",
         "tournament",
         "wordstats",
-        "workers"
+        "workers",
+        "workspace"
       ],
       "resolved_type_examples": [
         "arena",
@@ -1902,7 +1906,8 @@
         "tokens",
         "tournament",
         "wordstats",
-        "workers"
+        "workers",
+        "workspace"
       ]
     },
     {
@@ -6063,6 +6068,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "environment",
         "orders",
         "quotes"
@@ -18797,6 +18803,20 @@
       ]
     },
     {
+      "record_id": "std.postgres::setting#type",
+      "required": [
+        "std.postgres::setting"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "arena"
+      ],
+      "resolved_type_examples": [
+        "arena"
+      ]
+    },
+    {
       "record_id": "std.postgres::statement#type",
       "required": [
         "std.postgres::statement"
@@ -20394,7 +20414,8 @@
       "missing": [],
       "application_missing": [],
       "examples": [
-        "statistics"
+        "statistics",
+        "workspace"
       ],
       "resolved_type_examples": []
     },
@@ -20702,7 +20723,8 @@
         "tournament",
         "warehouse",
         "wordstats",
-        "workers"
+        "workers",
+        "workspace"
       ],
       "resolved_type_examples": []
     },
@@ -22838,6 +22860,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "arena",
         "binary",
         "numbers",
         "orders",

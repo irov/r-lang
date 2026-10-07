@@ -8,6 +8,7 @@ import std.stream;
 import std.pool;
 import std.time;
 import std.uuid;
+import std.text;
 
 /* R-SLIB-PG-0001: a client of PostgreSQL over the frontend/backend protocol 3.0, written in R
    over std.net and std.tls. A connection is a handle of one session shared through an async
@@ -33,18 +34,27 @@ enum error_code {
     migration_mismatch,
 };
 
-/* R-SLIB-PG-0002: a failure; a server error carries its SQLSTATE, message, detail and hint. */
+/* R-SLIB-PG-0002: a failure; a server error carries its SQLSTATE, message, detail and hint, and
+   the schema, table, column, data type and constraint that it concerns. */
 error pg_error {
     error_code code;
     std.string::string sqlstate;
     std.string::string message;
     std.string::string detail;
     std.string::string hint;
+    std.string::string schema;
+    std.string::string table;
+    std.string::string column;
+    std.string::string data_type;
+    std.string::string constraint;
 };
 
 protected pg_error failure(error_code code, str message) throws std.alloc::alloc_error {
     return pg_error {.code = code, .sqlstate = std.string::create(), .message = std.string::from_str(message),
-                     .detail = std.string::create(), .hint = std.string::create()};
+                     .detail = std.string::create(), .hint = std.string::create(),
+                     .schema = std.string::create(), .table = std.string::create(),
+                     .column = std.string::create(), .data_type = std.string::create(),
+                     .constraint = std.string::create()};
 }
 
 /* ---- Values and rows ---- */
@@ -250,6 +260,11 @@ protected pg_error server_error(const u8[] body) throws pg_error, std.alloc::all
         case 77u8: made.message = move text;
         case 68u8: made.detail = move text;
         case 72u8: made.hint = move text;
+        case 115u8: made.schema = move text;
+        case 116u8: made.table = move text;
+        case 99u8: made.column = move text;
+        case 100u8: made.data_type = move text;
+        case 110u8: made.constraint = move text;
         default: drop text;
         }
         at = end + 1usize;
@@ -365,6 +380,13 @@ protected value value_of(u32 type_oid, const u8[] cell) throws pg_error, std.all
 
 /* ---- The session ---- */
 
+/* R-SLIB-PG-0005: a run-time parameter that the startup message sets for the session, such as
+   TimeZone. */
+struct setting {
+    std.string::string name;
+    std.string::string value;
+};
+
 /* R-SLIB-PG-0005: how a connection is made. A nonempty socket names the Unix-domain socket file
    of the server, such as /tmp/.s.PGSQL.5432, and host and port are not used. */
 struct options {
@@ -375,7 +397,26 @@ struct options {
     std.string::string password = std.string::create();
     std.string::string database = std.string::create();
     std.string::string application_name = std.string::create();
+    array<setting> settings = [];
 };
+
+/* R-SLIB-PG-0005: sets the run-time parameter name of the session to value, replacing a setting
+   whose name differs only in ASCII case. */
+void options::set(options* this, str name, str value) throws std.alloc::alloc_error {
+    for (usize index = 0usize; index < len(this->settings); index += 1usize) {
+        if (std.text::equal_ignore_ascii_case(this->settings[index].name, name) == true) {
+            std.string::string replaced = core::replace(&this->settings[index].value, std.string::from_str(value));
+            drop replaced;
+            return;
+        }
+    }
+    try {
+        this->settings.push(setting {.name = std.string::from_str(name), .value = std.string::from_str(value)});
+    } catch (std.array::push_error<setting> refused) {
+        (move refused) as void;
+        throw std.alloc::alloc_error::out_of_memory;
+    }
+}
 
 /* The value of an environment variable, none when it is not set or cannot be read. */
 protected o<std.string::string> variable(str name) throws std.alloc::alloc_error {
@@ -435,6 +476,13 @@ options options::from_environment() throws pg_error, std.alloc::alloc_error {
     o<std.string::string> application = variable("PGAPPNAME");
     switch (move application) {
     case variant o::some(move text): made.application_name = move text;
+    case variant o::none: break;
+    }
+    o<std.string::string> zone = variable("PGTZ");
+    switch (move zone) {
+    case variant o::some(move text):
+        made.set("TimeZone", text);
+        drop text;
     case variant o::none: break;
     }
     return move made;
@@ -582,6 +630,36 @@ protected bool is_empty(const std.string::string* text) {
     return len(raw_text) == 0usize;
 }
 
+/* A name the startup message sets itself, which a setting cannot change (R-SLIB-PG-0005). */
+protected bool fixed_setting(str name) {
+    const u8[] spelled = name;
+    if (len(spelled) == 0usize) {
+        return true;
+    }
+    return std.text::equal_ignore_ascii_case(name, "user") == true ||
+           std.text::equal_ignore_ascii_case(name, "database") == true ||
+           std.text::equal_ignore_ascii_case(name, "application_name") == true ||
+           std.text::equal_ignore_ascii_case(name, "client_encoding") == true ||
+           std.text::equal_ignore_ascii_case(name, "DateStyle") == true ||
+           std.text::equal_ignore_ascii_case(name, "replication") == true;
+}
+
+protected bool has_zero(str text) {
+    const u8[] spelled = text;
+    for (usize index = 0usize; index < len(spelled); index += 1usize) {
+        if (spelled[index] == 0u8) {
+            return true;
+        }
+    }
+    return false;
+}
+
+protected pg_error refused_setting(str name) throws std.alloc::alloc_error {
+    pg_error made = failure(error_code::invalid_value, "a setting cannot change this parameter or is not a C string");
+    made.detail = std.string::from_str(name);
+    return move made;
+}
+
 protected bytes startup_message(const options* settings) throws pg_error, std.alloc::alloc_error {
     bytes out = {};
     put_u32(&out, 0u32);
@@ -601,6 +679,13 @@ protected bytes startup_message(const options* settings) throws pg_error, std.al
     /* R-SLIB-PG-0013 reads timestamps and dates in the ISO style whatever the server default. */
     put_string(&out, "DateStyle");
     put_string(&out, "ISO, MDY");
+    for (usize index = 0usize; index < len(settings->settings); index += 1usize) {
+        const setting* item = &settings->settings[index];
+        throw (fixed_setting(item->name) == true || has_zero(item->name) == true || has_zero(item->value) == true)
+            refused_setting(item->name);
+        put_string(&out, item->name);
+        put_string(&out, item->value);
+    }
     std.bytes::append_u8(&out, 0u8);
     finish_message(&out, 0usize);
     return move out;

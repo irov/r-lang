@@ -38,6 +38,7 @@ def main():
         run('init', root, expected='created\n')
         run('init', root, status=74)
         run('first', root, expected='empty\n')
+        run('entries', root, expected='empty\n')
         for message in ['', 'hello', 'caf\u00e9 \U0001f642', 'x' * 10000]:
             data = b'\x01' + message.encode()
             run('record', root, 'note', message, expected=f'written={len(data)} size={len(data)}\n')
@@ -65,6 +66,13 @@ def main():
             run('remove', root, 'published', expected='removed\n')
         run('mkdir', root, 'drafts', expected='empty\n')
         assert (root / 'drafts').is_dir()
+        # Every entry, not only the first: each entry hands back the iterator for the next one.
+        run('record', root, 'beta', 'b', expected='written=2 size=2\n')
+        run('record', root, 'alpha', 'a', expected='written=2 size=2\n')
+        run('entries', root, expected='alpha regular\nbeta regular\ndrafts directory\n')
+        run('remove', root, 'alpha', expected='removed\n')
+        run('remove', root, 'beta', expected='removed\n')
+        run('entries', root, expected='drafts directory\n')
         run('rmdir', root, 'drafts', expected='removed\n')
         run('first', root, expected='empty\n')
         run('stat', root, 'missing', status=74)

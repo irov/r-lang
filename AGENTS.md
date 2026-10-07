@@ -293,6 +293,10 @@ these rules are the ones that most often reject otherwise reasonable code:
 - R-FUNC-0012: a task with checked errors must be awaited, cancelled or detached on every path,
   throws included, so a member that lives across a whole loop returns its failure as a value
   instead of throwing it (`watch_stop` in `std.service`).
+- A field cannot be moved out of a struct (R-OWN-0005); take the struct apart instead with
+  `auto {.field = name, .other} = move value;` (R-STMT-0022). This is how a directory is walked
+  (`auto {.iterator = rest, .entry} = move item;` in the `entry` case of `std.fs::next`, then
+  `iterator = move rest;`) and how a refused `std.fs` write hands its data back.
 - `u8` and `u16` operands of arithmetic, bitwise operators and shifts promote to `i32`, as in C;
   narrow the result back with `as` (`(entry >> 4usize) as u16`).
 - Hot loops: the compiler leaves out a bounds check it can prove (compiler/README.md, *Index

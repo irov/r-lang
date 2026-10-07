@@ -11,7 +11,7 @@ struct CommandStorage2 { std.string::string value; };
 // Output and exit status shared by command and error branches.
 struct CommandResponse { std.string::string output; i32 status; };
 
-enum Command { init, inspect, first, stat, record, read, tail, publish, rename, remove, mkdir, rmdir };
+enum Command { init, inspect, first, entries, stat, record, read, tail, publish, rename, remove, mkdir, rmdir };
 
 async i32 main(const str[] arguments) {
     try {
@@ -19,7 +19,7 @@ async i32 main(const str[] arguments) {
         
         try {
             if (len(arguments) == 1usize) {
-                std.string::string help = std.string::from_str("workspace init|inspect|first PATH\nworkspace stat|read|remove|mkdir|rmdir ROOT NAME\nworkspace record ROOT NAME TEXT\nworkspace publish|rename ROOT FROM TO\nworkspace tail PATH BYTE_COUNT\n");
+                std.string::string help = std.string::from_str("workspace init|inspect|first|entries PATH\nworkspace stat|read|remove|mkdir|rmdir ROOT NAME\nworkspace record ROOT NAME TEXT\nworkspace publish|rename ROOT FROM TO\nworkspace tail PATH BYTE_COUNT\n");
                 await std.console::print(move help);
                 return 0;
             }
@@ -31,7 +31,8 @@ async i32 main(const str[] arguments) {
             case variant o::none: throw Usage { .message = "unknown workspace command" };
             }
             usize required = 4usize;
-            if (command == Command::init || command == Command::inspect || command == Command::first) { required = 3usize; }
+            if (command == Command::init || command == Command::inspect || command == Command::first ||
+                command == Command::entries) { required = 3usize; }
             if (command == Command::record || command == Command::publish || command == Command::rename) { required = 5usize; }
             throw (len(arguments) != required) Usage { .message = "wrong argument count" };
             CommandStorage1 state_name_text = {.value = std.string::create()};
@@ -60,6 +61,11 @@ async i32 main(const str[] arguments) {
                             std.string::string summary = await example.workspace.report::first(move iterator);
                             response.output = move summary;
                         } else {
+                          if (command == Command::entries) {
+                            std.fs::directory_iter iterator = await root.iterate();
+                            std.string::string listing = await example.workspace.report::entries(move iterator);
+                            response.output = move listing;
+                          } else {
                             std.fs::path name = std.fs::path_from_utf8(state_name_text.value);
                             throw (name.is_absolute() == true) Usage { .message = "name must be relative to root" };
                             switch (command) {
@@ -105,6 +111,7 @@ async i32 main(const str[] arguments) {
                                 response.output = std.string::from_str("removed\n"); break;
                             default: throw Usage { .message = "unexpected command" };
                             }
+                          }
                         }
                         await (move root).close();
                     }

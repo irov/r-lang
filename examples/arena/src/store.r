@@ -96,8 +96,29 @@ protected void add(array<std.postgres::value>* target, std.postgres::value item)
     }
 }
 
+/* Whether the options already name the zone of the session, as PGTZ makes from_environment do. */
+protected bool has_zone(const std.postgres::options* settings) {
+    for (usize index = 0usize; index < len(settings->settings); index += 1usize) {
+        const std.postgres::setting* item = &settings->settings[index];
+        if (std.text::equal_ignore_ascii_case(item->name, "TimeZone") == true) { return true; }
+    }
+    return false;
+}
+
+/* The session counts days in the zone of the rewards (ARENA_TIME_ZONE; without it the zone of
+   PGTZ, else UTC): the startup message sets it as TimeZone, so DATE(created_at) is a day of that
+   zone whatever the zone of the server. */
 protected async std.postgres::connection open_database() throws std.postgres::pg_error, std.error::fault {
-    return await std.postgres::connect(std.postgres::options::from_environment());
+    std.postgres::options settings = std.postgres::options::from_environment();
+    o<std.string::string> zone = std.env::get("ARENA_TIME_ZONE");
+    switch (move zone) {
+    case variant o::some(move named):
+        settings.set("TimeZone", named);
+        drop named;
+    case variant o::none:
+        if (has_zone(&settings) == false) { settings.set("TimeZone", "UTC"); }
+    }
+    return await std.postgres::connect(move settings);
 }
 
 async std.string::string migrate() throws std.postgres::pg_error, std.error::fault {
@@ -224,7 +245,7 @@ async std.string::string user(i64 id) throws NoUser, std.postgres::pg_error, std
     array<std.postgres::value> key = [];
     add(&key, std.postgres::value::integer(id));
     std.postgres::rows found = await db.query(
-        "SELECT nickname, (created_at AT TIME ZONE 'UTC')::date AS joined_on, last_sync, session, badges, stats "
+        "SELECT nickname, DATE(created_at) AS joined_on, last_sync, session, badges, stats "
         "FROM users WHERE id = $1",
         move key);
     await (move db).close();

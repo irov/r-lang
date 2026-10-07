@@ -16,6 +16,7 @@ workspace tail /tmp/my-journal/note 5
 workspace publish /tmp/my-journal note published
 workspace rename /tmp/my-journal note archived
 workspace first /tmp/my-journal
+workspace entries /tmp/my-journal
 workspace mkdir /tmp/my-journal drafts
 workspace rmdir /tmp/my-journal drafts
 workspace remove /tmp/my-journal archived
@@ -33,8 +34,11 @@ as Unix seconds and nanoseconds. Missing timestamps print `unavailable`.
 
 Relative operations use directory capabilities. Publication demonstrates the path-based
 atomic no-replace operation: its destination must be a single filename under ROOT. `first`
-reports one entry in native enumeration order, or `empty`; it is a presence/preview command,
-not a recursive directory listing. File and directory handles are explicitly closed on
+reports one entry in native enumeration order, or `empty`; it is a presence/preview command.
+`entries` lists every entry of ROOT as `name kind` lines sorted by name, or `empty`, without
+descending into directories: each `std.fs::next` hands back the iterator inside its entry, and
+`auto {.iterator = rest, .entry} = move item;` takes it out for the next call (Core
+R-STMT-0022). File and directory handles are explicitly closed on
 success and released by ordinary cleanup on errors.
 
 Reads, publication input and tail output are limited to 1 MiB. The command tests run only in

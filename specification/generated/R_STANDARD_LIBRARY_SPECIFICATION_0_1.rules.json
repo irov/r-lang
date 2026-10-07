@@ -5,11 +5,11 @@
   "coverage_note": "This catalog records normative source rules only. It makes no claim that a rule is implemented, tested or otherwise covered.",
   "generated_from": {
     "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-    "revision": "0.1.0-draft.70",
-    "sha256": "200e83573ec92a4de5a08a5e35dbb5f0c04b79ca76dbec32faa30d25020a673d"
+    "revision": "0.1.0-draft.72",
+    "sha256": "a1223079d45a77a6b7c878957a81092fd7434be307774eaa24b7faa61c2bbd44"
   },
   "rule_count": 477,
-  "rules_sha256": "1a0871b2e2380cf582599060c351506843e0552bea1570a7def30c3d0758f3a7",
+  "rules_sha256": "6c1e770ba1db97afb4155c3aa0cce74ab15ef4d269c93187804535cd53d75943",
   "rules": [
     {
       "id": "R-SLIB-GEN-0001",
@@ -7510,9 +7510,9 @@
         "anchor_line": 5735,
         "declaration_line": 5736,
         "declaration_column": 1,
-        "end_line": 5750
+        "end_line": 5753
       },
-      "text_sha256": "f2445164f6187730ace794dff0e73068f2ee57d6f1f882825a06dd0985dd994d"
+      "text_sha256": "5f5fd963bf4523d3ee5a11f6ae8e4d0e6f1b2378e7aa3befbe07e35d60443fc9"
     },
     {
       "id": "R-SLIB-URL-0001",
@@ -7531,15 +7531,15 @@
         {
           "level": 3,
           "title": "21.17 URLs: `+std.url+`",
-          "line": 5750
+          "line": 5753
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 5752,
-        "declaration_line": 5753,
+        "anchor_line": 5755,
+        "declaration_line": 5756,
         "declaration_column": 1,
-        "end_line": 5758
+        "end_line": 5761
       },
       "text_sha256": "e8b8f6acb43ce8cf1b6292d4ee2b79a600ba563297b69213a9471808b27de8df"
     },
@@ -7560,15 +7560,15 @@
         {
           "level": 3,
           "title": "21.17 URLs: `+std.url+`",
-          "line": 5750
+          "line": 5753
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 5760,
-        "declaration_line": 5761,
+        "anchor_line": 5763,
+        "declaration_line": 5764,
         "declaration_column": 1,
-        "end_line": 5782
+        "end_line": 5785
       },
       "text_sha256": "a0517f185169db29987404b33b7ee554481987119294f7c0bda5c3d8947bd77b"
     },
@@ -7589,15 +7589,15 @@
         {
           "level": 3,
           "title": "21.17 URLs: `+std.url+`",
-          "line": 5750
+          "line": 5753
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 5784,
-        "declaration_line": 5785,
+        "anchor_line": 5787,
+        "declaration_line": 5788,
         "declaration_column": 1,
-        "end_line": 5793
+        "end_line": 5796
       },
       "text_sha256": "4a95af7d5c9c9511465facd7e7cb2b2d4615b326afa7bd696c97c55c2d0bf603"
     },
@@ -7618,15 +7618,15 @@
         {
           "level": 3,
           "title": "21.17 URLs: `+std.url+`",
-          "line": 5750
+          "line": 5753
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 5795,
-        "declaration_line": 5796,
+        "anchor_line": 5798,
+        "declaration_line": 5799,
         "declaration_column": 1,
-        "end_line": 5801
+        "end_line": 5804
       },
       "text_sha256": "ce2d8211e28984eac19a523efdbe29a2a5037eee3e9dc028ca4f14782e6eafda"
     },
@@ -7647,15 +7647,15 @@
         {
           "level": 3,
           "title": "21.17 URLs: `+std.url+`",
-          "line": 5750
+          "line": 5753
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 5803,
-        "declaration_line": 5804,
+        "anchor_line": 5806,
+        "declaration_line": 5807,
         "declaration_column": 1,
-        "end_line": 5815
+        "end_line": 5818
       },
       "text_sha256": "7845cc47944ccf4181dbdb61db3f216f9ef18acffe2c7b02b4d9e90c573dd821"
     },
@@ -7676,15 +7676,15 @@
         {
           "level": 3,
           "title": "21.18 Media types: `+std.mime+`",
-          "line": 5815
+          "line": 5818
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 5817,
-        "declaration_line": 5818,
+        "anchor_line": 5820,
+        "declaration_line": 5821,
         "declaration_column": 1,
-        "end_line": 5839
+        "end_line": 5842
       },
       "text_sha256": "de4c44e96828e7037174d19b8fcd65fd733e22151562ac76267ef68066f53a6d"
     },
@@ -7705,15 +7705,15 @@
         {
           "level": 3,
           "title": "21.18 Media types: `+std.mime+`",
-          "line": 5815
+          "line": 5818
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 5841,
-        "declaration_line": 5842,
+        "anchor_line": 5844,
+        "declaration_line": 5845,
         "declaration_column": 1,
-        "end_line": 5852
+        "end_line": 5855
       },
       "text_sha256": "3a04c9e4f8d631adba0e81dfe78756ab3e95170e7efff84ee3c87c6e660c29d2"
     },
@@ -7734,15 +7734,15 @@
         {
           "level": 3,
           "title": "21.19 HTTP/1.1: `+std.http+`",
-          "line": 5852
+          "line": 5855
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 5854,
-        "declaration_line": 5855,
+        "anchor_line": 5857,
+        "declaration_line": 5858,
         "declaration_column": 1,
-        "end_line": 5867
+        "end_line": 5870
       },
       "text_sha256": "99be8daaa83938239aca1a213d6b43071e68d487d735697e00f1e02aad514b2a"
     },
@@ -7763,15 +7763,15 @@
         {
           "level": 3,
           "title": "21.19 HTTP/1.1: `+std.http+`",
-          "line": 5852
+          "line": 5855
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 5869,
-        "declaration_line": 5870,
+        "anchor_line": 5872,
+        "declaration_line": 5873,
         "declaration_column": 1,
-        "end_line": 5888
+        "end_line": 5891
       },
       "text_sha256": "4be706d0f1d0750d5fca7767647a7bf656152770f062b19cf5354145d5c9c8fd"
     },
@@ -7792,15 +7792,15 @@
         {
           "level": 3,
           "title": "21.19 HTTP/1.1: `+std.http+`",
-          "line": 5852
+          "line": 5855
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 5890,
-        "declaration_line": 5891,
+        "anchor_line": 5893,
+        "declaration_line": 5894,
         "declaration_column": 1,
-        "end_line": 5906
+        "end_line": 5909
       },
       "text_sha256": "a422f09cea972673fce342e87c724adcd294cd09b9750d6a10cdd03ae7e3d627"
     },
@@ -7821,15 +7821,15 @@
         {
           "level": 3,
           "title": "21.19 HTTP/1.1: `+std.http+`",
-          "line": 5852
+          "line": 5855
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 5908,
-        "declaration_line": 5909,
+        "anchor_line": 5911,
+        "declaration_line": 5912,
         "declaration_column": 1,
-        "end_line": 5940
+        "end_line": 5943
       },
       "text_sha256": "610393e956450d8616e39d47d40388154970286c37f98639b58e2f2ce71e4310"
     },
@@ -7850,15 +7850,15 @@
         {
           "level": 3,
           "title": "21.19 HTTP/1.1: `+std.http+`",
-          "line": 5852
+          "line": 5855
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 5942,
-        "declaration_line": 5943,
+        "anchor_line": 5945,
+        "declaration_line": 5946,
         "declaration_column": 1,
-        "end_line": 5959
+        "end_line": 5962
       },
       "text_sha256": "6a2f570650207130658e63f84048eff1715f46041b71f6d26ecaf5e1561b1fd6"
     },
@@ -7879,15 +7879,15 @@
         {
           "level": 3,
           "title": "21.19 HTTP/1.1: `+std.http+`",
-          "line": 5852
+          "line": 5855
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 5961,
-        "declaration_line": 5962,
+        "anchor_line": 5964,
+        "declaration_line": 5965,
         "declaration_column": 1,
-        "end_line": 5983
+        "end_line": 5986
       },
       "text_sha256": "166270f029d50e8a5e1d5e0e4573f5f2d568897af8adbfff65634efd5b47ab29"
     },
@@ -7908,15 +7908,15 @@
         {
           "level": 3,
           "title": "21.19 HTTP/1.1: `+std.http+`",
-          "line": 5852
+          "line": 5855
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 5985,
-        "declaration_line": 5986,
+        "anchor_line": 5988,
+        "declaration_line": 5989,
         "declaration_column": 1,
-        "end_line": 6002
+        "end_line": 6005
       },
       "text_sha256": "8a1bbde7a32fdb306345500f8912ec7812465856104dd6677ae82cade73f6093"
     },
@@ -7937,15 +7937,15 @@
         {
           "level": 3,
           "title": "21.19 HTTP/1.1: `+std.http+`",
-          "line": 5852
+          "line": 5855
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6004,
-        "declaration_line": 6005,
+        "anchor_line": 6007,
+        "declaration_line": 6008,
         "declaration_column": 1,
-        "end_line": 6030
+        "end_line": 6033
       },
       "text_sha256": "e8f19ac5642cb657bc69b6e3b00b056a7470a658e68c8370f75a529afd027545"
     },
@@ -7966,15 +7966,15 @@
         {
           "level": 3,
           "title": "21.19 HTTP/1.1: `+std.http+`",
-          "line": 5852
+          "line": 5855
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6032,
-        "declaration_line": 6033,
+        "anchor_line": 6035,
+        "declaration_line": 6036,
         "declaration_column": 1,
-        "end_line": 6053
+        "end_line": 6056
       },
       "text_sha256": "7ab25941628372d6f98d24da621b1ff2e6b4cfeacefbdb352c54583472653629"
     },
@@ -7995,15 +7995,15 @@
         {
           "level": 3,
           "title": "21.19 HTTP/1.1: `+std.http+`",
-          "line": 5852
+          "line": 5855
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6055,
-        "declaration_line": 6056,
+        "anchor_line": 6058,
+        "declaration_line": 6059,
         "declaration_column": 1,
-        "end_line": 6074
+        "end_line": 6077
       },
       "text_sha256": "d4a793ba40a90d25ea72672d5c949b4cfcc4949924900d2be7d554e1371d09cb"
     },
@@ -8024,15 +8024,15 @@
         {
           "level": 3,
           "title": "21.19 HTTP/1.1: `+std.http+`",
-          "line": 5852
+          "line": 5855
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6076,
-        "declaration_line": 6077,
+        "anchor_line": 6079,
+        "declaration_line": 6080,
         "declaration_column": 1,
-        "end_line": 6098
+        "end_line": 6101
       },
       "text_sha256": "2f447e4c4c947957a075a9b3e2faa592f4aeb41c39510cd8cffeb8f174fa4fcf"
     },
@@ -8053,15 +8053,15 @@
         {
           "level": 3,
           "title": "21.19 HTTP/1.1: `+std.http+`",
-          "line": 5852
+          "line": 5855
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6100,
-        "declaration_line": 6101,
+        "anchor_line": 6103,
+        "declaration_line": 6104,
         "declaration_column": 1,
-        "end_line": 6114
+        "end_line": 6117
       },
       "text_sha256": "26c088ec17d8b40128a9f8408d3a1167c098cae2e8ed50b5c61de94aa4914961"
     },
@@ -8082,15 +8082,15 @@
         {
           "level": 3,
           "title": "21.19 HTTP/1.1: `+std.http+`",
-          "line": 5852
+          "line": 5855
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6116,
-        "declaration_line": 6117,
+        "anchor_line": 6119,
+        "declaration_line": 6120,
         "declaration_column": 1,
-        "end_line": 6127
+        "end_line": 6130
       },
       "text_sha256": "fa8782b3b71fe3269e4c78d94901f2d57789ef2f12d1d2105fb41476c394c4c6"
     },
@@ -8111,15 +8111,15 @@
         {
           "level": 3,
           "title": "21.19 HTTP/1.1: `+std.http+`",
-          "line": 5852
+          "line": 5855
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6129,
-        "declaration_line": 6130,
+        "anchor_line": 6132,
+        "declaration_line": 6133,
         "declaration_column": 1,
-        "end_line": 6135
+        "end_line": 6138
       },
       "text_sha256": "c0acbee7a271be894ba71143ae246e602e5d3122c9455c49e3c60ac3f10b809c"
     },
@@ -8140,15 +8140,15 @@
         {
           "level": 3,
           "title": "21.19 HTTP/1.1: `+std.http+`",
-          "line": 5852
+          "line": 5855
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6137,
-        "declaration_line": 6138,
+        "anchor_line": 6140,
+        "declaration_line": 6141,
         "declaration_column": 1,
-        "end_line": 6186
+        "end_line": 6189
       },
       "text_sha256": "7c2ccc3214cfa704921f30ad74242baa77255514add53f4222e86c6c8547cc1e"
     },
@@ -8169,15 +8169,15 @@
         {
           "level": 3,
           "title": "21.19 HTTP/1.1: `+std.http+`",
-          "line": 5852
+          "line": 5855
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6188,
-        "declaration_line": 6189,
+        "anchor_line": 6191,
+        "declaration_line": 6192,
         "declaration_column": 1,
-        "end_line": 6203
+        "end_line": 6206
       },
       "text_sha256": "f4bf67c1085c4a18b38bff03ac49a3def7abab0083e90e47f8b26c1bd8aea49c"
     },
@@ -8198,15 +8198,15 @@
         {
           "level": 3,
           "title": "21.19 HTTP/1.1: `+std.http+`",
-          "line": 5852
+          "line": 5855
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6205,
-        "declaration_line": 6206,
+        "anchor_line": 6208,
+        "declaration_line": 6209,
         "declaration_column": 1,
-        "end_line": 6222
+        "end_line": 6225
       },
       "text_sha256": "6b50aa1f1b8a54bf9bb61625fd8848f6f0f4159fc1456088f7d67fe61de043df"
     },
@@ -8227,15 +8227,15 @@
         {
           "level": 3,
           "title": "21.19 HTTP/1.1: `+std.http+`",
-          "line": 5852
+          "line": 5855
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6224,
-        "declaration_line": 6225,
+        "anchor_line": 6227,
+        "declaration_line": 6228,
         "declaration_column": 1,
-        "end_line": 6241
+        "end_line": 6244
       },
       "text_sha256": "156709bf548d03e7f44ef9ff8fe0070f8feed92659a61c276cd98af80d38c311"
     },
@@ -8256,15 +8256,15 @@
         {
           "level": 3,
           "title": "21.20 Name resolution: `+std.dns+`",
-          "line": 6241
+          "line": 6244
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6243,
-        "declaration_line": 6244,
+        "anchor_line": 6246,
+        "declaration_line": 6247,
         "declaration_column": 1,
-        "end_line": 6248
+        "end_line": 6251
       },
       "text_sha256": "72e2ba267a56e246c67a01480cab71a604c749d873fb1f065a2e7868cfb859d2"
     },
@@ -8285,15 +8285,15 @@
         {
           "level": 3,
           "title": "21.20 Name resolution: `+std.dns+`",
-          "line": 6241
+          "line": 6244
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6250,
-        "declaration_line": 6251,
+        "anchor_line": 6253,
+        "declaration_line": 6254,
         "declaration_column": 1,
-        "end_line": 6254
+        "end_line": 6257
       },
       "text_sha256": "a9a50a0fa0a2770b3692a74f98a1893f615ad6af459f8f0e6d0f4efbe1cce938"
     },
@@ -8314,15 +8314,15 @@
         {
           "level": 3,
           "title": "21.20 Name resolution: `+std.dns+`",
-          "line": 6241
+          "line": 6244
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6256,
-        "declaration_line": 6257,
+        "anchor_line": 6259,
+        "declaration_line": 6260,
         "declaration_column": 1,
-        "end_line": 6286
+        "end_line": 6289
       },
       "text_sha256": "48d141375a1fa44287e314e5a2b708234953608d61a4f098c55ba0ed0d72e1d8"
     },
@@ -8343,15 +8343,15 @@
         {
           "level": 3,
           "title": "21.20 Name resolution: `+std.dns+`",
-          "line": 6241
+          "line": 6244
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6288,
-        "declaration_line": 6289,
+        "anchor_line": 6291,
+        "declaration_line": 6292,
         "declaration_column": 1,
-        "end_line": 6310
+        "end_line": 6313
       },
       "text_sha256": "d98b2353e78514432cb613b716d5c6cbddf50c7a8df634b37a70ddde7c19f86e"
     },
@@ -8372,15 +8372,15 @@
         {
           "level": 3,
           "title": "21.20 Name resolution: `+std.dns+`",
-          "line": 6241
+          "line": 6244
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6312,
-        "declaration_line": 6313,
+        "anchor_line": 6315,
+        "declaration_line": 6316,
         "declaration_column": 1,
-        "end_line": 6325
+        "end_line": 6328
       },
       "text_sha256": "dadd360b3d3fcf0a1e73531ac9421eb69de4a37e1b86f09f6e827fd3c8c8db98"
     },
@@ -8401,15 +8401,15 @@
         {
           "level": 3,
           "title": "21.20 Name resolution: `+std.dns+`",
-          "line": 6241
+          "line": 6244
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6327,
-        "declaration_line": 6328,
+        "anchor_line": 6330,
+        "declaration_line": 6331,
         "declaration_column": 1,
-        "end_line": 6335
+        "end_line": 6338
       },
       "text_sha256": "0a0d1ed73a693a49a95c359e5badc16f690caf287b8b5f20305e74f77fbc81ff"
     },
@@ -8430,15 +8430,15 @@
         {
           "level": 3,
           "title": "21.21 WebSocket: `+std.websocket+`",
-          "line": 6335
+          "line": 6338
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6337,
-        "declaration_line": 6338,
+        "anchor_line": 6340,
+        "declaration_line": 6341,
         "declaration_column": 1,
-        "end_line": 6342
+        "end_line": 6345
       },
       "text_sha256": "b08367de33ee5356d8eef52f807b344ec926c9670c14b5e77198bb0522892fd0"
     },
@@ -8459,15 +8459,15 @@
         {
           "level": 3,
           "title": "21.21 WebSocket: `+std.websocket+`",
-          "line": 6335
+          "line": 6338
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6344,
-        "declaration_line": 6345,
+        "anchor_line": 6347,
+        "declaration_line": 6348,
         "declaration_column": 1,
-        "end_line": 6363
+        "end_line": 6366
       },
       "text_sha256": "4b069acd404c4e892de6e45fc2268871947884a8fe0811fcdc530db4e6fe0500"
     },
@@ -8488,15 +8488,15 @@
         {
           "level": 3,
           "title": "21.21 WebSocket: `+std.websocket+`",
-          "line": 6335
+          "line": 6338
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6365,
-        "declaration_line": 6366,
+        "anchor_line": 6368,
+        "declaration_line": 6369,
         "declaration_column": 1,
-        "end_line": 6380
+        "end_line": 6383
       },
       "text_sha256": "037ab4cba44738b58e20161c4f8d5d77b33f62054b40e9e539a4d4d29c7287c5"
     },
@@ -8517,15 +8517,15 @@
         {
           "level": 3,
           "title": "21.21 WebSocket: `+std.websocket+`",
-          "line": 6335
+          "line": 6338
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6382,
-        "declaration_line": 6383,
+        "anchor_line": 6385,
+        "declaration_line": 6386,
         "declaration_column": 1,
-        "end_line": 6387
+        "end_line": 6390
       },
       "text_sha256": "b69b117bd4b9c55eb8f366f3fa1d024daaeaef5179d1ed867c6fa66ff07d6b90"
     },
@@ -8546,15 +8546,15 @@
         {
           "level": 3,
           "title": "21.21 WebSocket: `+std.websocket+`",
-          "line": 6335
+          "line": 6338
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6389,
-        "declaration_line": 6390,
+        "anchor_line": 6392,
+        "declaration_line": 6393,
         "declaration_column": 1,
-        "end_line": 6413
+        "end_line": 6416
       },
       "text_sha256": "413d0f418821ad51402a9cbadc3f2c509732107119f713fa4893b6cc97d11f1d"
     },
@@ -8575,15 +8575,15 @@
         {
           "level": 3,
           "title": "21.22 JSON-RPC 2.0: `+std.jsonrpc+`",
-          "line": 6413
+          "line": 6416
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6415,
-        "declaration_line": 6416,
+        "anchor_line": 6418,
+        "declaration_line": 6419,
         "declaration_column": 1,
-        "end_line": 6423
+        "end_line": 6426
       },
       "text_sha256": "c09fc15e1a9f49e42332eb42ca2cd4db51923d862608fb2f90bad8fcef2c1770"
     },
@@ -8604,15 +8604,15 @@
         {
           "level": 3,
           "title": "21.22 JSON-RPC 2.0: `+std.jsonrpc+`",
-          "line": 6413
+          "line": 6416
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6425,
-        "declaration_line": 6426,
+        "anchor_line": 6428,
+        "declaration_line": 6429,
         "declaration_column": 1,
-        "end_line": 6449
+        "end_line": 6452
       },
       "text_sha256": "bec4aa065e80a3a6c9c177f0957ed52e2b6b72e6f1a68510fe7cdce6c7863b2c"
     },
@@ -8633,15 +8633,15 @@
         {
           "level": 3,
           "title": "21.22 JSON-RPC 2.0: `+std.jsonrpc+`",
-          "line": 6413
+          "line": 6416
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6451,
-        "declaration_line": 6452,
+        "anchor_line": 6454,
+        "declaration_line": 6455,
         "declaration_column": 1,
-        "end_line": 6465
+        "end_line": 6468
       },
       "text_sha256": "72bb2ef9695778204df8a800d66c1a2a34289387d9b49964250055899482d55f"
     },
@@ -8662,15 +8662,15 @@
         {
           "level": 3,
           "title": "21.22 JSON-RPC 2.0: `+std.jsonrpc+`",
-          "line": 6413
+          "line": 6416
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6467,
-        "declaration_line": 6468,
+        "anchor_line": 6470,
+        "declaration_line": 6471,
         "declaration_column": 1,
-        "end_line": 6479
+        "end_line": 6482
       },
       "text_sha256": "298bf96dc060e449bccba190a682503ba384dc9bfadf54e40b075c0214061f3e"
     },
@@ -8691,15 +8691,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6481,
-        "declaration_line": 6482,
+        "anchor_line": 6484,
+        "declaration_line": 6485,
         "declaration_column": 1,
-        "end_line": 6492
+        "end_line": 6495
       },
       "text_sha256": "8c550e768af60c4954203562b12f0b0e788dc84e2f9536480297ff8adc86cdc6"
     },
@@ -8720,15 +8720,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6494,
-        "declaration_line": 6495,
+        "anchor_line": 6497,
+        "declaration_line": 6498,
         "declaration_column": 1,
-        "end_line": 6503
+        "end_line": 6506
       },
       "text_sha256": "7207ed6f0396b0819d9474e17cef8463ade1e77953a3f375f7405d0a36c39e7e"
     },
@@ -8749,15 +8749,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6505,
-        "declaration_line": 6506,
+        "anchor_line": 6508,
+        "declaration_line": 6509,
         "declaration_column": 1,
-        "end_line": 6520
+        "end_line": 6523
       },
       "text_sha256": "f33fe907aeb91ec46ee40e68fe013dc9591f0552a1956f4efbfbdfdddbbbc794"
     },
@@ -8778,15 +8778,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6522,
-        "declaration_line": 6523,
+        "anchor_line": 6525,
+        "declaration_line": 6526,
         "declaration_column": 1,
-        "end_line": 6542
+        "end_line": 6545
       },
       "text_sha256": "7ca9cab80be2a72dbc64678499cfe4aadc80dd6e731128939d1eff53372535c5"
     },
@@ -8807,15 +8807,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6544,
-        "declaration_line": 6545,
+        "anchor_line": 6547,
+        "declaration_line": 6548,
         "declaration_column": 1,
-        "end_line": 6562
+        "end_line": 6565
       },
       "text_sha256": "25baee3cc2be33a480f06fb3f93ec6377e1e5aa44ab034311eb52911bb045048"
     },
@@ -8836,15 +8836,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6564,
-        "declaration_line": 6565,
+        "anchor_line": 6567,
+        "declaration_line": 6568,
         "declaration_column": 1,
-        "end_line": 6583
+        "end_line": 6586
       },
       "text_sha256": "af2e73c96e84838cc5b74e82ad776483a1fc2340fbd0ba2fb4264593a79a9d3d"
     },
@@ -8865,15 +8865,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6585,
-        "declaration_line": 6586,
+        "anchor_line": 6588,
+        "declaration_line": 6589,
         "declaration_column": 1,
-        "end_line": 6623
+        "end_line": 6626
       },
       "text_sha256": "7bcdc1a12eb549aad6ea7ac2614392930e60e6c9b0ce266a94435eec9f397b28"
     },
@@ -8894,15 +8894,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6625,
-        "declaration_line": 6626,
+        "anchor_line": 6628,
+        "declaration_line": 6629,
         "declaration_column": 1,
-        "end_line": 6644
+        "end_line": 6647
       },
       "text_sha256": "6fc80ce8a94f09d61551d78482e030d3432c6459b05a5b87b56dfe6b547b7189"
     },
@@ -8923,15 +8923,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6646,
-        "declaration_line": 6647,
+        "anchor_line": 6649,
+        "declaration_line": 6650,
         "declaration_column": 1,
-        "end_line": 6658
+        "end_line": 6661
       },
       "text_sha256": "b0042a9e1a52d3e1716aeff64f48d5412c047a39b1d3a3a59337bce16332472d"
     },
@@ -8952,15 +8952,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6660,
-        "declaration_line": 6661,
+        "anchor_line": 6663,
+        "declaration_line": 6664,
         "declaration_column": 1,
-        "end_line": 6675
+        "end_line": 6678
       },
       "text_sha256": "5a006a37d5817be117635cc8643268315a51d42cc74b4098084779c637ec5ad0"
     },
@@ -8981,15 +8981,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6677,
-        "declaration_line": 6678,
+        "anchor_line": 6680,
+        "declaration_line": 6681,
         "declaration_column": 1,
-        "end_line": 6708
+        "end_line": 6711
       },
       "text_sha256": "7b214dd4193791e1b627c6577c8cc5691f8744245df12c2322741d9da489b13c"
     },
@@ -9010,15 +9010,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6710,
-        "declaration_line": 6711,
+        "anchor_line": 6713,
+        "declaration_line": 6714,
         "declaration_column": 1,
-        "end_line": 6722
+        "end_line": 6725
       },
       "text_sha256": "fbd081c5c17ed4fe87b43bdf38c3cfb632b147415194128f88ce1677c9395b4e"
     },
@@ -9039,15 +9039,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6724,
-        "declaration_line": 6725,
+        "anchor_line": 6727,
+        "declaration_line": 6728,
         "declaration_column": 1,
-        "end_line": 6758
+        "end_line": 6761
       },
       "text_sha256": "9e372781b1d0ea0a5d38a1bb5101538b47736493d3ce36a998a19127c0c9b4c5"
     },
@@ -9068,15 +9068,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6760,
-        "declaration_line": 6761,
+        "anchor_line": 6763,
+        "declaration_line": 6764,
         "declaration_column": 1,
-        "end_line": 6776
+        "end_line": 6779
       },
       "text_sha256": "d7f61e0561d9016ec5cdbd7bcbc03cc0e3de22306b0d65e95af719b931e31815"
     },
@@ -9097,15 +9097,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6778,
-        "declaration_line": 6779,
+        "anchor_line": 6781,
+        "declaration_line": 6782,
         "declaration_column": 1,
-        "end_line": 6795
+        "end_line": 6798
       },
       "text_sha256": "50c4b441e7913689f4d428d7df97ee9c71acc94ce113e301ae1b1ccc30db2054"
     },
@@ -9126,15 +9126,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6797,
-        "declaration_line": 6798,
+        "anchor_line": 6800,
+        "declaration_line": 6801,
         "declaration_column": 1,
-        "end_line": 6823
+        "end_line": 6826
       },
       "text_sha256": "329b64f620595d0cfcaa3038e55453c70312e417dbd1bf4dd65138930d2409d0"
     },
@@ -9155,15 +9155,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6825,
-        "declaration_line": 6826,
+        "anchor_line": 6828,
+        "declaration_line": 6829,
         "declaration_column": 1,
-        "end_line": 6876
+        "end_line": 6879
       },
       "text_sha256": "90ed7db69944db9535de6a9e1baa11cb575603dfc0b0d056f0efba08be836f49"
     },
@@ -9184,15 +9184,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6878,
-        "declaration_line": 6879,
+        "anchor_line": 6881,
+        "declaration_line": 6882,
         "declaration_column": 1,
-        "end_line": 6898
+        "end_line": 6901
       },
       "text_sha256": "f291dba4c8dd76fb265c8657f021a9d3e8ce3c364ad31b3a6061237dc208f82c"
     },
@@ -9213,15 +9213,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6900,
-        "declaration_line": 6901,
+        "anchor_line": 6903,
+        "declaration_line": 6904,
         "declaration_column": 1,
-        "end_line": 6916
+        "end_line": 6919
       },
       "text_sha256": "b2b56e48f668509eee7b5be4534202f251271dfd57f0d5217b790f47ea6ef806"
     },
@@ -9242,15 +9242,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6918,
-        "declaration_line": 6919,
+        "anchor_line": 6921,
+        "declaration_line": 6922,
         "declaration_column": 1,
-        "end_line": 6945
+        "end_line": 6948
       },
       "text_sha256": "7ae599666da96eaf7882e4fe4e069b4ad24976edccd7dd36c5e8a0255cfe5c66"
     },
@@ -9271,15 +9271,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6947,
-        "declaration_line": 6948,
+        "anchor_line": 6950,
+        "declaration_line": 6951,
         "declaration_column": 1,
-        "end_line": 6970
+        "end_line": 6973
       },
       "text_sha256": "2c609dba6f730c5a567f764bdf829c77b25ff89b169573712472c1187b2023fa"
     },
@@ -9300,15 +9300,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6972,
-        "declaration_line": 6973,
+        "anchor_line": 6975,
+        "declaration_line": 6976,
         "declaration_column": 1,
-        "end_line": 7001
+        "end_line": 7004
       },
       "text_sha256": "df083a73875783cbb486241148f2e2cbd0367cefb5630949163b0e034b560bb9"
     },
@@ -9329,15 +9329,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7003,
-        "declaration_line": 7004,
+        "anchor_line": 7006,
+        "declaration_line": 7007,
         "declaration_column": 1,
-        "end_line": 7014
+        "end_line": 7017
       },
       "text_sha256": "93c8e06d6a86955e0a62dce3dff5e35e1c6919ea4ca7dd02958727ccf6d46a4b"
     },
@@ -9358,15 +9358,15 @@
         {
           "level": 3,
           "title": "21.23 Model Context Protocol: `+std.mcp+`",
-          "line": 6479
+          "line": 6482
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7016,
-        "declaration_line": 7017,
+        "anchor_line": 7019,
+        "declaration_line": 7020,
         "declaration_column": 1,
-        "end_line": 7046
+        "end_line": 7049
       },
       "text_sha256": "79820521c2961e023bc69351b79a954cea4960207167c940ab7b190da1096e50"
     },
@@ -9387,15 +9387,15 @@
         {
           "level": 3,
           "title": "21.24 CBOR: `+std.cbor+`",
-          "line": 7046
+          "line": 7049
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7048,
-        "declaration_line": 7049,
+        "anchor_line": 7051,
+        "declaration_line": 7052,
         "declaration_column": 1,
-        "end_line": 7058
+        "end_line": 7061
       },
       "text_sha256": "2c3459fdfff345364a80e2ee9027d65187d764dc0d4f30c01ebda85c4213cd83"
     },
@@ -9416,15 +9416,15 @@
         {
           "level": 3,
           "title": "21.24 CBOR: `+std.cbor+`",
-          "line": 7046
+          "line": 7049
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7060,
-        "declaration_line": 7061,
+        "anchor_line": 7063,
+        "declaration_line": 7064,
         "declaration_column": 1,
-        "end_line": 7078
+        "end_line": 7081
       },
       "text_sha256": "990299543fe7886d2513ea6774d8c3b21b94e726890775bfde4d7259766e5281"
     },
@@ -9445,15 +9445,15 @@
         {
           "level": 3,
           "title": "21.24 CBOR: `+std.cbor+`",
-          "line": 7046
+          "line": 7049
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7080,
-        "declaration_line": 7081,
+        "anchor_line": 7083,
+        "declaration_line": 7084,
         "declaration_column": 1,
-        "end_line": 7109
+        "end_line": 7112
       },
       "text_sha256": "130d6d349b8937616b6f2e72e3023685c088a5c168566feca649e62b0b11fc88"
     },
@@ -9474,15 +9474,15 @@
         {
           "level": 3,
           "title": "21.24 CBOR: `+std.cbor+`",
-          "line": 7046
+          "line": 7049
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7111,
-        "declaration_line": 7112,
+        "anchor_line": 7114,
+        "declaration_line": 7115,
         "declaration_column": 1,
-        "end_line": 7116
+        "end_line": 7119
       },
       "text_sha256": "a8d327328e1269a50044b1985e18e2ea19dc32748df052f12717fc5beb4e4598"
     },
@@ -9503,15 +9503,15 @@
         {
           "level": 3,
           "title": "21.24 CBOR: `+std.cbor+`",
-          "line": 7046
+          "line": 7049
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7118,
-        "declaration_line": 7119,
+        "anchor_line": 7121,
+        "declaration_line": 7122,
         "declaration_column": 1,
-        "end_line": 7130
+        "end_line": 7133
       },
       "text_sha256": "54981b5a64c42e50ae74f5272abf41816ce3d6b6a16c123b7a339e729a0fe3a0"
     },
@@ -9532,15 +9532,15 @@
         {
           "level": 3,
           "title": "21.24 CBOR: `+std.cbor+`",
-          "line": 7046
+          "line": 7049
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7132,
-        "declaration_line": 7133,
+        "anchor_line": 7135,
+        "declaration_line": 7136,
         "declaration_column": 1,
-        "end_line": 7141
+        "end_line": 7144
       },
       "text_sha256": "9ca8ddac3c9d9906031210a82ece4edc9da95d8a481c185bdc57f5c02f512e54"
     },
@@ -9561,15 +9561,15 @@
         {
           "level": 3,
           "title": "21.25 Cryptography: `+std.crypto+`",
-          "line": 7141
+          "line": 7144
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7143,
-        "declaration_line": 7144,
+        "anchor_line": 7146,
+        "declaration_line": 7147,
         "declaration_column": 1,
-        "end_line": 7155
+        "end_line": 7158
       },
       "text_sha256": "1737b1a915986a3303c5ec35138eb686528fa4cbf5c8dd0fcae8f29ae034c28c"
     },
@@ -9590,15 +9590,15 @@
         {
           "level": 3,
           "title": "21.25 Cryptography: `+std.crypto+`",
-          "line": 7141
+          "line": 7144
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7157,
-        "declaration_line": 7158,
+        "anchor_line": 7160,
+        "declaration_line": 7161,
         "declaration_column": 1,
-        "end_line": 7160
+        "end_line": 7163
       },
       "text_sha256": "5c6bead712d2183690497b0e0a0f183888e1a853c07398edbdbf19251e19567a"
     },
@@ -9619,15 +9619,15 @@
         {
           "level": 3,
           "title": "21.25 Cryptography: `+std.crypto+`",
-          "line": 7141
+          "line": 7144
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7162,
-        "declaration_line": 7163,
+        "anchor_line": 7165,
+        "declaration_line": 7166,
         "declaration_column": 1,
-        "end_line": 7175
+        "end_line": 7178
       },
       "text_sha256": "791f2b7566cad31f3ed73af278c55bac33261989bd8f6fdb60f6f782d937af87"
     },
@@ -9648,15 +9648,15 @@
         {
           "level": 3,
           "title": "21.25 Cryptography: `+std.crypto+`",
-          "line": 7141
+          "line": 7144
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7177,
-        "declaration_line": 7178,
+        "anchor_line": 7180,
+        "declaration_line": 7181,
         "declaration_column": 1,
-        "end_line": 7189
+        "end_line": 7192
       },
       "text_sha256": "ba7939be84e15e91fe387b5699c8a517d2e0738b49eb0b9dfa5d184225ff75fc"
     },
@@ -9677,15 +9677,15 @@
         {
           "level": 3,
           "title": "21.25 Cryptography: `+std.crypto+`",
-          "line": 7141
+          "line": 7144
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7191,
-        "declaration_line": 7192,
+        "anchor_line": 7194,
+        "declaration_line": 7195,
         "declaration_column": 1,
-        "end_line": 7201
+        "end_line": 7204
       },
       "text_sha256": "95c562ace4586b72a4f3933788834a0e0c147cefd8e723d5598e06b7510dd826"
     },
@@ -9706,15 +9706,15 @@
         {
           "level": 3,
           "title": "21.25 Cryptography: `+std.crypto+`",
-          "line": 7141
+          "line": 7144
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7203,
-        "declaration_line": 7204,
+        "anchor_line": 7206,
+        "declaration_line": 7207,
         "declaration_column": 1,
-        "end_line": 7208
+        "end_line": 7211
       },
       "text_sha256": "52a6f4ccd385172eba2de78213f3c4fed25d05b4a1ed47acaca489d7050985de"
     },
@@ -9735,15 +9735,15 @@
         {
           "level": 3,
           "title": "21.25 Cryptography: `+std.crypto+`",
-          "line": 7141
+          "line": 7144
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7210,
-        "declaration_line": 7211,
+        "anchor_line": 7213,
+        "declaration_line": 7214,
         "declaration_column": 1,
-        "end_line": 7224
+        "end_line": 7227
       },
       "text_sha256": "2993117610f997c06b7d46ed404a1ef60e0bc38f3ab1ff9b32f29e0450ec9bc4"
     },
@@ -9764,15 +9764,15 @@
         {
           "level": 3,
           "title": "21.25 Cryptography: `+std.crypto+`",
-          "line": 7141
+          "line": 7144
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7226,
-        "declaration_line": 7227,
+        "anchor_line": 7229,
+        "declaration_line": 7230,
         "declaration_column": 1,
-        "end_line": 7237
+        "end_line": 7240
       },
       "text_sha256": "f5704c0dede92c9202d1ef22fdc021d80b48504ae855b331d1973f50f2884b71"
     },
@@ -9793,15 +9793,15 @@
         {
           "level": 3,
           "title": "21.25 Cryptography: `+std.crypto+`",
-          "line": 7141
+          "line": 7144
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7239,
-        "declaration_line": 7240,
+        "anchor_line": 7242,
+        "declaration_line": 7243,
         "declaration_column": 1,
-        "end_line": 7265
+        "end_line": 7268
       },
       "text_sha256": "9857f5a1a8ed9288cf0b276da90b716c8ae5d4fe870eacd6fc680aca92b6c5fc"
     },
@@ -9822,15 +9822,15 @@
         {
           "level": 3,
           "title": "21.25 Cryptography: `+std.crypto+`",
-          "line": 7141
+          "line": 7144
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7267,
-        "declaration_line": 7268,
+        "anchor_line": 7270,
+        "declaration_line": 7271,
         "declaration_column": 1,
-        "end_line": 7293
+        "end_line": 7296
       },
       "text_sha256": "56f8add8e5c0a9ead506104008fe7715b4d2713cb2d993b5aa7184746fe35be3"
     },
@@ -9851,15 +9851,15 @@
         {
           "level": 3,
           "title": "21.25 Cryptography: `+std.crypto+`",
-          "line": 7141
+          "line": 7144
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7295,
-        "declaration_line": 7296,
+        "anchor_line": 7298,
+        "declaration_line": 7299,
         "declaration_column": 1,
-        "end_line": 7306
+        "end_line": 7309
       },
       "text_sha256": "f565d346352f4f936538124888b1911652d4659dce814fea5982d72dabfc58de"
     },
@@ -9880,15 +9880,15 @@
         {
           "level": 3,
           "title": "21.25 Cryptography: `+std.crypto+`",
-          "line": 7141
+          "line": 7144
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7308,
-        "declaration_line": 7309,
+        "anchor_line": 7311,
+        "declaration_line": 7312,
         "declaration_column": 1,
-        "end_line": 7343
+        "end_line": 7346
       },
       "text_sha256": "2d4983c607ba8ff1101fa5ed5da5f355e04d0c45650b5674a8dba91f5155c79c"
     },
@@ -9909,15 +9909,15 @@
         {
           "level": 3,
           "title": "21.26 CBOR Object Signing and Encryption: `+std.cose+`",
-          "line": 7343
+          "line": 7346
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7345,
-        "declaration_line": 7346,
+        "anchor_line": 7348,
+        "declaration_line": 7349,
         "declaration_column": 1,
-        "end_line": 7358
+        "end_line": 7361
       },
       "text_sha256": "735ff7c5325916280c3020fd2645a84e0b5c55d6f2bd40f59ab67fb0a2114afa"
     },
@@ -9938,15 +9938,15 @@
         {
           "level": 3,
           "title": "21.26 CBOR Object Signing and Encryption: `+std.cose+`",
-          "line": 7343
+          "line": 7346
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7360,
-        "declaration_line": 7361,
+        "anchor_line": 7363,
+        "declaration_line": 7364,
         "declaration_column": 1,
-        "end_line": 7374
+        "end_line": 7377
       },
       "text_sha256": "a68eed3ad3cfa9668fc0c5f80068d8125dcb2c7a3c0a500ad2424a3db791cd30"
     },
@@ -9967,15 +9967,15 @@
         {
           "level": 3,
           "title": "21.26 CBOR Object Signing and Encryption: `+std.cose+`",
-          "line": 7343
+          "line": 7346
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7376,
-        "declaration_line": 7377,
+        "anchor_line": 7379,
+        "declaration_line": 7380,
         "declaration_column": 1,
-        "end_line": 7387
+        "end_line": 7390
       },
       "text_sha256": "33973534b0f887fdad6dd76a7063a356cd393a4d1ce5768fba9d11393a586f36"
     },
@@ -9996,15 +9996,15 @@
         {
           "level": 3,
           "title": "21.26 CBOR Object Signing and Encryption: `+std.cose+`",
-          "line": 7343
+          "line": 7346
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7389,
-        "declaration_line": 7390,
+        "anchor_line": 7392,
+        "declaration_line": 7393,
         "declaration_column": 1,
-        "end_line": 7399
+        "end_line": 7402
       },
       "text_sha256": "8cb08781694c7808bcef64cf4c525bd2f0de4e6b1092a4f6f865fd6a3f83ba77"
     },
@@ -10025,15 +10025,15 @@
         {
           "level": 3,
           "title": "21.26 CBOR Object Signing and Encryption: `+std.cose+`",
-          "line": 7343
+          "line": 7346
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7401,
-        "declaration_line": 7402,
+        "anchor_line": 7404,
+        "declaration_line": 7405,
         "declaration_column": 1,
-        "end_line": 7410
+        "end_line": 7413
       },
       "text_sha256": "cd513c0203647255855499e0c9acb642f0f5c9cc77cd8b7e267e1e94964e2c9f"
     },
@@ -10054,15 +10054,15 @@
         {
           "level": 3,
           "title": "21.26 CBOR Object Signing and Encryption: `+std.cose+`",
-          "line": 7343
+          "line": 7346
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7412,
-        "declaration_line": 7413,
+        "anchor_line": 7415,
+        "declaration_line": 7416,
         "declaration_column": 1,
-        "end_line": 7425
+        "end_line": 7428
       },
       "text_sha256": "062523a8cf7a9ce5c890dc7449467537b016057daaed718814736887cc58d8b8"
     },
@@ -10083,15 +10083,15 @@
         {
           "level": 3,
           "title": "21.27 SQLite: `+std.sqlite+`",
-          "line": 7425
+          "line": 7428
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7427,
-        "declaration_line": 7428,
+        "anchor_line": 7430,
+        "declaration_line": 7431,
         "declaration_column": 1,
-        "end_line": 7443
+        "end_line": 7446
       },
       "text_sha256": "9d9757dd21afcfb0c750a9f4eebbb1fd3da551482513b585062584da95796364"
     },
@@ -10112,15 +10112,15 @@
         {
           "level": 3,
           "title": "21.27 SQLite: `+std.sqlite+`",
-          "line": 7425
+          "line": 7428
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7445,
-        "declaration_line": 7446,
+        "anchor_line": 7448,
+        "declaration_line": 7449,
         "declaration_column": 1,
-        "end_line": 7462
+        "end_line": 7465
       },
       "text_sha256": "f083db4023fda36df3b51d8635b6da05bb5083ab2ea3eb752e8167a107b0cee5"
     },
@@ -10141,15 +10141,15 @@
         {
           "level": 3,
           "title": "21.27 SQLite: `+std.sqlite+`",
-          "line": 7425
+          "line": 7428
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7464,
-        "declaration_line": 7465,
+        "anchor_line": 7467,
+        "declaration_line": 7468,
         "declaration_column": 1,
-        "end_line": 7474
+        "end_line": 7477
       },
       "text_sha256": "9234883d375276a48332c0d16cbed241ae69551d08db62de17cc5d95e098dd7e"
     },
@@ -10170,15 +10170,15 @@
         {
           "level": 3,
           "title": "21.27 SQLite: `+std.sqlite+`",
-          "line": 7425
+          "line": 7428
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7476,
-        "declaration_line": 7477,
+        "anchor_line": 7479,
+        "declaration_line": 7480,
         "declaration_column": 1,
-        "end_line": 7509
+        "end_line": 7512
       },
       "text_sha256": "29157e44d25a7b5ce67c4de0e597ecf055ad1c03756634e2ec930b77bb957863"
     },
@@ -10199,15 +10199,15 @@
         {
           "level": 3,
           "title": "21.27 SQLite: `+std.sqlite+`",
-          "line": 7425
+          "line": 7428
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7511,
-        "declaration_line": 7512,
+        "anchor_line": 7514,
+        "declaration_line": 7515,
         "declaration_column": 1,
-        "end_line": 7519
+        "end_line": 7522
       },
       "text_sha256": "8f5df8c03ed651554c9995d1c64b971e46583e28ae693ec2992e593523fecc2c"
     },
@@ -10228,15 +10228,15 @@
         {
           "level": 3,
           "title": "21.27 SQLite: `+std.sqlite+`",
-          "line": 7425
+          "line": 7428
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7521,
-        "declaration_line": 7522,
+        "anchor_line": 7524,
+        "declaration_line": 7525,
         "declaration_column": 1,
-        "end_line": 7538
+        "end_line": 7541
       },
       "text_sha256": "10199ac6ff1e0109eb3b3156c750c4b42fdd7fee74b30ac3b26b894d4fe497ee"
     },
@@ -10257,15 +10257,15 @@
         {
           "level": 3,
           "title": "21.27 SQLite: `+std.sqlite+`",
-          "line": 7425
+          "line": 7428
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7540,
-        "declaration_line": 7541,
+        "anchor_line": 7543,
+        "declaration_line": 7544,
         "declaration_column": 1,
-        "end_line": 7570
+        "end_line": 7573
       },
       "text_sha256": "067272ab8ecd6cf4fee63f32031ba768ada835b14ed9aacd6f4dcabcde15b968"
     },
@@ -10286,15 +10286,15 @@
         {
           "level": 3,
           "title": "21.27 SQLite: `+std.sqlite+`",
-          "line": 7425
+          "line": 7428
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7572,
-        "declaration_line": 7573,
+        "anchor_line": 7575,
+        "declaration_line": 7576,
         "declaration_column": 1,
-        "end_line": 7591
+        "end_line": 7594
       },
       "text_sha256": "faa524636d5af432ae14722a1ac12b766facdc8640af292d4e550f447a22bb70"
     },
@@ -10315,15 +10315,15 @@
         {
           "level": 3,
           "title": "21.28 Metrics: `+std.metrics+`",
-          "line": 7591
+          "line": 7594
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7593,
-        "declaration_line": 7594,
+        "anchor_line": 7596,
+        "declaration_line": 7597,
         "declaration_column": 1,
-        "end_line": 7602
+        "end_line": 7605
       },
       "text_sha256": "3a48751c08ba47cea80e60c4e62140c18a9bcd83042f42cd79f3591048699b90"
     },
@@ -10344,15 +10344,15 @@
         {
           "level": 3,
           "title": "21.28 Metrics: `+std.metrics+`",
-          "line": 7591
+          "line": 7594
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7604,
-        "declaration_line": 7605,
+        "anchor_line": 7607,
+        "declaration_line": 7608,
         "declaration_column": 1,
-        "end_line": 7613
+        "end_line": 7616
       },
       "text_sha256": "82dffd2a26bfcb0ee69ebd54892feb3f8ab2e6e7fb6bc5aeeeecaec1c3883c58"
     },
@@ -10373,15 +10373,15 @@
         {
           "level": 3,
           "title": "21.28 Metrics: `+std.metrics+`",
-          "line": 7591
+          "line": 7594
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7615,
-        "declaration_line": 7616,
+        "anchor_line": 7618,
+        "declaration_line": 7619,
         "declaration_column": 1,
-        "end_line": 7646
+        "end_line": 7649
       },
       "text_sha256": "26c04b14897cbb2a4f98ac155b27661f082908633d4eb5385a0811d137550d20"
     },
@@ -10402,15 +10402,15 @@
         {
           "level": 3,
           "title": "21.28 Metrics: `+std.metrics+`",
-          "line": 7591
+          "line": 7594
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7648,
-        "declaration_line": 7649,
+        "anchor_line": 7651,
+        "declaration_line": 7652,
         "declaration_column": 1,
-        "end_line": 7662
+        "end_line": 7665
       },
       "text_sha256": "f0c560fb096cb96d12541164ee50bf12b6e73e961e87b6cf8c87850b25e46608"
     },
@@ -10431,15 +10431,15 @@
         {
           "level": 3,
           "title": "21.29 Tracing: `+std.trace+`",
-          "line": 7662
+          "line": 7665
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7664,
-        "declaration_line": 7665,
+        "anchor_line": 7667,
+        "declaration_line": 7668,
         "declaration_column": 1,
-        "end_line": 7670
+        "end_line": 7673
       },
       "text_sha256": "37ab39e95f3021d4b9e05423fb7b2e7411ee2758923a5c7fe238bcc0ca23af4c"
     },
@@ -10460,15 +10460,15 @@
         {
           "level": 3,
           "title": "21.29 Tracing: `+std.trace+`",
-          "line": 7662
+          "line": 7665
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7672,
-        "declaration_line": 7673,
+        "anchor_line": 7675,
+        "declaration_line": 7676,
         "declaration_column": 1,
-        "end_line": 7693
+        "end_line": 7696
       },
       "text_sha256": "9df710115053221ad7c9159b4a2cc88d5fab3f7f6ae30aa08328ba02cf45a64f"
     },
@@ -10489,15 +10489,15 @@
         {
           "level": 3,
           "title": "21.29 Tracing: `+std.trace+`",
-          "line": 7662
+          "line": 7665
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7695,
-        "declaration_line": 7696,
+        "anchor_line": 7698,
+        "declaration_line": 7699,
         "declaration_column": 1,
-        "end_line": 7706
+        "end_line": 7709
       },
       "text_sha256": "6aa2362635f99403da625a309412fa521a14d9944cfe74f294146e22265cfb21"
     },
@@ -10518,15 +10518,15 @@
         {
           "level": 3,
           "title": "21.30 Arenas of bytes: `+std.arena+`",
-          "line": 7706
+          "line": 7709
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7708,
-        "declaration_line": 7709,
+        "anchor_line": 7711,
+        "declaration_line": 7712,
         "declaration_column": 1,
-        "end_line": 7715
+        "end_line": 7718
       },
       "text_sha256": "88ba028b1d708fdfcf3fad12325b9e8dde309e734677ec0c2a400ae35368bb78"
     },
@@ -10547,15 +10547,15 @@
         {
           "level": 3,
           "title": "21.30 Arenas of bytes: `+std.arena+`",
-          "line": 7706
+          "line": 7709
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7717,
-        "declaration_line": 7718,
+        "anchor_line": 7720,
+        "declaration_line": 7721,
         "declaration_column": 1,
-        "end_line": 7723
+        "end_line": 7726
       },
       "text_sha256": "2f8c79c4c3d6b332e9e50c23eb5127ea2c0361a500632c58ae4825271b54d489"
     },
@@ -10576,15 +10576,15 @@
         {
           "level": 3,
           "title": "21.30 Arenas of bytes: `+std.arena+`",
-          "line": 7706
+          "line": 7709
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7725,
-        "declaration_line": 7726,
+        "anchor_line": 7728,
+        "declaration_line": 7729,
         "declaration_column": 1,
-        "end_line": 7732
+        "end_line": 7735
       },
       "text_sha256": "5ff90491930094bb812079072b3281c7690f0ccb46b6b0543cfc5168c944b311"
     },
@@ -10605,15 +10605,15 @@
         {
           "level": 3,
           "title": "21.30 Arenas of bytes: `+std.arena+`",
-          "line": 7706
+          "line": 7709
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7734,
-        "declaration_line": 7735,
+        "anchor_line": 7737,
+        "declaration_line": 7738,
         "declaration_column": 1,
-        "end_line": 7740
+        "end_line": 7743
       },
       "text_sha256": "6858946f8fa30f6c1f70d3d3f24e0c80e8297e19e728faea113c180c96725484"
     },
@@ -10634,15 +10634,15 @@
         {
           "level": 3,
           "title": "21.30 Arenas of bytes: `+std.arena+`",
-          "line": 7706
+          "line": 7709
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7742,
-        "declaration_line": 7743,
+        "anchor_line": 7745,
+        "declaration_line": 7746,
         "declaration_column": 1,
-        "end_line": 7749
+        "end_line": 7752
       },
       "text_sha256": "ad111c3959fd9096edb8308c86ad94222794078d3591499444c4ceee6824acaf"
     },
@@ -10663,15 +10663,15 @@
         {
           "level": 3,
           "title": "21.31 Pools of objects: `+std.pool+`",
-          "line": 7749
+          "line": 7752
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7751,
-        "declaration_line": 7752,
+        "anchor_line": 7754,
+        "declaration_line": 7755,
         "declaration_column": 1,
-        "end_line": 7755
+        "end_line": 7758
       },
       "text_sha256": "38f1535e9c51957a4b80565cd7ce267a0c7af15dd0b5eeddd7971c17f5eeeecf"
     },
@@ -10692,15 +10692,15 @@
         {
           "level": 3,
           "title": "21.31 Pools of objects: `+std.pool+`",
-          "line": 7749
+          "line": 7752
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7757,
-        "declaration_line": 7758,
+        "anchor_line": 7760,
+        "declaration_line": 7761,
         "declaration_column": 1,
-        "end_line": 7765
+        "end_line": 7768
       },
       "text_sha256": "4c5d64b2a8789cd519741ccfab53b289e8ea271fe73c7e83ab6a02aa6ae1738d"
     },
@@ -10721,15 +10721,15 @@
         {
           "level": 3,
           "title": "21.31 Pools of objects: `+std.pool+`",
-          "line": 7749
+          "line": 7752
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7767,
-        "declaration_line": 7768,
+        "anchor_line": 7770,
+        "declaration_line": 7771,
         "declaration_column": 1,
-        "end_line": 7775
+        "end_line": 7778
       },
       "text_sha256": "b04c723ca407af10caf3df9885b1d07bc74459def4829ff94c2471e1884e006a"
     },
@@ -10750,15 +10750,15 @@
         {
           "level": 3,
           "title": "21.32 PostgreSQL: `+std.postgres+`",
-          "line": 7775
+          "line": 7778
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7777,
-        "declaration_line": 7778,
+        "anchor_line": 7780,
+        "declaration_line": 7781,
         "declaration_column": 1,
-        "end_line": 7791
+        "end_line": 7794
       },
       "text_sha256": "d0130a3e300e02ee8b1e816a363b2452a5eafb8aa5171404a4451314daa81273"
     },
@@ -10779,17 +10779,17 @@
         {
           "level": 3,
           "title": "21.32 PostgreSQL: `+std.postgres+`",
-          "line": 7775
+          "line": 7778
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7793,
-        "declaration_line": 7794,
+        "anchor_line": 7796,
+        "declaration_line": 7797,
         "declaration_column": 1,
-        "end_line": 7808
+        "end_line": 7815
       },
-      "text_sha256": "bbe9b5037f7ff591516da2f531baacccabadf65025a4a5de7b7f7ed06ed9e41f"
+      "text_sha256": "94b977a1f5b574163442d833a64582b3f7b3a98c614d953f18ef08bff1736181"
     },
     {
       "id": "R-SLIB-PG-0003",
@@ -10808,15 +10808,15 @@
         {
           "level": 3,
           "title": "21.32 PostgreSQL: `+std.postgres+`",
-          "line": 7775
+          "line": 7778
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7810,
-        "declaration_line": 7811,
+        "anchor_line": 7817,
+        "declaration_line": 7818,
         "declaration_column": 1,
-        "end_line": 7822
+        "end_line": 7829
       },
       "text_sha256": "bd87bbe26d1d490ddcfbfc974cea22654c3ec24486bca985f75cc1dbad42efa5"
     },
@@ -10837,15 +10837,15 @@
         {
           "level": 3,
           "title": "21.32 PostgreSQL: `+std.postgres+`",
-          "line": 7775
+          "line": 7778
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7824,
-        "declaration_line": 7825,
+        "anchor_line": 7831,
+        "declaration_line": 7832,
         "declaration_column": 1,
-        "end_line": 7846
+        "end_line": 7853
       },
       "text_sha256": "e025fa0ec813fdd64d2d1a4b938aa46321046a931ebabbb817ee655b517b2b69"
     },
@@ -10866,17 +10866,17 @@
         {
           "level": 3,
           "title": "21.32 PostgreSQL: `+std.postgres+`",
-          "line": 7775
+          "line": 7778
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7848,
-        "declaration_line": 7849,
+        "anchor_line": 7855,
+        "declaration_line": 7856,
         "declaration_column": 1,
-        "end_line": 7878
+        "end_line": 7895
       },
-      "text_sha256": "0b63222c1c8e08084c070b000a2a9929b4b981030c134e9d6901e433efa10ee1"
+      "text_sha256": "7a842f272e3242d26af3a2abe640b664cbf5731149a68d5877fa7398fadbdbcf"
     },
     {
       "id": "R-SLIB-PG-0006",
@@ -10895,15 +10895,15 @@
         {
           "level": 3,
           "title": "21.32 PostgreSQL: `+std.postgres+`",
-          "line": 7775
+          "line": 7778
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7880,
-        "declaration_line": 7881,
+        "anchor_line": 7897,
+        "declaration_line": 7898,
         "declaration_column": 1,
-        "end_line": 7897
+        "end_line": 7914
       },
       "text_sha256": "ff6e22e83f04f52c7e38555b5f5d13d34167a74359644defd2e7c4ee9367aba0"
     },
@@ -10924,15 +10924,15 @@
         {
           "level": 3,
           "title": "21.32 PostgreSQL: `+std.postgres+`",
-          "line": 7775
+          "line": 7778
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7899,
-        "declaration_line": 7900,
+        "anchor_line": 7916,
+        "declaration_line": 7917,
         "declaration_column": 1,
-        "end_line": 7910
+        "end_line": 7927
       },
       "text_sha256": "6a54558553417075e1d7d6268526065eb43599893763e7134702c1396abca1d8"
     },
@@ -10953,15 +10953,15 @@
         {
           "level": 3,
           "title": "21.32 PostgreSQL: `+std.postgres+`",
-          "line": 7775
+          "line": 7778
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7912,
-        "declaration_line": 7913,
+        "anchor_line": 7929,
+        "declaration_line": 7930,
         "declaration_column": 1,
-        "end_line": 7923
+        "end_line": 7940
       },
       "text_sha256": "b2ba2363183d478473c830077e8b8de3ebfd9ef36f060736fc4a7100680c4f29"
     },
@@ -10982,15 +10982,15 @@
         {
           "level": 3,
           "title": "21.32 PostgreSQL: `+std.postgres+`",
-          "line": 7775
+          "line": 7778
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7925,
-        "declaration_line": 7926,
+        "anchor_line": 7942,
+        "declaration_line": 7943,
         "declaration_column": 1,
-        "end_line": 7937
+        "end_line": 7954
       },
       "text_sha256": "e774d4a8f06e6f23662a3e332830cedaa7b78ea6e1e9e729dbf1be11613bbb0f"
     },
@@ -11011,15 +11011,15 @@
         {
           "level": 3,
           "title": "21.32 PostgreSQL: `+std.postgres+`",
-          "line": 7775
+          "line": 7778
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7939,
-        "declaration_line": 7940,
+        "anchor_line": 7956,
+        "declaration_line": 7957,
         "declaration_column": 1,
-        "end_line": 7948
+        "end_line": 7965
       },
       "text_sha256": "6fff9301d8853823f6783a6608f1b77bd7cd12e72ef23d2abc0950f91703cd11"
     },
@@ -11040,15 +11040,15 @@
         {
           "level": 3,
           "title": "21.32 PostgreSQL: `+std.postgres+`",
-          "line": 7775
+          "line": 7778
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7950,
-        "declaration_line": 7951,
+        "anchor_line": 7967,
+        "declaration_line": 7968,
         "declaration_column": 1,
-        "end_line": 7961
+        "end_line": 7978
       },
       "text_sha256": "c6429e63057929402d7dfc49c4e07bf5136b639e0b5abe8245713ae9b8a12853"
     },
@@ -11069,15 +11069,15 @@
         {
           "level": 3,
           "title": "21.32 PostgreSQL: `+std.postgres+`",
-          "line": 7775
+          "line": 7778
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7963,
-        "declaration_line": 7964,
+        "anchor_line": 7980,
+        "declaration_line": 7981,
         "declaration_column": 1,
-        "end_line": 7967
+        "end_line": 7984
       },
       "text_sha256": "e60efaf867a88de7b490f4c3339da8acfc11eb9cae7a175c0be4f398758d52af"
     },
@@ -11098,15 +11098,15 @@
         {
           "level": 3,
           "title": "21.32 PostgreSQL: `+std.postgres+`",
-          "line": 7775
+          "line": 7778
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7969,
-        "declaration_line": 7970,
+        "anchor_line": 7986,
+        "declaration_line": 7987,
         "declaration_column": 1,
-        "end_line": 7989
+        "end_line": 8006
       },
       "text_sha256": "8d75c0cc4274f1fb72919466585ae9184c128c9e0681a1097a9b85ab83827418"
     },
@@ -11127,15 +11127,15 @@
         {
           "level": 3,
           "title": "21.32 PostgreSQL: `+std.postgres+`",
-          "line": 7775
+          "line": 7778
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7991,
-        "declaration_line": 7992,
+        "anchor_line": 8008,
+        "declaration_line": 8009,
         "declaration_column": 1,
-        "end_line": 8006
+        "end_line": 8023
       },
       "text_sha256": "6a5802af110a8ac520934592890bb7fce146aac109b09d6f92a5b464032327fb"
     },
@@ -11156,15 +11156,15 @@
         {
           "level": 3,
           "title": "21.32 PostgreSQL: `+std.postgres+`",
-          "line": 7775
+          "line": 7778
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8008,
-        "declaration_line": 8009,
+        "anchor_line": 8025,
+        "declaration_line": 8026,
         "declaration_column": 1,
-        "end_line": 8047
+        "end_line": 8064
       },
       "text_sha256": "65b817a0b886652c8952de8ae8708cd7c391fd6239a2f458329cd353de0c35a2"
     },
@@ -11185,15 +11185,15 @@
         {
           "level": 3,
           "title": "21.32 PostgreSQL: `+std.postgres+`",
-          "line": 7775
+          "line": 7778
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8049,
-        "declaration_line": 8050,
+        "anchor_line": 8066,
+        "declaration_line": 8067,
         "declaration_column": 1,
-        "end_line": 8068
+        "end_line": 8085
       },
       "text_sha256": "e51e3ae4678a3069bf1b1ad405c43f041ce2bb98c5ccbc89c13a4df0d8b36b76"
     },
@@ -11214,15 +11214,15 @@
         {
           "level": 3,
           "title": "21.32 PostgreSQL: `+std.postgres+`",
-          "line": 7775
+          "line": 7778
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8070,
-        "declaration_line": 8071,
+        "anchor_line": 8087,
+        "declaration_line": 8088,
         "declaration_column": 1,
-        "end_line": 8114
+        "end_line": 8131
       },
       "text_sha256": "887312f0fad4e78d9c349db86e95cd2bab846610553523f41cdf8e639802e07d"
     },
@@ -11243,15 +11243,15 @@
         {
           "level": 3,
           "title": "21.33 JSON Web Tokens: `+std.jwt+`",
-          "line": 8114
+          "line": 8131
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8116,
-        "declaration_line": 8117,
+        "anchor_line": 8133,
+        "declaration_line": 8134,
         "declaration_column": 1,
-        "end_line": 8125
+        "end_line": 8142
       },
       "text_sha256": "0175cb32b3cd01d1b9b4ee6dadfafa9db615bc1c91d82534c3afc8c5cfa63eef"
     },
@@ -11272,15 +11272,15 @@
         {
           "level": 3,
           "title": "21.33 JSON Web Tokens: `+std.jwt+`",
-          "line": 8114
+          "line": 8131
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8127,
-        "declaration_line": 8128,
+        "anchor_line": 8144,
+        "declaration_line": 8145,
         "declaration_column": 1,
-        "end_line": 8136
+        "end_line": 8153
       },
       "text_sha256": "aa754fdc9ba766d4fa035f4dd73453e42fa8d79a65cc987294f844fe699c91ce"
     },
@@ -11301,15 +11301,15 @@
         {
           "level": 3,
           "title": "21.33 JSON Web Tokens: `+std.jwt+`",
-          "line": 8114
+          "line": 8131
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8138,
-        "declaration_line": 8139,
+        "anchor_line": 8155,
+        "declaration_line": 8156,
         "declaration_column": 1,
-        "end_line": 8149
+        "end_line": 8166
       },
       "text_sha256": "dfec4418cf920a5529107475813907011e661576e0c6b780726d24bd763e97ad"
     },
@@ -11330,15 +11330,15 @@
         {
           "level": 3,
           "title": "21.33 JSON Web Tokens: `+std.jwt+`",
-          "line": 8114
+          "line": 8131
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8151,
-        "declaration_line": 8152,
+        "anchor_line": 8168,
+        "declaration_line": 8169,
         "declaration_column": 1,
-        "end_line": 8163
+        "end_line": 8180
       },
       "text_sha256": "55b204c9bdfa027e2d9885031645cacf34adb7dc736f8b98fa2101279e53cb5e"
     },
@@ -11359,15 +11359,15 @@
         {
           "level": 3,
           "title": "21.33 JSON Web Tokens: `+std.jwt+`",
-          "line": 8114
+          "line": 8131
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8165,
-        "declaration_line": 8166,
+        "anchor_line": 8182,
+        "declaration_line": 8183,
         "declaration_column": 1,
-        "end_line": 8179
+        "end_line": 8196
       },
       "text_sha256": "bb979d3aaecf34cb6265f8dd46b38ab0a84ac21fa742034ba4cec1d7f9b8593f"
     },
@@ -11388,15 +11388,15 @@
         {
           "level": 3,
           "title": "21.33 JSON Web Tokens: `+std.jwt+`",
-          "line": 8114
+          "line": 8131
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8181,
-        "declaration_line": 8182,
+        "anchor_line": 8198,
+        "declaration_line": 8199,
         "declaration_column": 1,
-        "end_line": 8202
+        "end_line": 8219
       },
       "text_sha256": "599fc500f600e44fe97a35380f3c4c53b770724a2779dcbff2c6141162910bca"
     },
@@ -11417,15 +11417,15 @@
         {
           "level": 3,
           "title": "21.33 JSON Web Tokens: `+std.jwt+`",
-          "line": 8114
+          "line": 8131
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8204,
-        "declaration_line": 8205,
+        "anchor_line": 8221,
+        "declaration_line": 8222,
         "declaration_column": 1,
-        "end_line": 8219
+        "end_line": 8236
       },
       "text_sha256": "72cc9e7d5e0eb546d8b6e221d218c2406460f6013bd22085d725e3d16b71d4bc"
     },
@@ -11446,15 +11446,15 @@
         {
           "level": 3,
           "title": "21.34 OAuth 2.0 clients: `+std.oauth2+`",
-          "line": 8219
+          "line": 8236
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8221,
-        "declaration_line": 8222,
+        "anchor_line": 8238,
+        "declaration_line": 8239,
         "declaration_column": 1,
-        "end_line": 8231
+        "end_line": 8248
       },
       "text_sha256": "49fb0d6f3c9c0c233ebedc98d212600bcac5b8d800e422886a6f83fbfcb34545"
     },
@@ -11475,15 +11475,15 @@
         {
           "level": 3,
           "title": "21.34 OAuth 2.0 clients: `+std.oauth2+`",
-          "line": 8219
+          "line": 8236
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8233,
-        "declaration_line": 8234,
+        "anchor_line": 8250,
+        "declaration_line": 8251,
         "declaration_column": 1,
-        "end_line": 8237
+        "end_line": 8254
       },
       "text_sha256": "2680a460239af05d77351aec0adf1a49274f1ee36ac6c345f7604aa387dfd151"
     },
@@ -11504,15 +11504,15 @@
         {
           "level": 3,
           "title": "21.34 OAuth 2.0 clients: `+std.oauth2+`",
-          "line": 8219
+          "line": 8236
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8239,
-        "declaration_line": 8240,
+        "anchor_line": 8256,
+        "declaration_line": 8257,
         "declaration_column": 1,
-        "end_line": 8257
+        "end_line": 8274
       },
       "text_sha256": "29cc15980aa081d448aeb18d8af89fcbaf51f1c364fd30c5387d900e63146d55"
     },
@@ -11533,15 +11533,15 @@
         {
           "level": 3,
           "title": "21.34 OAuth 2.0 clients: `+std.oauth2+`",
-          "line": 8219
+          "line": 8236
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8259,
-        "declaration_line": 8260,
+        "anchor_line": 8276,
+        "declaration_line": 8277,
         "declaration_column": 1,
-        "end_line": 8269
+        "end_line": 8286
       },
       "text_sha256": "0f9cdfaa46d81bc4b6bd7f1ae3796fa19abbe80f3a68316d14661c97a62bbc88"
     },
@@ -11562,15 +11562,15 @@
         {
           "level": 3,
           "title": "21.34 OAuth 2.0 clients: `+std.oauth2+`",
-          "line": 8219
+          "line": 8236
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8271,
-        "declaration_line": 8272,
+        "anchor_line": 8288,
+        "declaration_line": 8289,
         "declaration_column": 1,
-        "end_line": 8286
+        "end_line": 8303
       },
       "text_sha256": "132f5152fa7d6df7bccb1f724127642685629d1d1ec729a465e4d60405b72834"
     },
@@ -11591,15 +11591,15 @@
         {
           "level": 3,
           "title": "21.34 OAuth 2.0 clients: `+std.oauth2+`",
-          "line": 8219
+          "line": 8236
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8288,
-        "declaration_line": 8289,
+        "anchor_line": 8305,
+        "declaration_line": 8306,
         "declaration_column": 1,
-        "end_line": 8306
+        "end_line": 8323
       },
       "text_sha256": "e07eab7b7ca50c3e62a133ba73dc7e72673ca3f610696ad863a736a2588d2785"
     },
@@ -11615,15 +11615,15 @@
         {
           "level": 2,
           "title": "Annex A — Normative public API inventory",
-          "line": 8306
+          "line": 8323
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8308,
-        "declaration_line": 8309,
+        "anchor_line": 8325,
+        "declaration_line": 8326,
         "declaration_column": 1,
-        "end_line": 8766
+        "end_line": 8783
       },
       "text_sha256": "69d8ca6d9f29ec309625d02d314fc70acbd23e8a875698a07f70ee1d4a35be66"
     },
@@ -11639,20 +11639,20 @@
         {
           "level": 2,
           "title": "Annex A — Normative public API inventory",
-          "line": 8306
+          "line": 8323
         },
         {
           "level": 3,
           "title": "A.2 Asynchronous APIs",
-          "line": 8551
+          "line": 8568
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8768,
-        "declaration_line": 8769,
+        "anchor_line": 8785,
+        "declaration_line": 8786,
         "declaration_column": 1,
-        "end_line": 8781
+        "end_line": 8798
       },
       "text_sha256": "a7d489e0f7cdcba7dfdc8741fe58f1a47bf1b42bfe8af091e4b8777e35ba3cfb"
     },
@@ -11668,20 +11668,20 @@
         {
           "level": 2,
           "title": "Annex A — Normative public API inventory",
-          "line": 8306
+          "line": 8323
         },
         {
           "level": 3,
           "title": "A.2 Asynchronous APIs",
-          "line": 8551
+          "line": 8568
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8783,
-        "declaration_line": 8784,
+        "anchor_line": 8800,
+        "declaration_line": 8801,
         "declaration_column": 1,
-        "end_line": 8789
+        "end_line": 8806
       },
       "text_sha256": "8e02c0fefe249db25e44acc02641e625552a9569bc2c68a2a2b9b132e7c97bdb"
     },
@@ -11697,15 +11697,15 @@
         {
           "level": 2,
           "title": "Annex B — Normative C17 and native mapping",
-          "line": 8791
+          "line": 8808
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8793,
-        "declaration_line": 8794,
+        "anchor_line": 8810,
+        "declaration_line": 8811,
         "declaration_column": 1,
-        "end_line": 8798
+        "end_line": 8815
       },
       "text_sha256": "a4e97a0b67b0b6d18760d92c0ea31d401380591ffa658fc938761689989d120e"
     },
@@ -11721,15 +11721,15 @@
         {
           "level": 2,
           "title": "Annex B — Normative C17 and native mapping",
-          "line": 8791
+          "line": 8808
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8800,
-        "declaration_line": 8801,
+        "anchor_line": 8817,
+        "declaration_line": 8818,
         "declaration_column": 1,
-        "end_line": 8928
+        "end_line": 8945
       },
       "text_sha256": "b722482b4f7a52412cb0a176dbc20156827f205bb40346acb62357ec8a03f260"
     },
@@ -11745,15 +11745,15 @@
         {
           "level": 2,
           "title": "Annex B — Normative C17 and native mapping",
-          "line": 8791
+          "line": 8808
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8930,
-        "declaration_line": 8931,
+        "anchor_line": 8947,
+        "declaration_line": 8948,
         "declaration_column": 1,
-        "end_line": 8938
+        "end_line": 8955
       },
       "text_sha256": "0b0e395682534bdb10c0023e205c7ef32ca3ee18f846701312ff0e1e6c40fd35"
     },
@@ -11769,15 +11769,15 @@
         {
           "level": 2,
           "title": "Annex B — Normative C17 and native mapping",
-          "line": 8791
+          "line": 8808
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8940,
-        "declaration_line": 8941,
+        "anchor_line": 8957,
+        "declaration_line": 8958,
         "declaration_column": 1,
-        "end_line": 8948
+        "end_line": 8965
       },
       "text_sha256": "8734d48777b5d5f96994ec7904e4e31610fb1cfecc951ac3d6df4e3ce7c1f970"
     },
@@ -11793,15 +11793,15 @@
         {
           "level": 2,
           "title": "Annex B — Normative C17 and native mapping",
-          "line": 8791
+          "line": 8808
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8950,
-        "declaration_line": 8951,
+        "anchor_line": 8967,
+        "declaration_line": 8968,
         "declaration_column": 1,
-        "end_line": 8958
+        "end_line": 8975
       },
       "text_sha256": "185598d0981cb33a1218810651214ca9d6e07fd0d78874e819c6341b64c241df"
     },
@@ -11817,15 +11817,15 @@
         {
           "level": 2,
           "title": "Annex B — Normative C17 and native mapping",
-          "line": 8791
+          "line": 8808
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8960,
-        "declaration_line": 8961,
+        "anchor_line": 8977,
+        "declaration_line": 8978,
         "declaration_column": 1,
-        "end_line": 8965
+        "end_line": 8982
       },
       "text_sha256": "74ba9a77015f3d3a5362ae02ca1b49249dd108f36fe0bab25b33c78d24cd7f34"
     },
@@ -11841,15 +11841,15 @@
         {
           "level": 2,
           "title": "Annex B — Normative C17 and native mapping",
-          "line": 8791
+          "line": 8808
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8967,
-        "declaration_line": 8968,
+        "anchor_line": 8984,
+        "declaration_line": 8985,
         "declaration_column": 1,
-        "end_line": 8972
+        "end_line": 8989
       },
       "text_sha256": "276632499676a7c99d403a92f2488077ec6a31e1a31658c8960fdca08f4683d5"
     },
@@ -11865,15 +11865,15 @@
         {
           "level": 2,
           "title": "Annex B — Normative C17 and native mapping",
-          "line": 8791
+          "line": 8808
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8974,
-        "declaration_line": 8975,
+        "anchor_line": 8991,
+        "declaration_line": 8992,
         "declaration_column": 1,
-        "end_line": 8978
+        "end_line": 8995
       },
       "text_sha256": "4beb4c6134fe611baa108a4b0a318c701b840e897779993fec35162ac3aae97e"
     },
@@ -11889,15 +11889,15 @@
         {
           "level": 2,
           "title": "Annex B — Normative C17 and native mapping",
-          "line": 8791
+          "line": 8808
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8980,
-        "declaration_line": 8981,
+        "anchor_line": 8997,
+        "declaration_line": 8998,
         "declaration_column": 1,
-        "end_line": 8989
+        "end_line": 9006
       },
       "text_sha256": "a0107b976aafff4828e4fa0be27064da7fd406d114376fd0ddbca7822877d847"
     },
@@ -11913,15 +11913,15 @@
         {
           "level": 2,
           "title": "Annex B — Normative C17 and native mapping",
-          "line": 8791
+          "line": 8808
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8991,
-        "declaration_line": 8992,
+        "anchor_line": 9008,
+        "declaration_line": 9009,
         "declaration_column": 1,
-        "end_line": 8997
+        "end_line": 9014
       },
       "text_sha256": "59772550f67ecd1978287d029454eec503caa15a09e76838d102f36b9aa11125"
     },
@@ -11937,15 +11937,15 @@
         {
           "level": 2,
           "title": "Annex B — Normative C17 and native mapping",
-          "line": 8791
+          "line": 8808
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8999,
-        "declaration_line": 9000,
+        "anchor_line": 9016,
+        "declaration_line": 9017,
         "declaration_column": 1,
-        "end_line": 9007
+        "end_line": 9024
       },
       "text_sha256": "9c80488d4167bd6b84fa0b4ab1bde91e32adc0df97c7d4f112dc8ff03163ee95"
     },
@@ -11961,15 +11961,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9009
+          "line": 9026
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9014,
-        "declaration_line": 9015,
+        "anchor_line": 9031,
+        "declaration_line": 9032,
         "declaration_column": 1,
-        "end_line": 9017
+        "end_line": 9034
       },
       "text_sha256": "f36288fe8393324eee30642f428ea136aba98c9a7c66ffb9b62ba3757ae614b4"
     },
@@ -11985,15 +11985,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9009
+          "line": 9026
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9019,
-        "declaration_line": 9020,
+        "anchor_line": 9036,
+        "declaration_line": 9037,
         "declaration_column": 1,
-        "end_line": 9023
+        "end_line": 9040
       },
       "text_sha256": "351957c652950ef21f359f03ce8120ee886d8852f8897cef12d249427a646e75"
     },
@@ -12009,15 +12009,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9009
+          "line": 9026
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9025,
-        "declaration_line": 9026,
+        "anchor_line": 9042,
+        "declaration_line": 9043,
         "declaration_column": 1,
-        "end_line": 9029
+        "end_line": 9046
       },
       "text_sha256": "c5e6f2a78b4856094befe4ed85294d6b638d73685b27d2efbf12fcf65c577632"
     },
@@ -12033,15 +12033,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9009
+          "line": 9026
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9031,
-        "declaration_line": 9032,
+        "anchor_line": 9048,
+        "declaration_line": 9049,
         "declaration_column": 1,
-        "end_line": 9034
+        "end_line": 9051
       },
       "text_sha256": "3b16f42954f18afd96a8732bc2996bb6021d58d8bd6ed5266652942bf5b4c6b4"
     },
@@ -12057,15 +12057,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9009
+          "line": 9026
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9036,
-        "declaration_line": 9037,
+        "anchor_line": 9053,
+        "declaration_line": 9054,
         "declaration_column": 1,
-        "end_line": 9039
+        "end_line": 9056
       },
       "text_sha256": "82779522096ed9b31042ae84c20103c8c54380dcc37951d8eea12a97898ef661"
     },
@@ -12081,15 +12081,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9009
+          "line": 9026
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9041,
-        "declaration_line": 9042,
+        "anchor_line": 9058,
+        "declaration_line": 9059,
         "declaration_column": 1,
-        "end_line": 9048
+        "end_line": 9065
       },
       "text_sha256": "214f9121dc71e8154073cbf443ac91abc3887abd85dad88bacc641359306a3fc"
     },
@@ -12105,15 +12105,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9009
+          "line": 9026
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9050,
-        "declaration_line": 9051,
+        "anchor_line": 9067,
+        "declaration_line": 9068,
         "declaration_column": 1,
-        "end_line": 9053
+        "end_line": 9070
       },
       "text_sha256": "af449c90541246c1aed2988bd11c2d859e859637b4831b15ac537d15adc6a6bb"
     },
@@ -12129,15 +12129,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9009
+          "line": 9026
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9055,
-        "declaration_line": 9056,
+        "anchor_line": 9072,
+        "declaration_line": 9073,
         "declaration_column": 1,
-        "end_line": 9059
+        "end_line": 9076
       },
       "text_sha256": "2dfc68c1edb7e3666f35c570b23b957813173e59bcaeea3748ed234a7f7f68d9"
     },
@@ -12153,15 +12153,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9009
+          "line": 9026
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9061,
-        "declaration_line": 9062,
+        "anchor_line": 9078,
+        "declaration_line": 9079,
         "declaration_column": 1,
-        "end_line": 9070
+        "end_line": 9087
       },
       "text_sha256": "21e0b27ffd4a2cf975c5fe861f6f5992942a84a0521f8cbd48803d51406be1f3"
     },
@@ -12177,15 +12177,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9009
+          "line": 9026
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9072,
-        "declaration_line": 9073,
+        "anchor_line": 9089,
+        "declaration_line": 9090,
         "declaration_column": 1,
-        "end_line": 9081
+        "end_line": 9098
       },
       "text_sha256": "b958337bddc61c3223b03d4ced5943bdece28e9c065f2e200b8336a4a1ad3570"
     },
@@ -12201,15 +12201,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9009
+          "line": 9026
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9083,
-        "declaration_line": 9084,
+        "anchor_line": 9100,
+        "declaration_line": 9101,
         "declaration_column": 1,
-        "end_line": 9096
+        "end_line": 9113
       },
       "text_sha256": "8e59d8812e1d29d955a9ca0ecafe7feb2277745b65dec4ddf1bfcbd29284fe52"
     },
@@ -12225,15 +12225,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9009
+          "line": 9026
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9098,
-        "declaration_line": 9099,
+        "anchor_line": 9115,
+        "declaration_line": 9116,
         "declaration_column": 1,
-        "end_line": 9102
+        "end_line": 9119
       },
       "text_sha256": "8d49f39f4e7b13604ebbed79ee4387d5767aec8f8ad3d001b7c8308373e5816c"
     },
@@ -12249,15 +12249,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9009
+          "line": 9026
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9104,
-        "declaration_line": 9105,
+        "anchor_line": 9121,
+        "declaration_line": 9122,
         "declaration_column": 1,
-        "end_line": 9107
+        "end_line": 9124
       },
       "text_sha256": "8cc203be65a6ef61ce8d1902f1125cc5c4c873daf4f99a0f7e29fae22dd267ba"
     },
@@ -12273,15 +12273,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9009
+          "line": 9026
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9109,
-        "declaration_line": 9110,
+        "anchor_line": 9126,
+        "declaration_line": 9127,
         "declaration_column": 1,
-        "end_line": 9122
+        "end_line": 9139
       },
       "text_sha256": "2b73492bdb17cd0a70b043c56ba2b151b719e08b0b8ce45c46b603b24ea9e0e3"
     },
@@ -12297,15 +12297,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9009
+          "line": 9026
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9124,
-        "declaration_line": 9125,
+        "anchor_line": 9141,
+        "declaration_line": 9142,
         "declaration_column": 1,
-        "end_line": 9130
+        "end_line": 9147
       },
       "text_sha256": "93910660dd35ebafda5ba77721d78b7f2b47c4265ab9c229090360fa4295fc89"
     },
@@ -12321,15 +12321,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9009
+          "line": 9026
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9132,
-        "declaration_line": 9133,
+        "anchor_line": 9149,
+        "declaration_line": 9150,
         "declaration_column": 1,
-        "end_line": 9142
+        "end_line": 9159
       },
       "text_sha256": "cdba2985f611aee4623e111657e4205dcd3e9e15d41f0ce037c2e01be240bbe7"
     },
@@ -12345,15 +12345,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9009
+          "line": 9026
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9144,
-        "declaration_line": 9145,
+        "anchor_line": 9161,
+        "declaration_line": 9162,
         "declaration_column": 1,
-        "end_line": 9149
+        "end_line": 9166
       },
       "text_sha256": "6254eb38ebf3fff9dc5757dfe7ac9b1b2f010cba7ea4a245561ef16afe650317"
     },
@@ -12369,15 +12369,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9009
+          "line": 9026
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9151,
-        "declaration_line": 9152,
+        "anchor_line": 9168,
+        "declaration_line": 9169,
         "declaration_column": 1,
-        "end_line": 9155
+        "end_line": 9172
       },
       "text_sha256": "1dc1e4ccf7a2a3c64352a9ad03c5c50f076a9ca9f623ac94848add98f6c7dc74"
     },
@@ -12393,15 +12393,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9009
+          "line": 9026
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9157,
-        "declaration_line": 9158,
+        "anchor_line": 9174,
+        "declaration_line": 9175,
         "declaration_column": 1,
-        "end_line": 9161
+        "end_line": 9178
       },
       "text_sha256": "ff646b5a90f0f6c346334221737039b0857c2d14db94a38f674e866860fafb4b"
     },
@@ -12417,15 +12417,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9009
+          "line": 9026
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9163,
-        "declaration_line": 9164,
+        "anchor_line": 9180,
+        "declaration_line": 9181,
         "declaration_column": 1,
-        "end_line": 9169
+        "end_line": 9186
       },
       "text_sha256": "88c90411297452bca312f938a08818ce8f8b060386d4b84a20ce8b70f9803240"
     },
@@ -12441,15 +12441,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9171
+          "line": 9188
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9173,
-        "declaration_line": 9174,
+        "anchor_line": 9190,
+        "declaration_line": 9191,
         "declaration_column": 1,
-        "end_line": 9204
+        "end_line": 9221
       },
       "text_sha256": "a59424ad27147761099b4bc08a401faa0b90b2ca40786b1fbf1da31c5f4279b1"
     },
@@ -12465,15 +12465,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9171
+          "line": 9188
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9206,
-        "declaration_line": 9207,
+        "anchor_line": 9223,
+        "declaration_line": 9224,
         "declaration_column": 1,
-        "end_line": 9258
+        "end_line": 9275
       },
       "text_sha256": "a22244a6ad76c7aa1a1d867bf6cc0cff9131727668d0d8c70e09b47632ad48db"
     },
@@ -12489,15 +12489,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9171
+          "line": 9188
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9260,
-        "declaration_line": 9261,
+        "anchor_line": 9277,
+        "declaration_line": 9278,
         "declaration_column": 1,
-        "end_line": 9282
+        "end_line": 9299
       },
       "text_sha256": "a12c9805583205ad8ba1f778ac41afd0881213497be4def32461a74a92f1f368"
     },
@@ -12513,15 +12513,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9171
+          "line": 9188
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9284,
-        "declaration_line": 9285,
+        "anchor_line": 9301,
+        "declaration_line": 9302,
         "declaration_column": 1,
-        "end_line": 9304
+        "end_line": 9321
       },
       "text_sha256": "dbb9f7f0e59d3fc9d182bf34525c27614666e5a1742a409e187d704bc319af5f"
     },
@@ -12537,15 +12537,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9171
+          "line": 9188
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9306,
-        "declaration_line": 9307,
+        "anchor_line": 9323,
+        "declaration_line": 9324,
         "declaration_column": 1,
-        "end_line": 9321
+        "end_line": 9338
       },
       "text_sha256": "ed64c36477905d34954deddffae91d00c136ee9d9d2144f5bba6a437251a2c8a"
     },
@@ -12561,15 +12561,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9171
+          "line": 9188
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9323,
-        "declaration_line": 9324,
+        "anchor_line": 9340,
+        "declaration_line": 9341,
         "declaration_column": 1,
-        "end_line": 9351
+        "end_line": 9368
       },
       "text_sha256": "a32ef5ec9792d553165cb20a962a4cfbb8c80a39aa7100cdce9826f2118bbf34"
     },
@@ -12585,15 +12585,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9171
+          "line": 9188
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9353,
-        "declaration_line": 9354,
+        "anchor_line": 9370,
+        "declaration_line": 9371,
         "declaration_column": 1,
-        "end_line": 9368
+        "end_line": 9385
       },
       "text_sha256": "1e63cf22510e1b10ded7081a683d83c0b68bb886483734d8d91216d731345e45"
     },
@@ -12609,15 +12609,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9171
+          "line": 9188
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9370,
-        "declaration_line": 9371,
+        "anchor_line": 9387,
+        "declaration_line": 9388,
         "declaration_column": 1,
-        "end_line": 9384
+        "end_line": 9401
       },
       "text_sha256": "91e2896fa2b2eca7bb2bbe15d918a0c9a0fd8374dff5c7d4c50fe83428edb9ba"
     },
@@ -12633,15 +12633,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9171
+          "line": 9188
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9386,
-        "declaration_line": 9387,
+        "anchor_line": 9403,
+        "declaration_line": 9404,
         "declaration_column": 1,
-        "end_line": 9391
+        "end_line": 9408
       },
       "text_sha256": "bba5fe9896976c7fbea5310c64707ca1bfd444f10751ef42e5880d1950de73b1"
     },
@@ -12657,15 +12657,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9171
+          "line": 9188
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9393,
-        "declaration_line": 9394,
+        "anchor_line": 9410,
+        "declaration_line": 9411,
         "declaration_column": 1,
-        "end_line": 9413
+        "end_line": 9430
       },
       "text_sha256": "07e94bbd0f17e471b626cc69e4706fece540c4f72d0e51ccd957a7b37f41ba9d"
     },
@@ -12681,15 +12681,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9171
+          "line": 9188
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9415,
-        "declaration_line": 9416,
+        "anchor_line": 9432,
+        "declaration_line": 9433,
         "declaration_column": 1,
-        "end_line": 9475
+        "end_line": 9492
       },
       "text_sha256": "07679d5398ae25b02b9771e87de4c6f07554c9329df7994a08e14b8d81afedb4"
     },
@@ -12705,15 +12705,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9171
+          "line": 9188
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9477,
-        "declaration_line": 9478,
+        "anchor_line": 9494,
+        "declaration_line": 9495,
         "declaration_column": 1,
-        "end_line": 9519
+        "end_line": 9536
       },
       "text_sha256": "878ad201eec0765016b9829400414a048964a359d30cf68730ed5d4bcc61a5ca"
     },
@@ -12729,15 +12729,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9171
+          "line": 9188
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9521,
-        "declaration_line": 9522,
+        "anchor_line": 9538,
+        "declaration_line": 9539,
         "declaration_column": 1,
-        "end_line": 9565
+        "end_line": 9582
       },
       "text_sha256": "aaf697c350232504a570b5b08826670efbfb7632c08b3ea75e4a6b0ab0225212"
     },
@@ -12753,15 +12753,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9171
+          "line": 9188
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9567,
-        "declaration_line": 9568,
+        "anchor_line": 9584,
+        "declaration_line": 9585,
         "declaration_column": 1,
-        "end_line": 9583
+        "end_line": 9600
       },
       "text_sha256": "c73193e5ca162a600721a2a44300814f3b25e1fe8e4a53c7aaa0f57e01425b0d"
     },
@@ -12777,15 +12777,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9171
+          "line": 9188
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9585,
-        "declaration_line": 9586,
+        "anchor_line": 9602,
+        "declaration_line": 9603,
         "declaration_column": 1,
-        "end_line": 9595
+        "end_line": 9612
       },
       "text_sha256": "2654b4883a493bd0dca0ba50e2bd32837dbc88934401f0f96b27941d0328bbaa"
     },
@@ -12801,15 +12801,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9171
+          "line": 9188
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9597,
-        "declaration_line": 9598,
+        "anchor_line": 9614,
+        "declaration_line": 9615,
         "declaration_column": 1,
-        "end_line": 9602
+        "end_line": 9619
       },
       "text_sha256": "4a2d9ce7fb299c95731713b9fa152b55ebd65f03e91d1b545059e9de551f20e5"
     },
@@ -12825,15 +12825,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9171
+          "line": 9188
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9604,
-        "declaration_line": 9605,
+        "anchor_line": 9621,
+        "declaration_line": 9622,
         "declaration_column": 1,
-        "end_line": 9607
+        "end_line": 9624
       },
       "text_sha256": "d27590c6728a827310cc043df7a2b88725694573765f3ac276d17578b0910bec"
     },
@@ -12849,15 +12849,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9171
+          "line": 9188
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9609,
-        "declaration_line": 9610,
+        "anchor_line": 9626,
+        "declaration_line": 9627,
         "declaration_column": 1,
-        "end_line": 9613
+        "end_line": 9630
       },
       "text_sha256": "46231dc8e60f265bcadc42efb89cea0545cc789eda2b019b779ea0b2e747560e"
     },
@@ -12873,15 +12873,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9171
+          "line": 9188
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9615,
-        "declaration_line": 9616,
+        "anchor_line": 9632,
+        "declaration_line": 9633,
         "declaration_column": 1,
-        "end_line": 9622
+        "end_line": 9639
       },
       "text_sha256": "d3d57ecbd111042548823b379ac312bf22574b8cefb473622cb9e2004e2d1b85"
     },
@@ -12897,15 +12897,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9171
+          "line": 9188
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9624,
-        "declaration_line": 9625,
+        "anchor_line": 9641,
+        "declaration_line": 9642,
         "declaration_column": 1,
-        "end_line": 9633
+        "end_line": 9650
       },
       "text_sha256": "8bb4c6684a591c9e372645610f2c2d4cfc37e164c06c884590f2a4d5d8a45308"
     }
