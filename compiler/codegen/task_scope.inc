@@ -1,13 +1,36 @@
 /* Scope storage is immovable and private to its enclosing resumable frame. It is named after the
-   group symbol, not its source offset, since the repetitions of a translation-time loop repeat
-   one source scope (R-STMT-0023, defect L44-12). */
-static bool r_c17_scope_reference(RC17Emitter *emitter, RSymbolId symbol, const char *object) {
+   ordinal of the group's entry in the function: the repetitions of a translation-time loop repeat
+   one source scope (R-STMT-0023, defect L44-12), and symbol numbers depend on the order of the
+   modules (defect L44-18). */
+static uint32_t
+r_c17_scope_ordinal(RC17Emitter *emitter, const RMirFunction *mir, RSymbolId symbol) {
+    uint32_t ordinal = 0U;
+    for (uint32_t b = 0U; b < mir->block_count; ++b) {
+        const RMirBlock *block = r_c17_mir_block(emitter, mir, b);
+        for (uint32_t i = 0U; i < block->instruction_count; ++i) {
+            const RMirInstruction *op = r_c17_mir_instruction(emitter, block, i);
+            if (op->kind != R_MIR_INSTRUCTION_TASK_SCOPE_ENTER)
+                continue;
+            if (op->symbol == symbol)
+                return ordinal;
+            ordinal += 1U;
+        }
+    }
+    return UINT32_MAX;
+}
+
+static bool r_c17_scope_reference(RC17Emitter *emitter,
+                                  const RMirFunction *mir,
+                                  RSymbolId symbol,
+                                  const char *object) {
     const RSemanticSymbol *group = r_c17_symbol(emitter, symbol);
-    return group != NULL && group->is_task_scope &&
-           r_c17_format(emitter, "%s->r_scope_%08" PRIx32, object, (uint32_t)symbol);
+    const uint32_t ordinal = r_c17_scope_ordinal(emitter, mir, symbol);
+    return group != NULL && group->is_task_scope && ordinal != UINT32_MAX &&
+           r_c17_format(emitter, "%s->r_scope_%08" PRIx32, object, ordinal);
 }
 
 static bool r_c17_emit_scope_fields(RC17Emitter *emitter, const RMirFunction *mir, uint32_t depth) {
+    uint32_t ordinal = 0U;
     for (uint32_t b = 0U; b < mir->block_count; ++b) {
         const RMirBlock *block = r_c17_mir_block(emitter, mir, b);
         for (uint32_t i = 0U; i < block->instruction_count; ++i) {
@@ -16,15 +39,15 @@ static bool r_c17_emit_scope_fields(RC17Emitter *emitter, const RMirFunction *mi
                 continue;
             const RSemanticSymbol *group = r_c17_symbol(emitter, op->symbol);
             if (group == NULL || !r_c17_indent(emitter, depth) ||
-                !r_c17_format(
-                    emitter, "RRuntimeTaskScope r_scope_%08" PRIx32 ";\n", (uint32_t)op->symbol) ||
+                !r_c17_format(emitter, "RRuntimeTaskScope r_scope_%08" PRIx32 ";\n", ordinal) ||
                 !r_c17_indent(emitter, depth) ||
                 !r_c17_format(emitter,
                               "RRuntimeTaskScopeEntry r_scope_%08" PRIx32
                               "_entries[UINT64_C(%" PRIu64 ")];\n",
-                              (uint32_t)op->symbol,
+                              ordinal,
                               op->integer_value))
                 return false;
+            ordinal += 1U;
         }
     }
     return true;
@@ -62,7 +85,8 @@ static bool r_c17_scope_discard_members(RC17Emitter *emitter,
                 return false;
             if (!r_c17_write(emitter, ") {\n") || !r_c17_indent(emitter, depth + 1U) ||
                 !r_c17_write(emitter, "if (r_runtime_task_scope_drop(&") ||
-                !r_c17_scope_reference(emitter, group, "frame") || !r_c17_write(emitter, ",") ||
+                !r_c17_scope_reference(emitter, mir, group, "frame") ||
+                !r_c17_write(emitter, ",") ||
                 !(r_c17_current_column(emitter) + sizeof(" &frame->r_v00000000)) {") - 1U +
                               (carrier ? sizeof(".r_payload.r_ok") - 1U : 0U) >
                           100U
@@ -124,9 +148,9 @@ static bool r_c17_emit_scope_instruction(RC17Emitter *emitter,
         if (!r_c17_indent(emitter, depth) ||
             !r_c17_write(emitter, "if (!r_runtime_task_scope_open(execution,\n") ||
             !r_c17_spaces(emitter, (size_t)depth * 4U + 31U) || !r_c17_write(emitter, "&") ||
-            !r_c17_scope_reference(emitter, op->symbol, "frame") || !r_c17_write(emitter, ",\n") ||
-            !r_c17_spaces(emitter, (size_t)depth * 4U + 31U) ||
-            !r_c17_scope_reference(emitter, op->symbol, "frame") ||
+            !r_c17_scope_reference(emitter, mir, op->symbol, "frame") ||
+            !r_c17_write(emitter, ",\n") || !r_c17_spaces(emitter, (size_t)depth * 4U + 31U) ||
+            !r_c17_scope_reference(emitter, mir, op->symbol, "frame") ||
             !r_c17_write(emitter, "_entries,\n") ||
             !r_c17_spaces(emitter, (size_t)depth * 4U + 31U) ||
             !r_c17_format(emitter, "UINT64_C(%" PRIu64 "))) {\n", op->integer_value) ||
@@ -142,7 +166,7 @@ static bool r_c17_emit_scope_instruction(RC17Emitter *emitter,
     if (op->kind == R_MIR_INSTRUCTION_TASK_SCOPE_CLOSE) {
         return r_c17_indent(emitter, depth) &&
                r_c17_write(emitter, "if (!r_runtime_task_scope_close(&") &&
-               r_c17_scope_reference(emitter, op->symbol, "frame") &&
+               r_c17_scope_reference(emitter, mir, op->symbol, "frame") &&
                r_c17_write(emitter, ")) {\n") &&
                r_c17_emit_async_contract_panic(emitter, op->span, depth + 1U) &&
                r_c17_indent(emitter, depth) && r_c17_write(emitter, "}\n");
@@ -150,7 +174,8 @@ static bool r_c17_emit_scope_instruction(RC17Emitter *emitter,
     if (op->operation == R_TOKEN_KW_FINALLY &&
         (!r_c17_scope_discard_members(emitter, mir, op->symbol, depth) ||
          !r_c17_indent(emitter, depth) || !r_c17_write(emitter, "r_runtime_task_scope_cancel(&") ||
-         !r_c17_scope_reference(emitter, op->symbol, "frame") || !r_c17_write(emitter, ");\n")))
+         !r_c17_scope_reference(emitter, mir, op->symbol, "frame") ||
+         !r_c17_write(emitter, ");\n")))
         return false;
     /* R-STMT-0018: a bounded wait takes its deadline instant as the first operand; a vacancy
        wait (L25.3) names no members. */
@@ -193,7 +218,7 @@ static bool r_c17_emit_scope_instruction(RC17Emitter *emitter,
                                       : "r_runtime_task_scope_wait_vacancy(execution, &")
                      : until ? "r_runtime_task_scope_wait_until(execution, &"
                              : "r_runtime_task_scope_wait(execution, &") ||
-        !r_c17_scope_reference(emitter, op->symbol, "frame"))
+        !r_c17_scope_reference(emitter, mir, op->symbol, "frame"))
         return false;
     if (vacancy) {
         const RMirValueId deadline =
@@ -283,9 +308,9 @@ static bool r_c17_emit_scoped_start(RC17Emitter *emitter,
     if (!r_c17_indent(emitter, depth) || !r_c17_write(emitter, "{\n") ||
         !r_c17_indent(emitter, depth + 1U) ||
         !r_c17_write(emitter, "const size_t reservation = r_runtime_task_scope_reserve(&") ||
-        !r_c17_scope_reference(emitter, op->task_scope, "frame") || !r_c17_write(emitter, ");\n") ||
-        !r_c17_indent(emitter, depth + 1U) || !r_c17_write(emitter, "if (reservation == 0U) {\n") ||
-        !r_c17_indent(emitter, depth + 2U) ||
+        !r_c17_scope_reference(emitter, mir, op->task_scope, "frame") ||
+        !r_c17_write(emitter, ");\n") || !r_c17_indent(emitter, depth + 1U) ||
+        !r_c17_write(emitter, "if (reservation == 0U) {\n") || !r_c17_indent(emitter, depth + 2U) ||
         !r_c17_emit_async_field_reference(emitter, "frame", false, op->result) ||
         !r_c17_format(emitter,
                       ".r_payload.r_error_%08" PRIx32 " = R_STD_ASYNC_START_SCOPE_FULL;\n",
@@ -306,8 +331,8 @@ static bool r_c17_emit_scoped_start(RC17Emitter *emitter,
         !r_c17_emit_async_field_reference(emitter, "frame", false, op->result) ||
         !r_c17_write(emitter, ".r_tag == UINT32_C(0)) {\n") || !r_c17_indent(emitter, depth + 3U) ||
         !r_c17_write(emitter, "r_runtime_task_scope_bind(&") ||
-        !r_c17_scope_reference(emitter, op->task_scope, "frame") || !r_c17_write(emitter, ",\n") ||
-        !r_c17_spaces(emitter, ((size_t)depth + 3U) * 4U + 26U) ||
+        !r_c17_scope_reference(emitter, mir, op->task_scope, "frame") ||
+        !r_c17_write(emitter, ",\n") || !r_c17_spaces(emitter, ((size_t)depth + 3U) * 4U + 26U) ||
         !r_c17_write(emitter, "reservation,\n") ||
         !r_c17_spaces(emitter, ((size_t)depth + 3U) * 4U + 26U) ||
         !r_c17_emit_async_field_reference(emitter, "frame", false, op->result) ||
@@ -368,7 +393,7 @@ static bool r_c17_emit_scoped_start(RC17Emitter *emitter,
     if (!r_c17_indent(emitter, depth + 2U) || !r_c17_write(emitter, "} else {\n") ||
         !r_c17_indent(emitter, depth + 3U) ||
         !r_c17_write(emitter, "r_runtime_task_scope_abandon(&") ||
-        !r_c17_scope_reference(emitter, op->task_scope, "frame") ||
+        !r_c17_scope_reference(emitter, mir, op->task_scope, "frame") ||
         !r_c17_write(emitter, ", reservation);\n") || !r_c17_indent(emitter, depth + 2U) ||
         !r_c17_write(emitter, "}\n") || !r_c17_indent(emitter, depth + 1U) ||
         !r_c17_write(emitter, "}\n") || !r_c17_indent(emitter, depth) ||

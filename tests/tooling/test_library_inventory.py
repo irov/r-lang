@@ -194,6 +194,8 @@ class LibraryInventoryTests(unittest.TestCase):
             for record in inventory["items"]
         )
         self.assertEqual(partial_count, 0)
+        # Defect L45-5: the release gate requires every public record to be implemented.
+        self.assertEqual(unimplemented_count, 0)
         self.assertIn(
             f"{unimplemented_count} unimplemented, {partial_count} partial", layout.stdout
         )

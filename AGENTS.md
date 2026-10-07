@@ -188,6 +188,10 @@ as finished. The matrix records their results per stage.
   `regenerate-standard-type-registry`, `regenerate-named-standard-copy-abi`,
   `regenerate-named-standard-move-abi`, `regenerate-target-abi`, then rebuild. Module counts are
   asserted in `tests/tooling/test_library_inventory.py`.
+- A record takes its `implementation` from its C source, its R source or a catalog of
+  `tools/generate_library_inventory.py` (`CORE_INTRINSIC_IMPLEMENTATIONS` for compiler
+  intrinsics); without one it is written as `unimplemented`, and `library-coverage-check` and
+  `r_library_inventory_tooling` fail (L45-5).
 - Every public inventory record must be used by an example application
   (`tools/check_example_coverage.py --frontend build/debug/r-front --write` regenerates
   `examples/coverage.json`; the `r_example_catalogue` test fails when it is stale, also after a

@@ -1864,6 +1864,32 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
         },
     },
 }
+# Library R-LIB-0027 (L45): the bit and wide integer families are lowered by the compiler to static
+# strict C17 helpers (compiler/codegen/core_bits.inc), like the arithmetic families of R-LIB-0001.
+WIDE_SUFFIX_OPERATIONS = frozenset(
+    ("widening_mul", "carrying_add", "borrowing_sub", "narrowing_div")
+)
+CORE_INTRINSIC_IMPLEMENTATIONS.update(
+    {
+        f"core::{name}_SUFFIX": {
+            "item_kind": "intrinsic_closed_family",
+            "source_signature": f"core::{name}_SUFFIX({parameters}) -> {result}",
+            "implementation": {
+                "kind": "intrinsic",
+                "compiler_contract": (
+                    "Five unsigned literal-suffix operations and the form without the suffix "
+                    "call a static ISO C17 helper built from half-width words and return a "
+                    "tuple; narrowing_div checks the divisor and the high half at the call site."
+                    if name in WIDE_SUFFIX_OPERATIONS
+                    else "Ten literal-suffix operations and the form without the suffix call a "
+                    "static ISO C17 helper of portable shifts and masks; translation-time "
+                    "evaluation folds them inside an evaluated function."
+                ),
+            },
+        }
+        for name, parameters, result in BIT_SUFFIX_OPERATIONS
+    }
+)
 
 
 MATH_NON_FAILING_SCHEMA_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {

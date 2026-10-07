@@ -4299,7 +4299,8 @@
         "R-LIB-0027"
       ],
       "implementation": {
-        "kind": "unimplemented"
+        "kind": "intrinsic",
+        "compiler_contract": "Five unsigned literal-suffix operations and the form without the suffix call a static ISO C17 helper built from half-width words and return a tuple; narrowing_div checks the divisor and the high half at the call site."
       },
       "source_signature": "core::borrowing_sub_SUFFIX(SUFFIX left, SUFFIX right, bool borrow) -> (SUFFIX, bool)",
       "checked_effect": {
@@ -4343,7 +4344,8 @@
         "R-LIB-0027"
       ],
       "implementation": {
-        "kind": "unimplemented"
+        "kind": "intrinsic",
+        "compiler_contract": "Five unsigned literal-suffix operations and the form without the suffix call a static ISO C17 helper built from half-width words and return a tuple; narrowing_div checks the divisor and the high half at the call site."
       },
       "source_signature": "core::carrying_add_SUFFIX(SUFFIX left, SUFFIX right, bool carry) -> (SUFFIX, bool)",
       "checked_effect": {
@@ -4568,7 +4570,8 @@
         "R-LIB-0027"
       ],
       "implementation": {
-        "kind": "unimplemented"
+        "kind": "intrinsic",
+        "compiler_contract": "Ten literal-suffix operations and the form without the suffix call a static ISO C17 helper of portable shifts and masks; translation-time evaluation folds them inside an evaluated function."
       },
       "source_signature": "core::count_ones_SUFFIX(SUFFIX value) -> u32",
       "checked_effect": {
@@ -5295,7 +5298,8 @@
         "R-LIB-0027"
       ],
       "implementation": {
-        "kind": "unimplemented"
+        "kind": "intrinsic",
+        "compiler_contract": "Ten literal-suffix operations and the form without the suffix call a static ISO C17 helper of portable shifts and masks; translation-time evaluation folds them inside an evaluated function."
       },
       "source_signature": "core::leading_zeros_SUFFIX(SUFFIX value) -> u32",
       "checked_effect": {
@@ -5434,7 +5438,8 @@
         "R-LIB-0027"
       ],
       "implementation": {
-        "kind": "unimplemented"
+        "kind": "intrinsic",
+        "compiler_contract": "Five unsigned literal-suffix operations and the form without the suffix call a static ISO C17 helper built from half-width words and return a tuple; narrowing_div checks the divisor and the high half at the call site."
       },
       "source_signature": "core::narrowing_div_SUFFIX(SUFFIX high, SUFFIX low, SUFFIX divisor) -> (SUFFIX, SUFFIX)",
       "checked_effect": {
@@ -5638,7 +5643,8 @@
         "R-LIB-0027"
       ],
       "implementation": {
-        "kind": "unimplemented"
+        "kind": "intrinsic",
+        "compiler_contract": "Ten literal-suffix operations and the form without the suffix call a static ISO C17 helper of portable shifts and masks; translation-time evaluation folds them inside an evaluated function."
       },
       "source_signature": "core::rotate_left_SUFFIX(SUFFIX value, u32 count) -> SUFFIX",
       "checked_effect": {
@@ -5682,7 +5688,8 @@
         "R-LIB-0027"
       ],
       "implementation": {
-        "kind": "unimplemented"
+        "kind": "intrinsic",
+        "compiler_contract": "Ten literal-suffix operations and the form without the suffix call a static ISO C17 helper of portable shifts and masks; translation-time evaluation folds them inside an evaluated function."
       },
       "source_signature": "core::rotate_right_SUFFIX(SUFFIX value, u32 count) -> SUFFIX",
       "checked_effect": {
@@ -6088,7 +6095,8 @@
         "R-LIB-0027"
       ],
       "implementation": {
-        "kind": "unimplemented"
+        "kind": "intrinsic",
+        "compiler_contract": "Ten literal-suffix operations and the form without the suffix call a static ISO C17 helper of portable shifts and masks; translation-time evaluation folds them inside an evaluated function."
       },
       "source_signature": "core::swap_bytes_SUFFIX(SUFFIX value) -> SUFFIX",
       "checked_effect": {
@@ -6224,7 +6232,8 @@
         "R-LIB-0027"
       ],
       "implementation": {
-        "kind": "unimplemented"
+        "kind": "intrinsic",
+        "compiler_contract": "Ten literal-suffix operations and the form without the suffix call a static ISO C17 helper of portable shifts and masks; translation-time evaluation folds them inside an evaluated function."
       },
       "source_signature": "core::trailing_zeros_SUFFIX(SUFFIX value) -> u32",
       "checked_effect": {
@@ -6668,7 +6677,8 @@
         "R-LIB-0027"
       ],
       "implementation": {
-        "kind": "unimplemented"
+        "kind": "intrinsic",
+        "compiler_contract": "Five unsigned literal-suffix operations and the form without the suffix call a static ISO C17 helper built from half-width words and return a tuple; narrowing_div checks the divisor and the high half at the call site."
       },
       "source_signature": "core::widening_mul_SUFFIX(SUFFIX left, SUFFIX right) -> (SUFFIX, SUFFIX)",
       "checked_effect": {
