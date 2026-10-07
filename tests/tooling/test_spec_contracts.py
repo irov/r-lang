@@ -74,8 +74,8 @@ class SpecificationContractTests(unittest.TestCase):
 
     def test_repository_catalogs_and_target_manifest_are_current(self) -> None:
         for specification, inventory, expected_count in (
-            (CORE_SPECIFICATION, CORE_INVENTORY, "498 rules"),
-            (LIBRARY_SPECIFICATION, LIBRARY_INVENTORY, "477 rules"),
+            (CORE_SPECIFICATION, CORE_INVENTORY, "501 rules"),
+            (LIBRARY_SPECIFICATION, LIBRARY_INVENTORY, "478 rules"),
         ):
             result = run_tool(
                 str(RULE_GENERATOR),

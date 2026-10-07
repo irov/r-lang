@@ -130,6 +130,8 @@ const char *r_hir_kind_name(RHirKind kind) {
         return "pack_element";
     case R_HIR_PACK_ARGS:
         return "pack_args";
+    case R_HIR_CONSTEXPR_LOOP:
+        return "constexpr_loop";
     case R_HIR_INVALID:
     default:
         return "invalid";
@@ -1913,6 +1915,18 @@ static bool r_hir_dump_node(const RFrontendContext *context,
             break;
         case R_STANDARD_CALL_RANDOM_FILL:
             operation_name = "std.random::fill";
+            break;
+        case R_STANDARD_CALL_CORE_LEADING_ZEROS:
+        case R_STANDARD_CALL_CORE_TRAILING_ZEROS:
+        case R_STANDARD_CALL_CORE_COUNT_ONES:
+        case R_STANDARD_CALL_CORE_SWAP_BYTES:
+        case R_STANDARD_CALL_CORE_ROTATE_LEFT:
+        case R_STANDARD_CALL_CORE_ROTATE_RIGHT:
+        case R_STANDARD_CALL_CORE_WIDENING_MUL:
+        case R_STANDARD_CALL_CORE_CARRYING_ADD:
+        case R_STANDARD_CALL_CORE_BORROWING_SUB:
+        case R_STANDARD_CALL_CORE_NARROWING_DIV:
+            operation_name = r_standard_core_bits_qualified_name(node->standard_operation);
             break;
         case R_STANDARD_CALL_INVALID:
         default:

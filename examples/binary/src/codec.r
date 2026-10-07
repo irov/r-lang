@@ -1,4 +1,5 @@
 module example.binary.codec;
+import std.bytes;
 
 // A byte is written as two hexadecimal digits, including its leading zero.
 void append_hex(std.string::string* output, const u8[] data) throws std.alloc::alloc_error {
@@ -33,27 +34,104 @@ std.string::string checksums(str source) throws std.alloc::alloc_error {
     return move output;
 }
 
-// Wire format: one flag byte, u16 version, u32 payload length, u64 sequence, payload.
+// The fixed part of a packet: one flag byte, u16 version, u32 payload length, u64 sequence.
+struct Header {
+    u8 flags;
+    u16 version;
+    u32 length;
+    u64 sequence;
+};
+
+// A field type that writes and reads itself in little-endian order.
+trait Wire {
+    void put(const Self* this, bytes* wire) throws std.alloc::alloc_error;
+    void take(Self* this, std.bytes::cursor* at, const u8[] wire) throws std.bytes::bytes_error;
+};
+
+impl Wire for u8 {
+    void put(const Self* this, bytes* wire) throws std.alloc::alloc_error { std.bytes::append_u8(wire, *this); }
+    void take(Self* this, std.bytes::cursor* at, const u8[] wire) throws std.bytes::bytes_error { *this = at->read_u8(wire); }
+};
+
+impl Wire for u16 {
+    void put(const Self* this, bytes* wire) throws std.alloc::alloc_error { wire->append_u16_le(*this); }
+    void take(Self* this, std.bytes::cursor* at, const u8[] wire) throws std.bytes::bytes_error { *this = at->read_u16_le(wire); }
+};
+
+impl Wire for u32 {
+    void put(const Self* this, bytes* wire) throws std.alloc::alloc_error { wire->append_u32_le(*this); }
+    void take(Self* this, std.bytes::cursor* at, const u8[] wire) throws std.bytes::bytes_error { *this = at->read_u32_le(wire); }
+};
+
+impl Wire for u64 {
+    void put(const Self* this, bytes* wire) throws std.alloc::alloc_error { wire->append_u64_le(*this); }
+    void take(Self* this, std.bytes::cursor* at, const u8[] wire) throws std.bytes::bytes_error { *this = at->read_u64_le(wire); }
+};
+
+// The header needs no hand-written encoder: a translation-time loop repeats its block for each
+// field of T, and core::field borrows the field of each repetition with that field's own type.
+@generic<T: fields(Wire)>
+void put_fields(const T* value, bytes* wire) throws std.alloc::alloc_error {
+    for (constexpr usize index in 0usize..core::field_count::<T>()) {
+        core::field(value, index)->put(wire);
+    }
+}
+
+@generic<T: fields(Wire)>
+void take_fields(T* value, std.bytes::cursor* at, const u8[] wire) throws std.bytes::bytes_error {
+    for (constexpr usize index in 0usize..core::field_count::<T>()) {
+        core::field_mut(value, index)->take(at, wire);
+    }
+}
+
+// Wire format: the header, then the payload. The flags are read bit by bit, the header field by
+// field.
 std.string::string packet(str payload, u64 sequence)
-    throws std.alloc::alloc_error, std.bits::read_error, std.convert::range_error {
+    throws std.alloc::alloc_error, std.bits::read_error, std.bytes::bytes_error, std.convert::range_error {
     usize size = len(payload);
-    u32 length = std.convert::checked_u32(size);
+    Header header = {.flags = 5u8, .version = 1u16, .length = std.convert::checked_u32(size), .sequence = sequence};
     bytes wire = std.bytes::with_capacity(15usize);
-    std.bytes::append_u8(&wire, 5u8);
-    wire.append_u16_le(1u16);
-    wire.append_u32_le(length);
-    wire.append_u64_le(sequence);
+    put_fields(&header, &wire);
     wire.append(payload);
     std.bits::lsb_reader reader = {};
     u64 urgent = std.bits::read(wire, &reader, 1u8);
     u64 encoding = std.bits::read(wire, &reader, 2u8);
     reader.align_byte();
-    u64 version = std.bits::read(wire, &reader, 16u8);
-    u64 decoded_length = std.bits::read(wire, &reader, 32u8);
-    u64 decoded_sequence = std.bits::read(wire, &reader, 64u8);
-    std.string::string output = f"urgent={urgent} encoding={encoding} version={version} length={decoded_length} sequence={decoded_sequence}\n";
+    Header decoded = {.flags = 0u8, .version = 0u16, .length = 0u32, .sequence = 0u64};
+    std.bytes::cursor at = {};
+    take_fields(&decoded, &at, wire);
+    std.string::string output = f"urgent={urgent} encoding={encoding} version={decoded.version} length={decoded.length} sequence={decoded.sequence}\n";
     append_hex(&output, wire);
     output.append("\n");
+    return move output;
+}
+
+// The bit operations of one value: its zero and one bit counts, its bytes reversed and its
+// rotations by one byte.
+std.string::string bits(u64 value) throws std.alloc::alloc_error {
+    u32 leading = core::leading_zeros_u64(value);
+    u32 trailing = core::trailing_zeros_u64(value);
+    u32 ones = core::count_ones_u64(value);
+    u64 swapped = core::swap_bytes_u64(value);
+    u64 left = core::rotate_left_u64(value, 8u32);
+    u64 right = core::rotate_right_u64(value, 8u32);
+    return f"leading_zeros={leading} trailing_zeros={trailing} count_ones={ones}\nswap_bytes={swapped:016x} rotate_left={left:016x} rotate_right={right:016x}\n";
+}
+
+// Arithmetic on 64-bit limbs: the 128-bit product, the sum and difference with their carry and
+// borrow, and the product divided back by the second factor.
+std.string::string wide(u64 left, u64 right) throws std.alloc::alloc_error {
+    auto (low, high) = core::widening_mul_u64(left, right);
+    auto (sum, carry) = core::carrying_add_u64(left, right, false);
+    auto (difference, borrow) = core::borrowing_sub_u64(left, right, false);
+    std.string::string output = f"product high={high:016x} low={low:016x}\nsum={sum:016x} carry={carry}\ndifference={difference:016x} borrow={borrow}\n";
+    if (right == 0u64) {
+        output.append("quotient none\n");
+        return move output;
+    }
+    auto (quotient, remainder) = core::narrowing_div_u64(high, low, right);
+    std.string::string division = f"quotient={quotient} remainder={remainder}\n";
+    output.append(division);
     return move output;
 }
 

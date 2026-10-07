@@ -611,6 +611,19 @@ INTEGER_SUFFIX_OPERATIONS = (
     *(f"wrapping_{operation}_SUFFIX" for operation in ("add", "sub", "mul")),
     *(f"saturating_{operation}_SUFFIX" for operation in ("add", "sub", "mul")),
 )
+# Library R-LIB-0027 (L45): name, parameters and result of each bit and wide integer family.
+BIT_SUFFIX_OPERATIONS = (
+    ("leading_zeros", "SUFFIX value", "u32"),
+    ("trailing_zeros", "SUFFIX value", "u32"),
+    ("count_ones", "SUFFIX value", "u32"),
+    ("swap_bytes", "SUFFIX value", "SUFFIX"),
+    ("rotate_left", "SUFFIX value, u32 count", "SUFFIX"),
+    ("rotate_right", "SUFFIX value, u32 count", "SUFFIX"),
+    ("widening_mul", "SUFFIX left, SUFFIX right", "(SUFFIX, SUFFIX)"),
+    ("carrying_add", "SUFFIX left, SUFFIX right, bool carry", "(SUFFIX, bool)"),
+    ("borrowing_sub", "SUFFIX left, SUFFIX right, bool borrow", "(SUFFIX, bool)"),
+    ("narrowing_div", "SUFFIX high, SUFFIX low, SUFFIX divisor", "(SUFFIX, SUFFIX)"),
+)
 ATOMIC_OPERATIONS = (
     "atomic_load",
     "atomic_store",
@@ -734,6 +747,14 @@ COMPLEX_FALLIBLE_BINARY = ("div", "pow")
 # the deterministic bridge. It also pins qualified schematic families so an incidental prose
 # spelling cannot silently become their only inventory record.
 EXPLICIT_RULE_ITEMS: dict[str, tuple[ExplicitPublicItem, ...]] = {
+    "R-LIB-0027": tuple(
+        explicit_operation(
+            f"core::{name}_SUFFIX",
+            f"core::{name}_SUFFIX({parameters}) -> {result}",
+            item_kind="intrinsic_closed_family",
+        )
+        for name, parameters, result in BIT_SUFFIX_OPERATIONS
+    ),
     "R-LIB-0001": (
         ExplicitPublicItem(
             "core::min_SUFFIX",
@@ -899,6 +920,18 @@ EXPLICIT_RULE_ITEMS: dict[str, tuple[ExplicitPublicItem, ...]] = {
             "core::field_name",
             "core::field_name::<T>(usize index) -> constexpr str",
             evidence="core::field_name",
+            item_kind="intrinsic_family",
+        ),
+        explicit_operation(
+            "core::field",
+            "core::field(const T* value, usize index) -> const F*",
+            evidence="core::field",
+            item_kind="intrinsic_family",
+        ),
+        explicit_operation(
+            "core::field_mut",
+            "core::field_mut(T* value, usize index) -> F*",
+            evidence="core::field_mut",
             item_kind="intrinsic_family",
         ),
         explicit_operation(
@@ -1167,7 +1200,8 @@ EXPLICIT_RULE_BLOCK_SHA256 = {
     "R-LIB-0025": "536bb3dc8c2d40e442d578aad7199694ad01cb313c0e04996b4f439e582223b4",
     "R-LIB-0001": "5375ba18932b66260e350206caa3bdd284a0d99ccb7365d6715ec86a82a256ac",
     "R-LIB-0011": "bad2e9acdb5d0e246e8b7ae30d39bd311a53a20b06d361b34b6558469c790062",
-    "R-LIB-0024": "0dcd6683ac922b193d1ccee1e32e808107f67421046def17b8831661b5bb8977",
+    "R-LIB-0024": "fbfd1bb8389820b08ab2f50db88d465dcc942769e47ebbea751f62ee31d948c4",
+    "R-LIB-0027": "7dcf70ed59c082c7cdd65190bf12a79a13cc523f8a37697cd221e8ac30b75b17",
     "R-LIB-0012": "c2aa9b207f7297de2ab9c470dabf728f2fa1d92c2827b010ef7de32090bc1be1",
     "R-SLIB-C-0001": "49e64346f93cce514fc3d6825645d536f78730d1219412c267f7aadb626baf83",
     "R-SLIB-CONV-0002": "467f4b66ef802d7b779b01c6c1a99a12cfdcef70d10129d56c97f6a672a12a17",
@@ -1479,6 +1513,28 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
             "kind": "intrinsic",
             "compiler_contract": (
                 "The semantic pass folds the declared name of the field at the constant index into a program string and rejects an index beyond the field count."
+            ),
+        },
+    },
+    "core::field": {
+        "item_kind": "intrinsic_family",
+        "source_signature": "core::field(const T* value, usize index) -> const F*",
+        "implementation": {
+            "kind": "intrinsic",
+            "compiler_contract": (
+                "The semantic pass lowers the call to a borrow of the field at the constant index, "
+                "or in a generic definition to a field of the type parameter that each instantiation closes."
+            ),
+        },
+    },
+    "core::field_mut": {
+        "item_kind": "intrinsic_family",
+        "source_signature": "core::field_mut(T* value, usize index) -> F*",
+        "implementation": {
+            "kind": "intrinsic",
+            "compiler_contract": (
+                "The semantic pass lowers the call to an exclusive borrow of the field at the constant index, "
+                "or in a generic definition to a field of the type parameter that each instantiation closes."
             ),
         },
     },

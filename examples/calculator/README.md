@@ -89,6 +89,30 @@ bound that the build derives for the entry counts 16 frames of each of the three
 stack header of the build records it as `R_STACK_RECURSION_...` with the functions it counts.
 A misplaced byte is `syntax error at byte N`, also with status 65.
 
+## Postfix expressions and a state machine
+
+`calculator rpn EXPRESSION` evaluates reverse Polish notation, such as `3 4 + 2 *` (14), with at
+most 16 pending numbers. `postfix` in [src/expression.r](src/expression.r) reads it with a state
+machine whose state is the class of the byte at the position, written as a labeled switch:
+
+```r
+scan: switch (classify(text, at)) {
+case Byte::space:
+    at += 1usize;
+    continue scan (classify(text, at));
+case Byte::digit:
+    ...
+case Byte::end:
+    break;
+}
+```
+
+`continue scan (value);` selects the clause for the next state without a separate loop and
+selector variable, and a clause that completes, such as the one for the end of the text, leaves
+the switch (Core R-STMT-0024). An operator without two numbers below it, a number beyond the
+sixteenth, a byte that is neither a digit, an operator nor a space, and a text that leaves other
+than one number are `syntax error at byte N` with status 65.
+
 `tests/run_calculator_examples.py` invokes every concrete command and compares printed
 results with independent Python `math`/`cmath` calculations. It also checks invalid input,
 domain and pole errors, the expressions and their nesting limit, and that the measured stack

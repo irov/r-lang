@@ -56,10 +56,50 @@ def main() -> None:
                 check(['saturating_'+op, kind, str(left), str(right)], str(saturated))
         check(['parse', kind, str(high+1)], None, 65)
         check(['parse', kind, str(low-1)], None, 65)
+        mask = (1 << bits) - 1
+
+        def to_type(raw: int) -> int:
+            return raw - (1 << bits) if signed and raw >> (bits - 1) else raw
+        for value in [0, 1, 6, low, high]:
+            raw = value & mask
+            check(['leading_zeros', kind, str(value)], str(bits - raw.bit_length()))
+            check(['trailing_zeros', kind, str(value)],
+                  str(bits if raw == 0 else (raw & -raw).bit_length() - 1))
+            check(['count_ones', kind, str(value)], str(bin(raw).count('1')))
+            swapped = int.from_bytes(raw.to_bytes(bits // 8, 'little'), 'big')
+            check(['swap_bytes', kind, str(value)], str(to_type(swapped)))
+            for amount in [1, bits + 3]:
+                shift = amount % bits
+                left = ((raw << shift) | (raw >> (bits - shift))) & mask
+                right = ((raw >> shift) | (raw << (bits - shift))) & mask
+                check(['rotate_left', kind, str(value), str(amount)], str(to_type(left)))
+                check(['rotate_right', kind, str(value), str(amount)], str(to_type(right)))
+        if signed:
+            check(['widening_mul', kind, '2', '3'], None, 64)
+            continue
+        for left, right in [(6, 7), (high, high), (high, 2)]:
+            product = left * right
+            check(['widening_mul', kind, str(left), str(right)], f'{product & mask} {product >> bits}')
+            for flag in (0, 1):
+                total = left + right + flag
+                check(['carrying_add', kind, str(left), str(right), str(flag)],
+                      f'{total & mask} {"true" if total > mask else "false"}')
+                difference = left - right - flag
+                check(['borrowing_sub', kind, str(left), str(right), str(flag)],
+                      f'{difference & mask} {"true" if difference < 0 else "false"}')
+        for high_half, low_half, divisor in [(0, 7, 3), (1, 0, 3), (high - 1, high, high), (2, 5, 2),
+                                             (0, 5, 0)]:
+            if divisor == 0 or high_half >= divisor:
+                expected = 'overflow'
+            else:
+                quotient, remainder = divmod((high_half << bits) | low_half, divisor)
+                expected = f'{quotient} {remainder}'
+            check(['narrowing_div', kind, str(high_half), str(low_half), str(divisor)], expected)
     for args, status in [(['convert','u8','256'],65), (['convert','i32','1.5'],65),
                          (['parse','u8','2','2'],65), (['parse','u8','1','1'],65),
                          (['parse','unknown','1'],64), (['checked_add','u8','1'],64),
-                         (['checked_add','c_int','1','2'],64), (['c_convert','i32','1'],64)]:
+                         (['checked_add','c_int','1','2'],64), (['c_convert','i32','1'],64),
+                         (['narrowing_div','u8','1','2'],64), (['count_ones','c_int','1'],64)]:
         check(args, None, status)
     check([], None)
     print(f'Numbers: {count} commands passed across every integer and conversion specialization')

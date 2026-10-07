@@ -1,8 +1,10 @@
-/* Scope storage is immovable and private to its enclosing resumable frame. */
+/* Scope storage is immovable and private to its enclosing resumable frame. It is named after the
+   group symbol, not its source offset, since the repetitions of a translation-time loop repeat
+   one source scope (R-STMT-0023, defect L44-12). */
 static bool r_c17_scope_reference(RC17Emitter *emitter, RSymbolId symbol, const char *object) {
     const RSemanticSymbol *group = r_c17_symbol(emitter, symbol);
     return group != NULL && group->is_task_scope &&
-           r_c17_format(emitter, "%s->r_scope_%08" PRIx32, object, group->scope_start);
+           r_c17_format(emitter, "%s->r_scope_%08" PRIx32, object, (uint32_t)symbol);
 }
 
 static bool r_c17_emit_scope_fields(RC17Emitter *emitter, const RMirFunction *mir, uint32_t depth) {
@@ -15,12 +17,12 @@ static bool r_c17_emit_scope_fields(RC17Emitter *emitter, const RMirFunction *mi
             const RSemanticSymbol *group = r_c17_symbol(emitter, op->symbol);
             if (group == NULL || !r_c17_indent(emitter, depth) ||
                 !r_c17_format(
-                    emitter, "RRuntimeTaskScope r_scope_%08" PRIx32 ";\n", group->scope_start) ||
+                    emitter, "RRuntimeTaskScope r_scope_%08" PRIx32 ";\n", (uint32_t)op->symbol) ||
                 !r_c17_indent(emitter, depth) ||
                 !r_c17_format(emitter,
                               "RRuntimeTaskScopeEntry r_scope_%08" PRIx32
                               "_entries[UINT64_C(%" PRIu64 ")];\n",
-                              group->scope_start,
+                              (uint32_t)op->symbol,
                               op->integer_value))
                 return false;
         }

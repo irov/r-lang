@@ -820,6 +820,23 @@ static bool r_reflection_index_operand(RBodyContext *body,
     if (r_body_constant_scalar(body, operand->node, &value) && value.valid) {
         *constant = true;
         *index = value.bits;
+        return true;
+    }
+    /* R-EXPR-0022: another constant expression, such as a local constant or a call of a
+       translation-time evaluable function, folds as well; nothing is reported when it is not
+       one (defect L44-14). */
+    if (!r_consteval_dependent(body->frontend, operand->node, 0U)) {
+        bool folded = false;
+        uint64_t bits = 0U;
+        if (!r_consteval_evaluate_node(
+                body->frontend, operand->node, false, false, &folded, &bits)) {
+            return false;
+        }
+        if (folded) {
+            r_consteval_mark_reads(body->frontend, operand->node, 0U);
+            *constant = true;
+            *index = bits;
+        }
     }
     return true;
 }
@@ -1505,6 +1522,238 @@ static bool r_reflection_lower_value_call(RBodyContext *body,
                                     UINT64_C(0),
                                     &children,
                                     result);
+}
+
+/* R-REFL-0006 (L44): the borrow of field `index` of a struct or tuple place, shared or exclusive.
+ * In a generic definition the struct may be a type parameter and the index the constant of a
+ * translation-time loop; the field is then the synthetic parameter of r_semantic_field_parameter,
+ * whose traits are the field traits of the struct parameter. The place is an R_HIR_FIELD_PLACE
+ * whose member is not yet known (zero) and whose auxiliary type is that parameter; an
+ * instantiation sets the member (generics.inc). */
+static bool r_reflection_field_of_place(RBodyContext *body,
+                                        RExpressionResult place,
+                                        RAstRef index_ref,
+                                        RSourceSpan call_span,
+                                        bool exclusive,
+                                        RExpressionResult *result) {
+    RFrontendContext *context = body->frontend;
+    const char *rule_id = "R-REFL-0006";
+    RExpressionResult index_operand = {0};
+    RExpressionResult field = {0};
+    bool constant = false;
+    uint64_t index = UINT64_C(0);
+    RTypeId index_parameter = R_TYPE_ID_INVALID;
+    RTypeId borrow_type;
+    const RTypeId place_type = r_semantic_value_type(context, place.type);
+    const RSemanticAggregate *aggregate = r_semantic_aggregate_for_type(context, place_type);
+    const bool dependent_struct =
+        (aggregate == NULL) &&
+        (r_semantic_value_kind(context, place_type) == R_SEMANTIC_TYPE_PARAMETER);
+
+    if (((aggregate == NULL) || (aggregate->kind != R_SEMANTIC_AGGREGATE_STRUCT)) &&
+        !dependent_struct) {
+        return r_body_diagnostic(body,
+                                 "R-DIAG-TYPE-001",
+                                 rule_id,
+                                 "core::field takes `&place` or a pointer to a struct or tuple",
+                                 call_span);
+    }
+    if (!r_reflection_index_operand(
+            body, index_ref, call_span, rule_id, &index_operand, &constant, &index)) {
+        return false;
+    }
+    if (!index_operand.valid) {
+        return true;
+    }
+    /* Lowering the index may create aggregates and types and move their arrays (defect L44-11). */
+    aggregate = r_semantic_aggregate_for_type(context, place_type);
+    if (!constant) {
+        const RHirNode *index_node = r_body_hir_node(body, index_operand.node);
+        const RSemanticType *index_type =
+            index_node == NULL ? NULL : r_semantic_type(context, index_node->auxiliary_type);
+        if ((index_node != NULL) && (index_node->kind == R_HIR_GENERIC_CONSTANT) &&
+            (index_type != NULL) && (index_type->kind == R_SEMANTIC_TYPE_PARAMETER) &&
+            (index_type->base != 0U) &&
+            context->generic_parameters[index_type->base - 1U].loop_constant) {
+            index_parameter = index_node->auxiliary_type;
+        } else {
+            return r_body_diagnostic(
+                body,
+                "R-DIAG-CONST-002",
+                rule_id,
+                "the field index of core::field is a translation-time constant",
+                call_span);
+        }
+    }
+    if (dependent_struct || (index_parameter != R_TYPE_ID_INVALID)) {
+        RTypeId field_type;
+        RHirNodeId children_storage[1] = {place.node};
+        RHirVector children = {children_storage, 1U, 1U};
+        RHirNodeId node_id;
+        if ((aggregate != NULL) && (index_parameter == R_TYPE_ID_INVALID) &&
+            (index >= (uint64_t)aggregate->field_count)) {
+            return r_body_diagnostic(body,
+                                     "R-DIAG-CONST-001",
+                                     rule_id,
+                                     "the field index of core::field is outside the fields",
+                                     call_span);
+        }
+        if (!r_semantic_field_parameter(context, place_type, index_parameter, index, &field_type) ||
+            !r_body_append_node(body,
+                                R_HIR_FIELD_PLACE,
+                                call_span,
+                                field_type,
+                                place.symbol,
+                                R_TOKEN_INVALID,
+                                UINT64_C(0),
+                                true,
+                                &children,
+                                &node_id)) {
+            return false;
+        }
+        RHirNode *node = r_body_hir_node(body, node_id);
+        node->auxiliary_type = field_type;
+        node->borrow_origin = place.borrow_origin;
+        node->borrow_referent = place.borrow_referent;
+        node->borrow_origin_set = place.borrow_origin_set;
+        node->borrow_origin_multiple = place.borrow_origin_multiple;
+        field = place;
+        field.node = node_id;
+        field.type = field_type;
+        field.is_place = true;
+        return r_body_standard_borrow_type(body, field_type, !exclusive, &borrow_type) &&
+               r_body_form_safe_borrow(body, call_span, borrow_type, &field, result);
+    }
+    if (index >= (uint64_t)aggregate->field_count) {
+        return r_body_diagnostic(body,
+                                 "R-DIAG-CONST-001",
+                                 rule_id,
+                                 "the field index of core::field is outside the fields",
+                                 call_span);
+    }
+    const RSemanticField *member = r_reflection_field(context, aggregate, (uint32_t)index);
+    if ((member != NULL) && member->is_protected && (aggregate->module_source != body->source)) {
+        return r_body_diagnostic(body,
+                                 "R-DIAG-NAME-001",
+                                 "R-NAME-0003",
+                                 "protected struct field is not visible",
+                                 call_span);
+    }
+    /* Formed as `&place.field` forms it, so that the borrow path names the field. */
+    return r_match_field_place(body, place, (uint32_t)index, call_span, &field) &&
+           r_body_standard_borrow_type(
+               body, r_semantic_value_type(context, field.type), !exclusive, &borrow_type) &&
+           r_body_form_safe_borrow(body, call_span, borrow_type, &field, result);
+}
+
+/* R-REFL-0006 (L44): `core::field(object, index)` and `core::field_mut(object, index)`, a shared or
+ * exclusive borrow of field `index`, in declaration order, of the struct or tuple that object
+ * points to. The index is a translation-time constant, so the result has the type of that field;
+ * the borrow is the one `&object->field` forms, restricted to the field, so that borrows of other
+ * fields stay independent. */
+static bool r_reflection_lower_field_access(RBodyContext *body,
+                                            RAstRef argument_list,
+                                            const RAstNodeView *arguments_view,
+                                            RSourceSpan call_span,
+                                            RStandardCallOperation operation,
+                                            RExpressionResult *result) {
+    RFrontendContext *context = body->frontend;
+    const char *rule_id = "R-REFL-0006";
+    const bool exclusive = operation == R_STANDARD_CALL_CORE_FIELD_MUT;
+    RAstRef object_ref;
+    RAstRef index_ref;
+    RExpressionResult object = {0};
+    RExpressionResult place = {0};
+
+    r_body_expression_invalid(result);
+    if ((arguments_view->child_count != UINT32_C(2)) ||
+        !r_ast_ref_child(context, argument_list, UINT32_C(0), &object_ref) ||
+        !r_ast_ref_child(context, argument_list, UINT32_C(1), &index_ref)) {
+        return r_body_diagnostic(
+            body,
+            "R-DIAG-TYPE-001",
+            rule_id,
+            "core::field takes a pointer to a struct or tuple and a field index",
+            call_span);
+    }
+    /* `&place` borrows the field of the place itself, as `&place.field` does, so that borrows of
+       different fields stay independent. */
+    {
+        RAstRef direct = object_ref;
+        RAstNodeView direct_view;
+        RAstTokenView operator_token;
+        RAstRef operand_ref;
+        for (uint32_t depth = 0U; r_ast_ref_view(context, direct, &direct_view) &&
+                                  ((direct_view.kind == R_SYNTAX_EXPRESSION) ||
+                                   (direct_view.kind == R_SYNTAX_INITIALIZER) ||
+                                   (direct_view.kind == R_SYNTAX_BINARY_EXPRESSION)) &&
+                                  (depth <= r_frontend_tree_depth_limit(context));
+             ++depth) {
+            RAstRef inner;
+            if (!r_body_ast_single_node_child(context, direct, &inner)) {
+                break;
+            }
+            direct = inner;
+        }
+        if (r_ast_ref_view(context, direct, &direct_view) &&
+            (direct_view.kind == R_SYNTAX_UNARY_EXPRESSION) &&
+            r_body_ast_first_token(context, direct, &operator_token) &&
+            (operator_token.kind == R_TOKEN_AMP) &&
+            r_body_ast_single_node_child(context, direct, &operand_ref)) {
+            RExpressionResult whole = {0};
+            if (!r_body_lower_expression(body, operand_ref, R_TYPE_ID_INVALID, &whole)) {
+                return false;
+            }
+            if (!whole.valid) {
+                return true;
+            }
+            if (whole.is_place) {
+                return r_reflection_field_of_place(
+                    body, whole, index_ref, call_span, exclusive, result);
+            }
+            return r_body_diagnostic(body,
+                                     "R-DIAG-TYPE-001",
+                                     rule_id,
+                                     "core::field takes `&place` or a pointer to a struct or tuple",
+                                     call_span);
+        }
+    }
+    /* A pointer value: the field of its pointee, as `pointer->field`. */
+    if (!r_generic_lower_argument(body,
+                                  object_ref,
+                                  R_TYPE_ID_INVALID,
+                                  exclusive ? R_SEMANTIC_TYPE_FLAG_NONE
+                                            : R_SEMANTIC_TYPE_FLAG_SHARED,
+                                  &object) ||
+        !r_body_place_to_value(body, &object)) {
+        return false;
+    }
+    if (!object.valid) {
+        return true;
+    }
+    const RSemanticType *pointer =
+        r_semantic_type(context, r_semantic_value_type(context, object.type));
+    if ((pointer == NULL) || (pointer->kind != R_SEMANTIC_TYPE_BORROW)) {
+        return r_body_diagnostic(body,
+                                 "R-DIAG-TYPE-001",
+                                 rule_id,
+                                 "core::field takes `&place` or a pointer to a struct or tuple",
+                                 call_span);
+    }
+    if (exclusive && ((pointer->flags & R_SEMANTIC_TYPE_FLAG_SHARED) != 0U)) {
+        return r_body_diagnostic(body,
+                                 "R-DIAG-TYPE-001",
+                                 rule_id,
+                                 "core::field_mut takes an exclusive pointer T*",
+                                 call_span);
+    }
+    if (!r_body_form_deref_place(body, object, call_span, &place)) {
+        return false;
+    }
+    if (!place.valid) {
+        return true;
+    }
+    return r_reflection_field_of_place(body, place, index_ref, call_span, exclusive, result);
 }
 
 /* ---- instantiation ---- */

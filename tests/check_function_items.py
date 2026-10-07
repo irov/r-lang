@@ -50,7 +50,7 @@ i32 main() {
 
         interface = emit('interface', [provider, consumer])
         assert interface == emit('interface', [consumer, provider])
-        assert '(interface version=33 ' in interface
+        assert '(interface version=34 ' in interface
         assert '(name="E" constraints=(unborrowed errors))' in interface
         assert '$function(increment)' in interface and '$function(checked)' in interface
         assert '(callable mode=shared parameters=(i32) return=i32 throws=(effects ' in interface

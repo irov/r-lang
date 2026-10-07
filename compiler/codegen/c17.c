@@ -347,6 +347,8 @@ typedef struct RC17Emitter {
     uint16_t left_shift_helpers;
     uint16_t right_shift_helpers;
     uint16_t core_integer_helpers[9];
+    /* Library R-LIB-0027 (L45): one bit per integer kind for each bit or wide operation. */
+    uint16_t core_bits_helpers[10];
     uint32_t next_temporary;
     /* L37.5: while the shadow payload of a borrowed standard-outcome switch is built, the
        binding symbol it is built for is named r_view<label>. */
@@ -2748,6 +2750,25 @@ static bool r_c17_note_core_integer_helper(RC17Emitter *emitter,
     }
     return true;
 }
+
+static bool r_c17_note_core_bits_helper(RC17Emitter *emitter,
+                                        RTypeId integer_type,
+                                        RStandardCallOperation operation);
+static bool r_c17_preflight_core_bits_call(RC17Emitter *emitter,
+                                           const RHirNode *node,
+                                           RSymbolId function_symbol,
+                                           size_t depth);
+static bool r_c17_preflight_async_core_bits(RC17Emitter *emitter,
+                                            const RMirFunction *mir,
+                                            const RMirInstruction *instruction);
+static bool
+r_c17_emit_core_bits(RC17Emitter *emitter, const RHirNode *node, uint32_t depth, RC17Value *result);
+static bool r_c17_emit_async_core_bits(RC17Emitter *emitter,
+                                       const RMirFunction *mir,
+                                       const RSemanticSymbol *function,
+                                       const RMirInstruction *instruction,
+                                       uint32_t depth);
+static bool r_c17_emit_core_bits_helpers(RC17Emitter *emitter);
 
 static bool r_c17_convert_parse_tag_is_float(uint64_t tag) {
     return (tag == UINT64_C(10)) || (tag == UINT64_C(11)) || (tag == UINT64_C(38)) ||
@@ -12486,6 +12507,9 @@ static bool r_c17_preflight_async_instruction(RC17Emitter *emitter,
         }
         operand = r_c17_mir_value_definition(
             emitter, mir, r_c17_mir_operand(emitter, instruction, UINT32_C(0)));
+        if (r_standard_core_bits_operation(instruction->standard_operation)) {
+            return r_c17_preflight_async_core_bits(emitter, mir, instruction);
+        }
         if (r_c17_core_integer_operation(instruction->standard_operation)) {
             const RMirInstruction *right_operand = r_c17_mir_value_definition(
                 emitter, mir, r_c17_mir_operand(emitter, instruction, UINT32_C(1)));
@@ -29306,6 +29330,9 @@ static bool r_c17_emit_expression_node(RC17Emitter *emitter,
         if (r_c17_core_integer_operation(node->standard_operation)) {
             return r_c17_emit_core_integer(emitter, node, depth, result);
         }
+        if (r_standard_core_bits_operation(node->standard_operation)) {
+            return r_c17_emit_core_bits(emitter, node, depth, result);
+        }
         if (r_c17_core_atomic_operation(node->standard_operation)) {
             return r_c17_emit_core_atomic(emitter, node, depth, result);
         }
@@ -44133,6 +44160,9 @@ static bool r_c17_emit_async_instruction_kind(RC17Emitter *emitter,
             return r_c17_emit_async_slice_from_raw_parts(
                 emitter, mir, function, instruction, depth);
         }
+        if (r_standard_core_bits_operation(instruction->standard_operation)) {
+            return r_c17_emit_async_core_bits(emitter, mir, function, instruction, depth);
+        }
         if (r_c17_core_integer_operation(instruction->standard_operation)) {
             const bool checked = r_c17_core_integer_checked(instruction->standard_operation);
 
@@ -49081,6 +49111,8 @@ static bool r_c17_emit_core_integer_helpers(RC17Emitter *emitter) {
     return true;
 }
 
+#include "core_bits.inc"
+
 static bool r_c17_emit_core_atomic_helpers(RC17Emitter *emitter) {
     if (!emitter->uses_core_atomic_operations) {
         return true;
@@ -49276,7 +49308,8 @@ static bool r_c17_emit_helper_definitions(RC17Emitter *emitter) {
         return false;
     }
     return r_c17_emit_core_atomic_helpers(emitter) && r_c17_emit_core_integer_helpers(emitter) &&
-           r_c17_emit_new_helpers(emitter) && r_c17_emit_shared_owner_clone_helpers(emitter) &&
+           r_c17_emit_core_bits_helpers(emitter) && r_c17_emit_new_helpers(emitter) &&
+           r_c17_emit_shared_owner_clone_helpers(emitter) &&
            r_c17_emit_signed_helpers(emitter, R_SEMANTIC_TYPE_I8) &&
            r_c17_emit_signed_helpers(emitter, R_SEMANTIC_TYPE_I16) &&
            r_c17_emit_signed_helpers(emitter, R_SEMANTIC_TYPE_I32) &&
@@ -53878,6 +53911,9 @@ static bool r_c17_preflight_expression(RC17Emitter *emitter,
         }
         if (r_c17_core_integer_operation(node->standard_operation)) {
             return r_c17_preflight_core_integer_call(emitter, node, function_symbol, depth);
+        }
+        if (r_standard_core_bits_operation(node->standard_operation)) {
+            return r_c17_preflight_core_bits_call(emitter, node, function_symbol, depth);
         }
         if (r_c17_core_atomic_operation(node->standard_operation)) {
             return r_c17_preflight_core_atomic_call(emitter, node, function_symbol, depth);

@@ -39,9 +39,30 @@ def main():
     run(['compare','abc','bc'],'equal=false order=-1 prefix=false suffix=true utf8=true\npattern=1\nnewline=none\n')
     run(['compare','abc','abc'],'equal=true order=0 prefix=true suffix=true utf8=true\npattern=0\nnewline=none\n')
     run(['compare','abc','z'],'equal=false order=-1 prefix=false suffix=false utf8=true\npattern=none\nnewline=none\n')
+    mask = 2**64 - 1
+    for value in [0, 1, 2**63, mask, 0x0123456789abcdef, 0x8000000000000001, 1 << 40]:
+        leading = 64 - value.bit_length()
+        trailing = 64 if value == 0 else (value & -value).bit_length() - 1
+        swapped = int.from_bytes(value.to_bytes(8, 'little'), 'big')
+        left = ((value << 8) | (value >> 56)) & mask
+        right = ((value >> 8) | (value << 56)) & mask
+        run(['bits', str(value)],
+            f'leading_zeros={leading} trailing_zeros={trailing} count_ones={bin(value).count("1")}\n'
+            f'swap_bytes={swapped:016x} rotate_left={left:016x} rotate_right={right:016x}\n')
+    for left, right in [(0, 0), (1, 0), (mask, mask), (mask, 2), (3, 5), (2**63, 2**63 + 7),
+                        (0x0123456789abcdef, 0xfedcba9876543210)]:
+        product = left * right
+        total = left + right
+        difference = (left - right) & mask
+        expected = (f'product high={product >> 64:016x} low={product & mask:016x}\n'
+                    f'sum={total & mask:016x} carry={"true" if total > mask else "false"}\n'
+                    f'difference={difference:016x} borrow={"true" if left < right else "false"}\n')
+        expected += f'quotient={left} remainder=0\n' if right else 'quotient none\n'
+        run(['wide', str(left), str(right)], expected)
+    run(['wide', '1'], 'wrong number of operands\n', 64)
     run(['nope','abc'],'unknown command\n',64)
     run(['packet','abc'],'wrong number of operands\n',64)
-    print(f'Binary: {count} checksum, packet, label, comparison and input checks passed')
+    print(f'Binary: {count} checksum, packet, label, comparison, bit, wide and input checks passed')
 
 
 if __name__ == '__main__': main()

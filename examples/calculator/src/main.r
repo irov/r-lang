@@ -28,6 +28,12 @@ protected std.string::string calculate(str... words)
         f64 value = example.calculator.expression::evaluate(words[1]);
         std.string::string text = f"{value}\n";
         return move text;
+    case "rpn":
+        // A postfix expression, read by a state machine on a labeled switch (L46).
+        throw (len(words) != 2usize) Usage { .message = "usage: calculator rpn EXPRESSION" };
+        f64 value = example.calculator.expression::postfix(words[1]);
+        std.string::string text = f"{value}\n";
+        return move text;
     default:
     }
     Operation operation = match (core::enum_from_name::<Operation>(words[0])) {
@@ -54,7 +60,7 @@ async i32 main(const str[] arguments) {
 
     try {
         if (len(arguments) == 1usize) {
-            response.result = std.string::from_str("calculator OP TYPE OPERANDS...\ncalculator eval EXPRESSION\nTypes: f32 f64 c_float c_double c_long_double complex_f32 complex_f64\nExamples: sqrt f64 9; hypot f32 3 4; mul complex_f64 1 2 3 4; eval \"2 * (3 + 4)\"\n");
+            response.result = std.string::from_str("calculator OP TYPE OPERANDS...\ncalculator eval EXPRESSION\ncalculator rpn EXPRESSION\nTypes: f32 f64 c_float c_double c_long_double complex_f32 complex_f64\nExamples: sqrt f64 9; hypot f32 3 4; mul complex_f64 1 2 3 4; eval \"2 * (3 + 4)\"\n");
         } else {
             // Every word after the program name: the operation, the type and the operands.
             response.result = calculate(...arguments[1..]);

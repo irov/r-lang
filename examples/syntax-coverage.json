@@ -1,8 +1,8 @@
 {
   "version": 1,
   "scope": "CST node presence; not semantic or branch coverage",
-  "total_nodes": 103,
-  "application_nodes": 103,
+  "total_nodes": 105,
+  "application_nodes": 105,
   "nodes": [
     {
       "node": "aggregate_initializer",
@@ -756,7 +756,6 @@
       "node": "conditional_expression",
       "applications": [
         "arena",
-        "binary",
         "clock",
         "dispatch",
         "numbers",
@@ -767,6 +766,15 @@
       ],
       "walkthroughs": [
         "pointers"
+      ]
+    },
+    {
+      "node": "constexpr_for_statement",
+      "applications": [
+        "binary"
+      ],
+      "walkthroughs": [
+        "reflection"
       ]
     },
     {
@@ -802,6 +810,8 @@
     {
       "node": "destructuring_declaration",
       "applications": [
+        "binary",
+        "numbers",
         "tally",
         "workspace"
       ],
@@ -1178,6 +1188,15 @@
         "pointers",
         "reflection",
         "tables"
+      ]
+    },
+    {
+      "node": "fields_constraint",
+      "applications": [
+        "binary"
+      ],
+      "walkthroughs": [
+        "reflection"
       ]
     },
     {
@@ -1560,6 +1579,7 @@
       "node": "generic_header",
       "applications": [
         "arena",
+        "binary",
         "ingest",
         "jobs",
         "json_tool",
@@ -1583,6 +1603,7 @@
       "node": "generic_parameter",
       "applications": [
         "arena",
+        "binary",
         "ingest",
         "jobs",
         "json_tool",
@@ -1679,6 +1700,7 @@
     {
       "node": "impl_declaration",
       "applications": [
+        "binary",
         "dispatch",
         "keystore",
         "relay",
@@ -1688,6 +1710,7 @@
       ],
       "walkthroughs": [
         "methods",
+        "reflection",
         "tables"
       ]
     },
@@ -1980,6 +2003,7 @@
     {
       "node": "labeled_statement",
       "applications": [
+        "calculator",
         "netlab",
         "workspace"
       ],
@@ -2183,6 +2207,7 @@
         "generics",
         "json",
         "methods",
+        "reflection",
         "regex"
       ]
     },
@@ -2557,9 +2582,11 @@
     {
       "node": "range_expression",
       "applications": [
+        "binary",
         "tournament"
       ],
       "walkthroughs": [
+        "reflection",
         "tables"
       ]
     },
@@ -2646,6 +2673,7 @@
       "applications": [
         "arena",
         "assistant",
+        "binary",
         "bytepipe",
         "c_bridge",
         "calculator",
@@ -3174,18 +3202,21 @@
     {
       "node": "trait_declaration",
       "applications": [
+        "binary",
         "keystore",
         "tally",
         "tournament"
       ],
       "walkthroughs": [
         "methods",
+        "reflection",
         "tables"
       ]
     },
     {
       "node": "trait_name",
       "applications": [
+        "binary",
         "dispatch",
         "fanout",
         "ipc",
@@ -3198,6 +3229,7 @@
       ],
       "walkthroughs": [
         "methods",
+        "reflection",
         "tables"
       ]
     },
@@ -3275,7 +3307,9 @@
       "applications": [
         "tally"
       ],
-      "walkthroughs": []
+      "walkthroughs": [
+        "reflection"
+      ]
     },
     {
       "node": "unary_expression",

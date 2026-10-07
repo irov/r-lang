@@ -1,7 +1,8 @@
 module example.reflection.main;
 
 import example.reflection.model::{Level, Command, Settings, level_from_text, next_level,
-                                  enabled, command_name, type_of, cardinality};
+                                  enabled, command_name, type_of, cardinality, total_score,
+                                  clear_all, first_scored};
 
 /* Byte-for-byte comparison of two strings; `str` converts to a byte slice implicitly. */
 bool same(str left, str right) {
@@ -87,5 +88,23 @@ i32 main() {
     if (quiet == true) { return 20; }
     bool loud = enabled(&settings, Level::warn);
     if (loud == false) { return 20; }
+
+    /* Fields by a constant index: a translation-time loop visits every field of a record whose
+       fields implement Scored, struct or tuple alike. */
+    if (total_score(&settings) != 5u32) { return 21; }
+    bool ok_11 = same(first_scored(&settings), "threshold");
+    if (ok_11 == false) { return 22; }
+    (u32, bool) pair = (4u32, true);
+    if (total_score(&pair) != 5u32) { return 23; }
+    clear_all(&settings);
+    if (total_score(&settings) != 0u32 || settings.threshold != Level::trace) { return 24; }
+    bool ok_12 = same(first_scored(&settings), "");
+    if (ok_12 == false) { return 25; }
+
+    /* `&place` borrows only the field, so two fields of one place are borrowed at once. */
+    u32* retries = core::field_mut(&settings, 1usize);
+    const bool* verbose = core::field(&settings, 2usize);
+    *retries = 9u32;
+    if (*verbose == true || settings.retries != 9u32) { return 26; }
     return 0;
 }

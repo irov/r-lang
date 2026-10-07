@@ -28,6 +28,11 @@ def code_only(text: str) -> str:
     )
 
 
+WIDE_INTEGER_FAMILIES = {
+    f'core::{name}_SUFFIX' for name in ('widening_mul', 'carrying_add', 'borrowing_sub', 'narrowing_div')
+}
+
+
 def spellings(item: dict, items: list[dict]) -> list[str]:
     name = item['id']
     if name.endswith(('_S', '_C')):
@@ -42,6 +47,9 @@ def spellings(item: dict, items: list[dict]) -> list[str]:
         return required
     if name.endswith('_SUFFIX'):
         suffixes = R_INTEGERS if name.startswith('core::') else R_INTEGERS + C_INTEGERS
+        if name in WIDE_INTEGER_FAMILIES:
+            # Library R-LIB-0027: the wide operations exist for the unsigned types only.
+            suffixes = tuple(suffix for suffix in R_INTEGERS if suffix.startswith('u'))
         return [name[:-6] + suffix for suffix in suffixes]
     if name.endswith('_D'):
         suffixes = (R_INTEGERS + C_INTEGERS + FLOATS if name.startswith('std.convert::')

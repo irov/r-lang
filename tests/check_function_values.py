@@ -161,7 +161,7 @@ def main():
         result = run('interface', ACCEPTED, 'accepted')
         assert result.returncode == 0, result.stderr
         text = result.stdout
-        assert '(interface version=33 ' in text or 'version=33' in text, text[:200]
+        assert '(interface version=34 ' in text or 'version=34' in text, text[:200]
         for field in ('(index=0 name="run" type=(fn parameters=(i32) return=i32 throws=(effects '
                       '(struct "values.accepted"::"Rejected")))',
                       '(index=1 name="fast" type=(fn parameters=(i32) return=i32 noalloc=true)',

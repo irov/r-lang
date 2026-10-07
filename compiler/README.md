@@ -1,7 +1,7 @@
 # R Frontend Parser 0.1
 
 This directory contains the bootstrap frontend for the normative English R Core
-Specification `0.1.0-draft.102`.
+Specification `0.1.0-draft.105`.
 
 ```text
 UTF-8 source
@@ -247,7 +247,7 @@ the terminator `panic`; the step returns `R_RUNTIME_TASK_STEP_PANICKED`, and the
 drops what is still initialized, as after a cancellation. A finally block may suspend, so the step
 parks the panic in its task (`r_runtime_task_panic_park`) before it jumps to the panic block
 through the `r_async_dispatch` label of its loop and takes it back (`r_runtime_task_panic_unpark`)
-before it returns. The MIR dump writes the block as ` panic=bbN` (interface schema 33).
+before it returns. The MIR dump writes the block as ` panic=bbN` (interface schema 34).
 
 At the boundaries the task runtime completes a panicked task with its report. An `await` makes the
 panic pending again in the awaiting task (`R_RUNTIME_TASK_EXECUTION_AWAIT_PANICKED`); a report that
@@ -589,7 +589,7 @@ defaults, `@default` variants and fixed arrays build ordinary `aggregate_init`, 
 `array_init` nodes, so MIR and C17 need nothing new; omitted array elements and `core::take`
 (lowered as a replacement with the evaluated default) use the same builder. An optional JSON
 field without `default` maps a literal or `factory()` initializer to the existing JSON default
-(`r_json_default_from_initializer`). Interface schema 33 writes `initializer=true` on such fields
+(`r_json_default_from_initializer`). Interface schema 34 writes `initializer=true` on such fields
 and `default=true` on the default variant. See `tests/fixtures/codegen_field_defaults.r`,
 `codegen_async_field_defaults.r`, `codegen_json_field_defaults.r`,
 `codegen_field_defaults_failures.r` with its allocation-failure wrapper,
@@ -649,7 +649,7 @@ directly or through a supertrait, declares `Name`) and adds the capabilities and
 holder to the projection parameter, so the body may compare, copy or add its values.
 `r_generic_validate_projections` substitutes the projection with the arguments of every
 instantiation, dependent ones included as for ordinary constraints, and validates the result
-against the holder. Interface schema 33 writes the entries as
+against the holder. Interface schema 34 writes the entries as
 `associated_constraints=((associated="P"::"Name" constraints=(...)))`. Defect M19-1: the first
 holders had no name, and `--emit=hir` of any program importing `std.iter` read the intern table
 at index -1; the source-surface audit found it.
@@ -833,7 +833,7 @@ constants, folds body uses and layouts, and reuses the ordinary monomorphization
 No runtime arguments or metadata are added. Core draft.58 admits every integer type and `bool`
 as a constant-parameter type: a literal `CONSTANT_EXPR` keeps its type keyword in `flags` and
 its value bits in `length`, an argument of another type is rejected rather than converted,
-and the identity of an instance includes each constant's type. Interface schema 33 carries
+and the identity of an instance includes each constant's type. Interface schema 34 carries
 `constant_type=u32`, typed constant arguments such as `(constant u32 15)` and dependent
 formulas. The preflight `frame` example uses this for a bounded
 wire frame with checked `@noalloc @nonblocking` packing and checksum helpers.
@@ -896,7 +896,7 @@ available and injects them by AST node, repeating while new values appear. Docum
 (R-IDB-010): 4000000 steps and 64 MiB of values per evaluation, at most 32 discovery passes
 (a program whose module-scope values still grow after them gets `R-DIAG-LIMIT-001`),
 and at most 256 scalar elements substituted inside a function body (a module constant holds a
-larger value as one static initializer, wrapped before column 100). Interface schema 33 marks
+larger value as one static initializer, wrapped before column 100). Interface schema 34 marks
 evaluable exported functions `consteval=true` and records source dependencies whenever a
 translation-time value was computed. The [tables example](../examples/tables/README.md)
 builds a CRC-32 table, a frame size used by a module-scope struct, enumerator values and a
@@ -957,7 +957,7 @@ storage, destroys every built component on failure and reports `std.alloc::alloc
 the call's carrier; a clone that cannot fail (Copy, shared owners, hooks without errors) has no
 checked effect. The glue is spliced in after the function prototypes because it calls hooks. The
 static call graph adds an edge to every hook the copied structure reaches, so a hook that clones
-its own type through an owner is a recursive call chain. Interface schema 33 records the `clone`
+its own type through an owner is a recursive call chain. Interface schema 34 records the `clone`
 hook and the `clone` constraint. See `tests/fixtures/codegen_swap_clone.r`,
 `codegen_async_swap_clone.r`, the failure sweep `codegen_clone_failures.r` and
 `examples/tournament`.
@@ -994,7 +994,7 @@ also in the clone of a generic body, is refused when that instance breaks them.
 parameters. C17 represents a function value as the `uint32_t` symbol number of its target
 (`r_c17_type` maps the kind to `u32`); a synchronous dispatcher switches on it with a direct call
 of each target, and an async start selects the target's frame initializer and launch like a dyn
-dispatcher, with the arguments after the receiver. Interface schema 33 writes the type as
+dispatcher, with the arguments after the receiver. Interface schema 34 writes the type as
 `(fn parameters=(...) return=R throws=(...))` with `async=true`, `noalloc=true` and
 `nonblocking=true` when they apply.
 
@@ -1015,7 +1015,7 @@ an implicit `import std.cmp;` during the interface scan. `clone` generates nothi
 `clone_derived`, which makes the structural clone glue of `compiler/codegen/clone.inc` apply.
 `compiler/semantic/derive.inc` records the capabilities, rejects unknown, repeated and misplaced
 derivations and errors with descendants, and checks that every field or payload proves the
-capability, naming the first that does not and silencing its region. Interface schema 33 writes
+capability, naming the first that does not and silencing its region. Interface schema 34 writes
 `derived=(...)` on the aggregate.
 
 The generated text relies on three general mechanisms. An implementation whose target is a
@@ -1040,7 +1040,7 @@ addresses are evaluated once in argument order; overlapping outputs are rejected
 
 Outputs currently require synchronous R functions and complete unborrowed value types.
 The mode survives generics, traits, callable constraints (`fn(out i32) -> void`),
-function items, opaque and module interface schema 33 (`(out i32)`). Async/C boundaries
+function items, opaque and module interface schema 34 (`(out i32)`). Async/C boundaries
 and variadic outputs are rejected. The existing ban on errors escaping `finally` remains.
 
 Each output write to local storage must be used before an overlapping overwrite or normal
@@ -1080,7 +1080,7 @@ to that method during monomorphization, keeping direct calls and the static call
 Creation and synchronous invocation add no heap allocation; async calls use normal task starts.
 Callable constraints may carry `@noalloc @nonblocking` after `fn` and an exact
 `throws(E1, E2)` suffix; async constraints start with `async fn`. Resource guarantees may
-be forgotten, never silently added. Interface schema 33 serializes mode, parameters, result,
+be forgotten, never silently added. Interface schema 34 serializes mode, parameters, result,
 resource promises, checked errors and async status and excludes synthetic traits.
 
 Stored non-void call and await results are significant by default. `@must_use` additionally
@@ -1366,7 +1366,7 @@ fields of the error are read through a shared borrow of the payload of variant z
 common initial sequence every member shares. `std.error::fault` names the family of the
 standard errors of the main boundary (`r_semantic_standard_fault_family`, built on first use),
 and `std.error::from_fault` is an erasure without a runtime symbol that C17 expands from the
-main-boundary table (`r_c17_emit_fault_portable`). Interface schema 33 writes `parent=` and
+main-boundary table (`r_c17_emit_fault_portable`). Interface schema 34 writes `parent=` and
 `(error_family T)`.
 
 Core draft.74 (L22) widens translation-time evaluation (`compiler/semantic/consteval.inc`,
@@ -1687,9 +1687,138 @@ that is not a constant stay `R_HIR_STANDARD_CALL` selections with one operand
 C17 emitter prints one helper per (form, subject, attribute),
 `r_reflection_<form>_a<subject>_a<attribute>`, whose `switch` assigns the `o::some` payload
 field by field from the constants, and gives none or the empty string to any other operand.
-Interface schema 33 writes `attribute_targets=(...)` on an attribute type and
+Interface schema 34 writes `attribute_targets=(...)` on an attribute type and
 `attributes=((type=A values=(...)) ...)` on each marked type, field and enumerator.
 `examples/arena` reads the table and key of its rows and the help of its commands this way.
+
+### Translation-time loops and field access
+
+`for (constexpr T name in low..high) block` (R-STMT-0023) is its own syntax kind,
+`constexpr_for_statement` (`constexpr str` after `for (` stays a type), lowered by
+`semantic/constexpr_loops.inc`. With constant bounds the block is lowered once per value, each
+time with a fresh symbol for `name`: a `MODULE_CONSTANT` whose uses fold to literals, flagged
+`block_constant` so that it is no name of the module scope, of the interface or of a qualified
+lookup. The repetitions form one HIR block, lowering stops after a repetition that always
+returns, and no loop reaches MIR. A `break` or `continue` that would leave the repeated loop is
+found by comparing the break-target and loop-scope depths with the floors recorded at the loop
+(`r_constexpr_loop_jump_escapes`); a labeled jump names a loop around the repetitions and may
+leave them, and a label on the loop is a syntax error. A loop repeats at most
+1024 times (`R_CONSTEXPR_LOOP_LIMIT`).
+
+A bound is any constant expression: a literal, a local or module constant, `sizeof`, or a call
+that translation-time evaluation folds (`r_consteval_required_scalar`). In a generic definition
+a bound may be dependent, as `r_consteval_dependent` decides: a constant parameter,
+`core::field_count::<T>()`, `core::enum_count::<T>()`, a size query or a call over them. The block is then lowered once into an
+`R_HIR_CONSTEXPR_LOOP` node (children low, high and block) whose auxiliary type is a synthetic
+constant parameter (`RGenericParameter.loop_constant`), and the uses of `name` are
+`R_HIR_GENERIC_CONSTANT` nodes of that parameter. The generic clone
+(`r_generic_clone_constexpr_loop`, `semantic/generics.inc`) evaluates the cloned bounds and
+clones the block once per value with the parameter bound on `context->constexpr_binding_*`:
+the bounds of the instance are folded, the symbols the repetition uses are selected with the
+constant bound (so a branch of `@if` it does not take copies nothing), the symbols the block
+declares, by node or by a scope beginning inside it (the group of a `task_scope`), get fresh
+copies with their links remapped as a whole instance remaps them, and the node memo is reset,
+so each repetition is a subtree of its own. A task group is named in the frame after its symbol,
+not its source offset, and a lambda in a repetition captures the loop constant as a value.
+Substitution resolves the loop parameter through the bindings, and the cache of static `@if`
+choices is bypassed while bindings are active, since one condition node decides differently per
+repetition. The marking of a whole instance, which prunes unselected static branches before
+cloning, cannot evaluate the block without bindings, so it leaves the selection of the symbols
+the block declares to each repetition.
+
+`core::field(value, index)` and `core::field_mut(value, index)` (R-REFL-0006) are lowered by
+`r_reflection_lower_field_access` (`semantic/reflection.inc`) before the other reflection forms,
+and the overload query types them through `r_standard_query_field`. The index is a value
+argument that must fold to a constant. An operand `&place` is lowered as a place, and the field
+place of `r_match_field_place` is borrowed like `&place.field` (`r_body_form_safe_borrow`), so
+the borrow covers that field only; any other operand is a pointer, dereferenced first. A
+dependent index, or a struct that is a type parameter, yields a synthetic field parameter
+(`r_semantic_field_parameter`, `semantic/traits.inc`: base type and index parameter or value)
+whose trait constraints are the field traits of the base, and an `R_HIR_FIELD_PLACE` with member
+0 and that parameter as auxiliary type, which the clone closes to the concrete member
+(`r_generic_close_field_place`); as the member is unknown in the definition, the borrow
+analysis there treats such a field borrow as a borrow of the whole place. The constraint `fields(Trait)` (R-TYPE-0043,
+`fields_constraint`) is a pending trait constraint marked `fields`: it adds the trait to the
+field traits of the parameter, not to the parameter, and `r_generic_validate_against` checks at
+every application that the argument is a struct or tuple whose every field proves the trait.
+Interface schema 34 writes it as `(fields Trait)` in the constraint list. The fixtures are
+`codegen_field_access`, `codegen_generic_field_access` and their async twins; `examples/binary`
+writes and reads its packet header this way.
+
+### Bit and wide integer operations
+
+`core::leading_zeros_SUFFIX`, `trailing_zeros`, `count_ones`, `swap_bytes`, `rotate_left` and
+`rotate_right` for every R integer type, and `widening_mul`, `carrying_add`, `borrowing_sub` and
+`narrowing_div` for the unsigned ones (Library R-LIB-0027), are one contiguous range of standard
+operations (`r_standard_core_bits_operation` and the name and operand-count helpers in
+`frontend_internal.h`). `semantic/core_bits.inc` resolves the suffixed name and lowers the call to
+one `R_HIR_STANDARD_CALL` with the integer type as auxiliary type; the suffix-free form selects the
+type from the first operand, a wide operation from the first two, in `standard_methods.inc`, which
+also types both forms for overload queries. A wide result is the tuple of R-TYPE-0052, and
+`r_core_bits_evaluate` computes every operation at translation (R-FUNC-0023), where a narrowing
+division outside its domain is the panic of `R-DIAG-CONST-003`.
+
+The C17 emitter (`codegen/core_bits.inc`) prints one static helper per used (operation, type)
+pair, `r_core_<operation>_<suffix>`. A wide helper returns the first part and writes the second
+through a pointer to the second member of the tuple temporary or frame slot; a narrowing division
+first tests its divisor and high half at the call site and panics there with `division_by_zero`
+or `integer_overflow`. The helpers are portable C17 whose shapes the pinned Apple clang 21 turns
+into single instructions at `-O2` (measured on the generated helpers):
+
+| Operation | C17 idiom | arm64 |
+| --- | --- | --- |
+| `leading_zeros`, 32 and 64 bits | shift loop counting down | `clz` |
+| `leading_zeros`, 8 and 16 bits | fill below the highest bit, then count ones | `orr` ×3, `cnt` (the loop stays a loop) |
+| `trailing_zeros` | count ones of `(x & -x) - 1` | `rbit`, `clz` |
+| `count_ones` | Hacker's Delight 5-2 | `cnt`, `addv` |
+| `swap_bytes` | shifts and masks | `rev`, `rev16` |
+| `rotate_left`, `rotate_right` | `(x << s) \| (x >> (-s & (N - 1)))` | `ror` |
+| `widening_mul`, up to 32 bits | one 64-bit product | `umull` |
+| `widening_mul`, 64 bits | four 32-bit products | 17 instructions, not `mul` and `umulh` |
+| `carrying_add` chain | compare with an operand | `adds`, `adc` |
+| `borrowing_sub` chain | compare with an operand | `subs`, `cset`, `sub` (no `sbc`) |
+| `narrowing_div`, 64 bits | Knuth D over 32-bit digits after normalization | two `udiv` |
+
+The helpers never run R code, so no panic test follows their calls
+(`r_semantic_standard_call_runs_code`), and the suffix-free form selects by the type of a value
+read through a shared view (`const T`) as by `T`.
+
+The 64-bit widening multiplication and the borrow chain are the measured cost of strict C17: a
+128-bit type or compiler builtins would give `umulh` and `sbcs`, and the generated C uses neither.
+`codegen_core_bits` checks every operation at its boundaries and compares a value computed at
+translation with the same computation at run time; `examples/numbers` runs every operation of
+every type against Python and `examples/binary` prints them for one value.
+
+### Labeled switches
+
+A switch over an integer, `char` or fieldless enum value, of the program or of the library, may
+carry a label
+(R-STMT-0024); the parser accepts `name: switch` beside the labeled loops and an optional
+`(value)` after the label of a `continue`. `r_dispatch_lower` (`semantic/loop_labels.inc`)
+lowers it as `{ T $switch = value; while (true) { switch ($switch) { ... } break; } }`: the
+operand is evaluated once into a hidden local, and the hidden loop goes through
+`r_body_lower_loop` with callbacks, as the loop of `while (x is pattern)` does, so the object
+states of a clause selected again reach the fixed point of an ordinary loop. Its label is a
+loop label marked `dispatch` with the selector symbol: `break name;` is a labeled break of the
+hidden loop, `continue name (next);` an assignment of the selector followed by a continue of it
+(targeted when loops lie between), and an unlabeled `continue;` passes over hidden loops to the
+next loop around (`r_dispatch_lower_plain_continue`). The switch reads the selector through
+`body->dispatch_operand` instead of its operand expression, and reports in
+`body->switch_reaches_end` whether a clause can complete, since a switch counts only `return`
+and `throw` as leaving it, not a clause that selects again; the hidden break follows the switch
+only then, so a state machine whose clauses all return or select again never ends. MIR and C17
+see a plain loop around a switch; the C is `for (;;) { switch (r_t) { ... continue; } break; }`.
+The checks that ask whether a change inside a loop reaches a later use treat the hidden loop
+apart (`r_dispatch_selects_after`): its back edge is a `continue name (value);` in the clause
+of the change or a later one, not the end of the switch, which leaves it, and the operand,
+read once before the loop, is no later use. An unlabeled `continue;` in such a switch inside a
+translation-time loop would leave the repetitions and is refused as there.
+
+A dispatch replicated after every clause (`switch (next) { case A: goto clause_A; ... }`), the
+strict-C17 counterpart of computed goto, was measured on a 16-opcode stack machine with Apple
+clang 21 at `-O2`: 0.88 to 0.96 of the speed of the plain loop, with or without a range check of
+the opcode, while GNU computed goto ran 1.43 to 1.49 times faster. The emitter therefore prints
+the plain loop; computed goto is outside strict C17.
 
 Valid constructs outside the implemented semantic or code-generation slices receive
 `R-DIAG-SLICE-001` or make `r_frontend_emit_c17` return

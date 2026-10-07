@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "core_revision": "0.1.0-draft.102",
+  "core_revision": "0.1.0-draft.105",
   "annex": "A",
-  "annex_sha256": "474ce8adb917d2b53c8cde3bc79fa61b94a9d0fda0863aedf614ddb0735b8929",
-  "production_count": 303,
+  "annex_sha256": "b5f0c284bff0c59432a1bf2eb99ed5a5300289caa7d3645899ebbf59d991a9ea",
+  "production_count": 306,
   "sections": {
     "A.2": {
       "production_count": 36,
@@ -17,8 +17,8 @@
       ]
     },
     "A.3": {
-      "production_count": 79,
-      "production_names_sha256": "89d42d9b24a64100d35fac6f97c806efc26754ca6f6cc89fc5e2288f77d26576",
+      "production_count": 80,
+      "production_names_sha256": "b7addd206f368817efa0d188ca5357f2c437d7665d19fdd04cc9a8597e25f915",
       "implementation": [
         "compiler/parser/parser.c:declarations",
         "compiler/parser/static_conditions.inc"
@@ -66,8 +66,8 @@
       ]
     },
     "A.5": {
-      "production_count": 44,
-      "production_names_sha256": "9f2475eb60fcc7b48ca49d34cbef0b772e23d7d543f07253cddbfd3c3bff720e",
+      "production_count": 46,
+      "production_names_sha256": "5d2fdbb8f2fd52a7a372bb3c5397f6d7cdc6c384ef2c27ade684130ac72df10b",
       "implementation": [
         "compiler/parser/parser.c:statements",
         "compiler/parser/static_conditions.inc"

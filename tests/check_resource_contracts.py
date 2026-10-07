@@ -44,7 +44,7 @@ i32 main() {
 
         interface = emit('interface', [provider, consumer])
         assert interface == emit('interface', [consumer, provider])
-        assert '(interface version=33 ' in interface
+        assert '(interface version=34 ' in interface
         assert interface.count('noalloc=true nonblocking=true') >= 3
         assert '(function-schema ' in interface
         assert emit('c17', [provider, consumer]) == emit('c17', [consumer, provider])

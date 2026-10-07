@@ -13,7 +13,7 @@ protected std.string::string format_value(u16 value, u32 radix)
     return move text;
 }
 
-std.string::string evaluate(Operation operation, str first, str second, u32 radix)
+std.string::string evaluate(Operation operation, str first, str second, str third, u32 radix)
     throws Usage, std.convert::parse_error, std.convert::range_error, std.format::format_error, std.alloc::alloc_error {
     if (operation == Operation::convert) {
         f64 input = std.convert::parse_f64(first);
@@ -33,6 +33,35 @@ std.string::string evaluate(Operation operation, str first, str second, u32 radi
     if (operation == Operation::parse) {
         std.string::string text = format_value(left, radix);
         return move text;
+    }
+    switch (operation) {
+    case Operation::leading_zeros:
+        u32 count = core::leading_zeros(left);
+        std.string::string text = f"{count}";
+        return move text;
+    case Operation::trailing_zeros:
+        u32 count = core::trailing_zeros(left);
+        std.string::string text = f"{count}";
+        return move text;
+    case Operation::count_ones:
+        u32 count = core::count_ones(left);
+        std.string::string text = f"{count}";
+        return move text;
+    case Operation::swap_bytes:
+        u16 value = core::swap_bytes(left);
+        std.string::string text = format_value(value, radix);
+        return move text;
+    case Operation::rotate_left:
+        u32 count = std.convert::parse_u32(second, 10u32);
+        u16 value = core::rotate_left(left, count);
+        std.string::string text = format_value(value, radix);
+        return move text;
+    case Operation::rotate_right:
+        u32 count = std.convert::parse_u32(second, 10u32);
+        u16 value = core::rotate_right(left, count);
+        std.string::string text = format_value(value, radix);
+        return move text;
+    default: break;
     }
     u16 right = std.convert::parse_u16(second, radix);
     switch (operation) {
@@ -92,6 +121,37 @@ std.string::string evaluate(Operation operation, str first, str second, u32 radi
     case Operation::saturating_mul:
         u16 value = core::saturating_mul(left, right);
         std.string::string text = format_value(value, radix);
+        return move text;
+    case Operation::widening_mul:
+        auto (low, high) = core::widening_mul(left, right);
+        std.string::string low_text = format_value(low, radix);
+        std.string::string high_text = format_value(high, radix);
+        std.string::string text = f"{low_text} {high_text}";
+        return move text;
+    case Operation::carrying_add:
+        u16 extra = std.convert::parse_u16(third, radix);
+        auto (value, carry) = core::carrying_add(left, right, extra != 0u16);
+        std.string::string value_text = format_value(value, radix);
+        std.string::string text = f"{value_text} {carry}";
+        return move text;
+    case Operation::borrowing_sub:
+        u16 extra = std.convert::parse_u16(third, radix);
+        auto (value, borrow) = core::borrowing_sub(left, right, extra != 0u16);
+        std.string::string value_text = format_value(value, radix);
+        std.string::string text = f"{value_text} {borrow}";
+        return move text;
+    case Operation::narrowing_div:
+        u16 divisor = std.convert::parse_u16(third, radix);
+        bool fits = left < divisor;
+        if (fits == false) {
+            right as void;
+            std.string::string text = std.string::from_str("overflow");
+            return move text;
+        }
+        auto (quotient, remainder) = core::narrowing_div(left, right, divisor);
+        std.string::string quotient_text = format_value(quotient, radix);
+        std.string::string remainder_text = format_value(remainder, radix);
+        std.string::string text = f"{quotient_text} {remainder_text}";
         return move text;
     default: throw Usage { .message = "unsupported integer operation" };
     }

@@ -2,8 +2,8 @@
   "schema_version": 3,
   "generated_from": {
     "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-    "revision": "0.1.0-draft.72",
-    "sha256": "a1223079d45a77a6b7c878957a81092fd7434be307774eaa24b7faa61c2bbd44"
+    "revision": "0.1.0-draft.74",
+    "sha256": "43d2f47ffa40ecb8f28e8721f50bd6aec317c8f7a900d877922ed5673e96723d"
   },
   "extraction": {
     "qualified_item_pattern": "(?<![A-Za-z0-9_.])((?:core|std\\.[a-z][a-z0-9]*)::[A-Za-z_][A-Za-z0-9_]*)",
@@ -11,8 +11,9 @@
       "R-LIB-0001": 20,
       "R-LIB-0011": 10,
       "R-LIB-0012": 22,
-      "R-LIB-0024": 19,
+      "R-LIB-0024": 21,
       "R-LIB-0025": 4,
+      "R-LIB-0027": 10,
       "R-SLIB-C-0001": 1,
       "R-SLIB-CONV-0002": 1,
       "R-SLIB-CONV-0004": 1,
@@ -26,8 +27,9 @@
       "R-LIB-0001": "5375ba18932b66260e350206caa3bdd284a0d99ccb7365d6715ec86a82a256ac",
       "R-LIB-0011": "bad2e9acdb5d0e246e8b7ae30d39bd311a53a20b06d361b34b6558469c790062",
       "R-LIB-0012": "c2aa9b207f7297de2ab9c470dabf728f2fa1d92c2827b010ef7de32090bc1be1",
-      "R-LIB-0024": "0dcd6683ac922b193d1ccee1e32e808107f67421046def17b8831661b5bb8977",
+      "R-LIB-0024": "fbfd1bb8389820b08ab2f50db88d465dcc942769e47ebbea751f62ee31d948c4",
       "R-LIB-0025": "536bb3dc8c2d40e442d578aad7199694ad01cb313c0e04996b4f439e582223b4",
+      "R-LIB-0027": "7dcf70ed59c082c7cdd65190bf12a79a13cc523f8a37697cd221e8ac30b75b17",
       "R-SLIB-C-0001": "49e64346f93cce514fc3d6825645d536f78730d1219412c267f7aadb626baf83",
       "R-SLIB-CONV-0002": "467f4b66ef802d7b779b01c6c1a99a12cfdcef70d10129d56c97f6a672a12a17",
       "R-SLIB-CONV-0004": "fba1382b6e5573aa46908eb2a43acff59774ad84557b2f33073c63819f514a53",
@@ -4288,6 +4290,94 @@
       "scoped": false
     },
     {
+      "record_id": "core::borrowing_sub_SUFFIX#operation",
+      "id": "core::borrowing_sub_SUFFIX",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_closed_family",
+      "normative_rules": [
+        "R-LIB-0027"
+      ],
+      "implementation": {
+        "kind": "unimplemented"
+      },
+      "source_signature": "core::borrowing_sub_SUFFIX(SUFFIX left, SUFFIX right, bool borrow) -> (SUFFIX, bool)",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "(SUFFIX, bool)",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "(SUFFIX, bool)"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "(SUFFIX, bool)",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "(SUFFIX, bool)"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "5cd24666f1e8925e53f235b420e7a56a448d687b9ffd7dd50783884ffcbaabe3"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "core::carrying_add_SUFFIX#operation",
+      "id": "core::carrying_add_SUFFIX",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_closed_family",
+      "normative_rules": [
+        "R-LIB-0027"
+      ],
+      "implementation": {
+        "kind": "unimplemented"
+      },
+      "source_signature": "core::carrying_add_SUFFIX(SUFFIX left, SUFFIX right, bool carry) -> (SUFFIX, bool)",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "(SUFFIX, bool)",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "(SUFFIX, bool)"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "(SUFFIX, bool)",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "(SUFFIX, bool)"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "5cd24666f1e8925e53f235b420e7a56a448d687b9ffd7dd50783884ffcbaabe3"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
       "record_id": "core::checked_add_SUFFIX#operation",
       "id": "core::checked_add_SUFFIX",
       "facet": "operation",
@@ -4463,6 +4553,50 @@
         },
         "completion": null,
         "descriptor_sha256": "83e392198af971868ed318cf9a9cc8c1f81e1b0008f037fb0458e781e87a3ec0"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "core::count_ones_SUFFIX#operation",
+      "id": "core::count_ones_SUFFIX",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_closed_family",
+      "normative_rules": [
+        "R-LIB-0027"
+      ],
+      "implementation": {
+        "kind": "unimplemented"
+      },
+      "source_signature": "core::count_ones_SUFFIX(SUFFIX value) -> u32",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "u32",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "u32"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "u32",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "u32"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "313e9e094a4ec011e2bd1c5a533269caf4dc0a557a19785d11b8175243961415"
       },
       "panics_on_allocation_failure": false,
       "discardable_result": false,
@@ -4829,6 +4963,51 @@
       "scoped": false
     },
     {
+      "record_id": "core::field#operation",
+      "id": "core::field",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_family",
+      "normative_rules": [
+        "R-LIB-0024"
+      ],
+      "implementation": {
+        "kind": "intrinsic",
+        "compiler_contract": "The semantic pass lowers the call to a borrow of the field at the constant index, or in a generic definition to a field of the type parameter that each instantiation closes."
+      },
+      "source_signature": "core::field(const T* value, usize index) -> const F*",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "const F*",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "const F*"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "const F*",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "const F*"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "b6b855f3a4edac655df2371b86701d9a37e3a73703acadc4f54ef299a5fd4643"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
       "record_id": "core::field_attribute#operation",
       "id": "core::field_attribute",
       "facet": "operation",
@@ -4913,6 +5092,51 @@
         },
         "completion": null,
         "descriptor_sha256": "32968a3b110741b4906fb947d33a286535a35576a4ea604fb9aff9106f6b784a"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "core::field_mut#operation",
+      "id": "core::field_mut",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_family",
+      "normative_rules": [
+        "R-LIB-0024"
+      ],
+      "implementation": {
+        "kind": "intrinsic",
+        "compiler_contract": "The semantic pass lowers the call to an exclusive borrow of the field at the constant index, or in a generic definition to a field of the type parameter that each instantiation closes."
+      },
+      "source_signature": "core::field_mut(T* value, usize index) -> F*",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "F*",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "F*"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "F*",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "F*"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "a531ac2e7db79f946fae51dce7dfe83be4259e480640f45dac1d4808b4a5c999"
       },
       "panics_on_allocation_failure": false,
       "discardable_result": false,
@@ -5062,6 +5286,50 @@
       "scoped": false
     },
     {
+      "record_id": "core::leading_zeros_SUFFIX#operation",
+      "id": "core::leading_zeros_SUFFIX",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_closed_family",
+      "normative_rules": [
+        "R-LIB-0027"
+      ],
+      "implementation": {
+        "kind": "unimplemented"
+      },
+      "source_signature": "core::leading_zeros_SUFFIX(SUFFIX value) -> u32",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "u32",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "u32"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "u32",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "u32"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "313e9e094a4ec011e2bd1c5a533269caf4dc0a557a19785d11b8175243961415"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
       "record_id": "core::location#operation",
       "id": "core::location",
       "facet": "operation",
@@ -5155,6 +5423,50 @@
         "generator_contract": "Compiler emits the mathematical minimum for each of the ten literal fixed-integer suffixes."
       },
       "source_signature": "core::min_SUFFIX: SUFFIX"
+    },
+    {
+      "record_id": "core::narrowing_div_SUFFIX#operation",
+      "id": "core::narrowing_div_SUFFIX",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_closed_family",
+      "normative_rules": [
+        "R-LIB-0027"
+      ],
+      "implementation": {
+        "kind": "unimplemented"
+      },
+      "source_signature": "core::narrowing_div_SUFFIX(SUFFIX high, SUFFIX low, SUFFIX divisor) -> (SUFFIX, SUFFIX)",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "(SUFFIX, SUFFIX)",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "(SUFFIX, SUFFIX)"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "(SUFFIX, SUFFIX)",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "(SUFFIX, SUFFIX)"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "e30bda631b3c2b4a6d7e2f739500a0bcf7fd846ec586c0120b1ab815de21f624"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
     },
     {
       "record_id": "core::profile_name#operation",
@@ -5314,6 +5626,94 @@
       },
       "panics_on_allocation_failure": false,
       "discardable_result": true,
+      "scoped": false
+    },
+    {
+      "record_id": "core::rotate_left_SUFFIX#operation",
+      "id": "core::rotate_left_SUFFIX",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_closed_family",
+      "normative_rules": [
+        "R-LIB-0027"
+      ],
+      "implementation": {
+        "kind": "unimplemented"
+      },
+      "source_signature": "core::rotate_left_SUFFIX(SUFFIX value, u32 count) -> SUFFIX",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "SUFFIX",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "SUFFIX"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "SUFFIX",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "SUFFIX"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "3a7230606e598c1f35cb1159acb9cd7cbcc2ca9ed3d37905f2923ce275b62b55"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "core::rotate_right_SUFFIX#operation",
+      "id": "core::rotate_right_SUFFIX",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_closed_family",
+      "normative_rules": [
+        "R-LIB-0027"
+      ],
+      "implementation": {
+        "kind": "unimplemented"
+      },
+      "source_signature": "core::rotate_right_SUFFIX(SUFFIX value, u32 count) -> SUFFIX",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "SUFFIX",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "SUFFIX"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "SUFFIX",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "SUFFIX"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "3a7230606e598c1f35cb1159acb9cd7cbcc2ca9ed3d37905f2923ce275b62b55"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
       "scoped": false
     },
     {
@@ -5679,6 +6079,50 @@
       "scoped": false
     },
     {
+      "record_id": "core::swap_bytes_SUFFIX#operation",
+      "id": "core::swap_bytes_SUFFIX",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_closed_family",
+      "normative_rules": [
+        "R-LIB-0027"
+      ],
+      "implementation": {
+        "kind": "unimplemented"
+      },
+      "source_signature": "core::swap_bytes_SUFFIX(SUFFIX value) -> SUFFIX",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "SUFFIX",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "SUFFIX"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "SUFFIX",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "SUFFIX"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "3a7230606e598c1f35cb1159acb9cd7cbcc2ca9ed3d37905f2923ce275b62b55"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
       "record_id": "core::take#operation",
       "id": "core::take",
       "facet": "operation",
@@ -5765,6 +6209,50 @@
         },
         "completion": null,
         "descriptor_sha256": "3f4e91d76ddda30b61a55a0dca91ad61b75b7a067ea406ff3503ddcbf43f26e8"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "core::trailing_zeros_SUFFIX#operation",
+      "id": "core::trailing_zeros_SUFFIX",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_closed_family",
+      "normative_rules": [
+        "R-LIB-0027"
+      ],
+      "implementation": {
+        "kind": "unimplemented"
+      },
+      "source_signature": "core::trailing_zeros_SUFFIX(SUFFIX value) -> u32",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "u32",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "u32"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "u32",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "u32"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "313e9e094a4ec011e2bd1c5a533269caf4dc0a557a19785d11b8175243961415"
       },
       "panics_on_allocation_failure": false,
       "discardable_result": false,
@@ -6165,6 +6653,50 @@
         },
         "completion": null,
         "descriptor_sha256": "944122060e28c89e85a86af3bc587c23622ef7b851928ac34fb210dad9ddd727"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "core::widening_mul_SUFFIX#operation",
+      "id": "core::widening_mul_SUFFIX",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_closed_family",
+      "normative_rules": [
+        "R-LIB-0027"
+      ],
+      "implementation": {
+        "kind": "unimplemented"
+      },
+      "source_signature": "core::widening_mul_SUFFIX(SUFFIX left, SUFFIX right) -> (SUFFIX, SUFFIX)",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "(SUFFIX, SUFFIX)",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "(SUFFIX, SUFFIX)"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "(SUFFIX, SUFFIX)",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "(SUFFIX, SUFFIX)"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "e30bda631b3c2b4a6d7e2f739500a0bcf7fd846ec586c0120b1ab815de21f624"
       },
       "panics_on_allocation_failure": false,
       "discardable_result": false,

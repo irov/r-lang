@@ -15,7 +15,7 @@
 |Поле |Значение
 |Документ |R Core Language Specification
 |Версия языка |0.1
-|Редакция документа |0.1.0-draft.102
+|Редакция документа |0.1.0-draft.105
 |Статус |Перевод нормативного черновика; не является стабильным стандартом R 1.0
 |Язык документа |Русский перевод; ключевые нормативные термины приведены на английском
 |Целевой backend |ISO/IEC 9899:2018 (C17)
@@ -612,7 +612,7 @@ layout, Copy/Move и инициализацию. `+optional+` разрешает
 преобразования. Полный контракт преобразования задаёт R-SLIB-JSON-0001, а схему —
 R-SLIB-JSON-0002. Interface schema 5 экспортирует нормализованные контракты
 полей и fingerprints определений без изменения физического представления aggregate.
-Interface schema 33 добавляет description к экспортируемому контракту поля, а hook
+Interface schema 34 добавляет description к экспортируемому контракту поля, а hook
 `+json_schema+` — к экспортируемым hooks типа.
 
 Associated-имена `+json_marshal+`, `+json_unmarshal+`, `+json_is_zero+` и `+json_schema+`
@@ -1095,9 +1095,9 @@ contract. `+error+` доказывает допустимость во всех 
 оно не доказывает Send. Guard, lock outcome с guard, scoped handle, container iterator и
 entry reference держат region создавшей их операции (R-TYPE-0026) и никогда не
 `+unborrowed+`. Opaque standard types используют явно зарегистрированные capabilities, а
-не написание или суффикс имени. Constraint вне этого набора именует trait по R-TYPE-0043,
-core trait как `+core::Name+` по R-TYPE-0046 либо записывает callable signature по
-R-TYPE-0044.
+не написание или суффикс имени. Constraint вне этого набора именует trait либо, как
+`+fields(Trait)+`, trait полей по R-TYPE-0043, core trait как `+core::Name+` по R-TYPE-0046
+либо записывает callable signature по R-TYPE-0044.
 
 `+json_encode+` и `+json_decode+` доказывают доступность соответствующего направления
 JSON-преобразования по R-SLIB-JSON-0001. Ни одно не подразумевает другое; Copy и POD не
@@ -1263,9 +1263,17 @@ trait либо модулю целевого типа. Для пары кано�
 требует `+R-DIAG-TRAIT-001+`. Такая запись в другом заголовке требует `+R-DIAG-TYPE-001+`.
 Запись не добавляет параметра в схему. Тело может применять к значениям `+P::Name+`
 операции, которые обосновывают её ограничения, а каждая инстанциация shall связывать с
-`+P::Name+` тип, доказывающий их; иначе требуется `+R-DIAG-TYPE-001+`. Interface schema 33
+`+P::Name+` тип, доказывающий их; иначе требуется `+R-DIAG-TYPE-001+`. Interface schema 34
 записывает такие записи как
 `+associated_constraints=((associated=P::Name constraints=(...)))+`.
+
+Ограничение `+fields(Trait)+`, где `+Trait+` именует trait или его приложение, как выше,
+доказывает struct или кортеж, тип каждого поля которого доказывает `+Trait+`; другой аргумент
+типа требует `+R-DIAG-TYPE-001+`, как и тип поля, который его не доказывает. В
+generic-определении поле параметра, которое `+core::field+` или `+core::field_mut+` заимствует
+по индексу, решаемому инстанциацией, имеет методы `+Trait+` и никаких других операций
+(R-REFL-0006); определение проверяется один раз, а каждая его инстанциация — с типами своих
+полей. Interface schema 34 записывает ограничение как `+(fields Trait)+`.
 
 [[R-TYPE-0044]]
 *R-TYPE-0044* — Generic constraint `+fn(P...) -> R+` описывает синхронный callable с
@@ -1330,7 +1338,7 @@ receiver удерживает (R-BORROW-0009): пока результат жи�
 opaque-результат — зависит от всего receiver, как от заимствованного аргумента, из
 которого сформирован результат (R-BORROW-0009), поэтому receiver остаётся заимствованным,
 пока результат жив. Реализация наследует атрибут и может его повторить; атрибут на методе,
-реализующем prototype без него, требует `+R-DIAG-TRAIT-001+`. Interface schema 33
+реализующем prototype без него, требует `+R-DIAG-TRAIT-001+`. Interface schema 34
 записывает `+lending=true+`.
 
 Связанный тип может объявлять типовые параметры, например
@@ -1349,7 +1357,7 @@ generic trait или реализации; иначе требуется `+R-DIA
 которые дают ограничения его связанного типа; после неё это выбранное связывание с
 аргументами, подставленными вместо параметров. Generic-параметр не выводится из
 применения. Связанный тип с параметрами не фиксируется равенством opaque-результата или
-dyn-интерфейса (R-TYPE-0048, R-TYPE-0051). Interface schema 33 записывает параметры
+dyn-интерфейса (R-TYPE-0048, R-TYPE-0051). Interface schema 34 записывает параметры
 связанного типа, а связывание с параметрами — как
 `+(type_function parameters=(...) body=...)+`.
 
@@ -1452,7 +1460,7 @@ generic argument, рекурсивно по поддерживаемым фор�
 (R-TYPE-0036). Ожидаемый результат не участвует. Copy/Move, заимствования, checked errors,
 запуск async и cleanup сохраняют обычные правила.
 
-Interface schema 33 записывает константные параметры с `+constant_type=usize+`, закрытые
+Interface schema 34 записывает константные параметры с `+constant_type=usize+`, закрытые
 аргументы с типом и значением, зависимые выражения и fingerprints определений. Callable
 constraints schema 11 остаются структурными. Импорт определений по-прежнему требует
 исходники; сериализация generic bodies не вводится.
@@ -1518,7 +1526,7 @@ Generic-тело проверяется до инстанцирования. В�
 необработанный член передаётся наружу. Именованные catch, bare rethrow и finally сохраняют
 обычные правила. Происхождение заимствований консервативно сохраняется через абстрактные
 вызовы и именованные catch; подстановка набора не продлевает жизнь payload. Ошибки
-async-start остаются отдельными от выводимого набора completion-errors. Interface schema 33 записывает вид параметра `+errors+`, структурные callable-эффекты и канонические
+async-start остаются отдельными от выводимого набора completion-errors. Interface schema 34 записывает вид параметра `+errors+`, структурные callable-эффекты и канонические
 аргументы наборов. Определения по-прежнему импортируются из исходников.
 
 [[R-TYPE-0050]]
@@ -1552,7 +1560,7 @@ async-start остаются отдельными от выводимого на
 объявление уровня модуля, использующее её до проверки реализаций, получает значение,
 вычисленное разведочным проходом (R-EXPR-0032).
 
-Interface schema 33 перечисляет константы каждого trait с их типом и признаком значения по
+Interface schema 34 перечисляет константы каждого trait с их типом и признаком значения по
 умолчанию и записывает зависимую константу как её trait, имя и владельца; fingerprint
 определения реализации покрывает её значения. Импорт определений по-прежнему требует
 исходники.
@@ -1608,7 +1616,7 @@ borrow-контракт, must-use и ресурсные атрибуты — а�
 форматированием (R-TYPE-0046); его выбор форматирует значение этим форматированием.
 Загрузка новых реализаций во время работы программы, восстановление типа члена
 и сам интерфейс как generic-аргумент в эту редакцию не входят; владельцы интерфейсов
-следуют R-TYPE-0055. Interface schema 33 записывает тип как `+(dyn "dyn(...)")+` с
+следуют R-TYPE-0055. Interface schema 34 записывает тип как `+(dyn "dyn(...)")+` с
 каноническим контрактом интерфейса.
 
 [[R-TYPE-0052]]
@@ -1626,7 +1634,7 @@ layout, классификацию Copy и Move, порядок очистки �
 значений элементов. `+value.N+` выбирает элемент `+N+` как поле (R-AGG-0002), а шаблон
 match разбирает кортеж полями `+.0+`, `+.1+`, ... (R-EXPR-0031). Элементы держат views как
 поля; последующее использование `+value.N+` сохраняет живыми views этого элемента.
-`+core::type_name+` записывает кортеж как `+(A, B)+`, а interface schema 33 — как
+`+core::type_name+` записывает кортеж как `+(A, B)+`, а interface schema 34 — как
 `+(tuple A B)+`.
 
 [[R-TYPE-0053]]
@@ -1673,7 +1681,7 @@ spread значения типа `+P+`. Spread не последним аргу�
 каждую длину и завершается там, где ветвь не выбрана.
 
 Инстанциация заменяет каждый пакет его кортежем, поэтому у инстанса только обычные
-параметры и прямые вызовы. Interface schema 33 записывает `+pack=true+` с ограничениями
+параметры и прямые вызовы. Interface schema 34 записывает `+pack=true+` с ограничениями
 каждого элемента, пакет из префикса и элементов другого пакета — как
 `+(pack prefix=(...) base=... from=k)+`, а раскрытие в callable-сигнатуре — как
 `+(expand P)+`.
@@ -1726,7 +1734,7 @@ generic-функции; это множество конечно и извест
 каждое преобразование к типу её доказало.
 
 Значение-функция представлено номером обозначаемой функции; вызов — выбор по целям его
-типа с прямым вызовом каждой либо async-запуск выбранной функции. Interface schema 33
+типа с прямым вызовом каждой либо async-запуск выбранной функции. Interface schema 34
 записывает тип функции как `+(fn parameters=(...) return=R throws=(...))+`, добавляя
 `+async=true+`, `+noalloc=true+` и `+nonblocking=true+` для имеющихся формы и гарантий.
 Значения-функции, захватывающие состояние, упорядочение значений-функций и типы функций в
@@ -1781,7 +1789,7 @@ capability и равенство связанных типов контракт�
 
 Владелец интерфейса представлен владельцем своего члена и тегом члена; его уничтожение
 выбирает уничтожение члена по тегу, а сужение перенумеровывает тег по таблице двух
-интерфейсов. Interface schema 33 записывает его как владельца типа интерфейса, например
+интерфейсов. Interface schema 34 записывает его как владельца типа интерфейса, например
 `+(own (dyn "dyn(...)"))+` или `+(weak_rc (dyn "dyn(...)"))+`. Исключительный доступ к
 члену разделяемого владельца, восстановление типа члена, сам интерфейс как
 generic-аргумент и владельцы интерфейсов в C-объявлениях в эту редакцию не входят.
@@ -1977,7 +1985,7 @@ struct — значение `+Type {}+`: инициализаторы и зна�
 `+core::take+` (R-OWN-0019) и необязательное поле JSON (R-JSON-0001); его вычисление может
 бросать checked errors вычисляемых им инициализаторов. Атрибут `+@default+` стоит перед
 одним вариантом enum или error enum; второй `+@default+` в одном enum требует
-`+R-DIAG-NAME-002+`, а иной атрибут у варианта — `+R-DIAG-SYN-002+`. Interface schema 33
+`+R-DIAG-NAME-002+`, а иной атрибут у варианта — `+R-DIAG-SYN-002+`. Interface schema 34
 записывает `+initializer=true+` у поля с инициализатором и `+default=true+` у варианта
 `+@default+`.
 
@@ -2308,7 +2316,7 @@ Copy, может бросить только `+std.alloc::alloc_error+`: при 
 требует `+R-DIAG-STACK-001+`; статический граф вызовов (R-FUNC-0004) и ресурсные контракты
 (R-FUNC-0019) включают каждый хук клонирования, который вызывает копируемая структура.
 Клонирование значения, которое не Copy, выделяет память и не имеет доказательства
-`+@noalloc+` и `+@nonblocking+`. Interface schema 33 записывает хук `+clone+` типа и
+`+@noalloc+` и `+@nonblocking+`. Interface schema 34 записывает хук `+clone+` типа и
 ограничение `+clone+` generic-параметра.
 
 [[borrowing-lifetimes]]
@@ -2420,7 +2428,7 @@ usize both(const u8[] data) {
 }
 ----
 
-Interface schema 33 экспортирует `+borrow_contract+` для обычного результата и каждой
+Interface schema 34 экспортирует `+borrow_contract+` для обычного результата и каждой
 номинальной checked error, включая generic-определения и закрытые инстанциации.
 Происхождение — `+none+` (заимствований нет), `+static+`, точный набор нулевых индексов
 входных параметров, где `+held=(...)+` перечисляет входы, от которых оно зависит только
@@ -3154,7 +3162,7 @@ field count и далее требует `+R-DIAG-CONST-001+`; любой дру
 `+core::location()+` — место вызова: путь module, в source которого стоит вызов, двоеточие и
 номер строки вызова, считая с 1, в виде `+module.path:line+`. Все три — `+constexpr str+`,
 фиксированные во время translation, и ни одна форма не принимает argument; вызов
-`+core::location()+` в теле generic или в default называет своё собственное место. Каждая форма R-REFL-0001..R-REFL-0005 доступна в каждом profile, ничего не
+`+core::location()+` в теле generic или в default называет своё собственное место. Каждая форма R-REFL-0001..R-REFL-0006 доступна в каждом profile, ничего не
 выделяет, паникует только через Core checks своих operands и не вводит run-time type
 metadata (R-TYPE-0039): selections понижаются в прямые сравнения значения enumeration,
 активного tag либо байтов имени с таблицами времени translation.
@@ -3173,6 +3181,26 @@ Index, являющийся integer constant expression, сворачивает�
 требуют `+R-DIAG-TYPE-001+`; generic parameter проверяется при инстанциации, как в
 R-REFL-0001. Формы ничего не выделяют и не вводят run-time type metadata: выбор во время
 выполнения сравнивает свой operand с таблицей времени трансляции.
+
+[[R-REFL-0006]]
+*R-REFL-0006* — `+core::field(value, index)+` заимствует поле struct или элемент кортежа с
+номером объявления `+index+` от нуля, а `+core::field_mut(value, index)+` заимствует его
+исключительно. `+value+` — либо `+&place+` места struct или кортежа, которое заимствует только
+это поле, как `+&place.name+` или `+&place.0+`, либо borrow такого значения, `+const T*+` или
+`+T*+` для `+core::field+` и `+T*+` для `+core::field_mut+`, через который поле заимствуется,
+как его заимствовало бы `+value->name+`. Результат — `+const F*+` или `+F*+` для типа `+F+`
+этого поля, и он следует правилам этого borrow поля, поэтому borrows двух разных полей одного
+места независимы (R-BORROW-0011). `+index+` shall быть целочисленным константным выражением
+типа `+usize+`, например константой цикла времени трансляции (R-STMT-0023); тогда вызов и есть
+этот borrow поля, без выбора во время выполнения. В generic-определении, чей параметр типа `+T+`
+ограничен `+fields(Trait)+` (R-TYPE-0043), поле `+T+` по константе, которую решает
+инстанциация, имеет неизвестный тип, предоставляющий только методы `+Trait+`; каждая
+инстанциация подставляет тип поля. В самом определении borrows полей такого значения
+считаются borrows всего места, поскольку какие это поля, решает только инстанциация. Index, не являющийся константным выражением, требует
+`+R-DIAG-CONST-002+`, а index на числе полей и дальше — `+R-DIAG-CONST-001+`; operand ни одной
+из форм выше и shared borrow, переданный `+core::field_mut+`, требуют `+R-DIAG-TYPE-001+`, а
+protected-поле другого модуля (R-NAME-0003) — `+R-DIAG-NAME-001+`. Формы ничего не выделяют и
+не паникуют.
 
 [[static-conditions]]
 === 14.3 Статические условия
@@ -3277,7 +3305,8 @@ iteration expression. Condition shall присутствовать; init declara
 `+continue+` — только в loop и переходит к iteration clause `+for+` либо condition.
 Все exited automatic objects dropped согласно 11.2.
 
-Оператор `+while+`, `+for+` или range-for может нести метку, как
+Оператор `+while+`, `+for+` или range-for, а также switch по R-STMT-0024, может нести
+метку, как
 `+outer: for (...) { ... }+` (Annex A). В его теле `+break name;+` покидает, а
 `+continue name;+` продолжает цикл с меткой `+name+` из любой вложенности циклов и операторов
 `+switch+`: переход покидает каждую область между ними с её уничтожениями и проходит каждый
@@ -3653,6 +3682,43 @@ container обходится через его standard cursor, loop variable �
 variable требуют `+R-DIAG-TYPE-001+`; named Move iterator без `+move+` либо `+&+` требует
 `+R-DIAG-MOVE-001+`.
 
+[[R-STMT-0023]]
+*R-STMT-0023* — Цикл времени трансляции `+for (constexpr T name in low..high) block+` повторяет
+свой блок при трансляции, по одному разу для каждого значения `+name+` от `+low+` до `+high+`
+не включительно, по возрастанию; `+T+` — целый тип, а обе границы — константные выражения
+(R-EXPR-0022) типа `+T+`. В теле generic-определения граница может зависеть от его параметров,
+как `+core::field_count::<T>()+` или константный параметр: тогда блок проверяется один раз, где
+`+name+` — неизвестная константа типа `+T+`, а каждая инстанциация повторяет его с границами
+своих аргументов. В каждом повторении `+name+` — константа типа `+T+` со значением этого
+повторения: она допустима там, где требуется константное выражение, например в условии `+@if+`
+(R-META-0001), в границе массива или в индексе `+core::field+` (R-REFL-0006), и вне блока ничего
+не называет. Каждое повторение — отдельный блок, выражения которого проверяются с типами этого
+повторения, а объекты уничтожаются в его конце; повторения после того, которое не может
+завершиться, недостижимы и не транслируются. Цикл не создаёт цикла, счётчика или объекта
+времени выполнения, а пустой диапазон ничего не повторяет. `+return+` и `+throw+` покидают
+повторение, как любой блок; `+break+` или `+continue+`, чьим циклом был бы цикл времени
+трансляции, требуют `+R-DIAG-TYPE-001+`, а метка на таком цикле (R-STMT-0004) —
+`+R-DIAG-SYN-001+`. Тип, не являющийся целым, и диапазон, записанный не как `+low..high+`,
+требуют `+R-DIAG-TYPE-001+`, граница, не являющаяся константным выражением, —
+`+R-DIAG-CONST-002+`, а более 1024 повторений — `+R-DIAG-LIMIT-001+`.
+
+[[R-STMT-0024]]
+*R-STMT-0024* — `+switch+`, operand которого имеет целый тип, `+char+` или тип
+enumeration без полей, может нести метку, как `+name: switch (value) { ... }+`. В его клаузах,
+включая вложенные в них циклы и блоки, `+continue name (next);+` вычисляет `+next+` и
+преобразует его к типу operand, как это делает присваивание (R-INIT-0007), покидает каждую
+область до switch с её уничтожениями и маршрутами finally, как переход по метке
+(R-STMT-0004), затем выбирает и выполняет клаузу для этого значения так же, как switch для
+своего operand; `+break name;+` покидает switch из любой такой вложенности. Завершившаяся
+клауза, `+break;+` и `+fallthrough;+` сохраняют смысл (R-STMT-0007), поэтому switch
+заканчивается после одной клаузы, если клауза не выбирает снова. Состояния объектов в клаузе,
+выбранной снова, — те, что достигают её из каждого выбора, как в начале итерации цикла, а
+`+continue;+` без метки в клаузе продолжает ближайший цикл вокруг switch. Метка на switch,
+operand которого имеет другой тип, требует `+R-DIAG-TYPE-001+`; `+continue name;+` без
+значения для помеченного switch, `+continue name (next);+` для помеченного цикла и
+`+continue;+` без метки, когда вокруг switch нет цикла, требуют `+R-DIAG-FLOW-001+`; значение
+другого типа требует диагностики этого присваивания.
+
 [[functions]]
 == 16. Functions and calling semantics
 
@@ -3698,7 +3764,7 @@ Receiver метода следует R-FUNC-0014. Выбор не вычисля
 borrows или checked effects: понижается только выбранный вызов, один раз, с его ошибками.
 Generic-тела выбирают объявление при проверке определения по constraints; инстанциация
 сохраняет этот выбор. Имена из разных импортируемых модулей остаются неоднозначными. Члены
-перегрузки имеют детерминированную каноническую идентичность в interface schema 33 и в
+перегрузки имеют детерминированную каноническую идентичность в interface schema 34 и в
 порядке генерируемых символов функций. Static call graph функций R программы, включая drop
 hooks, достижимые через owned storage, initializers
 `+std.sync::call_once+`/`+get_or_init+` и asynchronous starts, shall быть acyclic, кроме
@@ -4054,7 +4120,7 @@ Generic thread entry выводится структурно из value argument
 по R-EXPR-0020. Создание и синхронный вызов closure не вводят indirect call, function pointer или heap
 allocation; captures и body сохраняют собственные эффекты. Async-вызов имеет обычные
 эффекты выделения task и cleanup.
-Interface schema 33 записывает callable constraints структурно: режим, типы параметров
+Interface schema 34 записывает callable constraints структурно: режим, типы параметров
 и результат; synthetic callable traits и implementations не экспортируются как trait records.
 
 [[R-FUNC-0018]]
@@ -4125,7 +4191,7 @@ thread-local cleanup включается в доказательство отс
 
 Неудачное доказательство требует `+R-DIAG-RESOURCE-001+` для `+@noalloc+` либо
 `+R-DIAG-RESOURCE-002+` для `+@nonblocking+` с цепочкой вызова или cleanup.
-Interface schema 33 экспортирует `+noalloc=true/false+` и
+Interface schema 34 экспортирует `+noalloc=true/false+` и
 `+nonblocking=true/false+` у функций и generic-схем и включает их в fingerprints.
 Флаги описывают объявленные контракты, а не выведенные обещания неаннотированного
 кода. Бинарный ABI и C-символы стандартной библиотеки не меняются.
@@ -4176,7 +4242,7 @@ Await подтверждает использование task и создаёт
 обёртки. Атрибут не переносится через стёртую raw function signature. Copy/Move,
 проверка borrow и правила разрешения task остаются обязательными. R-INIT-0014
 независимо запрещает безусловную замену локального значения.
-Interface schema 33 записывает `+must_use=true+`; отсутствие означает false.
+Interface schema 34 записывает `+must_use=true+`; отсутствие означает false.
 
 [[R-FUNC-0021]]
 *R-FUNC-0021* — Атрибут без аргументов `+@discardable+` помечает результат именованной функции
@@ -4199,7 +4265,7 @@ checking, Copy/Move и разрешение effectful task сохраняют с
 отбрасывает ни одной task. Разрешение не следует за значением в local, операнд оператора,
 условное выражение, callable-ограничение или raw function signature; они остаются под
 R-STMT-0001 и R-EXPR-0023, а local, инициализированный из `+@discardable+`-вызова, —
-обычный local. Interface schema 33 записывает `+discardable=true+`; отсутствие означает false.
+обычный local. Interface schema 34 записывает `+discardable=true+`; отсутствие означает false.
 
 [[R-FUNC-0022]]
 *R-FUNC-0022* — `+out T name+` объявляет выходной параметр синхронной функции R.
@@ -4238,7 +4304,7 @@ runtime-индексов; чтение или явное отбрасывани�
 
 При именованном вызове `+@discardable+` разрешает игнорировать выходы; это разрешение
 не переносится через function item, opaque callable или callable constraint. Оно не
-может отменить `+@must_use+` типа выхода. Interface schema 33 представляет режим как
+может отменить `+@must_use+` типа выхода. Interface schema 34 представляет режим как
 `+(out T)+`. Обычный изменяемый указатель не имеет контракта out. R-ERR-0003 по-прежнему
 запрещает ошибку, покидающую finally.
 
@@ -4272,7 +4338,8 @@ dereference places, borrows и slices своего storage; операторы, 
 целочисленными, floating, `+char+`, `+bool+` и enumeration types и views строки как
 `+str+` или как её байтов; assignments и compound assignments своего storage; aggregate и
 array initializers; `+panic+`; `+core::wrapping_*+`, `+core::saturating_*+`,
-`+core::enum_name+` и `+core::enum_ordinal+`; точные операции `+abs+`, `+floor+`,
+битовые и широкие целочисленные операции Library R-LIB-0027, `+core::enum_name+` и
+`+core::enum_ordinal+`; точные операции `+abs+`, `+floor+`,
 `+ceil+`, `+trunc+`, `+round+`, `+copy_sign+`, `+min+`, `+max+`, `+next_after+`,
 `+is_finite+`, `+is_infinite+`, `+is_nan+`, `+is_normal+` и `+sign_bit+` из `+std.math+`
 над этими типами с плавающей точкой и их корректно округлённые `+sqrt+` и `+remainder+`,
@@ -4286,7 +4353,7 @@ pointers, atomic и volatile access, callable values, tasks, `+await+`, threads,
 другие стандартные операции; вызов run-time функции действует так же. При трансляции
 allocation не отказывает: её ограничивают лимиты R-IDB-010, поэтому ветвь catch ошибки
 allocation там не выполняется, а capacity owner, которая следует политике роста во время
-выполнения, не наблюдается. Evaluability — свойство всей цепочки вызовов; interface schema 33 экспортирует его как `+consteval=true+` (R-MOD-0006).
+выполнения, не наблюдается. Evaluability — свойство всей цепочки вызовов; interface schema 34 экспортирует его как `+consteval=true+` (R-MOD-0006).
 
 [[R-FUNC-0024]]
 *R-FUNC-0024* — Атрибут без аргументов `+@chain+` помечает метод, вызов которого может
@@ -4308,7 +4375,7 @@ function item, требует `+R-DIAG-SYN-001+`; receiver в скобках `+(
 prototype. Атрибут не меняет ни сигнатуру, checked errors, borrow contract и владение
 метода, ни обязательства R-FUNC-0020. В асинхронном кадре временный consuming receiver
 вычисляется в скрытый объект кадра, как любой argument, а последний вызов цепочки может
-быть awaited (R-STMT-0012). Interface schema 33 записывает `+chain=true+`; отсутствие
+быть awaited (R-STMT-0012). Interface schema 34 записывает `+chain=true+`; отсутствие
 означает false.
 
 [[R-FUNC-0025]]
@@ -4512,7 +4579,7 @@ error читаются через такое значение; через нег
 Members family не содержат borrow, slice, runtime `+str+` или type, содержащий их; такой
 member требует `+R-DIAG-TYPE-001+`. Library error `+std.error::fault+` — корень
 стандартных ошибок (Library R-SLIB-ERR-0004): её family не имеет собственного member, и у
-неё нет полей. Interface schema 33 записывает `+parent=+` для error с parent и пишет type
+неё нет полей. Interface schema 34 записывает `+parent=+` для error с parent и пишет type
 такого значения как `+(error_family T)+`.
 
 [[R-AGG-0012]]
@@ -4535,7 +4602,7 @@ member требует `+R-DIAG-TYPE-001+`. Library error `+std.error::fault+` �
   собственным форматированием.
 
 Реализации и хуки — объявления модуля, объявившего тип: они проверяются и транслируются
-как написанные и записываются в его интерфейс, а interface schema 33 дополнительно
+как написанные и записываются в его интерфейс, а interface schema 34 дополнительно
 перечисляет способности как `+derived=+`. Generic-тип добавляет способность к каждому
 своему параметру-типу — как ограничение реализации (R-TYPE-0042) или хуков (R-FUNC-0009),
 поэтому инстанс обладает ею ровно тогда, когда её доказывают его аргументы. Error с parent
@@ -4573,7 +4640,7 @@ enum или error, когда его цели содержат `+type+`, пер�
 `+Enum::name+`, и оно имеет тип своего поля, целое — в его диапазоне. Значения — константы
 времени трансляции, которые читает R-REFL-0005: атрибут не меняет размещения, преобразований
 и поведения объявления, которое он помечает, и не создаёт метаданных времени выполнения.
-Interface schema 33 экспортирует цели типа атрибута и атрибуты каждого типа, поля и
+Interface schema 34 экспортирует цели типа атрибута и атрибуты каждого типа, поля и
 перечислителя.
 
 Имя встроенного атрибута (R-GRAM-0007) всегда обозначает его, и тип атрибута с таким именем
@@ -6071,7 +6138,7 @@ strategy, atomic lock-free properties, C compiler/ABI identity, selected profile
 
 Эталонный компилятор понижает checked и async closures, замыкания внутри generic-функций
 и синхронные generic-представления с заимствованиями через обычные HIR, MIR и C17.
-Interface schema 33 записывает ресурсные контракты, значимость и отбрасываемость результата
+Interface schema 34 записывает ресурсные контракты, значимость и отбрасываемость результата
 и происхождение заимствований. Обычный результат и каждая checked error имеют отдельные границы регионов;
 вложенные projections консервативно используют соответствующее объединение.
 
@@ -6098,7 +6165,7 @@ mutex-based executor свободными от аллокаций и блоки�
 уровня модуля продолжают прибавляться после 32 проходов, требует `+R-DIAG-LIMIT-001+`.
 `+long double+` цели, формат которого не binary64, остаётся run-time значением, а
 dictionary с ключами с плавающей точкой или `+std.string::string+` не замораживается в
-образ программы. Interface schema 33 записывает значение экспортируемого объекта
+образ программы. Interface schema 34 записывает значение экспортируемого объекта
 каноническим термом его проверенного инициализатора, поэтому изменение экспортируемого
 const-значения (R-MOD-0005) меняет интерфейс.
 
@@ -6240,7 +6307,8 @@ constant-parameter-type = "i8" | "i16" | "i32" | "i64" | "isize" | "u8" | "u16" 
                     | "u64" | "usize" | "bool" ;
 generic-constraint  = "copy" | "pod" | "send" | "sync" | "key" | "error" | "unborrowed"
                     | "json_encode" | "json_decode" | "errors" | "clone" | trait-application
-                    | callable-constraint ;
+                    | callable-constraint | fields-constraint ;
+fields-constraint   = "fields", "(", trait-application, ")" ;
 trait-name          = identifier | module-path, "::", identifier | core-trait-name ;
 trait-application   = trait-name, [ "<", type, { ",", type }, ">" ] ;
 core-trait-name     = "core", "::", ( "Iterator" | "Contains" ) ;
@@ -6492,7 +6560,7 @@ c-abi-type          = "c_char" | "c_schar" | "c_uchar" | "c_short" | "c_ushort"
 statement           = block | object-declaration | lambda-declaration
                     | expression-statement | if-statement | switch-statement | while-statement | for-statement
                     | for-in-statement | labeled-loop-statement | static-if-statement | deadline-statement
-                    | budget-statement
+                    | budget-statement | constexpr-for-statement | labeled-switch-statement
                     | thread-scope-statement | task-scope-statement | select-statement | jump-statement
                     | drop-statement | await-object-declaration | await-statement | try-statement
                     | throw-statement | unsafe-block ;
@@ -6507,11 +6575,14 @@ static-if-statement = "@", "if", "(", static-predicate, ")", block,
 while-statement     = "while", "(", statement-condition, ")", block ;
 labeled-loop-statement = identifier, ":", ( while-statement | for-statement
                                           | for-in-statement ) ;
+labeled-switch-statement = identifier, ":", switch-statement ;
 for-statement       = "for", "(", [ for-init ], ";", condition-expression, ";",
                       [ expression ], ")", block ;
 for-init            = object-declaration-no-semicolon | expression ;
 for-in-statement    = "for", "(", ( type | "auto" ), identifier, "in", iterable, ")", block ;
 iterable            = expression | expression, "..", expression ;
+constexpr-for-statement = "for", "(", "constexpr", type, identifier, "in", expression, "..",
+                          expression, ")", block ;
 object-declaration-no-semicolon = [ storage-specifier ], ( type | "auto" ), identifier, "=",
                                   initializer ;
 lambda-declaration  = [ "async" ], "fn", { callable-resource-attribute }, [ callable-mode ],
@@ -6543,14 +6614,16 @@ case-body-statement = static-if-statement | block | object-declaration | express
                     | thread-scope-statement | task-scope-statement | select-statement
                     | drop-statement | await-object-declaration | await-statement | try-statement
                     | unsafe-block | conditional-throw-statement | deadline-statement
-                    | budget-statement ;
-clause-terminator   = "break", [ identifier ], ";" | "continue", [ identifier ], ";"
+                    | budget-statement | constexpr-for-statement | labeled-switch-statement ;
+clause-terminator   = "break", [ identifier ], ";"
+                    | "continue", [ identifier, [ "(", expression, ")" ] ], ";"
                     | "return", [ return-operand ], ";"
                     | "throw", [ throw-operand ], ";"
                     | conditional-throw-else-statement
                     | "fallthrough", ";" ;
 
-jump-statement      = "break", [ identifier ], ";" | "continue", [ identifier ], ";"
+jump-statement      = "break", [ identifier ], ";"
+                    | "continue", [ identifier, [ "(", expression, ")" ] ], ";"
                     | "return", [ return-operand ], ";" ;
 return-operand      = expression | aggregate-initializer ;
 try-statement       = "try", block,

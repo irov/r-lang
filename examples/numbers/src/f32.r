@@ -13,7 +13,7 @@ protected std.string::string format_value(f32 value, u32 radix)
     return move text;
 }
 
-std.string::string evaluate(Operation operation, str first, str second, u32 radix)
+std.string::string evaluate(Operation operation, str first, str second, str third, u32 radix)
     throws Usage, std.convert::parse_error, std.convert::range_error, std.format::format_error, std.alloc::alloc_error {
     if (operation == Operation::convert) {
         f64 input = std.convert::parse_f64(first);

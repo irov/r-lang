@@ -13,7 +13,7 @@ protected std.string::string format_value(i8 value, u32 radix)
     return move text;
 }
 
-std.string::string evaluate(Operation operation, str first, str second, u32 radix)
+std.string::string evaluate(Operation operation, str first, str second, str third, u32 radix)
     throws Usage, std.convert::parse_error, std.convert::range_error, std.format::format_error, std.alloc::alloc_error {
     if (operation == Operation::convert) {
         f64 input = std.convert::parse_f64(first);
@@ -33,6 +33,35 @@ std.string::string evaluate(Operation operation, str first, str second, u32 radi
     if (operation == Operation::parse) {
         std.string::string text = format_value(left, radix);
         return move text;
+    }
+    switch (operation) {
+    case Operation::leading_zeros:
+        u32 count = core::leading_zeros(left);
+        std.string::string text = f"{count}";
+        return move text;
+    case Operation::trailing_zeros:
+        u32 count = core::trailing_zeros(left);
+        std.string::string text = f"{count}";
+        return move text;
+    case Operation::count_ones:
+        u32 count = core::count_ones(left);
+        std.string::string text = f"{count}";
+        return move text;
+    case Operation::swap_bytes:
+        i8 value = core::swap_bytes(left);
+        std.string::string text = format_value(value, radix);
+        return move text;
+    case Operation::rotate_left:
+        u32 count = std.convert::parse_u32(second, 10u32);
+        i8 value = core::rotate_left(left, count);
+        std.string::string text = format_value(value, radix);
+        return move text;
+    case Operation::rotate_right:
+        u32 count = std.convert::parse_u32(second, 10u32);
+        i8 value = core::rotate_right(left, count);
+        std.string::string text = format_value(value, radix);
+        return move text;
+    default: break;
     }
     i8 right = std.convert::parse_i8(second, radix);
     switch (operation) {

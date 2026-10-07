@@ -388,6 +388,22 @@ static bool r_overload_argument_type(
         if (symbol == NULL) {
             RExpressionResult selected = {0};
             uint32_t variant = 0U;
+            RAstRef root, item;
+            RAstTokenView scope, constant;
+            RTokenKind type_token = R_TOKEN_INVALID;
+            /* Library R-LIB-0001: `core::min_SUFFIX` and `core::max_SUFFIX` have the type of their
+               suffix (defect L45-1). */
+            if ((view.child_count == 2U) && r_ast_ref_child(context, ref, 0U, &root) &&
+                r_ast_ref_token(context, root, &scope) &&
+                r_semantic_token_text_equal_owned(context, &scope, "core") &&
+                r_ast_ref_child(context, ref, 1U, &item) &&
+                r_ast_ref_token(context, item, &constant) &&
+                ((r_semantic_token_text_starts_with_owned(context, &constant, "min_") &&
+                  r_body_core_integer_suffix(context, constant.span, "min_", &type_token)) ||
+                 (r_semantic_token_text_starts_with_owned(context, &constant, "max_") &&
+                  r_body_core_integer_suffix(context, constant.span, "max_", &type_token)))) {
+                return r_semantic_type_from_token(context, type_token, result);
+            }
             if (!r_body_lower_enum_constant(body, ref, &selected, &variant)) {
                 return false;
             }

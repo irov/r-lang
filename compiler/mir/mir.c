@@ -3143,6 +3143,8 @@ static bool r_mir_lower_standard_call(RMirBuildContext *build,
     }
     expected_count =
         (math_operation != NULL) ? math_operation->parameter_count
+        : r_standard_core_bits_operation(node->standard_operation)
+            ? r_standard_core_bits_operand_count(node->standard_operation)
         /* R-SLIB-NET-0012..0013: the synchronous option operations take their descriptor's
            operands. */
         : (r_standard_net_operation(node->standard_operation) != NULL)
@@ -9418,6 +9420,18 @@ static bool r_mir_dump_instruction(const RFrontendContext *context,
         case R_STANDARD_CALL_RANDOM_FILL:
             operation_name = "std.random::fill";
             break;
+        case R_STANDARD_CALL_CORE_LEADING_ZEROS:
+        case R_STANDARD_CALL_CORE_TRAILING_ZEROS:
+        case R_STANDARD_CALL_CORE_COUNT_ONES:
+        case R_STANDARD_CALL_CORE_SWAP_BYTES:
+        case R_STANDARD_CALL_CORE_ROTATE_LEFT:
+        case R_STANDARD_CALL_CORE_ROTATE_RIGHT:
+        case R_STANDARD_CALL_CORE_WIDENING_MUL:
+        case R_STANDARD_CALL_CORE_CARRYING_ADD:
+        case R_STANDARD_CALL_CORE_BORROWING_SUB:
+        case R_STANDARD_CALL_CORE_NARROWING_DIV:
+            operation_name = r_standard_core_bits_qualified_name(instruction->standard_operation);
+            break;
         case R_STANDARD_CALL_INVALID:
         default:
             if (async_sync == NULL) {
@@ -9781,7 +9795,8 @@ static bool r_mir_dump_instruction(const RFrontendContext *context,
             (instruction->standard_operation == R_STANDARD_CALL_CORE_ADOPT) ||
             (instruction->standard_operation == R_STANDARD_CALL_CORE_RELEASE) ||
             ((instruction->standard_operation >= R_STANDARD_CALL_CORE_CHECKED_ADD) &&
-             (instruction->standard_operation <= R_STANDARD_CALL_CORE_SATURATING_MUL))) {
+             (instruction->standard_operation <= R_STANDARD_CALL_CORE_SATURATING_MUL)) ||
+            r_standard_core_bits_operation(instruction->standard_operation)) {
             if (!r_write_text(writer, user_data, " pointee=") ||
                 !r_mir_write_type(context, instruction->auxiliary_type, writer, user_data)) {
                 return false;
@@ -10359,7 +10374,7 @@ RFrontendStatus r_frontend_dump_interface(const RFrontendContext *context,
     }
     if (!r_write_text(writer,
                       user_data,
-                      "(interface version=33 core_revision=\"" R_FRONTEND_CORE_REVISION "\"\n") ||
+                      "(interface version=34 core_revision=\"" R_FRONTEND_CORE_REVISION "\"\n") ||
         !r_mir_write_indent(writer, user_data, UINT32_C(1)) ||
         !r_write_text(writer, user_data, "(profile ") ||
         !r_write_escaped(
@@ -10499,7 +10514,8 @@ RFrontendStatus r_frontend_dump_interface(const RFrontendContext *context,
     }
     for (constant_index = 0U; constant_index < context->semantic_symbol_count; ++constant_index) {
         const RSemanticSymbol *symbol = &context->semantic_symbols[constant_index];
-        if ((symbol->kind == R_SEMANTIC_SYMBOL_MODULE_CONSTANT) && !symbol->is_protected) {
+        if ((symbol->kind == R_SEMANTIC_SYMBOL_MODULE_CONSTANT) && !symbol->is_protected &&
+            !symbol->block_constant) {
             constant_count += 1U;
         }
     }
@@ -10512,6 +10528,7 @@ RFrontendStatus r_frontend_dump_interface(const RFrontendContext *context,
             const RSemanticSymbol *candidate = &context->semantic_symbols[symbol_index];
             const RSymbolId candidate_id = (RSymbolId)(symbol_index + 1U);
             if ((candidate->kind != R_SEMANTIC_SYMBOL_MODULE_CONSTANT) || candidate->is_protected ||
+                candidate->block_constant ||
                 ((previous_constant != R_SYMBOL_ID_INVALID) &&
                  (r_mir_compare_symbols(context, previous_constant, candidate_id) >= 0)) ||
                 ((next_constant != R_SYMBOL_ID_INVALID) &&

@@ -522,7 +522,7 @@ static bool r_consteval_standard_operation_allowed(RStandardCallOperation operat
     case R_STANDARD_CALL_CORE_ENUM_ORDINAL:
         return true;
     default:
-        return false;
+        return r_standard_core_bits_operation(operation);
     }
 }
 
@@ -2377,6 +2377,59 @@ static bool r_consteval_reflection(RConstEval *eval, const RHirNode *source, RCo
 
 #include "consteval_containers.inc"
 
+/* Library R-LIB-0027 (L45): a bit or wide integer operation over its evaluated first operand and
+   the others; a narrowing division outside its domain panics as at run time. */
+static bool r_consteval_core_bits(RConstEval *eval,
+                                  const RHirNode *node,
+                                  const RConstCell *first,
+                                  RConstCell *result,
+                                  uint32_t depth) {
+    RFrontendContext *context = eval->context;
+    const RTypeId result_type = r_semantic_value_type(context, node->type);
+    RConstCell operands[3];
+    const char *panic = NULL;
+    uint64_t low;
+    uint64_t high;
+    bool is_signed;
+    uint32_t width;
+
+    (void)memset(operands, 0, sizeof(operands));
+    operands[0] = *first;
+    for (uint32_t index = 1U; (index < node->child_count) && (index < 3U); ++index) {
+        if (!r_consteval_expression(
+                eval, r_consteval_child(context, node, index), &operands[index], depth + 1U)) {
+            return false;
+        }
+    }
+    if (!r_semantic_integer_properties(
+            r_semantic_value_kind(context, node->auxiliary_type), &is_signed, &width)) {
+        return r_consteval_fail(eval, R_CONST_FAILURE_UNSUPPORTED, node->span);
+    }
+    if (!r_core_bits_evaluate(node->standard_operation,
+                              width,
+                              operands[0].bits,
+                              operands[1].bits,
+                              operands[2].bits,
+                              &low,
+                              &high,
+                              &panic)) {
+        return r_consteval_panic(eval, panic, node->span);
+    }
+    if (node->standard_operation < R_STANDARD_CALL_CORE_WIDENING_MUL) {
+        r_consteval_scalar_value(result, result_type, low);
+        return true;
+    }
+    if (!r_consteval_zero(eval, result_type, result, node->span, depth + 1U)) {
+        return false;
+    }
+    if ((result->kind != R_CONST_AGGREGATE) || (result->count != 2U)) {
+        return r_consteval_fail(eval, R_CONST_FAILURE_UNSUPPORTED, node->span);
+    }
+    result->items[0].bits = low;
+    result->items[1].bits = high;
+    return true;
+}
+
 static bool r_consteval_standard_call(RConstEval *eval,
                                       const RHirNode *node,
                                       RConstCell *result,
@@ -2436,6 +2489,9 @@ static bool r_consteval_standard_call(RConstEval *eval,
     if ((node->child_count == 0U) ||
         !r_consteval_expression(eval, r_consteval_child(context, node, 0U), &left, depth + 1U)) {
         return false;
+    }
+    if (r_standard_core_bits_operation(node->standard_operation)) {
+        return r_consteval_core_bits(eval, node, &left, result, depth);
     }
     switch (node->standard_operation) {
     case R_STANDARD_CALL_CORE_ENUM_NAME:
@@ -4875,7 +4931,10 @@ static bool r_consteval_static_choice(RFrontendContext *context,
     size_t index;
 
     *truth = -1;
-    for (index = 0U; index < context->static_choice_count; ++index) {
+    /* R-STMT-0023 (L44): inside a repetition of a translation-time loop the choice also depends
+       on the loop constants, so it is neither looked up nor kept. */
+    const bool repeated = context->constexpr_binding_count != 0U;
+    for (index = 0U; !repeated && (index < context->static_choice_count); ++index) {
         const RStaticChoice *known = &context->static_choices[index];
         if ((known->predicate == predicate_id) && (known->schema == schema) &&
             (known->arguments == arguments)) {
@@ -4884,8 +4943,14 @@ static bool r_consteval_static_choice(RFrontendContext *context,
         }
     }
     if (!r_consteval_instance_value(
-            context, predicate.condition, schema, arguments, predicate.span, &bits, &valid) ||
-        !r_grow_array(context,
+            context, predicate.condition, schema, arguments, predicate.span, &bits, &valid)) {
+        return false;
+    }
+    if (repeated) {
+        *truth = (valid && (bits != 0U)) ? 1 : 0;
+        return true;
+    }
+    if (!r_grow_array(context,
                       (void **)&context->static_choices,
                       &context->static_choice_capacity,
                       sizeof(*context->static_choices),

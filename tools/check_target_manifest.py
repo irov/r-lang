@@ -2632,7 +2632,7 @@ def validate_freestanding_manifest(
         return 1
     print(
         "target manifest valid: arm64-apple-darwin freestanding, "
-        "498 Core rules, 477 Library rules, environment panic handler, "
+        "501 Core rules, 478 Library rules, environment panic handler, "
         "environment stack bounds, no allocator"
     )
     return 0
@@ -2664,14 +2664,14 @@ def main() -> int:
             core_specification,
             core_inventory_path,
             CORE_REQUIRED_RULES,
-            498,
+            501,
             errors,
         )
         library_inventory = validate_catalog(
             library_specification,
             library_inventory_path,
             LIBRARY_REQUIRED_RULES,
-            477,
+            478,
             errors,
         )
         identity = manifest.get("identity")
@@ -2798,7 +2798,7 @@ def main() -> int:
             return 1
         print(
             "target manifest valid: arm64-apple-darwin hosted-native-async, "
-            "498 Core rules, 477 Library rules, 4 filesystem-lane threads, "
+            "501 Core rules, 478 Library rules, 4 filesystem-lane threads, "
             "4 blocking-pool threads, 262144-byte generated-frame ceiling"
         )
         return 0

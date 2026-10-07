@@ -878,6 +878,13 @@ static bool r_closure_source_place(RBodyContext *outer,
         const RSymbolId symbol_id = outer->active_symbols.items[index - 1U];
         const RSemanticSymbol *symbol = r_body_symbol(outer, symbol_id);
         if ((symbol != NULL) && (symbol->name_intern_id == name_intern_id) &&
+            symbol->block_constant) {
+            /* R-STMT-0023 (defect L44-16): the constant of an enclosing translation-time loop is
+               captured as its value. */
+            *found = true;
+            return r_body_append_module_constant(outer, symbol, span, result);
+        }
+        if ((symbol != NULL) && (symbol->name_intern_id == name_intern_id) &&
             ((symbol->kind == R_SEMANTIC_SYMBOL_LOCAL) ||
              (symbol->kind == R_SEMANTIC_SYMBOL_PARAMETER))) {
             *found = true;
@@ -1138,7 +1145,7 @@ r_body_lower_lambda(RBodyContext *body, RAstRef statement, size_t scope_base, RH
     context->semantic_aggregates[context->semantic_aggregate_count++] = aggregate;
     for (index = 0U; index < scan.uses.count; ++index) {
         RClosureUse *use = &scan.uses.items[index];
-        RExpressionResult source;
+        RExpressionResult source = {0};
         RSemanticField field;
         RTypeId source_type;
         bool found;
@@ -1164,6 +1171,11 @@ r_body_lower_lambda(RBodyContext *body, RAstRef statement, size_t scope_base, RH
             continue;
         }
         source_type = r_semantic_value_type(context, source.type);
+        /* A source that is no place is a loop constant: a Copy value the capture copies. */
+        const bool constant_capture = !source.is_place;
+        if (constant_capture) {
+            use->moved = true;
+        }
         (void)memset(&field, 0, sizeof(field));
         field.name_span = use->span;
         field.name_intern_id = use->name_intern_id;
@@ -1216,7 +1228,9 @@ r_body_lower_lambda(RBodyContext *body, RAstRef statement, size_t scope_base, RH
                 !use->moved || r_semantic_type_contains_borrow(context, field.type) ||
                 r_semantic_type_contains_slice(context, field.type) ||
                 r_semantic_value_kind(context, field.type) == R_SEMANTIC_TYPE_STR;
-            if (use->moved) {
+            if (constant_capture) {
+                value = source;
+            } else if (use->moved) {
                 if (!r_body_move_from_place(body, source, use->span, &value)) {
                     goto cleanup;
                 }

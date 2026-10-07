@@ -52,7 +52,7 @@ i32 main() {
             return result.stdout
 
         interface = emit('interface', [api, app])
-        assert '(interface version=33 ' in interface
+        assert '(interface version=34 ' in interface
         assert interface == emit('interface', [app, api])
         assert emit('c17', [api, app]) == emit('c17', [app, api])
         views = next(line for line in interface.splitlines()

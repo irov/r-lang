@@ -15,7 +15,7 @@ if(NOT first STREQUAL second)
     message(FATAL_ERROR "raw function interface changes when module inputs are reordered")
 endif()
 foreach(expected IN ITEMS
-        "(interface version=33"
+        "(interface version=34"
         "(raw_fn parameters=(c_int) return=c_int)"
         "callback=true c_name=\"r_audit_module_increment\""
         "audit.std_c_callback_module::Box"

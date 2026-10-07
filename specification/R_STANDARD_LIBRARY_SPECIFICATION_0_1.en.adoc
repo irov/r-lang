@@ -15,7 +15,7 @@ Normative draft of the R standard library
 |Field |Value
 |Document|R Standard Library Specification
 |Language version|0.1
-|Document revision|0.1.0-draft.72
+|Document revision|0.1.0-draft.74
 |Status|Normative draft; not a stable R 1.0 standard
 |Document language|English; normative original
 |Required language standard|R Core Language Specification 0.1
@@ -235,6 +235,43 @@ does not create user generics or overload resolution. Construction of `+o+`,
 ordinary slice semantics and panic categories remain Core language facilities governed
 by the Core Specification, not additional callable standard-library items.
 
+[[R-LIB-0027]]
+*R-LIB-0027* — Every profile provides in `+core+`, for each literal suffix `+SUFFIX+` of
+R-LIB-0001, the exact bit operations
+
+* `+core::leading_zeros_SUFFIX(SUFFIX value) -> u32+`,
+  `+core::trailing_zeros_SUFFIX(SUFFIX value) -> u32+` and
+  `+core::count_ones_SUFFIX(SUFFIX value) -> u32+`;
+* `+core::swap_bytes_SUFFIX(SUFFIX value) -> SUFFIX+`;
+* `+core::rotate_left_SUFFIX(SUFFIX value, u32 count) -> SUFFIX+` and
+  `+core::rotate_right_SUFFIX(SUFFIX value, u32 count) -> SUFFIX+`;
+
+and, for each unsigned suffix `+u8+`, `+u16+`, `+u32+`, `+u64+` and `+usize+`, the exact wide
+operations
+
+* `+core::widening_mul_SUFFIX(SUFFIX left, SUFFIX right) -> (SUFFIX, SUFFIX)+`;
+* `+core::carrying_add_SUFFIX(SUFFIX left, SUFFIX right, bool carry) -> (SUFFIX, bool)+` and
+  `+core::borrowing_sub_SUFFIX(SUFFIX left, SUFFIX right, bool borrow) -> (SUFFIX, bool)+`;
+* `+core::narrowing_div_SUFFIX(SUFFIX high, SUFFIX low, SUFFIX divisor) -> (SUFFIX, SUFFIX)+`.
+
+A bit operation sees the N bits of its value in two's complement, N being the width of the type.
+`+leading_zeros+` is the number of zero bits above the highest one bit and `+trailing_zeros+` the
+number below the lowest one bit, both N for zero; `+count_ones+` is the number of one bits;
+`+swap_bytes+` reverses the order of the bytes; `+rotate_left+` and `+rotate_right+` rotate the
+bits by `+count+` modulo N toward the most or the least significant end. A wide operation
+computes with 2N bits and gives a tuple (Core R-TYPE-0052): `+widening_mul+` the low and the high
+N bits of the product; `+carrying_add+` the low N bits of `+left + right + carry+` and whether
+that sum reaches 2^N^; `+borrowing_sub+` the difference `+left - right - borrow+` modulo 2^N^ and
+whether it is negative; `+narrowing_div+` the quotient and the remainder of the 2N-bit value
+`+high+` · 2^N^ + `+low+` divided by `+divisor+`. A narrowing division by zero panics with
+`+division_by_zero+`, and one whose `+high+` is not less than `+divisor+`, so that the quotient
+does not fit, with `+integer_overflow+`; no other operation panics, and none allocates or has a
+side effect. Each operation may also be called without `+_SUFFIX+`; the call then selects the
+suffix of the integer type of its first operand, and a wide operation the integer type that its
+first two operands select under Core R-FUNC-0004. A suffix or operand type outside these sets, a
+signed suffix of a wide operation and a missing or extra operand require `+R-DIAG-TYPE-001+`.
+A function that uses them may be evaluated at translation (Core R-FUNC-0023).
+
 [[R-LIB-0002]]
 *R-LIB-0002* — A safe library function shall express ownership in its source signature,
 shall expose compiler-verifiable borrow-origin relations in interface metadata and
@@ -288,7 +325,7 @@ read.
 
 [[R-LIB-0024]]
 *R-LIB-0024* — Every profile provides these exact compiler-recognized static reflection
-intrinsics of Core R-REFL-0001..R-REFL-0005 as closed families over the type or value they
+intrinsics of Core R-REFL-0001..R-REFL-0006 as closed families over the type or value they
 name:
 
 * `+core::enum_count::<T>() -> usize+`, `+core::enum_min::<T>() -> T+`, `+core::enum_max::<T>() -> T+`
@@ -301,6 +338,9 @@ name:
   for a tagged union `+T+`;
 * `+core::type_name::<T>() -> constexpr str+`, `+core::field_count::<T>() -> usize+` and
   `+core::field_name::<T>(usize index) -> constexpr str+`;
+* `+core::field(const T* value, usize index) -> const F*+` and
+  `+core::field_mut(T* value, usize index) -> F*+` for the field `+F+` of a struct or tuple `+T+`
+  at a constant index (Core R-REFL-0006);
 * `+core::target_name() -> constexpr str+`, `+core::profile_name() -> constexpr str+` and
   `+core::location() -> constexpr str+`;
 * `+core::type_attribute::<A, T>() -> o<A>+`,
@@ -8338,8 +8378,9 @@ observable target state and caller-owned inputs are unchanged on the indicated f
 |Module and exact items |Ownership and capabilities |Allocation and recoverable failure |Panic and thread behavior |C17/native basis
 
 |`+core+`: R-LIB-0001, R-LIB-0011, R-LIB-0020 (`+core::hash+` and
-`+core::key_equal+`), R-LIB-0024 (static reflection) and Core R-ARRAY-0007,
-R-UNSAFE-0007..0008, R-REFL-0001..0004
+`+core::key_equal+`), R-LIB-0024 (static reflection), R-LIB-0027 (bit and wide integer
+operations) and Core R-ARRAY-0007,
+R-UNSAFE-0007..0008, R-REFL-0001..0006
 |Copy scalars/slices; atomic objects follow Core Send/Sync
 |No implicit allocation; checked outcomes fixed by R-LIB-0001
 |Core arithmetic, bounds and exact unsafe contracts; atomics are thread-safe

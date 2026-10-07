@@ -282,6 +282,29 @@ def expanded_operation_names(items: list[dict[str, Any]]) -> dict[str, dict[str,
             f"core::{stem}_SUFFIX",
             [f"core::{stem}_{suffix}" for suffix in R_INTEGER_SUFFIXES],
         )
+    # Library R-LIB-0027 (L45): the bit operations of every integer type and the wide ones of
+    # the unsigned types.
+    for stem in (
+        "leading_zeros",
+        "trailing_zeros",
+        "count_ones",
+        "swap_bytes",
+        "rotate_left",
+        "rotate_right",
+    ):
+        add_family(
+            f"core::{stem}_SUFFIX",
+            [f"core::{stem}_{suffix}" for suffix in R_INTEGER_SUFFIXES],
+        )
+    for stem in ("widening_mul", "carrying_add", "borrowing_sub", "narrowing_div"):
+        add_family(
+            f"core::{stem}_SUFFIX",
+            [
+                f"core::{stem}_{suffix}"
+                for suffix in R_INTEGER_SUFFIXES
+                if suffix.startswith("u")
+            ],
+        )
     add_family(
         "std.convert::parse_SUFFIX",
         [f"std.convert::parse_{suffix}" for suffix in NUMERIC_SUFFIXES],

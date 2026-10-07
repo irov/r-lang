@@ -618,9 +618,17 @@ typedef struct RLoopLabel {
     size_t break_depth;
     size_t loop_index;
     bool broken;
+    /* R-STMT-0024 (L46): the label names a switch, lowered as a hidden loop around it whose
+       selector `continue name (value);` assigns. */
+    bool dispatch;
+    RSymbolId selector;
 } RLoopLabel;
 
 typedef struct RBodyContext {
+    /* R-STMT-0024 (L46): the selector a dispatching switch reads in place of its operand, and
+       whether the switch last lowered may complete at its end. */
+    const struct RExpressionResult *dispatch_operand;
+    bool switch_reaches_end;
     bool checking_usize_constant;
     /* M32-5 (R-STMT-0018): the members listed by the select whose clause is being lowered; a
        branch inside the clause may consume one of them and another leave it select-pending. */
@@ -649,6 +657,11 @@ typedef struct RBodyContext {
     RSizeVector active_switch_finally_depths;
     RObjectStateSnapshotVector active_switch_break_states;
     RSizeVector active_break_target_kinds;
+    /* R-STMT-0023 (L44): while a translation-time loop repeats its block, the break targets and
+       loops that began before it; a jump to one of them would leave the loop. */
+    bool in_constexpr_loop;
+    size_t constexpr_loop_break_floor;
+    size_t constexpr_loop_loop_floor;
     RSizeVector active_finally_scope_bases;
     RSizeVector active_finally_catch_depths;
     RSizeVector active_finally_required_scope_bases;
@@ -1202,6 +1215,9 @@ static bool r_hir_build_module_object_initializer(RFrontendContext *, RSymbolId)
 static bool
 r_consteval_resolve_module_constant(RFrontendContext *, RSymbolId, RSourceSpan, bool, bool *);
 static bool r_consteval_required_scalar(RFrontendContext *, RHirNodeId, uint64_t *, bool *);
+static bool
+r_consteval_evaluate_node(RFrontendContext *, RHirNodeId, bool, bool, bool *, uint64_t *);
+static bool r_consteval_dependent(RFrontendContext *, RHirNodeId, uint32_t);
 static bool r_consteval_fold_initializer(RFrontendContext *, RHirNodeId);
 static bool r_consteval_value_type(const RFrontendContext *, RTypeId, uint32_t);
 static bool r_consteval_dependent_initializer(RFrontendContext *, RHirNodeId, bool *);
@@ -1471,6 +1487,27 @@ static bool r_body_lower_method_call_named(RBodyContext *,
                                            RExpressionResult *);
 static bool r_body_lower_lambda(RBodyContext *, RAstRef, size_t, RHirNodeId *);
 static bool r_body_lower_for_in(RBodyContext *, RAstRef, RHirNodeId *, bool *);
+static bool r_body_lower_constexpr_for(RBodyContext *, RAstRef, RHirNodeId *, bool *);
+/* R-STMT-0023 (L44): the most repetitions of one translation-time loop. */
+enum {
+    R_CONSTEXPR_LOOP_LIMIT = 1024
+};
+static bool r_semantic_field_parameter(RFrontendContext *, RTypeId, RTypeId, uint64_t, RTypeId *);
+static bool r_constexpr_loop_jump_escapes(RBodyContext *, RTokenKind, const RAstTokenView *);
+static bool r_dispatch_loop(const RBodyContext *, size_t);
+static bool r_dispatch_selects_after(RBodyContext *, size_t, RAstRef, RSourceSpan, RSourceSpan *);
+static bool
+r_core_bits_named(const RFrontendContext *, const RAstTokenView *, RStandardCallOperation *);
+static bool r_core_bits_result_type(
+    RFrontendContext *, RStandardCallOperation, RTypeId, RSourceSpan, RTypeId *);
+static bool r_body_lower_core_bits(RBodyContext *,
+                                   RAstRef,
+                                   const RAstNodeView *,
+                                   RSourceSpan,
+                                   RSourceSpan,
+                                   RStandardCallOperation,
+                                   RTokenKind,
+                                   RExpressionResult *);
 static bool r_body_lower_collection(RBodyContext *, RAstRef, RTypeId, RExpressionResult *);
 static bool r_body_append_implicit_drop(RBodyContext *, RSymbolId, RSourceSpan, RHirVector *);
 static bool r_body_lower_dict(RBodyContext *, RAstRef, RTypeId, RExpressionResult *);
@@ -4740,7 +4777,7 @@ static RArrayBoundStatus r_semantic_resolve_named_array_bound(RFrontendContext *
         bool visible = false;
         size_t import_index;
 
-        if ((symbol->kind != R_SEMANTIC_SYMBOL_MODULE_CONSTANT) ||
+        if ((symbol->kind != R_SEMANTIC_SYMBOL_MODULE_CONSTANT) || symbol->block_constant ||
             (symbol->name_intern_id != name->intern_id)) {
             continue;
         }
@@ -11752,7 +11789,7 @@ static bool r_semantic_fold_module_reference(RModuleConstantFold *fold,
         bool visible = false;
         size_t import_index;
 
-        if ((symbol->kind != R_SEMANTIC_SYMBOL_MODULE_CONSTANT) ||
+        if ((symbol->kind != R_SEMANTIC_SYMBOL_MODULE_CONSTANT) || symbol->block_constant ||
             (symbol->name_intern_id != name->intern_id) || symbol->poisoned) {
             continue;
         }
@@ -14422,9 +14459,10 @@ static bool r_semantic_validate_imports(RFrontendContext *context) {
         for (symbol_index = 0U; symbol_index < context->semantic_symbol_count; ++symbol_index) {
             const RSemanticSymbol *symbol = &context->semantic_symbols[symbol_index];
             const RSource *source;
-            if ((symbol->kind != R_SEMANTIC_SYMBOL_FUNCTION) &&
-                (symbol->kind != R_SEMANTIC_SYMBOL_MODULE_CONSTANT) &&
-                (symbol->kind != R_SEMANTIC_SYMBOL_MODULE_OBJECT)) {
+            if (((symbol->kind != R_SEMANTIC_SYMBOL_FUNCTION) &&
+                 (symbol->kind != R_SEMANTIC_SYMBOL_MODULE_CONSTANT) &&
+                 (symbol->kind != R_SEMANTIC_SYMBOL_MODULE_OBJECT)) ||
+                symbol->block_constant) {
                 continue;
             }
             source = r_get_source_const(context, symbol->module_source);
@@ -14529,7 +14567,7 @@ static bool r_semantic_validate_import_shadowing(RFrontendContext *context) {
         if (((symbol->kind != R_SEMANTIC_SYMBOL_FUNCTION) &&
              (symbol->kind != R_SEMANTIC_SYMBOL_MODULE_CONSTANT) &&
              (symbol->kind != R_SEMANTIC_SYMBOL_MODULE_OBJECT)) ||
-            symbol->is_synthetic) {
+            symbol->is_synthetic || symbol->block_constant) {
             continue;
         }
         declaration_source = r_get_source_const(context, symbol->module_source);
@@ -14554,7 +14592,7 @@ static bool r_semantic_validate_import_shadowing(RFrontendContext *context) {
                 if (((imported->kind != R_SEMANTIC_SYMBOL_FUNCTION) &&
                      (imported->kind != R_SEMANTIC_SYMBOL_MODULE_CONSTANT) &&
                      (imported->kind != R_SEMANTIC_SYMBOL_MODULE_OBJECT)) ||
-                    imported->is_protected ||
+                    imported->is_protected || imported->block_constant ||
                     (imported->name_intern_id != symbol->name_intern_id)) {
                     continue;
                 }
@@ -15682,6 +15720,11 @@ bool r_semantic_standard_call_runs_code(const RFrontendContext *context, const R
         return true;
     default:
         break;
+    }
+    /* Library R-LIB-0027 (L45): integer helpers whose tuple result is a struct but never runs R
+       code. */
+    if (r_standard_core_bits_operation(node->standard_operation)) {
+        return false;
     }
     if (r_semantic_type_reaches_r_code(context, node->type, 0U) ||
         r_semantic_type_reaches_r_code(context, node->auxiliary_type, 0U)) {
@@ -17457,12 +17500,20 @@ static bool r_body_symbol_has_loop_carried_use(RBodyContext *body,
             (symbol->name_span.start >= block_view.span.start)) {
             continue;
         }
-        flow = r_body_ast_loop_flow_after(body, loop_block, mutation_span, UINT32_C(0));
-        if ((flow & (R_LOOP_AST_FLOW_FALLTHROUGH | R_LOOP_AST_FLOW_BACKEDGE)) == UINT32_C(0)) {
-            continue;
+        if (r_dispatch_loop(body, loop_index - 1U)) {
+            /* R-STMT-0024 (L46, defect L46-4): the hidden loop of a labeled switch. */
+            if (!r_dispatch_selects_after(
+                    body, loop_index - 1U, loop_block, mutation_span, &before)) {
+                continue;
+            }
+        } else {
+            flow = r_body_ast_loop_flow_after(body, loop_block, mutation_span, UINT32_C(0));
+            if ((flow & (R_LOOP_AST_FLOW_FALLTHROUGH | R_LOOP_AST_FLOW_BACKEDGE)) == UINT32_C(0)) {
+                continue;
+            }
+            before = block_view.span;
+            before.end = before.start;
         }
-        before = block_view.span;
-        before.end = before.start;
         if (r_body_ast_has_future_symbol_use(
                 body, loop_block, symbol, before, false, UINT32_C(0))) {
             return true;
@@ -18256,7 +18307,7 @@ static bool r_body_name_conflicts_module_scope(const RBodyContext *body,
         if (((symbol->kind == R_SEMANTIC_SYMBOL_FUNCTION) ||
              (symbol->kind == R_SEMANTIC_SYMBOL_MODULE_CONSTANT) ||
              (symbol->kind == R_SEMANTIC_SYMBOL_MODULE_OBJECT)) &&
-            (symbol->module_source == body->source) &&
+            !symbol->block_constant && (symbol->module_source == body->source) &&
             (symbol->name_intern_id == name->intern_id)) {
             return true;
         }
@@ -18298,9 +18349,10 @@ typedef enum RBodyLookupIssue {
 } RBodyLookupIssue;
 
 static bool r_body_symbol_is_module_ordinary(const RSemanticSymbol *symbol) {
-    return (symbol != NULL) && ((symbol->kind == R_SEMANTIC_SYMBOL_FUNCTION) ||
-                                (symbol->kind == R_SEMANTIC_SYMBOL_MODULE_CONSTANT) ||
-                                (symbol->kind == R_SEMANTIC_SYMBOL_MODULE_OBJECT));
+    return (symbol != NULL) && !symbol->block_constant &&
+           ((symbol->kind == R_SEMANTIC_SYMBOL_FUNCTION) ||
+            (symbol->kind == R_SEMANTIC_SYMBOL_MODULE_CONSTANT) ||
+            (symbol->kind == R_SEMANTIC_SYMBOL_MODULE_OBJECT));
 }
 
 static RSymbolId
@@ -20045,8 +20097,11 @@ static bool r_body_projected_borrow_destination_member(const RBodyContext *body,
             if (current->kind != R_HIR_FIELD_PLACE) {
                 return true;
             }
-            if ((current->aggregate_member == UINT32_C(0)) ||
-                ((size_t)current->aggregate_member > body->frontend->semantic_field_count)) {
+            if (current->aggregate_member == UINT32_C(0)) {
+                /* R-REFL-0006 (L44): a field of a dependent struct; its member is not known. */
+                return true;
+            }
+            if ((size_t)current->aggregate_member > body->frontend->semantic_field_count) {
                 body->frontend->resource_status = R_FRONTEND_INTERNAL_ERROR;
                 return false;
             }
@@ -21200,6 +21255,12 @@ static bool r_format_lower(RBodyContext *, RAstRef, const RAstRef *, RTypeId, RE
 /* compiler/semantic/reflection.inc (R-REFL-0001..0004). */
 static bool r_reflection_is_operation(RStandardCallOperation operation);
 static bool r_reflection_lower_type_call(RBodyContext *, RAstRef, RTypeId, RExpressionResult *);
+static bool r_reflection_lower_field_access(RBodyContext *,
+                                            RAstRef,
+                                            const RAstNodeView *,
+                                            RSourceSpan,
+                                            RStandardCallOperation,
+                                            RExpressionResult *);
 static bool r_reflection_lower_value_call(RBodyContext *,
                                           RAstRef,
                                           const RAstNodeView *,
@@ -23382,6 +23443,27 @@ static bool r_body_append_module_constant(RBodyContext *body,
         (symbol->is_import || (symbol->consteval_state != 0U))) {
         return r_body_cascade(body);
     }
+    if ((symbol->kind == R_SEMANTIC_SYMBOL_MODULE_CONSTANT) &&
+        (symbol->constant_parameter != R_TYPE_ID_INVALID)) {
+        /* R-STMT-0023 (L44): the constant of a translation-time loop an instantiation unrolls. */
+        if (!r_body_append_node(body,
+                                R_HIR_GENERIC_CONSTANT,
+                                span,
+                                value_type,
+                                R_SYMBOL_ID_INVALID,
+                                R_TOKEN_INVALID,
+                                UINT64_C(0),
+                                false,
+                                NULL,
+                                &node_id)) {
+            return false;
+        }
+        r_body_hir_node(body, node_id)->auxiliary_type = symbol->constant_parameter;
+        result->node = node_id;
+        result->type = value_type;
+        result->valid = true;
+        return true;
+    }
     if ((symbol->kind != R_SEMANTIC_SYMBOL_MODULE_CONSTANT) ||
         !r_body_append_node(body,
                             R_HIR_LITERAL,
@@ -24417,6 +24499,8 @@ static bool r_body_core_operation(const RFrontendContext *context,
     } else if (r_semantic_token_text_starts_with_owned(
                    context, &components[1], "saturating_mul_")) {
         *operation = R_STANDARD_CALL_CORE_SATURATING_MUL;
+    } else if (r_core_bits_named(context, &components[1], operation)) {
+        /* Library R-LIB-0027 (L45): `core::count_ones_u64` and the other bit operations. */
     } else if (r_semantic_token_text_equal_owned(context, &components[1], "atomic_load")) {
         *operation = R_STANDARD_CALL_CORE_ATOMIC_LOAD;
     } else if (r_semantic_token_text_equal_owned(context, &components[1], "atomic_store")) {
@@ -24450,6 +24534,10 @@ static bool r_body_core_operation(const RFrontendContext *context,
         *operation = R_STANDARD_CALL_CORE_PROFILE_NAME;
     } else if (r_semantic_token_text_equal_owned(context, &components[1], "location")) {
         *operation = R_STANDARD_CALL_CORE_LOCATION;
+    } else if (r_semantic_token_text_equal_owned(context, &components[1], "field")) {
+        *operation = R_STANDARD_CALL_CORE_FIELD;
+    } else if (r_semantic_token_text_equal_owned(context, &components[1], "field_mut")) {
+        *operation = R_STANDARD_CALL_CORE_FIELD_MUT;
     } else {
         return false;
     }
@@ -42253,6 +42341,11 @@ static bool r_body_lower_call(RBodyContext *body,
                 return r_generic_lower_key_call(
                     body, argument_list, &arguments_view, core_operation, call_span, result);
             }
+            if ((core_operation == R_STANDARD_CALL_CORE_FIELD) ||
+                (core_operation == R_STANDARD_CALL_CORE_FIELD_MUT)) {
+                return r_reflection_lower_field_access(
+                    body, argument_list, &arguments_view, call_span, core_operation, result);
+            }
             if (r_reflection_is_operation(core_operation)) {
                 return r_reflection_lower_value_call(body,
                                                      argument_list,
@@ -42311,6 +42404,16 @@ static bool r_body_lower_call(RBodyContext *body,
                                                  core_operation,
                                                  R_TOKEN_INVALID,
                                                  result);
+            }
+            if (r_standard_core_bits_operation(core_operation)) {
+                return r_body_lower_core_bits(body,
+                                              argument_list,
+                                              &arguments_view,
+                                              call_span,
+                                              operation_span,
+                                              core_operation,
+                                              R_TOKEN_INVALID,
+                                              result);
             }
             if ((core_operation >= R_STANDARD_CALL_CORE_ATOMIC_LOAD) &&
                 (core_operation <= R_STANDARD_CALL_CORE_ATOMIC_IS_LOCK_FREE)) {
@@ -55326,6 +55429,9 @@ static bool r_budget_finally(RBodyContext *, RSourceSpan, RHirNodeId *);
 static bool r_recursion_finally(RBodyContext *, RSourceSpan, RHirNodeId *);
 static bool r_tuple_lower_destructuring(RBodyContext *, RAstRef, size_t, RHirNodeId *);
 static bool r_label_lower_statement(RBodyContext *, RAstRef, size_t, RHirNodeId *, bool *);
+static bool r_dispatch_lower_continue(
+    RBodyContext *, const RAstTokenView *, RAstRef, RSourceSpan, RHirNodeId *, bool *);
+static bool r_dispatch_lower_plain_continue(RBodyContext *, RSourceSpan, RHirNodeId *, bool *);
 static bool r_label_lower_jump(
     RBodyContext *, RTokenKind, const RAstTokenView *, RSourceSpan, RHirNodeId *, bool *);
 static bool r_recursion_lower_body(RBodyContext *, RAstRef, RSourceSpan, RHirNodeId *, bool *);
@@ -56988,6 +57094,10 @@ static bool r_body_lower_switch_statement(RBodyContext *body,
     }
     if (select != NULL) {
         value = select->value;
+    } else if (body->dispatch_operand != NULL) {
+        /* R-STMT-0024 (L46): each pass of a labeled switch selects by its hidden selector. */
+        value = *body->dispatch_operand;
+        body->dispatch_operand = NULL;
     } else if (!r_ast_find_direct_child(
                    body->frontend, statement, R_SYNTAX_EXPRESSION, &expression) ||
                !r_body_lower_expression(body, expression, R_TYPE_ID_INVALID, &value)) {
@@ -57668,6 +57778,10 @@ static bool r_body_lower_switch_statement(RBodyContext *body,
     *always_returns = all_return && (seen_default ||
                                      (!r_semantic_kind_is_integer(switch_kind) &&
                                       (switch_kind != R_SEMANTIC_TYPE_CHAR) && all_variants_seen));
+    body->switch_reaches_end =
+        has_reaching_clause ||
+        !(seen_default || (!r_semantic_kind_is_integer(switch_kind) &&
+                           (switch_kind != R_SEMANTIC_TYPE_CHAR) && all_variants_seen));
     if (switch_is_constant && constant_selection_seen) {
         *always_returns = constant_selected_returns;
     }
@@ -57936,6 +58050,8 @@ static bool r_body_lower_statement(RBodyContext *body,
         return r_body_lower_for(body, statement, node_id, always_returns);
     case R_SYNTAX_FOR_IN_STATEMENT:
         return r_body_lower_for_in(body, statement, node_id, always_returns);
+    case R_SYNTAX_CONSTEXPR_FOR_STATEMENT:
+        return r_body_lower_constexpr_for(body, statement, node_id, always_returns);
     case R_SYNTAX_SWITCH_STATEMENT:
         return r_body_lower_switch(body, statement, node_id, always_returns);
     case R_SYNTAX_SELECT_STATEMENT:
@@ -58062,10 +58178,30 @@ static bool r_body_lower_statement(RBodyContext *body,
         }
         if ((jump_token.kind == R_TOKEN_KW_BREAK) || (jump_token.kind == R_TOKEN_KW_CONTINUE)) {
             RAstTokenView label;
-            if (r_ast_direct_token(body->frontend, statement, 1U, NULL, &label) &&
-                (label.kind == R_TOKEN_IDENTIFIER)) {
+            const bool labeled = r_ast_direct_token(body->frontend, statement, 1U, NULL, &label) &&
+                                 (label.kind == R_TOKEN_IDENTIFIER);
+            if (r_constexpr_loop_jump_escapes(body, jump_token.kind, labeled ? &label : NULL)) {
+                return r_body_diagnostic(body,
+                                         "R-DIAG-TYPE-001",
+                                         "R-STMT-0023",
+                                         "break and continue do not leave a translation-time loop",
+                                         view.span);
+            }
+            RAstRef value_ref;
+            if (labeled && (jump_token.kind == R_TOKEN_KW_CONTINUE) &&
+                r_ast_find_direct_child(
+                    body->frontend, statement, R_SYNTAX_EXPRESSION, &value_ref)) {
+                return r_dispatch_lower_continue(
+                    body, &label, value_ref, view.span, node_id, always_returns);
+            }
+            if (labeled) {
                 return r_label_lower_jump(
                     body, jump_token.kind, &label, view.span, node_id, always_returns);
+            }
+            if ((jump_token.kind == R_TOKEN_KW_CONTINUE) &&
+                (body->active_loop_scope_bases.count != 0U) &&
+                r_dispatch_loop(body, body->active_loop_scope_bases.count - 1U)) {
+                return r_dispatch_lower_plain_continue(body, view.span, node_id, always_returns);
             }
             return r_body_lower_structured_jump(
                 body, jump_token.kind, view.span, node_id, always_returns);
@@ -59686,6 +59822,10 @@ static bool r_reflection_spell_type(RFrontendContext *, RTypeId, RReflectionText
 /* R-REFL-0001..0004: static reflection intrinsics. */
 #include "packs.inc"
 #include "reflection.inc"
+/* R-STMT-0023 (L44): translation-time loops. */
+#include "constexpr_loops.inc"
+
+#include "core_bits.inc"
 
 #include "json_schema_text.inc"
 #include "static_conditions.inc"

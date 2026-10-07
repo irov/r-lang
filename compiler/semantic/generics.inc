@@ -160,6 +160,39 @@ static bool r_generic_register_parameter(RFrontendContext *context,
         }
         if (!r_ast_ref_token(context, token_ref, &token)) {
             if (r_ast_ref_view(context, token_ref, &constraint_view) &&
+                constraint_view.kind == R_SYNTAX_FIELDS_CONSTRAINT) {
+                /* R-TYPE-0043 (L44): `fields(Trait)` is resolved with the other traits. */
+                RAstRef trait_ref;
+                RGenericPendingConstraint pending = {0};
+                if (projection) {
+                    if (!r_semantic_add_diagnostic(context,
+                                                   "R-DIAG-TRAIT-001",
+                                                   "R-TYPE-0043",
+                                                   "an associated type constraint takes capability "
+                                                   "and nominal trait constraints",
+                                                   constraint_view.span)) {
+                        return false;
+                    }
+                    continue;
+                }
+                if (!r_ast_find_direct_child(context, token_ref, R_SYNTAX_TRAIT_NAME, &trait_ref)) {
+                    continue;
+                }
+                pending.parameter = (uint32_t)context->generic_parameter_count;
+                pending.application = trait_ref;
+                pending.span = constraint_view.span;
+                pending.fields = true;
+                if (!r_grow_array(context,
+                                  (void **)&context->generic_pending_constraints,
+                                  &context->generic_pending_constraint_capacity,
+                                  sizeof(pending),
+                                  context->generic_pending_constraint_count + 1U))
+                    return false;
+                context->generic_pending_constraints[context->generic_pending_constraint_count++] =
+                    pending;
+                continue;
+            }
+            if (r_ast_ref_view(context, token_ref, &constraint_view) &&
                 constraint_view.kind == R_SYNTAX_TRAIT_NAME) {
                 RGenericPendingConstraint pending = {0};
                 pending.parameter = (uint32_t)context->generic_parameter_count;
@@ -700,6 +733,19 @@ static bool r_generic_apply_aggregate(RFrontendContext *context,
     return true;
 }
 
+/* R-STMT-0023 (L44): the value that the innermost repetition being unrolled binds to the constant
+   of a translation-time loop. */
+static bool
+r_constexpr_binding(const RFrontendContext *context, RTypeId parameter, uint64_t *value) {
+    for (size_t index = context->constexpr_binding_count; index != 0U; --index) {
+        if (context->constexpr_binding_parameters[index - 1U] == parameter) {
+            *value = context->constexpr_binding_values[index - 1U];
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool r_generic_substitute_type(RFrontendContext *context,
                                       RTypeId id,
                                       uint32_t schema_id,
@@ -716,6 +762,41 @@ static bool r_generic_substitute_type(RFrontendContext *context,
     type = *description;
     if (r_opaque_parameter(context, id) != NULL)
         return r_opaque_substitute(context, id, schema_id, first_argument, result);
+    if (type.kind == R_SEMANTIC_TYPE_PARAMETER && type.base != 0U &&
+        type.base <= context->generic_parameter_count &&
+        context->generic_parameters[type.base - 1U].loop_constant) {
+        /* R-STMT-0023 (L44): the constant of the repetition being unrolled; outside one it stays.
+         */
+        uint64_t value;
+        if (!r_constexpr_binding(context, id, &value)) {
+            return true;
+        }
+        return r_semantic_intern_derived_type(
+            context, R_SEMANTIC_TYPE_CONSTANT_EXPR, 0U, 0U, value, R_TOKEN_INVALID, result);
+    }
+    if (type.kind == R_SEMANTIC_TYPE_PARAMETER && type.base != 0U &&
+        type.base <= context->generic_parameter_count &&
+        context->generic_parameters[type.base - 1U].field_base != R_TYPE_ID_INVALID) {
+        /* R-REFL-0006 (L44): the field of the substituted struct at the bound index. */
+        const RGenericParameter field = context->generic_parameters[type.base - 1U];
+        uint64_t field_number = field.field_index_value;
+        RTypeId base;
+        if ((field.field_index != R_TYPE_ID_INVALID) &&
+            !r_constexpr_binding(context, field.field_index, &field_number)) {
+            return true;
+        }
+        if (!r_generic_substitute_type(
+                context, field.field_base, schema_id, first_argument, &base)) {
+            return false;
+        }
+        const RSemanticAggregate *aggregate = r_semantic_aggregate_for_type(context, base);
+        if ((aggregate == NULL) || (aggregate->kind != R_SEMANTIC_AGGREGATE_STRUCT) ||
+            (field_number >= (uint64_t)aggregate->field_count)) {
+            return true;
+        }
+        *result = context->semantic_fields[aggregate->first_field + (uint32_t)field_number].type;
+        return true;
+    }
     if (type.kind == R_SEMANTIC_TYPE_PARAMETER) {
         if (type.base != 0U && type.base <= context->generic_parameter_count &&
             context->generic_parameters[type.base - 1U].refinement_origin != 0U) {
@@ -2510,6 +2591,8 @@ typedef struct RGenericPackPieces {
 
 typedef struct RGenericClone {
     RFrontendContext *context;
+    /* The generic definition being instantiated. */
+    RSymbolId origin;
     uint32_t schema;
     uint32_t arguments;
     RSymbolId *symbols;
@@ -2910,6 +2993,40 @@ cleanup:
     return success;
 }
 
+static bool
+r_generic_loop_declared(const RFrontendContext *, RHirNodeId, RSymbolId, size_t, size_t, uint8_t *);
+
+/* R-STMT-0023 (L44): marks every symbol a subtree names, whichever branch of a constant condition
+   names it. */
+static bool r_generic_mark_all_symbols(
+    RGenericClone *clone, RHirNodeId id, uint8_t *symbols, uint8_t *seen, uint32_t depth) {
+    RFrontendContext *context = clone->context;
+    if ((id == 0U) || (id > clone->node_count) || (depth > r_frontend_tree_depth_limit(context))) {
+        return false;
+    }
+    if (seen[id - 1U] != 0U) {
+        return true;
+    }
+    seen[id - 1U] = 1U;
+    const RHirNode node = context->hir_nodes[id - 1U];
+    if ((node.symbol != 0U) && (node.symbol <= clone->symbol_count)) {
+        symbols[node.symbol - 1U] = 1U;
+    }
+    if ((node.deref_local != 0U) && (node.deref_local <= clone->symbol_count)) {
+        symbols[node.deref_local - 1U] = 1U;
+    }
+    for (uint32_t index = 0U; index < node.child_count; ++index) {
+        if (!r_generic_mark_all_symbols(clone,
+                                        context->hir_children[node.first_child + index],
+                                        symbols,
+                                        seen,
+                                        depth + 1U)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 /* Select branch-local storage along with its HIR. Inactive locals must not instantiate
  * layouts, destructors or runtime dependencies. Parameters retain the declared signature. */
 static bool r_generic_mark_selected_symbols(
@@ -2927,6 +3044,37 @@ static bool r_generic_mark_selected_symbols(
         symbols[node.symbol - 1U] = 1U;
     if (node.deref_local != 0U && node.deref_local <= clone->symbol_count)
         symbols[node.deref_local - 1U] = 1U;
+    if (node.kind == R_HIR_CONSTEXPR_LOOP) {
+        /* R-STMT-0023 (L44): every repetition copies the symbols its block declares itself. */
+        uint8_t *declared = r_context_allocate(context, clone->symbol_count + 1U);
+        const RSymbolId origin = clone->origin;
+        bool marked = declared != NULL;
+        /* The bounds select as usual; the block, whose constant conditions only the
+           repetitions decide, keeps every symbol it names. */
+        for (index = 0U; marked && (index < node.child_count); ++index) {
+            const RHirNodeId child = context->hir_children[node.first_child + index];
+            if (index + 1U < node.child_count) {
+                marked = r_generic_mark_selected_symbols(clone, child, symbols, seen, depth + 1U);
+            } else {
+                marked = r_generic_mark_all_symbols(clone, child, symbols, seen, depth + 1U);
+            }
+        }
+        if (marked && (node.child_count == 3U)) {
+            marked = r_generic_loop_declared(context,
+                                             context->hir_children[node.first_child + 2U],
+                                             origin,
+                                             clone->node_count,
+                                             clone->symbol_count,
+                                             declared);
+            for (size_t slot = 0U; marked && (slot < clone->symbol_count); ++slot) {
+                if (declared[slot] != 0U) {
+                    symbols[slot] = 0U;
+                }
+            }
+        }
+        r_context_free(context, declared);
+        return marked;
+    }
     if (node.kind == R_HIR_STATIC_IF) {
         int truth;
         uint32_t branch;
@@ -2951,6 +3099,341 @@ static bool r_generic_mark_selected_symbols(
                 clone, context->hir_children[node.first_child + index], symbols, seen, depth + 1U))
             return false;
     }
+    return true;
+}
+
+/* R-STMT-0023 (L44): marks the nodes of a subtree. */
+static bool r_generic_mark_subtree(const RFrontendContext *context,
+                                   RHirNodeId id,
+                                   uint8_t *nodes,
+                                   size_t node_count,
+                                   uint32_t depth) {
+    if ((id == 0U) || ((size_t)id > node_count) || (depth > r_frontend_tree_depth_limit(context))) {
+        return true;
+    }
+    if (nodes[id - 1U] != 0U) {
+        return true;
+    }
+    nodes[id - 1U] = 1U;
+    const RHirNode node = context->hir_nodes[id - 1U];
+    for (uint32_t index = 0U; index < node.child_count; ++index) {
+        if (!r_generic_mark_subtree(context,
+                                    context->hir_children[node.first_child + index],
+                                    nodes,
+                                    node_count,
+                                    depth + 1U)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* R-STMT-0023 (L44): the symbols of `origin` that the block of a translation-time loop declares,
+   those whose declaration node lies in it; each repetition gets copies of its own. */
+static bool r_generic_loop_declared(const RFrontendContext *context,
+                                    RHirNodeId block,
+                                    RSymbolId origin,
+                                    size_t node_count,
+                                    size_t symbol_count,
+                                    uint8_t *declared) {
+    uint8_t *nodes = r_context_allocate((RFrontendContext *)context, node_count + 1U);
+    if (nodes == NULL) {
+        return false;
+    }
+    (void)memset(nodes, 0, node_count + 1U);
+    const bool marked = r_generic_mark_subtree(context, block, nodes, node_count, 0U);
+    /* A symbol without a node of its own, such as the group of a task_scope, is declared in the
+       block when its scope begins there (defect L44-12). */
+    const RSourceSpan span = context->hir_nodes[block - 1U].span;
+    if (marked) {
+        for (size_t index = 0U; index < symbol_count; ++index) {
+            const RSemanticSymbol *symbol = &context->semantic_symbols[index];
+            const bool by_node = (symbol->hir_node != 0U) &&
+                                 ((size_t)symbol->hir_node <= node_count) &&
+                                 (nodes[symbol->hir_node - 1U] != 0U);
+            const bool by_scope = (symbol->name_span.source == span.source) &&
+                                  (symbol->scope_start > span.start) &&
+                                  (symbol->scope_start < span.end);
+            declared[index] = (symbol->parent == origin) && (by_node || by_scope) ? 1U : 0U;
+        }
+    }
+    r_context_free((RFrontendContext *)context, nodes);
+    return marked;
+}
+
+/* R-STMT-0023 (L44): binds the constant of a translation-time loop for one repetition. */
+static bool r_constexpr_bind(RFrontendContext *context, RTypeId parameter, uint64_t value) {
+    if (!r_grow_array(context,
+                      (void **)&context->constexpr_binding_parameters,
+                      &context->constexpr_binding_parameter_capacity,
+                      sizeof(*context->constexpr_binding_parameters),
+                      context->constexpr_binding_count + 1U) ||
+        !r_grow_array(context,
+                      (void **)&context->constexpr_binding_values,
+                      &context->constexpr_binding_value_capacity,
+                      sizeof(*context->constexpr_binding_values),
+                      context->constexpr_binding_count + 1U)) {
+        return false;
+    }
+    context->constexpr_binding_parameters[context->constexpr_binding_count] = parameter;
+    context->constexpr_binding_values[context->constexpr_binding_count] = value;
+    context->constexpr_binding_count += 1U;
+    return true;
+}
+
+/* R-STMT-0023 (L44): an instance unrolls a translation-time loop of its definition. The bounds are
+   constants once cloned; each repetition binds the loop parameter to its value, gives the symbols
+   the block declares copies of their own and clones the block anew. */
+static bool r_generic_clone_constexpr_loop(RGenericClone *clone,
+                                           const RHirNode *source,
+                                           uint32_t depth,
+                                           RHirNodeId *result) {
+    RFrontendContext *context = clone->context;
+    RHirNodeId low_id;
+    RHirNodeId high_id;
+    RHirVector copies = {0};
+    uint8_t *declared = NULL;
+    uint8_t *selected = NULL;
+    uint8_t *seen = NULL;
+    bool success = false;
+    const RHirNodeId block = context->hir_children[source->first_child + 2U];
+    /* Cloning the bounds may intern types and move semantic_types, so the parameter is read
+       first (defect L44-9). */
+    const RSemanticType *parameter_type = r_semantic_type(context, source->auxiliary_type);
+    const uint32_t parameter_base = parameter_type == NULL ? 0U : parameter_type->base;
+
+    if ((source->child_count != 3U) || (parameter_base == 0U) ||
+        ((size_t)parameter_base > context->generic_parameter_count) ||
+        !r_generic_clone_node(
+            clone, context->hir_children[source->first_child], depth + 1U, &low_id) ||
+        !r_generic_clone_node(
+            clone, context->hir_children[source->first_child + 1U], depth + 1U, &high_id)) {
+        return false;
+    }
+    /* The bounds of this instance: literals, or expressions over the substituted parameters
+       that translation-time evaluation folds, such as `core::field_count::<T>() - 1usize`. */
+    uint64_t bounds[2] = {0U, 0U};
+    const RHirNodeId bound_ids[2] = {low_id, high_id};
+    for (uint32_t which = 0U; which < 2U; ++which) {
+        const RHirNode bound = context->hir_nodes[bound_ids[which] - 1U];
+        bool folded = bound.kind == R_HIR_LITERAL;
+        bounds[which] = bound.integer_value;
+        if (!folded &&
+            !r_consteval_required_scalar(context, bound_ids[which], &bounds[which], &folded)) {
+            return false;
+        }
+        if (!folded) {
+            if (clone->origin_poisoned) {
+                return true;
+            }
+            return r_semantic_add_diagnostic(context,
+                                             "R-DIAG-CONST-002",
+                                             "R-STMT-0023",
+                                             "a bound of a translation-time loop is a constant in "
+                                             "every instantiation",
+                                             source->span);
+        }
+    }
+    const RTypeId loop_type = context->generic_parameters[parameter_base - 1U].constant_type;
+    bool is_signed = false;
+    uint32_t width = 64U;
+    (void)r_semantic_integer_properties(
+        r_semantic_value_kind(context, loop_type), &is_signed, &width);
+    const uint64_t mask = width >= 64U ? UINT64_MAX : ((UINT64_C(1) << width) - 1U);
+    uint64_t low = bounds[0];
+    uint64_t high = bounds[1];
+    if (is_signed && (width < 64U)) {
+        const uint64_t sign = UINT64_C(1) << (width - 1U);
+        low = ((low & mask) ^ sign) - sign;
+        high = ((high & mask) ^ sign) - sign;
+    }
+    uint64_t count = 0U;
+    if (is_signed ? ((int64_t)low < (int64_t)high) : (low < high)) {
+        count = high - low;
+    }
+    if (count > (uint64_t)R_CONSTEXPR_LOOP_LIMIT) {
+        return clone->origin_poisoned ||
+               r_semantic_add_diagnostic(context,
+                                         "R-DIAG-LIMIT-001",
+                                         "R-STMT-0023",
+                                         "a translation-time loop repeats its block at most 1024 "
+                                         "times",
+                                         source->span);
+    }
+    const RSymbolId origin = clone->origin;
+    declared = r_context_allocate(context, clone->symbol_count + 1U);
+    if ((declared == NULL) ||
+        !r_generic_loop_declared(
+            context, block, origin, clone->node_count, clone->symbol_count, declared)) {
+        goto cleanup;
+    }
+    selected = r_context_allocate(context, clone->symbol_count + 1U);
+    seen = r_context_allocate(context, clone->node_count + 1U);
+    if ((selected == NULL) || (seen == NULL)) {
+        goto cleanup;
+    }
+    for (uint64_t step = 0U; step < count; ++step) {
+        RHirNodeId copy;
+        uint8_t *nodes = NULL;
+        if (!r_constexpr_bind(context, source->auxiliary_type, (low + step) & mask)) {
+            goto cleanup;
+        }
+        /* The symbols this repetition uses: with its constant bound, the constant conditions of
+           the block decide, so a branch it does not take copies nothing (defect L44-13). */
+        (void)memset(selected, 0, clone->symbol_count + 1U);
+        (void)memset(seen, 0, clone->node_count + 1U);
+        if (!r_generic_mark_selected_symbols(clone, block, selected, seen, depth + 1U)) {
+            context->constexpr_binding_count -= 1U;
+            goto cleanup;
+        }
+        for (size_t index = 0U; index < clone->symbol_count; ++index) {
+            if ((declared[index] == 0U) || (selected[index] == 0U)) {
+                continue;
+            }
+            RSemanticSymbol symbol = context->semantic_symbols[index];
+            symbol.parent = context->generic_current_function;
+            symbol.hir_node = 0U;
+            if (!r_generic_substitute_type(
+                    context, symbol.type, clone->schema, clone->arguments, &symbol.type) ||
+                !r_semantic_append_symbol(context, symbol, &clone->symbols[index])) {
+                context->constexpr_binding_count -= 1U;
+                goto cleanup;
+            }
+        }
+        /* The links between symbols follow the copies, as for a whole instance. */
+        for (size_t index = 0U; index < clone->symbol_count; ++index) {
+            if ((declared[index] == 0U) || (selected[index] == 0U)) {
+                continue;
+            }
+            RSemanticSymbol *copied = &context->semantic_symbols[clone->symbols[index] - 1U];
+            if ((copied->task_scope != 0U) && (copied->task_scope <= clone->symbol_count)) {
+                copied->task_scope = clone->symbols[copied->task_scope - 1U];
+            }
+            if ((copied->out_parameter != 0U) && (copied->out_parameter <= clone->symbol_count)) {
+                copied->out_parameter = clone->symbols[copied->out_parameter - 1U];
+            }
+            if ((copied->parameter_content != 0U) &&
+                (copied->parameter_content <= clone->symbol_count)) {
+                copied->parameter_content = clone->symbols[copied->parameter_content - 1U];
+            }
+            if ((copied->content_parameter != 0U) &&
+                (copied->content_parameter <= clone->symbol_count)) {
+                copied->content_parameter = clone->symbols[copied->content_parameter - 1U];
+            }
+            if (!r_semantic_remap_borrow_origins(context,
+                                                 clone->symbols,
+                                                 clone->symbol_count,
+                                                 &copied->borrow_origin,
+                                                 &copied->borrow_origin_set,
+                                                 &copied->borrow_origin_multiple)) {
+                context->constexpr_binding_count -= 1U;
+                goto cleanup;
+            }
+        }
+        nodes = r_context_allocate(context, clone->node_count + 1U);
+        if (nodes == NULL) {
+            context->constexpr_binding_count -= 1U;
+            goto cleanup;
+        }
+        (void)memset(nodes, 0, clone->node_count + 1U);
+        const bool marked = r_generic_mark_subtree(context, block, nodes, clone->node_count, 0U);
+        for (size_t index = 0U; marked && (index < clone->node_count); ++index) {
+            if (nodes[index] != 0U) {
+                clone->nodes[index] = R_HIR_NODE_ID_INVALID;
+            }
+        }
+        r_context_free(context, nodes);
+        const bool cloned = marked && r_generic_clone_node(clone, block, depth + 1U, &copy);
+        context->constexpr_binding_count -= 1U;
+        if (!cloned ||
+            ((copy != R_HIR_NODE_ID_INVALID) && !r_hir_vector_push(context, &copies, copy))) {
+            goto cleanup;
+        }
+        /* The projected borrow states of this repetition's copies, while the symbols still map
+           to them. */
+        for (size_t index = 0U; index < clone->symbol_count; ++index) {
+            uint32_t state;
+            if ((declared[index] == 0U) || (selected[index] == 0U)) {
+                continue;
+            }
+            if (!r_generic_clone_borrow_state(
+                    clone, context->semantic_symbols[index].projected_borrow_state, 0U, &state)) {
+                goto cleanup;
+            }
+            context->semantic_symbols[clone->symbols[index] - 1U].projected_borrow_state = state;
+        }
+    }
+    {
+        RHirNode node;
+        RTypeId void_type;
+        (void)memset(&node, 0, sizeof(node));
+        if (!r_semantic_type_from_token(context, R_TOKEN_KW_VOID, &void_type)) {
+            goto cleanup;
+        }
+        node.kind = R_HIR_BLOCK;
+        node.span = source->span;
+        node.type = void_type;
+        if (!r_hir_append_node(context, node, result) ||
+            !r_hir_commit_children(context, *result, &copies)) {
+            goto cleanup;
+        }
+    }
+    success = true;
+cleanup:
+    r_context_free(context, declared);
+    r_context_free(context, selected);
+    r_context_free(context, seen);
+    r_context_free(context, copies.items);
+    return success;
+}
+
+/* R-REFL-0006 (L44): an instance sets the member of a field place that `core::field` formed in a
+   dependent struct, from the synthetic field parameter of the definition. */
+static bool r_generic_close_field_place(RGenericClone *clone, RTypeId parameter, RHirNode *node) {
+    RFrontendContext *context = clone->context;
+    const RSemanticType *type = r_semantic_type(context, parameter);
+    if ((type == NULL) || (type->kind != R_SEMANTIC_TYPE_PARAMETER) || (type->base == 0U) ||
+        ((size_t)type->base > context->generic_parameter_count)) {
+        return true;
+    }
+    const RGenericParameter field = context->generic_parameters[type->base - 1U];
+    if (field.field_base == R_TYPE_ID_INVALID) {
+        return true;
+    }
+    uint64_t number = field.field_index_value;
+    RTypeId base;
+    if (((field.field_index != R_TYPE_ID_INVALID) &&
+         !r_constexpr_binding(context, field.field_index, &number)) ||
+        !r_generic_substitute_type(
+            context, field.field_base, clone->schema, clone->arguments, &base)) {
+        context->resource_status = R_FRONTEND_INTERNAL_ERROR;
+        return false;
+    }
+    const RSemanticAggregate *aggregate = r_semantic_aggregate_for_type(context, base);
+    if ((aggregate == NULL) || (aggregate->kind != R_SEMANTIC_AGGREGATE_STRUCT) ||
+        (number >= (uint64_t)aggregate->field_count)) {
+        return clone->origin_poisoned ||
+               r_semantic_add_diagnostic(context,
+                                         "R-DIAG-TYPE-001",
+                                         "R-REFL-0006",
+                                         "core::field takes a struct or tuple with this field in "
+                                         "every instantiation",
+                                         node->span);
+    }
+    const uint32_t member = aggregate->first_field + (uint32_t)number + 1U;
+    const RSemanticField *selected = &context->semantic_fields[member - 1U];
+    const RSourceId module = context->semantic_symbols[clone->origin - 1U].module_source;
+    if (selected->is_protected && (aggregate->module_source != module) && !clone->origin_poisoned &&
+        !r_semantic_add_diagnostic(context,
+                                   "R-DIAG-NAME-001",
+                                   "R-NAME-0003",
+                                   "protected struct field is not visible",
+                                   node->span)) {
+        return false;
+    }
+    node->aggregate_member = member;
+    node->type = selected->type;
+    node->auxiliary_type = R_TYPE_ID_INVALID;
     return true;
 }
 
@@ -2999,6 +3482,13 @@ static bool r_generic_clone_node(RGenericClone *clone,
         if (!r_generic_clone_node(
                 clone, context->hir_children[source.first_child + branch], depth + 1U, result))
             return false;
+        clone->nodes[source_id - 1U] = *result;
+        return true;
+    }
+    if (source.kind == R_HIR_CONSTEXPR_LOOP) {
+        if (!r_generic_clone_constexpr_loop(clone, &source, depth, result)) {
+            return false;
+        }
         clone->nodes[source_id - 1U] = *result;
         return true;
     }
@@ -3154,6 +3644,11 @@ static bool r_generic_clone_node(RGenericClone *clone,
         node.borrow_origin = R_SYMBOL_ID_INVALID;
         node.borrow_origin_set = UINT32_C(0);
         node.borrow_origin_multiple = false;
+    }
+    if ((node.kind == R_HIR_FIELD_PLACE) && (node.aggregate_member == 0U) &&
+        (source.auxiliary_type != R_TYPE_ID_INVALID) &&
+        !r_generic_close_field_place(clone, source.auxiliary_type, &node)) {
+        return false;
     }
     if ((node.kind == R_HIR_FIELD_INIT || node.kind == R_HIR_FIELD_PLACE) &&
         node.aggregate_member != 0U) {
@@ -3609,6 +4104,7 @@ static bool r_generic_close_function(RFrontendContext *context, RSymbolId id) {
         return true;
     }
     clone.context = context;
+    clone.origin = instance.generic_origin;
     clone.schema = instance.generic_schema;
     clone.arguments = instance.first_generic_argument;
     clone.symbol_count = context->semantic_symbol_count;
@@ -4031,6 +4527,60 @@ static bool r_generic_validate_against(RFrontendContext *context,
                     "R-TYPE-0043",
                     "generic type argument does not implement the required trait",
                     span);
+            }
+        }
+    }
+    if (parameter.field_trait_count != 0U) {
+        /* R-TYPE-0043 (L44): `fields(Trait)`; a parameter argument proves it with its own field
+           traits, a struct or tuple with the traits of every field. */
+        /* Proving a trait may instantiate implementations and move the aggregate and type
+           arrays, so what the loop needs is copied first (defect L44-10). */
+        const RSemanticAggregate *aggregate = r_semantic_aggregate_for_type(context, argument);
+        const bool parameter_argument = (type->kind == R_SEMANTIC_TYPE_PARAMETER) &&
+                                        (type->base != 0U) &&
+                                        ((size_t)type->base <= context->generic_parameter_count);
+        const uint32_t argument_base = parameter_argument ? type->base : 0U;
+        if (!parameter_argument &&
+            ((aggregate == NULL) || (aggregate->kind != R_SEMANTIC_AGGREGATE_STRUCT))) {
+            return r_semantic_add_diagnostic(context,
+                                             "R-DIAG-TYPE-001",
+                                             "R-TYPE-0043",
+                                             "a fields constraint requires a struct or tuple",
+                                             span);
+        }
+        const uint32_t first_field = parameter_argument ? 0U : aggregate->first_field;
+        const uint32_t field_count = parameter_argument ? 0U : aggregate->field_count;
+        for (uint32_t constraint = 0U; constraint < parameter.field_trait_count; ++constraint) {
+            const uint32_t trait =
+                context->generic_trait_constraints[parameter.first_field_trait + constraint];
+            if (parameter_argument) {
+                const RGenericParameter proved = context->generic_parameters[argument_base - 1U];
+                bool found = false;
+                for (uint32_t own = 0U; !found && (own < proved.field_trait_count); ++own) {
+                    found =
+                        context->generic_trait_constraints[proved.first_field_trait + own] == trait;
+                }
+                if (!found) {
+                    return r_semantic_add_diagnostic(
+                        context,
+                        "R-DIAG-TYPE-001",
+                        "R-TYPE-0043",
+                        "generic type argument does not prove the fields constraint",
+                        span);
+                }
+                continue;
+            }
+            for (uint32_t member = 0U; member < field_count; ++member) {
+                const RTypeId field_type = context->semantic_fields[first_field + member].type;
+                if (!r_semantic_type_implements_trait(context, field_type, trait)) {
+                    return r_semantic_add_diagnostic(
+                        context,
+                        "R-DIAG-TYPE-001",
+                        "R-TYPE-0043",
+                        "a field of the generic type argument does not implement the trait of "
+                        "its fields constraint",
+                        span);
+                }
             }
         }
     }

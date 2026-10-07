@@ -673,6 +673,14 @@ static bool r_standard_select_integer(
     RBodyContext *body, RTypeId type, RTypeId other, RSourceSpan span, RTypeId *result) {
     RFrontendContext *context = body->frontend;
     *result = R_TYPE_ID_INVALID;
+    /* An element, a pointee or a field read through a shared view is `const T`; the operation
+       selects by T (defect L45-3). */
+    if (type != R_TYPE_ID_INVALID) {
+        type = r_semantic_value_type(context, type);
+    }
+    if (other != R_TYPE_ID_INVALID) {
+        other = r_semantic_value_type(context, other);
+    }
     RTypeId selected = R_TYPE_ID_INVALID, exact_type = R_TYPE_ID_INVALID;
     size_t viable_count = 0U, exact_count = 0U;
     for (size_t numeric = 0U; numeric < 10U; ++numeric) {
@@ -876,6 +884,65 @@ static bool r_standard_lower_overload(RBodyContext *body,
                                                      result) &&
                            r_standard_record_operation(body, "core", spelling, result);
                 }
+            }
+            /* Library R-LIB-0027 (L45): `core::count_ones(value)` and the other bit operations
+               without the suffix take it from the first operand, a wide one from the first two. */
+            for (uint32_t bits = (uint32_t)R_STANDARD_CALL_CORE_LEADING_ZEROS;
+                 bits <= (uint32_t)R_STANDARD_CALL_CORE_NARROWING_DIV;
+                 ++bits) {
+                const RStandardCallOperation bits_operation = (RStandardCallOperation)bits;
+                const char *bits_name = r_standard_core_bits_name(bits_operation);
+                RAstRef operand;
+                RTypeId type = R_TYPE_ID_INVALID;
+                RTypeId other = R_TYPE_ID_INVALID;
+                uint64_t tag;
+                char spelling[96];
+
+                if (!r_semantic_token_text_equal_owned(context, &operation, bits_name)) {
+                    continue;
+                }
+                *matched = true;
+                if ((view->child_count == 0U) ||
+                    !r_ast_ref_child(context, arguments, 0U, &operand) ||
+                    !r_overload_argument_type(body, operand, 0U, false, &type)) {
+                    return r_body_diagnostic(body,
+                                             "R-DIAG-TYPE-001",
+                                             "R-FUNC-0004",
+                                             "core integer operation requires an integer operand",
+                                             span);
+                }
+                other = type;
+                if ((bits_operation >= R_STANDARD_CALL_CORE_WIDENING_MUL) &&
+                    ((view->child_count < 2U) ||
+                     !r_ast_ref_child(context, arguments, 1U, &operand) ||
+                     !r_overload_argument_type(body, operand, 0U, false, &other))) {
+                    return r_body_diagnostic(body,
+                                             "R-DIAG-TYPE-001",
+                                             "R-FUNC-0004",
+                                             "core integer operation requires two integer operands",
+                                             span);
+                }
+                if (!r_standard_select_integer(body, type, other, span, &type)) {
+                    return false;
+                }
+                if (type == R_TYPE_ID_INVALID) {
+                    return true;
+                }
+                if (!r_semantic_checked_numeric_type_tag(context, type, &tag)) {
+                    return false;
+                }
+                const RTokenKind token = r_checked_numeric_destinations[tag].token_kind;
+                (void)snprintf(
+                    spelling, sizeof(spelling), "%s_%s", bits_name, r_token_kind_name(token));
+                return r_body_lower_core_bits(body,
+                                              arguments,
+                                              view,
+                                              span,
+                                              operation.span,
+                                              bits_operation,
+                                              token,
+                                              result) &&
+                       r_standard_record_operation(body, "core", spelling, result);
             }
         }
     }
@@ -1182,6 +1249,85 @@ static bool r_standard_query_type(RFrontendContext *context,
     return true;
 }
 
+/* R-REFL-0006 (L44): the type of `core::field(object, index)` for overload selection: a borrow of
+   the field that a literal index, or the name of a translation-time constant such as the
+   constant of a translation-time loop, selects; none when the index is known only to lowering. */
+static bool r_standard_query_field(
+    RBodyContext *body, RTypeId owner, RAstRef arguments, bool shared, RTypeId *result) {
+    RFrontendContext *context = body->frontend;
+    const RTypeId owner_type = r_semantic_value_type(context, owner);
+    const RSemanticAggregate *aggregate = r_semantic_aggregate_for_type(context, owner_type);
+    const RSemanticType *described = r_semantic_type(context, owner_type);
+    const bool dependent_struct = (aggregate == NULL) && (described != NULL) &&
+                                  (described->kind == R_SEMANTIC_TYPE_PARAMETER);
+    RAstRef argument;
+    RAstTokenView token;
+    uint64_t index = UINT64_C(0);
+    RTypeId index_parameter = R_TYPE_ID_INVALID;
+    RTypeId field_type;
+
+    *result = R_TYPE_ID_INVALID;
+    if ((((aggregate == NULL) || (aggregate->kind != R_SEMANTIC_AGGREGATE_STRUCT)) &&
+         !dependent_struct) ||
+        !r_ast_ref_child(context, arguments, 1U, &argument)) {
+        return true;
+    }
+    /* The index is one token inside its expression wrappers. */
+    for (uint32_t depth = 0U; !r_ast_ref_token(context, argument, &token); ++depth) {
+        RAstRef inner;
+        if (r_body_ast_first_token(context, argument, &token)) {
+            break;
+        }
+        if ((depth > r_frontend_tree_depth_limit(context)) ||
+            !r_body_ast_single_node_child(context, argument, &inner)) {
+            return true;
+        }
+        argument = inner;
+    }
+    if (token.kind == R_TOKEN_IDENTIFIER) {
+        RBodyLookupIssue issue;
+        const RSymbolId symbol_id = r_body_resolve_name(body, &token, &issue);
+        const RSemanticSymbol *symbol = r_body_symbol(body, symbol_id);
+        if ((symbol == NULL) || (symbol->kind != R_SEMANTIC_SYMBOL_MODULE_CONSTANT) ||
+            symbol->consteval_pending) {
+            return true;
+        }
+        index = symbol->integer_value;
+        index_parameter = symbol->constant_parameter;
+    } else if (token.kind == R_TOKEN_INTEGER_LITERAL) {
+        RIntegerLiteral literal;
+        if (!r_body_parse_integer_literal(body, argument, &literal)) {
+            return false;
+        }
+        if (!literal.valid) {
+            return true;
+        }
+        index = literal.magnitude;
+    } else {
+        return true;
+    }
+    if (dependent_struct || (index_parameter != R_TYPE_ID_INVALID)) {
+        /* R-REFL-0006 (L44): the synthetic field parameter of a generic definition. */
+        if (!r_semantic_field_parameter(context, owner_type, index_parameter, index, &field_type)) {
+            return false;
+        }
+    } else {
+        if (index >= (uint64_t)aggregate->field_count) {
+            return true;
+        }
+        field_type = r_semantic_value_type(
+            context, context->semantic_fields[aggregate->first_field + (uint32_t)index].type);
+    }
+    return r_semantic_intern_derived_type(context,
+                                          R_SEMANTIC_TYPE_BORROW,
+                                          field_type,
+                                          R_TYPE_ID_INVALID,
+                                          UINT64_C(0),
+                                          shared ? R_SEMANTIC_TYPE_FLAG_SHARED
+                                                 : R_SEMANTIC_TYPE_FLAG_NONE,
+                                          result);
+}
+
 static bool r_standard_query_call(RBodyContext *body,
                                   RAstRef primary,
                                   RAstRef suffix,
@@ -1299,6 +1445,54 @@ static bool r_standard_query_call(RBodyContext *body,
             return math_operation == 0U ||
                    r_body_standard_math_type(
                        context, r_standard_math_operation(math_operation)->result_type, result);
+        }
+    }
+    if (!method_call && view.child_count == 2U &&
+        ((strcmp(operation, "core::field") == 0) || (strcmp(operation, "core::field_mut") == 0))) {
+        return r_standard_query_field(
+            body, owner, arguments, strcmp(operation, "core::field") == 0, result);
+    }
+    if (!method_call && (view.child_count != 0U) && (strncmp(operation, "core::", 6U) == 0)) {
+        /* Library R-LIB-0027 (L45): a bit or wide integer operation, with the type suffix or
+           selected by its first operands. */
+        for (uint32_t bits = (uint32_t)R_STANDARD_CALL_CORE_LEADING_ZEROS;
+             bits <= (uint32_t)R_STANDARD_CALL_CORE_NARROWING_DIV;
+             ++bits) {
+            const RStandardCallOperation bits_operation = (RStandardCallOperation)bits;
+            const char *bits_name = r_standard_core_bits_name(bits_operation);
+            const size_t bits_length = strlen(bits_name);
+            RTypeId integer = R_TYPE_ID_INVALID;
+
+            if (strncmp(operation + 6U, bits_name, bits_length) != 0) {
+                continue;
+            }
+            if (operation[6U + bits_length] == '_') {
+                for (size_t numeric = 0U; numeric < 10U; ++numeric) {
+                    const RTokenKind token_kind =
+                        r_checked_numeric_destinations[numeric].token_kind;
+                    if ((strcmp(operation + 7U + bits_length, r_token_kind_name(token_kind)) ==
+                         0) &&
+                        !r_semantic_type_from_token(context, token_kind, &integer)) {
+                        return false;
+                    }
+                }
+            } else if (operation[6U + bits_length] == '\0') {
+                RTypeId other = owner;
+                RAstRef argument;
+                if ((bits_operation >= R_STANDARD_CALL_CORE_WIDENING_MUL) &&
+                    ((view.child_count < 2U) ||
+                     !r_ast_ref_child(context, arguments, 1U, &argument) ||
+                     !r_overload_argument_type(body, argument, 0U, false, &other))) {
+                    return view.child_count < 2U;
+                }
+                if (!r_standard_select_integer(body, owner, other, view.span, &integer)) {
+                    return false;
+                }
+            } else {
+                continue;
+            }
+            return (integer == R_TYPE_ID_INVALID) ||
+                   r_core_bits_result_type(context, bits_operation, integer, view.span, result);
         }
     }
     if (!method_call && view.child_count == 2U && strncmp(operation, "core::", 6U) == 0) {

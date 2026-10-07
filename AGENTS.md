@@ -261,7 +261,9 @@ these rules are the ones that most often reject otherwise reasonable code:
   parenthesize the receiver, as in `(lease.get())->query(...)`.
 - Functions are declared before use in source order; `protected` marks module-private items.
 - R-FUNC-0020: every result is used, forwarded or discarded with `as void` on every path, including
-  the zero-iteration path of a loop; a named Move value is discarded with `drop name;`.
+  the zero-iteration path of a loop; a named Move value is discarded with `drop name;`. A value
+  read only by the right operand of `||` or `&&` is unread on the path that stops at the left
+  one, so bind each part of `auto (sum, carry) = ...` to a `bool` before combining them.
 - R-INIT-0014: a value produced inside `task_scope` is accumulated into storage declared outside
   it (`total += await child;`), not assigned.
 - `@scoped` async calls need an enclosing `task_scope`, even inside `@scoped` functions, and a
@@ -287,6 +289,19 @@ these rules are the ones that most often reject otherwise reasonable code:
 - `core::location()` is the translation-time `module.path:line` of the call; pass it explicitly
   (`logger.log_at(level, message, &fields, core::location())`), since R has no implicit caller
   parameters.
+- A state machine is a labeled switch over an integer, char or fieldless enum:
+  `run: switch (op) { case A: ...; continue run (next); case B: return x; }`; a clause that
+  completes leaves the switch, `break run;` leaves it from a nested loop, and a plain
+  `continue;` belongs to the loop around the switch.
+- Bit and wide integer operations are `core::count_ones(x)`, `core::rotate_left(x, n)`,
+  `auto (low, high) = core::widening_mul(a, b);` and the like (Library R-LIB-0027), with or
+  without the type suffix; the wide ones exist for unsigned types only.
+- Fields are visited with a translation-time loop, `for (constexpr usize i in
+  0usize..core::field_count::<T>()) { core::field(&value, i)->...; }`; it takes no label, and an
+  unlabeled `break` or `continue` cannot leave it (a labeled one may leave it for its loop). A
+  generic body calls methods on the fields only under `@generic<T: fields(Trait)>`; `&place`
+  borrows just the field, as `&place.name` does, except on a type parameter, where it borrows
+  the place.
 - A panic ends its task and `await` continues it in the awaiting task; to survive the panic of a
   child (a request handler), await it as `await std.async::join(move t)`, which gives a
   `std.thread::join_result<T>` and admits only a task without checked errors (catch them inside).

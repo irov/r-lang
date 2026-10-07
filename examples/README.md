@@ -25,9 +25,9 @@ The same build harness verifies emitted C17, stack accounting and sanitizer conf
 | [Preflight](preflight/README.md) | Validate service configuration | Common error domains, typed error adapters, boundary checks and resource diagnostics |
 | [C bridge](c_bridge/README.md) | Exchange strings and owned packets with C | Header-verified imports, raw callbacks, handles, views anchored to a handle or to bytes (`core::slice_from_raw_parts_in`), attachment and UTF-8 views |
 | [Logbook](logbook/README.md) | Filter events and inspect log schemas | Enum reflection, public fields, explicit discriminants and owning payload variants |
-| [Calculator](calculator/README.md) | Real and complex scientific calculations, arithmetic expressions | Every concrete `std.math` operation, C numeric types, public records, checked errors, a recursive descent parser bounded by `@recursion(depth = 16)` |
-| [Numbers](numbers/README.md) | Radix conversion and integer arithmetic | All integer specializations, checked conversion, overflow, saturation and wrapping |
-| [Binary](binary/README.md) | Checksums, telemetry packets and device labels | Byte views, hashes, little-endian encoding, bit reading, fixed arrays |
+| [Calculator](calculator/README.md) | Real and complex scientific calculations, arithmetic and postfix expressions | Every concrete `std.math` operation, C numeric types, public records, checked errors, a recursive descent parser bounded by `@recursion(depth = 16)`, a state machine on a labeled switch |
+| [Numbers](numbers/README.md) | Radix conversion and integer arithmetic | All integer specializations, checked conversion, overflow, saturation and wrapping, bit counts, rotations and wide arithmetic |
+| [Binary](binary/README.md) | Checksums, telemetry packets, device labels and bit operations | Byte views, hashes, little-endian encoding written field by field (`fields(Trait)`), bit reading, fixed arrays, 128-bit arithmetic on limbs |
 | [Text](text/README.md) | Search, redact, split and inspect text | Complete regex API, UTF-8 boundaries, strings and reusable storage |
 | [Deflate](deflate/README.md) | Compress and decompress DEFLATE, zlib and gzip streams | Resumable `std.deflate` coders over caller buffers, flush modes, one-shot helpers, checked stream errors |
 | [XML](xml/README.md) | Stream, select and rewrite XML | Streaming `std.xml` reader over fragments, namespaces, path selectors, escaping writer |

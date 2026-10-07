@@ -1,9 +1,9 @@
 {
   "version": 4,
   "scope": "source references and resolved program operations and types; execution checked separately",
-  "total_records": 1568,
-  "covered_records": 1568,
-  "application_records": 1568,
+  "total_records": 1580,
+  "covered_records": 1580,
+  "application_records": 1580,
   "items": [
     {
       "record_id": "core::adopt#operation",
@@ -180,6 +180,40 @@
       "resolved_type_examples": []
     },
     {
+      "record_id": "core::borrowing_sub_SUFFIX#operation",
+      "required": [
+        "core::borrowing_sub_u8",
+        "core::borrowing_sub_u16",
+        "core::borrowing_sub_u32",
+        "core::borrowing_sub_u64",
+        "core::borrowing_sub_usize"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "binary",
+        "numbers"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "core::carrying_add_SUFFIX#operation",
+      "required": [
+        "core::carrying_add_u8",
+        "core::carrying_add_u16",
+        "core::carrying_add_u32",
+        "core::carrying_add_u64",
+        "core::carrying_add_usize"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "binary",
+        "numbers"
+      ],
+      "resolved_type_examples": []
+    },
+    {
       "record_id": "core::checked_add_SUFFIX#operation",
       "required": [
         "core::checked_add_i8",
@@ -254,6 +288,28 @@
       "application_missing": [],
       "examples": [
         "tournament"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "core::count_ones_SUFFIX#operation",
+      "required": [
+        "core::count_ones_i8",
+        "core::count_ones_u8",
+        "core::count_ones_i16",
+        "core::count_ones_u16",
+        "core::count_ones_i32",
+        "core::count_ones_u32",
+        "core::count_ones_i64",
+        "core::count_ones_u64",
+        "core::count_ones_isize",
+        "core::count_ones_usize"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "binary",
+        "numbers"
       ],
       "resolved_type_examples": []
     },
@@ -413,6 +469,19 @@
       "resolved_type_examples": []
     },
     {
+      "record_id": "core::field#operation",
+      "required": [
+        "core::field"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "binary",
+        "reflection"
+      ],
+      "resolved_type_examples": []
+    },
+    {
       "record_id": "core::field_attribute#operation",
       "required": [
         "core::field_attribute"
@@ -433,7 +502,21 @@
       "application_missing": [],
       "examples": [
         "arena",
+        "binary",
         "logbook",
+        "reflection"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "core::field_mut#operation",
+      "required": [
+        "core::field_mut"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "binary",
         "reflection"
       ],
       "resolved_type_examples": []
@@ -475,6 +558,28 @@
       "examples": [
         "jobs",
         "tournament"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "core::leading_zeros_SUFFIX#operation",
+      "required": [
+        "core::leading_zeros_i8",
+        "core::leading_zeros_u8",
+        "core::leading_zeros_i16",
+        "core::leading_zeros_u16",
+        "core::leading_zeros_i32",
+        "core::leading_zeros_u32",
+        "core::leading_zeros_i64",
+        "core::leading_zeros_u64",
+        "core::leading_zeros_isize",
+        "core::leading_zeros_usize"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "binary",
+        "numbers"
       ],
       "resolved_type_examples": []
     },
@@ -556,6 +661,23 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "numbers"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "core::narrowing_div_SUFFIX#operation",
+      "required": [
+        "core::narrowing_div_u8",
+        "core::narrowing_div_u16",
+        "core::narrowing_div_u32",
+        "core::narrowing_div_u64",
+        "core::narrowing_div_usize"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "binary",
         "numbers"
       ],
       "resolved_type_examples": []
@@ -651,6 +773,50 @@
         "workers",
         "workspace",
         "xml"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "core::rotate_left_SUFFIX#operation",
+      "required": [
+        "core::rotate_left_i8",
+        "core::rotate_left_u8",
+        "core::rotate_left_i16",
+        "core::rotate_left_u16",
+        "core::rotate_left_i32",
+        "core::rotate_left_u32",
+        "core::rotate_left_i64",
+        "core::rotate_left_u64",
+        "core::rotate_left_isize",
+        "core::rotate_left_usize"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "binary",
+        "numbers"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "core::rotate_right_SUFFIX#operation",
+      "required": [
+        "core::rotate_right_i8",
+        "core::rotate_right_u8",
+        "core::rotate_right_i16",
+        "core::rotate_right_u16",
+        "core::rotate_right_i32",
+        "core::rotate_right_u32",
+        "core::rotate_right_i64",
+        "core::rotate_right_u64",
+        "core::rotate_right_isize",
+        "core::rotate_right_usize"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "binary",
+        "numbers"
       ],
       "resolved_type_examples": []
     },
@@ -778,6 +944,28 @@
       "resolved_type_examples": []
     },
     {
+      "record_id": "core::swap_bytes_SUFFIX#operation",
+      "required": [
+        "core::swap_bytes_i8",
+        "core::swap_bytes_u8",
+        "core::swap_bytes_i16",
+        "core::swap_bytes_u16",
+        "core::swap_bytes_i32",
+        "core::swap_bytes_u32",
+        "core::swap_bytes_i64",
+        "core::swap_bytes_u64",
+        "core::swap_bytes_isize",
+        "core::swap_bytes_usize"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "binary",
+        "numbers"
+      ],
+      "resolved_type_examples": []
+    },
+    {
       "record_id": "core::take#operation",
       "required": [
         "core::take"
@@ -800,6 +988,28 @@
         "logbook",
         "preflight",
         "reflection"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "core::trailing_zeros_SUFFIX#operation",
+      "required": [
+        "core::trailing_zeros_i8",
+        "core::trailing_zeros_u8",
+        "core::trailing_zeros_i16",
+        "core::trailing_zeros_u16",
+        "core::trailing_zeros_i32",
+        "core::trailing_zeros_u32",
+        "core::trailing_zeros_i64",
+        "core::trailing_zeros_u64",
+        "core::trailing_zeros_isize",
+        "core::trailing_zeros_usize"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "binary",
+        "numbers"
       ],
       "resolved_type_examples": []
     },
@@ -1024,6 +1234,23 @@
       "application_missing": [],
       "examples": [
         "registers"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "core::widening_mul_SUFFIX#operation",
+      "required": [
+        "core::widening_mul_u8",
+        "core::widening_mul_u16",
+        "core::widening_mul_u32",
+        "core::widening_mul_u64",
+        "core::widening_mul_usize"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "binary",
+        "numbers"
       ],
       "resolved_type_examples": []
     },
@@ -3165,10 +3392,12 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "binary",
         "journal",
         "textkit"
       ],
       "resolved_type_examples": [
+        "binary",
         "journal",
         "textkit"
       ]

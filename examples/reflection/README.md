@@ -47,8 +47,33 @@ constexpr str scalar = type_of(42u32);   // "u32"
 ```
 
 `core::target_name()` and `core::profile_name()` name the target triple and the selected
-library profile of the translation. The forms are specified by Core R-REFL-0001..0004 and
-listed by Library R-LIB-0024; they are available in every profile, including `freestanding`.
+library profile of the translation.
+
+Fields are reached by a constant index. A translation-time loop repeats its block once per
+value of its constant, and `core::field` (or `core::field_mut`) borrows the field of each
+repetition with that field's own type. A generic body states what every field provides with the
+constraint `fields(Trait)`; it is checked once against the methods of the trait, and each
+instantiation unrolls the loop over its own fields:
+
+```r
+@generic<T: fields(Scored)>
+u32 total_score(const T* record) {
+    u32 total = 0u32;
+    for (constexpr usize index in 0usize..core::field_count::<T>()) {
+        total += core::field(record, index)->score();
+    }
+    return total;
+}
+
+total_score(&settings);       // Level, u32 and bool fields
+total_score(&pair);           // a (u32, bool) tuple
+u32* retries = core::field_mut(&settings, 1usize);
+const bool* verbose = core::field(&settings, 2usize);  // a second field of the same place
+```
+
+The generated C17 has no loop and no index: each repetition is the direct field access it
+names. The forms are specified by Core R-REFL-0001..0006, R-STMT-0023 and R-TYPE-0043 and listed
+by Library R-LIB-0024; they are available in every profile, including `freestanding`.
 
 From the repository root, inspect the generated program with:
 

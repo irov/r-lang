@@ -14,24 +14,32 @@ async i32 main(const str[] arguments) {
     try {
         usize count = len(arguments);
         if (count == 1usize) {
-            response.output = std.string::from_str("numbers OP TYPE VALUE [VALUE] [RADIX]\nOperations: parse convert c_convert limits checked_add/sub/mul wrapping_add/sub/mul saturating_add/sub/mul\n");
+            response.output = std.string::from_str("numbers OP TYPE VALUE [VALUE] [VALUE] [RADIX]\nOperations: parse convert c_convert limits checked_add/sub/mul wrapping_add/sub/mul saturating_add/sub/mul leading_zeros trailing_zeros count_ones swap_bytes rotate_left/right widening_mul carrying_add borrowing_sub narrowing_div\n");
         } else {
-            throw (count < 3usize || count > 6usize) Usage { .message = "wrong number of arguments" };
+            throw (count < 3usize || count > 7usize) Usage { .message = "wrong number of arguments" };
             o<Operation> parsed = core::enum_from_name::<Operation>(arguments[1]);
             Operation operation = Operation::parse;
             switch (parsed) {
             case variant o::some(value): operation = *value; break;
             case variant o::none: throw Usage { .message = "unknown operation" };
             }
-            bool binary = operation != Operation::parse && operation != Operation::convert &&
-                operation != Operation::c_convert && operation != Operation::limits;
-            usize minimum = binary == true ? 5usize : (operation == Operation::limits ? 3usize : 4usize);
+            bool unary = operation == Operation::parse || operation == Operation::convert ||
+                operation == Operation::c_convert || operation == Operation::leading_zeros ||
+                operation == Operation::trailing_zeros || operation == Operation::count_ones ||
+                operation == Operation::swap_bytes;
+            bool ternary = operation == Operation::carrying_add || operation == Operation::borrowing_sub ||
+                operation == Operation::narrowing_div;
+            usize minimum = 5usize;
+            if (operation == Operation::limits) { minimum = 3usize; }
+            if (unary == true) { minimum = 4usize; }
+            if (ternary == true) { minimum = 6usize; }
             throw (count < minimum || count > minimum + 1usize) Usage { .message = "wrong number of operands" };
             str first = count > 3usize ? arguments[3] : "0";
-            str second = binary == true ? arguments[4] : "0";
+            str second = minimum > 4usize ? arguments[4] : "0";
+            str third = minimum > 5usize ? arguments[5] : "0";
             u32 radix = 10u32;
             if (count > minimum) { radix = std.convert::parse_u32(arguments[minimum], 10u32); }
-            response.output = example.numbers.dispatch::evaluate(operation, arguments[2], first, second, radix);
+            response.output = example.numbers.dispatch::evaluate(operation, arguments[2], first, second, third, radix);
             response.output.append("\n");
         }
     } catch (Usage failure) {

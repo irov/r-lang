@@ -229,6 +229,20 @@ static bool r_mir_write_generic_schema_entries(const RFrontendContext *context,
             }
             first = false;
         }
+        /* R-TYPE-0043 (L44): interface 34 writes `fields(Trait)` as `(fields Trait)`. */
+        for (property = 0U; property < parameter->field_trait_count; ++property) {
+            if ((!first && !r_write_text(writer, user_data, " ")) ||
+                !r_write_text(writer, user_data, "(fields ") ||
+                !r_mir_write_trait_reference(
+                    context,
+                    context->generic_trait_constraints[parameter->first_field_trait + property],
+                    writer,
+                    user_data) ||
+                !r_write_text(writer, user_data, ")")) {
+                return false;
+            }
+            first = false;
+        }
         if (!r_write_text(writer, user_data, "))")) {
             return false;
         }

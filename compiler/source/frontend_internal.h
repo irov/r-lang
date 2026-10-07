@@ -252,6 +252,8 @@ typedef enum RSyntaxKind {
     R_SYNTAX_LAMBDA_DECLARATION,
     R_SYNTAX_MOVE_CAPTURE_LIST,
     R_SYNTAX_CALLABLE_CONSTRAINT,
+    /* R-TYPE-0043 (L44): `fields(Trait)`, every field of the argument implements Trait. */
+    R_SYNTAX_FIELDS_CONSTRAINT,
     R_SYNTAX_OPAQUE_RESULT,
     R_SYNTAX_DYN_TYPE,
     R_SYNTAX_ASSOCIATED_TYPE,
@@ -266,6 +268,8 @@ typedef enum RSyntaxKind {
     R_SYNTAX_WHILE_STATEMENT,
     R_SYNTAX_FOR_STATEMENT,
     R_SYNTAX_FOR_IN_STATEMENT,
+    /* R-STMT-0023 (L44): `for (constexpr T name in low..high) block`, repeated at translation. */
+    R_SYNTAX_CONSTEXPR_FOR_STATEMENT,
     R_SYNTAX_SWITCH_STATEMENT,
     R_SYNTAX_CASE_CLAUSE,
     R_SYNTAX_DEFAULT_CLAUSE,
@@ -591,6 +595,20 @@ typedef struct RGenericParameter {
     RSourceSpan application_span;
     /* R-TYPE-0051: the canonical contract spelling of a dyn interface; zero otherwise. */
     uint32_t dyn_key;
+    /* R-TYPE-0043 (L44): `fields(Trait)` constraints, one-based trait indices that every field
+       of the struct or tuple argument implements. */
+    uint32_t first_field_trait;
+    uint32_t field_trait_count;
+    /* R-REFL-0006 (L44): a synthetic parameter for the field that `core::field` borrows from a
+       dependent struct `field_base`, at the constant `field_index_value`, or at the constant
+       of the translation-time loop whose parameter is `field_index` when that is nonzero. It
+       carries the field traits of its base as its trait constraints. */
+    RTypeId field_base;
+    RTypeId field_index;
+    uint64_t field_index_value;
+    /* R-STMT-0023 (L44): the constant of a translation-time loop with dependent bounds; each
+       repetition that an instantiation unrolls binds it (RFrontendContext.constexpr_bindings). */
+    bool loop_constant;
 } RGenericParameter;
 
 /* A constraint name that is not in the closed vocabulary; resolved once traits are known. */
@@ -603,6 +621,8 @@ typedef struct RGenericPendingConstraint {
     /* The constraint is spelled `core::Name` and names a core trait (R-TYPE-0046). */
     bool is_core;
     RAstRef application;
+    /* R-TYPE-0043 (L44): the trait of a `fields(Trait)` constraint. */
+    bool fields;
 } RGenericPendingConstraint;
 
 /* R-TYPE-0043 (M19): `P::Name: constraints` in the header of a generic function. The holder is a
@@ -1018,6 +1038,12 @@ typedef enum RSemanticObjectState {
 
 typedef struct RSemanticSymbol {
     RSemanticSymbolKind kind;
+    /* R-STMT-0023 (L44): the constant of a translation-time loop in a generic definition whose
+       bounds an instantiation decides: its synthetic parameter; zero for every other symbol. */
+    RTypeId constant_parameter;
+    /* The constant of a translation-time loop belongs to its block: it is no name of the module
+       scope, its interface or its qualified lookup (R-STMT-0023). */
+    bool block_constant;
     RSourceSpan name_span;
     uint32_t scope_start;
     uint32_t name_intern_id;
@@ -1466,7 +1492,11 @@ typedef enum RHirKind {
        `integer_value` on. Only generic definitions contain them; a clone expands them. */
     R_HIR_PACK_PARTITION,
     R_HIR_PACK_ELEMENT,
-    R_HIR_PACK_ARGS
+    R_HIR_PACK_ARGS,
+    /* R-STMT-0023 (L44): a translation-time loop whose bounds an instantiation decides; children
+       are the low and high bounds and the block, `auxiliary_type` the parameter of its constant.
+       Only generic definitions contain it; a clone unrolls it into blocks. */
+    R_HIR_CONSTEXPR_LOOP
 
 } RHirKind;
 
@@ -1955,8 +1985,70 @@ typedef enum RStandardCallOperation {
     R_STANDARD_CALL_CORE_TYPE_ATTRIBUTE,
     R_STANDARD_CALL_CORE_FIELD_ATTRIBUTE,
     R_STANDARD_CALL_CORE_VARIANT_ATTRIBUTE,
-    R_STANDARD_CALL_CORE_FIELD_NAME_AT
+    R_STANDARD_CALL_CORE_FIELD_NAME_AT,
+    /* R-REFL-0006 (L44): core::field and core::field_mut, a borrow of the field of a struct or
+       tuple at a translation-time index; lowered to that borrow, they never reach HIR. */
+    R_STANDARD_CALL_CORE_FIELD,
+    R_STANDARD_CALL_CORE_FIELD_MUT,
+    /* Library R-LIB-0027 (L45): the bit and wide integer operations of core, in this order;
+       r_standard_core_bits_operation tests the range. */
+    R_STANDARD_CALL_CORE_LEADING_ZEROS,
+    R_STANDARD_CALL_CORE_TRAILING_ZEROS,
+    R_STANDARD_CALL_CORE_COUNT_ONES,
+    R_STANDARD_CALL_CORE_SWAP_BYTES,
+    R_STANDARD_CALL_CORE_ROTATE_LEFT,
+    R_STANDARD_CALL_CORE_ROTATE_RIGHT,
+    R_STANDARD_CALL_CORE_WIDENING_MUL,
+    R_STANDARD_CALL_CORE_CARRYING_ADD,
+    R_STANDARD_CALL_CORE_BORROWING_SUB,
+    R_STANDARD_CALL_CORE_NARROWING_DIV
 } RStandardCallOperation;
+
+/* Library R-LIB-0027 (L45): whether an operation is one of the bit and wide integer operations of
+   core, its name without the type suffix, and its operand count: a value; a value and a rotation
+   count or a second value; or two values and a carry, a borrow or a divisor. */
+static inline bool r_standard_core_bits_operation(RStandardCallOperation operation) {
+    return (operation >= R_STANDARD_CALL_CORE_LEADING_ZEROS) &&
+           (operation <= R_STANDARD_CALL_CORE_NARROWING_DIV);
+}
+
+static inline const char *r_standard_core_bits_name(RStandardCallOperation operation) {
+    static const char *const names[] = {"leading_zeros",
+                                        "trailing_zeros",
+                                        "count_ones",
+                                        "swap_bytes",
+                                        "rotate_left",
+                                        "rotate_right",
+                                        "widening_mul",
+                                        "carrying_add",
+                                        "borrowing_sub",
+                                        "narrowing_div"};
+    return r_standard_core_bits_operation(operation)
+               ? names[(uint32_t)operation - (uint32_t)R_STANDARD_CALL_CORE_LEADING_ZEROS]
+               : NULL;
+}
+
+static inline const char *r_standard_core_bits_qualified_name(RStandardCallOperation operation) {
+    static const char *const names[] = {"core::leading_zeros",
+                                        "core::trailing_zeros",
+                                        "core::count_ones",
+                                        "core::swap_bytes",
+                                        "core::rotate_left",
+                                        "core::rotate_right",
+                                        "core::widening_mul",
+                                        "core::carrying_add",
+                                        "core::borrowing_sub",
+                                        "core::narrowing_div"};
+    return r_standard_core_bits_operation(operation)
+               ? names[(uint32_t)operation - (uint32_t)R_STANDARD_CALL_CORE_LEADING_ZEROS]
+               : NULL;
+}
+
+static inline uint32_t r_standard_core_bits_operand_count(RStandardCallOperation operation) {
+    return operation <= R_STANDARD_CALL_CORE_SWAP_BYTES     ? UINT32_C(1)
+           : operation <= R_STANDARD_CALL_CORE_WIDENING_MUL ? UINT32_C(2)
+                                                            : UINT32_C(3);
+}
 
 typedef struct RStandardMathOperationDescriptor {
     const char *name;
@@ -2517,6 +2609,13 @@ struct RFrontendContext {
     RGenericPendingConstraint *generic_pending_constraints;
     size_t generic_pending_constraint_count;
     size_t generic_pending_constraint_capacity;
+    /* R-STMT-0023 (L44): the constants that the repetitions of translation-time loops bind while
+       an instantiation unrolls them, innermost last: the loop parameter type and its value. */
+    RTypeId *constexpr_binding_parameters;
+    uint64_t *constexpr_binding_values;
+    size_t constexpr_binding_count;
+    size_t constexpr_binding_parameter_capacity;
+    size_t constexpr_binding_value_capacity;
     RGenericProjectionConstraint *generic_projection_constraints;
     size_t generic_projection_constraint_count;
     size_t generic_projection_constraint_capacity;

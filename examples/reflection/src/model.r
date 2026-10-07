@@ -80,3 +80,59 @@ usize cardinality(T value) {
     value as void;
     return count;
 }
+
+/* A trait that every field of a record implements, so that a generic body may visit the fields
+   of any struct or tuple whose fields prove it (`fields(Scored)`). */
+trait Scored {
+    u32 score(const Self* this);
+    void clear(Self* this);
+};
+
+impl Scored for Level {
+    u32 score(const Self* this) { return core::enum_ordinal(*this) as u32; }
+    void clear(Self* this) { *this = core::enum_min::<Level>(); }
+};
+
+impl Scored for u32 {
+    u32 score(const Self* this) { return *this; }
+    void clear(Self* this) { *this = 0u32; }
+};
+
+impl Scored for bool {
+    u32 score(const Self* this) {
+        if (*this == true) { return 1u32; }
+        return 0u32;
+    }
+    void clear(Self* this) { *this = false; }
+};
+
+/* A translation-time loop repeats its block once per field, and core::field borrows the field of
+   each repetition with the type of that field; the generic body is checked once against the
+   methods of Scored and every instantiation unrolls the loop for its own fields. */
+@generic<T: fields(Scored)>
+u32 total_score(const T* record) {
+    u32 total = 0u32;
+    for (constexpr usize index in 0usize..core::field_count::<T>()) {
+        total += core::field(record, index)->score();
+    }
+    return total;
+}
+
+/* core::field_mut borrows each field exclusively. */
+@generic<T: fields(Scored)>
+void clear_all(T* record) {
+    for (constexpr usize index in 0usize..core::field_count::<T>()) {
+        core::field_mut(record, index)->clear();
+    }
+}
+
+/* The loop constant is a constant of each repetition, so it also names the field. */
+@generic<T: fields(Scored)>
+constexpr str first_scored(const T* record) {
+    for (constexpr usize index in 0usize..core::field_count::<T>()) {
+        if (core::field(record, index)->score() != 0u32) {
+            return core::field_name::<T>(index);
+        }
+    }
+    return "";
+}

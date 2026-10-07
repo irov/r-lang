@@ -573,6 +573,55 @@ static uint32_t r_semantic_associated_index(const RFrontendContext *context,
  * per (parameter, trait, associated type) so that equal projections have one type. */
 static bool r_semantic_append_trait_constraint(RFrontendContext *, uint32_t, uint32_t);
 
+/* R-REFL-0006 (L44): the synthetic parameter for the field that `core::field` borrows from the
+   dependent struct `base_type`: at the constant `index_value`, or at the constant of the
+   translation-time loop whose parameter is `index_parameter`. It carries the field traits of a
+   parameter base, so that their methods apply to the field in the generic definition. */
+static bool r_semantic_field_parameter(RFrontendContext *context,
+                                       RTypeId base_type,
+                                       RTypeId index_parameter,
+                                       uint64_t index_value,
+                                       RTypeId *type_id) {
+    RGenericParameter parameter;
+    for (size_t existing = 0U; existing < context->generic_parameter_count; ++existing) {
+        const RGenericParameter *candidate = &context->generic_parameters[existing];
+        if ((candidate->field_base == base_type) && (candidate->field_index == index_parameter) &&
+            ((index_parameter != R_TYPE_ID_INVALID) ||
+             (candidate->field_index_value == index_value))) {
+            *type_id = candidate->type;
+            return true;
+        }
+    }
+    (void)memset(&parameter, 0, sizeof(parameter));
+    const RSemanticType *base = r_semantic_type(context, base_type);
+    if ((base != NULL) && (base->kind == R_SEMANTIC_TYPE_PARAMETER) && (base->base != 0U) &&
+        ((size_t)base->base <= context->generic_parameter_count)) {
+        const RGenericParameter source = context->generic_parameters[base->base - 1U];
+        parameter.name_span = source.name_span;
+        parameter.name_intern_id = source.name_intern_id;
+        parameter.first_trait_constraint = source.first_field_trait;
+        parameter.trait_constraint_count = source.field_trait_count;
+    }
+    parameter.field_base = base_type;
+    parameter.field_index = index_parameter;
+    parameter.field_index_value = index_value;
+    if ((context->generic_parameter_count >= UINT32_MAX) ||
+        !r_grow_array(context,
+                      (void **)&context->generic_parameters,
+                      &context->generic_parameter_capacity,
+                      sizeof(parameter),
+                      context->generic_parameter_count + 1U) ||
+        !r_semantic_intern_type(context,
+                                R_SEMANTIC_TYPE_PARAMETER,
+                                (RTypeId)context->generic_parameter_count + 1U,
+                                &parameter.type)) {
+        return false;
+    }
+    context->generic_parameters[context->generic_parameter_count++] = parameter;
+    *type_id = parameter.type;
+    return true;
+}
+
 static bool r_semantic_trait_projection(RFrontendContext *context,
                                         RTypeId base_type,
                                         uint32_t trait,
@@ -1598,6 +1647,41 @@ static bool r_semantic_append_trait_constraint(RFrontendContext *context,
     return true;
 }
 
+/* R-TYPE-0043 (L44): adds a trait of a `fields(Trait)` constraint to a parameter; the list shares
+   the storage of trait constraints and moves to its end when it grows. */
+static bool
+r_semantic_append_field_trait(RFrontendContext *context, uint32_t parameter_index, uint32_t trait) {
+    RGenericParameter *parameter = &context->generic_parameters[parameter_index];
+    const uint32_t count = parameter->field_trait_count;
+    for (uint32_t index = 0U; index < count; ++index) {
+        if (context->generic_trait_constraints[parameter->first_field_trait + index] == trait)
+            return true;
+    }
+    if (!r_grow_array(context,
+                      (void **)&context->generic_trait_constraints,
+                      &context->generic_trait_constraint_capacity,
+                      sizeof(*context->generic_trait_constraints),
+                      context->generic_trait_constraint_count + 1U + count)) {
+        return false;
+    }
+    parameter = &context->generic_parameters[parameter_index];
+    if ((count != 0U) &&
+        (parameter->first_field_trait + count != context->generic_trait_constraint_count)) {
+        (void)memmove(context->generic_trait_constraints + context->generic_trait_constraint_count,
+                      context->generic_trait_constraints + parameter->first_field_trait,
+                      count * sizeof(*context->generic_trait_constraints));
+        parameter->first_field_trait = (uint32_t)context->generic_trait_constraint_count;
+        context->generic_trait_constraint_count += count;
+    }
+    if (count == 0U) {
+        parameter->first_field_trait = (uint32_t)context->generic_trait_constraint_count;
+    }
+    context->generic_trait_constraints[context->generic_trait_constraint_count] = trait;
+    context->generic_trait_constraint_count += 1U;
+    parameter->field_trait_count += 1U;
+    return true;
+}
+
 /* A trait is visible in a source when it is declared there or its module is imported. */
 static uint32_t r_semantic_resolve_trait_name(const RFrontendContext *context,
                                               RSourceId source,
@@ -2029,7 +2113,9 @@ static bool r_generic_resolve_trait_constraints(RFrontendContext *context) {
             uint32_t applied;
             if (!r_semantic_trait_from_ast(context, pending.application, &applied) ||
                 (applied != 0U &&
-                 !r_semantic_append_trait_constraint(context, pending.parameter, applied)))
+                 !(pending.fields
+                       ? r_semantic_append_field_trait(context, pending.parameter, applied)
+                       : r_semantic_append_trait_constraint(context, pending.parameter, applied))))
                 return false;
             continue;
         }

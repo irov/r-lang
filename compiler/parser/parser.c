@@ -4690,6 +4690,18 @@ static bool r_parse_callable_throws(RParser *parser) {
 /* `c & Trait<T> & fn(P) -> R`, the constraints after the `:` of a generic parameter. */
 static bool r_parse_generic_constraint_list(RParser *parser) {
     do {
+        if (r_parser_at(parser, R_TOKEN_IDENTIFIER) &&
+            r_parser_token_text_is(parser, r_parser_peek_token(parser), "fields") &&
+            (r_parser_peek_n_kind(parser, 1U) == R_TOKEN_LPAREN)) {
+            /* R-TYPE-0043 (L44): `fields(Trait)`, every field of the argument implements it. */
+            const size_t fields = r_parser_open(parser, R_SYNTAX_FIELDS_CONSTRAINT);
+            (void)r_parser_bump(parser);
+            (void)r_parser_bump(parser);
+            (void)r_parse_trait_name(parser);
+            (void)r_parser_expect(parser, R_TOKEN_RPAREN, "expected ')' after the field trait");
+            (void)r_parser_close(parser, fields);
+            continue;
+        }
         if (r_trait_application_ahead(parser)) {
             (void)r_parse_trait_name(parser);
             continue;
@@ -5162,6 +5174,17 @@ static bool r_parse_try_statement(RParser *parser) {
     return r_parser_close(parser, node);
 }
 
+/* R-STMT-0024 (L46): `continue name (value);` selects anew in the labeled switch `name`. */
+static void r_parse_continue_value(RParser *parser) {
+    if (!r_parser_eat(parser, R_TOKEN_LPAREN)) {
+        return;
+    }
+    if (!r_parse_expression_mode(parser, R_EXPRESSION_NORMAL).parsed) {
+        (void)r_parser_syntax_error(parser, "expected the value the switch selects by");
+    }
+    (void)r_parser_expect(parser, R_TOKEN_RPAREN, "expected ')' after the selected value");
+}
+
 static bool r_parse_jump_statement(RParser *parser) {
     size_t node = r_parser_open(parser, R_SYNTAX_JUMP_STATEMENT);
     RTokenKind kind = r_parser_peek_kind(parser);
@@ -5169,7 +5192,9 @@ static bool r_parse_jump_statement(RParser *parser) {
     if ((kind == R_TOKEN_KW_BREAK) || (kind == R_TOKEN_KW_CONTINUE)) {
         (void)r_parser_bump(parser);
         /* R-STMT-0004 (L37.2): `break name;` and `continue name;` name an enclosing loop. */
-        (void)r_parser_eat(parser, R_TOKEN_IDENTIFIER);
+        if (r_parser_eat(parser, R_TOKEN_IDENTIFIER) && (kind == R_TOKEN_KW_CONTINUE)) {
+            r_parse_continue_value(parser);
+        }
     } else if (kind == R_TOKEN_KW_RETURN) {
         (void)r_parser_bump(parser);
         if (!r_parser_at(parser, R_TOKEN_SEMICOLON) && !r_parse_return_operand(parser)) {
@@ -5193,7 +5218,9 @@ static bool r_parse_clause_terminator(RParser *parser) {
     if ((kind == R_TOKEN_KW_BREAK) || (kind == R_TOKEN_KW_CONTINUE)) {
         (void)r_parser_bump(parser);
         /* R-STMT-0004 (L37.2): a clause may end by leaving a named enclosing loop. */
-        (void)r_parser_eat(parser, R_TOKEN_IDENTIFIER);
+        if (r_parser_eat(parser, R_TOKEN_IDENTIFIER) && (kind == R_TOKEN_KW_CONTINUE)) {
+            r_parse_continue_value(parser);
+        }
     } else if (kind == R_TOKEN_KW_FALLTHROUGH) {
         (void)r_parser_bump(parser);
     } else if (kind == R_TOKEN_KW_RETURN) {
@@ -5397,11 +5424,34 @@ static bool r_parse_for_in_statement(RParser *parser, size_t node) {
     return r_parser_close(parser, node);
 }
 
+/* R-STMT-0023 (L44): `for (constexpr T name in low..high) block`; `constexpr str` stays a type. */
+static bool r_parse_constexpr_for_statement(RParser *parser, size_t node) {
+    RExpressionInfo range;
+    parser->source->cst_events[node].syntax_kind = R_SYNTAX_CONSTEXPR_FOR_STATEMENT;
+    (void)r_parser_expect(parser, R_TOKEN_KW_CONSTEXPR, "expected constexpr");
+    if (!r_parse_type(parser, true)) {
+        (void)r_parser_syntax_error(parser, "expected the integer type of the loop constant");
+    }
+    (void)r_parser_expect(parser, R_TOKEN_IDENTIFIER, "expected loop constant name");
+    (void)r_parser_expect(parser, R_TOKEN_KW_IN, "expected 'in' after the loop constant");
+    range = r_parse_range_or_expression(parser, R_EXPRESSION_NORMAL, UINT32_C(1), false);
+    if (!range.parsed) {
+        (void)r_parser_syntax_error(parser, "expected a range of constants");
+    }
+    (void)r_parser_expect(parser, R_TOKEN_RPAREN, "expected ')' after the range");
+    (void)r_parse_block(parser);
+    return r_parser_close(parser, node);
+}
+
 static bool r_parse_for_statement(RParser *parser) {
     size_t node = r_parser_open(parser, R_SYNTAX_FOR_STATEMENT);
     RExpressionInfo condition;
     (void)r_parser_bump(parser);
     (void)r_parser_expect(parser, R_TOKEN_LPAREN, "expected '(' after for");
+    if (r_parser_at(parser, R_TOKEN_KW_CONSTEXPR) &&
+        (r_parser_peek_n_kind(parser, 1U) != R_TOKEN_KW_STR)) {
+        return r_parse_constexpr_for_statement(parser, node);
+    }
     if (r_for_in_header_ahead(parser)) {
         return r_parse_for_in_statement(parser, node);
     }
@@ -5642,11 +5692,21 @@ static bool r_parse_statement(RParser *parser) {
 
     if ((kind == R_TOKEN_IDENTIFIER) && (r_parser_peek_n_kind(parser, 1U) == R_TOKEN_COLON) &&
         ((r_parser_peek_n_kind(parser, 2U) == R_TOKEN_KW_WHILE) ||
-         (r_parser_peek_n_kind(parser, 2U) == R_TOKEN_KW_FOR))) {
-        /* R-STMT-0004 (L37.2): `name: while (...)` and `name: for (...)` name a loop. */
+         (r_parser_peek_n_kind(parser, 2U) == R_TOKEN_KW_FOR) ||
+         (r_parser_peek_n_kind(parser, 2U) == R_TOKEN_KW_SWITCH))) {
+        /* R-STMT-0004 (L37.2): `name: while (...)` and `name: for (...)` name a loop, and
+           `name: switch (...)` (R-STMT-0024, L46) a switch that `continue name (value);` enters
+           anew. */
         const size_t labeled = r_parser_open(parser, R_SYNTAX_LABELED_STATEMENT);
         (void)r_parser_bump(parser);
         (void)r_parser_bump(parser);
+        /* R-STMT-0023 (L44): a translation-time loop is never the target of a jump. */
+        if (r_parser_at(parser, R_TOKEN_KW_FOR) &&
+            (r_parser_peek_n_kind(parser, 1U) == R_TOKEN_LPAREN) &&
+            (r_parser_peek_n_kind(parser, 2U) == R_TOKEN_KW_CONSTEXPR) &&
+            (r_parser_peek_n_kind(parser, 3U) != R_TOKEN_KW_STR)) {
+            (void)r_parser_syntax_error(parser, "a translation-time loop takes no label");
+        }
         (void)r_parse_statement(parser);
         return r_parser_close(parser, labeled);
     }

@@ -109,3 +109,60 @@ f64 evaluate(str source) throws Syntax, core::recursion_error {
     throw (at != len(text)) Syntax {.offset = at};
     return value;
 }
+
+/* Reverse Polish notation is read by a machine whose state is the class of the byte at the
+   position: each clause of the labeled switch selects the next state with `continue scan (...)`
+   (Core R-STMT-0024), and the end of the text leaves the switch. */
+enum Byte {
+    space,
+    digit,
+    operator,
+    end,
+    other,
+};
+
+protected Byte classify(const u8[] text, usize at) {
+    if (at >= len(text)) { return Byte::end; }
+    u8 value = text[at];
+    if (value == 32u8) { return Byte::space; }
+    if (is_number_byte(value) == true) { return Byte::digit; }
+    if (value == 43u8 || value == 45u8 || value == 42u8 || value == 47u8) { return Byte::operator; }
+    return Byte::other;
+}
+
+// The value of a postfix expression of at most 16 pending numbers, as "3 4 + 2 *".
+f64 postfix(str source) throws Syntax {
+    const u8[] text = source;
+    f64[16] stack = {};
+    usize depth = 0usize;
+    usize at = 0usize;
+    scan: switch (classify(text, at)) {
+    case Byte::space:
+        at += 1usize;
+        continue scan (classify(text, at));
+    case Byte::digit:
+        throw (depth == 16usize) Syntax {.offset = at};
+        stack[depth] = number(text, &at);
+        depth += 1usize;
+        continue scan (classify(text, at));
+    case Byte::operator:
+        throw (depth < 2usize) Syntax {.offset = at};
+        f64 right = stack[depth - 1usize];
+        f64 left = stack[depth - 2usize];
+        switch (text[at]) {
+        case 43u8: stack[depth - 2usize] = left + right;
+        case 45u8: stack[depth - 2usize] = left - right;
+        case 42u8: stack[depth - 2usize] = left * right;
+        default: stack[depth - 2usize] = left / right;
+        }
+        depth -= 1usize;
+        at += 1usize;
+        continue scan (classify(text, at));
+    case Byte::other:
+        throw Syntax {.offset = at};
+    case Byte::end:
+        break;
+    }
+    throw (depth != 1usize) Syntax {.offset = at};
+    return stack[0usize];
+}

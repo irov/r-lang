@@ -77,6 +77,16 @@ def check_expressions(exe: str) -> None:
     refused = 'expression nests deeper than 16 levels'
     for text in ('(' * 16 + '1' + ')' * 16, '-' * 20 + '1', '(' * 5000 + '1' + ')' * 5000):
         assert invoke(exe, ['eval', text], 65) == refused, text[:8]
+    # The rpn command: a state machine on a labeled switch (R-STMT-0024, L46).
+    assert invoke(exe, ['rpn', '3 4 + 2 *']) == '14'
+    assert invoke(exe, ['rpn', '  1.5 4 - 2 /']) == '-1.25'
+    assert invoke(exe, ['rpn', '2 3 4 * +']) == '14'
+    assert invoke(exe, ['rpn', ' '.join(['1'] * 16) + ' +' * 15]) == '16'
+    assert invoke(exe, ['rpn', '1 +'], 65) == 'syntax error at byte 2'
+    assert invoke(exe, ['rpn', '1 2'], 65) == 'syntax error at byte 3'
+    assert invoke(exe, ['rpn', '1 x'], 65) == 'syntax error at byte 2'
+    assert invoke(exe, ['rpn', ' '.join(['1'] * 17)], 65) == 'syntax error at byte 32'
+    assert invoke(exe, ['rpn', '1', '2'], 64) == 'usage: calculator rpn EXPRESSION'
 
 
 def check_stack_bound(header: Path) -> None:
@@ -130,7 +140,7 @@ def main() -> None:
     check_expressions(options.executable)
     if options.stack_header is not None:
         check_stack_bound(options.stack_header)
-    print(f'Calculator: {count} typed operations, six input/error paths, eval and help passed')
+    print(f'Calculator: {count} typed operations, six input/error paths, eval, rpn and help passed')
 
 
 if __name__ == '__main__': main()

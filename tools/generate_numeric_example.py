@@ -8,7 +8,9 @@ ROOT = Path(__file__).resolve().parents[1]
 R_INTEGERS = ('i8','u8','i16','u16','i32','u32','i64','u64','isize','usize')
 C_INTEGERS = ('c_char','c_schar','c_uchar','c_short','c_ushort','c_int','c_uint','c_long','c_ulong','c_llong','c_ullong','c_bool','c_wchar','c_wint','c_int8','c_uint8','c_int16','c_uint16','c_int32','c_uint32','c_int64','c_uint64','c_intptr','c_uintptr','c_intmax','c_uintmax','c_size','c_ptrdiff')
 FLOATS = ('f32','f64','c_float','c_double','c_long_double')
-OPS = ('parse','convert','c_convert','limits', *[p+'_'+o for p in ('checked','wrapping','saturating') for o in ('add','sub','mul')])
+BIT_OPS = ('leading_zeros','trailing_zeros','count_ones','swap_bytes','rotate_left','rotate_right')
+WIDE_OPS = ('widening_mul','carrying_add','borrowing_sub','narrowing_div')
+OPS = ('parse','convert','c_convert','limits', *[p+'_'+o for p in ('checked','wrapping','saturating') for o in ('add','sub','mul')], *BIT_OPS, *WIDE_OPS)
 TYPES = R_INTEGERS + C_INTEGERS + FLOATS
 
 
@@ -26,7 +28,7 @@ def outputs() -> dict[str,str]:
                '    u32 output_radix = radix == 0u32 ? 10u32 : radix;',
                '    builder.append(value'+('' if floating else ', output_radix')+');',
                '    std.string::string text = (move builder).finish();','    return move text;','}', '',
-               'std.string::string evaluate(Operation operation, str first, str second, u32 radix)',
+               'std.string::string evaluate(Operation operation, str first, str second, str third, u32 radix)',
                '    throws Usage, std.convert::parse_error, std.convert::range_error, std.format::format_error, std.alloc::alloc_error {']
         lines += ['    if (operation == Operation::convert) {',
                   '        f64 input = std.convert::parse_f64(first);',
@@ -46,6 +48,18 @@ def outputs() -> dict[str,str]:
         lines += [f'    {typ} left = std.convert::parse_{typ}(first'+('' if floating else ', radix')+');',
                   '    if (operation == Operation::parse) {','        std.string::string text = format_value(left, radix);','        return move text;','    }']
         if typ in R_INTEGERS:
+            # Library R-LIB-0027: the bit operations take one value, a rotation also its count.
+            lines.append('    switch (operation) {')
+            for op in BIT_OPS[:3]:
+                lines += [f'    case Operation::{op}:', f'        u32 count = core::{op}(left);',
+                          '        std.string::string text = f"{count}";', '        return move text;']
+            lines += ['    case Operation::swap_bytes:', f'        {typ} value = core::swap_bytes(left);',
+                      '        std.string::string text = format_value(value, radix);', '        return move text;']
+            for op in BIT_OPS[4:]:
+                lines += [f'    case Operation::{op}:', '        u32 count = std.convert::parse_u32(second, 10u32);',
+                          f'        {typ} value = core::{op}(left, count);',
+                          '        std.string::string text = format_value(value, radix);', '        return move text;']
+            lines += ['    default: break;', '    }']
             lines += [f'    {typ} right = std.convert::parse_{typ}(second, radix);','    switch (operation) {']
             for prefix in ('checked','wrapping','saturating'):
                 for op in ('add','sub','mul'):
@@ -58,18 +72,37 @@ def outputs() -> dict[str,str]:
                     else:
                         lines += [f'        {typ} value = core::{prefix}_{op}(left, right);',
                                   '        std.string::string text = format_value(value, radix);','        return move text;']
+            if typ.startswith('u'):
+                # The wide operations of the unsigned types; a carry or borrow is a third value.
+                lines += ['    case Operation::widening_mul:', '        auto (low, high) = core::widening_mul(left, right);',
+                          '        std.string::string low_text = format_value(low, radix);',
+                          '        std.string::string high_text = format_value(high, radix);',
+                          '        std.string::string text = f"{low_text} {high_text}";', '        return move text;']
+                for op, flag in (('carrying_add', 'carry'), ('borrowing_sub', 'borrow')):
+                    lines += [f'    case Operation::{op}:', f'        {typ} extra = std.convert::parse_{typ}(third, radix);',
+                              f'        auto (value, {flag}) = core::{op}(left, right, extra != 0{typ});',
+                              '        std.string::string value_text = format_value(value, radix);',
+                              f'        std.string::string text = f"{{value_text}} {{{flag}}}";', '        return move text;']
+                # The high half below the divisor, which is then not zero, keeps the quotient in range.
+                lines += ['    case Operation::narrowing_div:', f'        {typ} divisor = std.convert::parse_{typ}(third, radix);',
+                          '        bool fits = left < divisor;', '        if (fits == false) {', '            right as void;',
+                          '            std.string::string text = std.string::from_str("overflow");', '            return move text;', '        }',
+                          '        auto (quotient, remainder) = core::narrowing_div(left, right, divisor);',
+                          '        std.string::string quotient_text = format_value(quotient, radix);',
+                          '        std.string::string remainder_text = format_value(remainder, radix);',
+                          '        std.string::string text = f"{quotient_text} {remainder_text}";', '        return move text;']
             lines += ['    default: throw Usage { .message = "unsupported integer operation" };','    }']
         lines+=['    throw Usage { .message = "operation requires an R integer type" };','}','']
         files['examples/numbers/src/'+typ+'.r']='\n'.join(lines)
     lines=['// Generated by tools/generate_numeric_example.py.','module example.numbers.dispatch;',
            'import example.numbers.operation::{Operation};','import example.calculator.common::{Usage};','import std.text;',
            *['import example.numbers.type_'+typ+';' for typ in TYPES],'',
-           'std.string::string evaluate(Operation operation, str kind, str first, str second, u32 radix)',
+           'std.string::string evaluate(Operation operation, str kind, str first, str second, str third, u32 radix)',
            '    throws Usage, std.convert::parse_error, std.convert::range_error, std.format::format_error, std.alloc::alloc_error {']
     for typ in TYPES:
         lines += [f'    bool choose_{typ} = std.text::equal_ignore_ascii_case(kind, "{typ}");',
                   f'    if (choose_{typ} == true) {{',
-                  f'        std.string::string text = example.numbers.type_{typ}::evaluate(operation, first, second, radix);',
+                  f'        std.string::string text = example.numbers.type_{typ}::evaluate(operation, first, second, third, radix);',
                   '        return move text;','    }']
     lines+=['    throw Usage { .message = "unknown numeric type" };','}','']
     files['examples/numbers/src/dispatch.r']='\n'.join(lines)

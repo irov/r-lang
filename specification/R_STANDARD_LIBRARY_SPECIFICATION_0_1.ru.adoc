@@ -15,7 +15,7 @@
 |Поле |Значение
 |Документ |R Standard Library Specification
 |Версия языка |0.1
-|Редакция документа |0.1.0-draft.72
+|Редакция документа |0.1.0-draft.74
 |Статус |Перевод нормативного черновика; не является стабильным стандартом R 1.0
 |Язык документа |Русский перевод; ключевые нормативные термины приведены на английском
 |Требуемый стандарт языка |R Core Language Specification 0.1
@@ -234,6 +234,43 @@ result по модулю количества различных values этог
 semantics slices и categories panic остаются facilities Core language, регулируемыми
 Core Specification, а не дополнительными callable items стандартной библиотеки.
 
+[[R-LIB-0027]]
+*R-LIB-0027* — Каждый profile предоставляет в `+core+` для каждого literal suffix `+SUFFIX+` из
+R-LIB-0001 точные битовые операции
+
+* `+core::leading_zeros_SUFFIX(SUFFIX value) -> u32+`,
+  `+core::trailing_zeros_SUFFIX(SUFFIX value) -> u32+` и
+  `+core::count_ones_SUFFIX(SUFFIX value) -> u32+`;
+* `+core::swap_bytes_SUFFIX(SUFFIX value) -> SUFFIX+`;
+* `+core::rotate_left_SUFFIX(SUFFIX value, u32 count) -> SUFFIX+` и
+  `+core::rotate_right_SUFFIX(SUFFIX value, u32 count) -> SUFFIX+`;
+
+а для каждого беззнакового suffix `+u8+`, `+u16+`, `+u32+`, `+u64+` и `+usize+` — точные широкие
+операции
+
+* `+core::widening_mul_SUFFIX(SUFFIX left, SUFFIX right) -> (SUFFIX, SUFFIX)+`;
+* `+core::carrying_add_SUFFIX(SUFFIX left, SUFFIX right, bool carry) -> (SUFFIX, bool)+` и
+  `+core::borrowing_sub_SUFFIX(SUFFIX left, SUFFIX right, bool borrow) -> (SUFFIX, bool)+`;
+* `+core::narrowing_div_SUFFIX(SUFFIX high, SUFFIX low, SUFFIX divisor) -> (SUFFIX, SUFFIX)+`.
+
+Битовая операция видит N битов своего значения в дополнительном коде, где N — ширина типа.
+`+leading_zeros+` — число нулевых битов выше старшего единичного, `+trailing_zeros+` — ниже
+младшего единичного, оба равны N для нуля; `+count_ones+` — число единичных битов;
+`+swap_bytes+` переставляет байты в обратном порядке; `+rotate_left+` и `+rotate_right+`
+циклически сдвигают биты на `+count+` по модулю N к старшему или к младшему концу. Широкая
+операция вычисляет в 2N битах и даёт кортеж (Core R-TYPE-0052): `+widening_mul+` — младшие и
+старшие N битов произведения; `+carrying_add+` — младшие N битов `+left + right + carry+` и
+признак того, что сумма достигает 2^N^; `+borrowing_sub+` — разность `+left - right - borrow+`
+по модулю 2^N^ и признак того, что она отрицательна; `+narrowing_div+` — частное и остаток от
+деления 2N-битного значения `+high+` · 2^N^ + `+low+` на `+divisor+`. Узкое деление на ноль
+вызывает panic `+division_by_zero+`, а деление, у которого `+high+` не меньше `+divisor+`, так что
+частное не помещается, — panic `+integer_overflow+`; другие операции не вызывают panic, и ни одна
+ничего не выделяет и не имеет side effect. Каждую операцию можно вызвать и без `+_SUFFIX+`;
+тогда вызов выбирает suffix целочисленного типа первого operand, а широкая операция —
+целочисленный тип, который выбирают два первых operand по Core R-FUNC-0004. Suffix или тип operand вне этих
+наборов, знаковый suffix широкой операции и недостающий или лишний operand требуют
+`+R-DIAG-TYPE-001+`. Функцию, которая их использует, можно вычислить при трансляции (Core R-FUNC-0023).
+
 [[R-LIB-0002]]
 *R-LIB-0002* — Safe library function shall выражать ownership в своём source signature,
 shall предоставлять проверяемые compiler relations origins borrow в metadata interface
@@ -287,7 +324,7 @@ Copy, бросает ровно `+std.alloc::alloc_error+` и вызывает �
 
 [[R-LIB-0024]]
 *R-LIB-0024* — Каждый profile предоставляет эти exact compiler-recognized static reflection
-intrinsics Core R-REFL-0001..R-REFL-0005 как closed families над именуемым ими type либо
+intrinsics Core R-REFL-0001..R-REFL-0006 как closed families над именуемым ими type либо
 value:
 
 * `+core::enum_count::<T>() -> usize+`, `+core::enum_min::<T>() -> T+`, `+core::enum_max::<T>() -> T+`
@@ -299,6 +336,9 @@ value:
   для tagged union `+T+`;
 * `+core::type_name::<T>() -> constexpr str+`, `+core::field_count::<T>() -> usize+` и
   `+core::field_name::<T>(usize index) -> constexpr str+`;
+* `+core::field(const T* value, usize index) -> const F*+` и
+  `+core::field_mut(T* value, usize index) -> F*+` для поля `+F+` struct или кортежа `+T+` с
+  константным index (Core R-REFL-0006);
 * `+core::target_name() -> constexpr str+`, `+core::profile_name() -> constexpr str+` и
   `+core::location() -> constexpr str+`;
 * `+core::type_attribute::<A, T>() -> o<A>+`,
@@ -8328,8 +8368,9 @@ variants являются items public API соответствующей стр
 |Module и точные items |Ownership и capabilities |Allocation и recoverable failure |Panic и поведение thread |Основа C17/native
 
 |`+core+`: R-LIB-0001, R-LIB-0011, R-LIB-0020 (`+core::hash+` и
-`+core::key_equal+`), R-LIB-0024 (static reflection) и Core R-ARRAY-0007,
-R-UNSAFE-0007..0008, R-REFL-0001..0004
+`+core::key_equal+`), R-LIB-0024 (static reflection), R-LIB-0027 (битовые и широкие
+целочисленные операции) и Core R-ARRAY-0007,
+R-UNSAFE-0007..0008, R-REFL-0001..0006
 |Copy scalars/slices; atomic objects следуют Core Send/Sync
 |Нет implicit allocation; checked outcomes зафиксированы R-LIB-0001
 |Arithmetic, bounds и точные unsafe contracts Core; atomics являются thread-safe

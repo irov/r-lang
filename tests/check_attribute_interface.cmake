@@ -1,4 +1,4 @@
-# R-AGG-0013 (L42): interface schema 33 exports the targets of an attribute type and the
+# R-AGG-0013 (L42): interface schema 34 exports the targets of an attribute type and the
 # attributes of the program on each type, field and enumerator, with their argument values.
 if(NOT DEFINED R_FRONT_EXECUTABLE OR NOT DEFINED SOURCE)
     message(FATAL_ERROR "attribute interface test arguments are missing")
@@ -11,7 +11,7 @@ if(NOT status EQUAL 0)
     message(FATAL_ERROR "attribute interface failed: ${errors}")
 endif()
 foreach(expected IN ITEMS
-        "(interface version=33"
+        "(interface version=34"
         "test.codegen.user_attributes::table\" kind=struct"
         "attribute_targets=(type)"
         "attribute_targets=(field)"

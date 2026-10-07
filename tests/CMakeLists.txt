@@ -2425,6 +2425,22 @@ add_test(
         -P ${CMAKE_CURRENT_SOURCE_DIR}/check_attribute_interface.cmake
 )
 
+add_test(
+    NAME r_frontend_fields_interface
+    COMMAND "${CMAKE_COMMAND}"
+        -DR_FRONT_EXECUTABLE=$<TARGET_FILE:r-front>
+        -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_generic_field_access.r
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/check_fields_interface.cmake
+)
+
+add_test(
+    NAME r_frontend_core_bits_unwinding
+    COMMAND "${CMAKE_COMMAND}"
+        -DR_FRONT_EXECUTABLE=$<TARGET_FILE:r-front>
+        "-DSOURCES=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_core_bits.r;${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_async_core_bits.r"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/check_core_bits_unwinding.cmake
+)
+
 add_executable(r_frontend_bytes_type_tests bytes_type_tests.c)
 target_link_libraries(r_frontend_bytes_type_tests PRIVATE r_frontend)
 target_include_directories(r_frontend_bytes_type_tests PRIVATE
@@ -4256,6 +4272,17 @@ if(NOT MSVC)
             async_string_view_owners
             field_destructuring
             async_field_destructuring
+            field_access
+            async_field_access
+            generic_field_access
+            async_generic_field_access
+            core_bits
+            async_core_bits
+            core_bits_division_by_zero
+            core_bits_division_overflow
+            switch_dispatch
+            async_switch_dispatch
+            field_access_instances
             user_attributes
             async_user_attributes
             aggregate
@@ -5568,7 +5595,7 @@ if(NOT MSVC)
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_EXPECTED_PANIC "")
-        elseif(R_CODEGEN_CASE MATCHES "^(async_arc_last_release|string_place_views|async_string_place_views|string_view_owners|async_string_view_owners|field_destructuring|user_attributes|async_user_attributes|async_owner_shapes|async_owner_matrix|null_type|async_null_type|explicit_generics|async_explicit_generics|consteval|async_consteval|consteval_checked|async_consteval_checked|consteval_floats|async_consteval_floats|consteval_owners|consteval_frozen|async_consteval_frozen|deadline_blocks|budget_blocks|recursion_bounds|async_for|expression_forms|async_channels|group_detach|group_vacancy|group_capacity|effect_relay|swap_clone|async_swap_clone|derive|async_derive|cmp_impls|function_values|static_values|async_static_values|computed_bounds|async_computed_bounds|typed_constants|async_typed_constants|associated_constants|async_associated_constants|dyn_interfaces|async_dyn_interfaces|dyn_owners|async_dyn_owners|async_locks|async_broadcast|async_reserve|async_blocking|async_blocking_start|core_format|async_core_format|field_defaults|async_field_defaults|json_field_defaults|overloads|dict_custom_keys|common_error_fields|sync_initializer_cleanup_growth|fs_metadata_fields|string_outcomes|async_parameter_reassignment|process_outcome_records|async_math_records|numeric_error_codes|regex|regex_o2|async_regex|regex_oom|regex_driver|regex_example|regex_captures|library_text|library_encoding|library_iter_reductions|library_byte_cursor|async_library_text|library_text_oom|encoding_driver|json_schema_driver|json_schema_generics|async_json_schema_generics|library_random|library_uuid|library_hmac|async_library_tokens|hash_driver|hash_digest_values|hash_operations|hash_independent|async_hash_independent|library_time_formats|library_time_interval|standard_record_constructors|time_driver|cbor_driver|crypto_driver|jwt_driver|zone_driver|cose_driver|sqlite_driver|dead_new_helpers|library_signal|library_net_connect|library_net_options|library_net_unix|library_args|library_config|library_log|library_async_task_id|library_task_id_outside|async_direct_calls|arc_clone_only|async_arc_clone_only|test_mode|string_keys)$")
+        elseif(R_CODEGEN_CASE MATCHES "^(async_arc_last_release|string_place_views|async_string_place_views|string_view_owners|async_string_view_owners|field_destructuring|field_access|async_field_access|field_access_instances|core_bits|async_core_bits|switch_dispatch|async_switch_dispatch|generic_field_access|async_generic_field_access|user_attributes|async_user_attributes|async_owner_shapes|async_owner_matrix|null_type|async_null_type|explicit_generics|async_explicit_generics|consteval|async_consteval|consteval_checked|async_consteval_checked|consteval_floats|async_consteval_floats|consteval_owners|consteval_frozen|async_consteval_frozen|deadline_blocks|budget_blocks|recursion_bounds|async_for|expression_forms|async_channels|group_detach|group_vacancy|group_capacity|effect_relay|swap_clone|async_swap_clone|derive|async_derive|cmp_impls|function_values|static_values|async_static_values|computed_bounds|async_computed_bounds|typed_constants|async_typed_constants|associated_constants|async_associated_constants|dyn_interfaces|async_dyn_interfaces|dyn_owners|async_dyn_owners|async_locks|async_broadcast|async_reserve|async_blocking|async_blocking_start|core_format|async_core_format|field_defaults|async_field_defaults|json_field_defaults|overloads|dict_custom_keys|common_error_fields|sync_initializer_cleanup_growth|fs_metadata_fields|string_outcomes|async_parameter_reassignment|process_outcome_records|async_math_records|numeric_error_codes|regex|regex_o2|async_regex|regex_oom|regex_driver|regex_example|regex_captures|library_text|library_encoding|library_iter_reductions|library_byte_cursor|async_library_text|library_text_oom|encoding_driver|json_schema_driver|json_schema_generics|async_json_schema_generics|library_random|library_uuid|library_hmac|async_library_tokens|hash_driver|hash_digest_values|hash_operations|hash_independent|async_hash_independent|library_time_formats|library_time_interval|standard_record_constructors|time_driver|cbor_driver|crypto_driver|jwt_driver|zone_driver|cose_driver|sqlite_driver|dead_new_helpers|library_signal|library_net_connect|library_net_options|library_net_unix|library_args|library_config|library_log|library_async_task_id|library_task_id_outside|async_direct_calls|arc_clone_only|async_arc_clone_only|test_mode|string_keys)$")
             set(R_CODEGEN_SOURCE_1
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
             set(R_CODEGEN_SOURCE_2 "")
@@ -6417,7 +6444,7 @@ if(NOT MSVC)
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_EXPECTED_PANIC "bounds")
         elseif(R_CODEGEN_CASE MATCHES
-               "^(division_by_zero|modulo_by_zero|u32_division_by_zero|u32_modulo_by_zero)$")
+               "^(division_by_zero|modulo_by_zero|u32_division_by_zero|u32_modulo_by_zero|core_bits_division_by_zero)$")
             set(R_CODEGEN_SOURCE_1
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
             set(R_CODEGEN_SOURCE_2 "")
@@ -7468,6 +7495,32 @@ if(NOT MSVC)
             "semantic_field_destructuring_move:reject:R-DIAG-MOVE-001"
             "semantic_field_destructuring_index:reject:R-DIAG-NAME-001"
             "semantic_field_destructuring_index_name:reject:R-DIAG-SYN-001"
+            "semantic_constexpr_for_bound:reject:R-DIAG-CONST-002"
+            "semantic_constexpr_for_break:reject:R-DIAG-TYPE-001"
+            "semantic_constexpr_for_label:reject:R-DIAG-SYN-001"
+            "semantic_constexpr_for_unknown_type:reject:R-DIAG-NAME-001"
+            "semantic_core_bits_signed:reject:R-DIAG-TYPE-001"
+            "semantic_core_bits_count:reject:R-DIAG-TYPE-001"
+            "semantic_core_bits_operands:reject:R-DIAG-TYPE-001"
+            "semantic_core_bits_suffix:reject:R-DIAG-TYPE-001"
+            "semantic_core_bits_consteval:reject:R-DIAG-CONST-003"
+            "semantic_switch_dispatch_operand:reject:R-DIAG-TYPE-001"
+            "semantic_switch_dispatch_plain:reject:R-DIAG-FLOW-001"
+            "semantic_switch_dispatch_loop:reject:R-DIAG-FLOW-001"
+            "semantic_switch_dispatch_value:reject:R-DIAG-TYPE-001"
+            "semantic_switch_dispatch_outside:reject:R-DIAG-FLOW-001"
+            "semantic_switch_dispatch_moved:reject:R-DIAG-MOVE-003"
+            "semantic_switch_dispatch_bool:reject:R-DIAG-TYPE-001"
+            "semantic_switch_dispatch_constexpr:reject:R-DIAG-TYPE-001"
+            "semantic_constexpr_for_limit:reject:R-DIAG-LIMIT-001"
+            "semantic_constexpr_for_type:reject:R-DIAG-TYPE-001"
+            "semantic_field_access_index:reject:R-DIAG-CONST-002"
+            "semantic_field_access_range:reject:R-DIAG-CONST-001"
+            "semantic_field_access_shared:reject:R-DIAG-TYPE-001"
+            "semantic_field_access_conflict:reject:R-DIAG-BORROW-001"
+            "semantic_fields_constraint_violation:reject:R-DIAG-TYPE-001"
+            "semantic_fields_constraint_missing:reject:R-DIAG-NAME-001"
+            "semantic_fields_constraint_scalar:reject:R-DIAG-TYPE-001"
             "semantic_string_view_mutation:reject:R-DIAG-BORROW-001"
             "semantic_string_view_move:reject:R-DIAG-BORROW-001"
             "semantic_attribute_unknown:reject:R-DIAG-SYN-002"

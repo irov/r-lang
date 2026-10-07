@@ -44,6 +44,7 @@
     "generated_c_emitter": "compiler/codegen/c17.c",
     "generated_c_fragments": [
       "compiler/codegen/clone.inc",
+      "compiler/codegen/core_bits.inc",
       "compiler/codegen/direct_calls.inc",
       "compiler/codegen/format.inc",
       "compiler/codegen/format_glue.inc",

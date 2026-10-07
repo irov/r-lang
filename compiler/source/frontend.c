@@ -363,6 +363,8 @@ void r_frontend_destroy(RFrontendContext *context) {
     r_context_free(context, context->semantic_associated_constants);
     r_context_free(context, context->semantic_constant_bindings);
     r_context_free(context, context->generic_pending_constraints);
+    r_context_free(context, context->constexpr_binding_parameters);
+    r_context_free(context, context->constexpr_binding_values);
     r_context_free(context, context->generic_projection_constraints);
     r_context_free(context, context->generic_pending_callables);
     r_context_free(context, context->generic_trait_constraints);
@@ -1371,6 +1373,7 @@ const char *r_syntax_kind_name(RSyntaxKind kind) {
                                                            "lambda_declaration",
                                                            "move_capture_list",
                                                            "callable_constraint",
+                                                           "fields_constraint",
                                                            "opaque_result",
                                                            "dyn_type",
                                                            "associated_type",
@@ -1385,6 +1388,7 @@ const char *r_syntax_kind_name(RSyntaxKind kind) {
                                                            "while_statement",
                                                            "for_statement",
                                                            "for_in_statement",
+                                                           "constexpr_for_statement",
                                                            "switch_statement",
                                                            "case_clause",
                                                            "default_clause",
