@@ -36,60 +36,38 @@ r_require_match_count(mir_output
     "drop place=%local[0-9]+"
     2 "option(path) start-failure cleanup and success terminal drop")
 
+set(ir_arguments
+    --emit=llvm-ir
+    --entry test.codegen.async_option_path::main
+    --profile hosted-native-async
+    --target-manifest "${TARGET_MANIFEST}"
+    "${SOURCE_FILE}")
 execute_process(
-    COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
-        --entry test.codegen.async_option_path::main
-        --profile hosted-native-async
-        --target-manifest "${TARGET_MANIFEST}"
-        "${SOURCE_FILE}"
-    RESULT_VARIABLE c17_result
-    OUTPUT_VARIABLE c17_output
-    ERROR_VARIABLE c17_error
+    COMMAND "${R_FRONT_EXECUTABLE}" ${ir_arguments}
+    RESULT_VARIABLE ir_result
+    OUTPUT_VARIABLE ir_output
+    ERROR_VARIABLE ir_error
 )
-if(NOT c17_result EQUAL 0)
-    message(FATAL_ERROR "async option(path) C17 emit failed (${c17_result}): ${c17_error}")
+if(NOT ir_result EQUAL 0)
+    message(FATAL_ERROR "async option(path) LLVM IR emit failed (${ir_result}): ${ir_error}")
 endif()
-r_require_match_count(c17_output
-    "RStdFsPath r_some"
-    1 "option(path) payload representation")
-r_require_match_count(c17_output
-    "r_d[0-9]+ r_l00000003"
-    1 "option(path) local stored in async frame")
-r_require_match_count(c17_output
-    "_Bool r_l00000003_initialized"
-    1 "option(path) frame initialization state")
-r_require_match_count(c17_output
-    "r_stack_r_l00000003"
-    0 "cross-await option(path) is not transient stack storage")
-r_require_match_count(c17_output
-    "r_type_move_std_fs_path_gate[(]&destination->r_payload[.]r_some, &source->r_payload[.]r_some[)]"
-    1 "option(path) generic move glue")
-r_require_match_count(c17_output
-    "r_type_drop_std_fs_path_gate[(]&value->r_payload[.]r_some[)]"
-    1 "option(path) generic drop glue")
-r_require_match_count(c17_output
-    "r_type_move_d[0-9]+_gate[(]&frame->r_v00000019, &frame->r_l00000003[)]"
-    1 "option(path) move after resume")
-r_require_match_count(c17_output
-    "r_type_drop_d[0-9]+_gate[(]&frame->r_l00000006[)]"
-    2 "option(path) cleanup and terminal drop paths")
+# The move and drop glue of o<std.fs::path> reach the library's own path entries.
+foreach(entry IN ITEMS move_initialize destroy)
+    if(NOT ir_output MATCHES "call [^\n]*@(r_shim_)?r_std_fs_path_${entry}[(]")
+        message(FATAL_ERROR "option(path) glue does not reach r_std_fs_path_${entry}")
+    endif()
+endforeach()
 
 execute_process(
-    COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
-        --entry test.codegen.async_option_path::main
-        --profile hosted-native-async
-        --target-manifest "${TARGET_MANIFEST}"
-        "${SOURCE_FILE}"
+    COMMAND "${R_FRONT_EXECUTABLE}" ${ir_arguments}
     RESULT_VARIABLE repeated_result
     OUTPUT_VARIABLE repeated_output
     ERROR_VARIABLE repeated_error
 )
 if(NOT repeated_result EQUAL 0)
     message(FATAL_ERROR
-        "repeated async option(path) C17 emit failed (${repeated_result}): ${repeated_error}")
+        "repeated async option(path) LLVM IR emit failed (${repeated_result}): ${repeated_error}")
 endif()
-if(NOT c17_output STREQUAL repeated_output)
-    message(FATAL_ERROR "async option(path) C17 output is not deterministic")
+if(NOT ir_output STREQUAL repeated_output)
+    message(FATAL_ERROR "async option(path) LLVM IR output is not deterministic")
 endif()

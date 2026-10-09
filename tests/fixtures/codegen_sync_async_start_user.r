@@ -34,6 +34,15 @@ usize start_with_owned_buffer(array<u8> buffer) {
     }
 }
 
+// tests/codegen_sync_async_start_user_wrapper.c refuses the frame allocation of the first start
+// and stops the executor before the second; each start then fails and the buffer it named stays
+// with the caller (Core R-FUNC-0010).
 i32 main() {
+    try {
+        array<u8> first = std.array::filled(1usize, 17u8);
+        if (start_with_owned_buffer(move first) != 1usize) { return 1; }
+        array<u8> second = std.array::filled(1usize, 29u8);
+        if (start_with_owned_buffer(move second) != 1usize) { return 2; }
+    } catch (std.alloc::alloc_error failure) { return 3; }
     return 0;
 }

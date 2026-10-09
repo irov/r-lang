@@ -14,6 +14,13 @@ function(r_require_match_count variable pattern expected description)
     endif()
 endfunction()
 
+function(r_require_present variable pattern description)
+    string(REGEX MATCH "${pattern}" match "${${variable}}")
+    if(match STREQUAL "")
+        message(FATAL_ERROR "${description}: '${pattern}' is absent:\n${${variable}}")
+    endif()
+endfunction()
+
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}" --emit=hir "${SOURCE_FILE}"
     RESULT_VARIABLE hir_result
@@ -46,26 +53,25 @@ r_require_match_count(mir_output
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
+        --emit=llvm-ir
         --entry test.codegen.async_stderr::main
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"
         "${SOURCE_FILE}"
-    RESULT_VARIABLE c17_result
-    OUTPUT_VARIABLE c17_output
-    ERROR_VARIABLE c17_error
+    RESULT_VARIABLE ir_result
+    OUTPUT_VARIABLE ir_output
+    ERROR_VARIABLE ir_error
 )
-if(NOT c17_result EQUAL 0)
-    message(FATAL_ERROR "C17 emit failed (${c17_result}): ${c17_error}")
+if(NOT ir_result EQUAL 0)
+    message(FATAL_ERROR "LLVM IR emit failed (${ir_result}): ${ir_error}")
 endif()
-r_require_match_count(c17_output "#include \"r_std_io[.]h\"" 1
-    "generated std.io include")
-r_require_match_count(c17_output "r_std_io_stderr[(]" 1
-    "generated stderr calls")
-r_require_match_count(c17_output "r_std_io_output_move_initialize[(]" 1
-    "generated output moves")
-r_require_match_count(c17_output "r_std_io_output_destroy[(]" 1
-    "generated output drops")
+r_require_match_count(ir_output "call [^\n]*@r_std_io_stderr[(]" 1
+    "stderr calls")
+# The move and drop glue of std.io::output reach the library's own entries.
+r_require_present(ir_output "call [^\n]*@(r_shim_)?r_std_io_output_move_initialize[(]"
+    "output move glue")
+r_require_present(ir_output "call [^\n]*@(r_shim_)?r_std_io_output_destroy[(]"
+    "output drop glue")
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"

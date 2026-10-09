@@ -6,6 +6,12 @@ import subprocess
 import tempfile
 
 
+def emit_options(mode):
+    """Options of one output; LLVM IR lowers every function, not only those main reaches, so
+    that code generation also accepts the functions main never calls."""
+    return ['--emit=' + mode, '--all-functions'] if mode == 'llvm-ir' else ['--emit=' + mode]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--front', required=True)
@@ -38,7 +44,7 @@ i32 main() {
 ''')
 
         def emit(mode, paths):
-            result = subprocess.run([args.front, '--emit=' + mode, *map(str, paths)],
+            result = subprocess.run([args.front, *emit_options(mode), *map(str, paths)],
                                     capture_output=True, text=True, timeout=30)
             assert result.returncode == 0, (result.returncode, result.stderr)
             return result.stdout
@@ -51,7 +57,7 @@ i32 main() {
         closed = [line for line in interface.splitlines()
                   if '(function name="constants.api::size<' in line]
         assert len(closed) == 2, closed
-        assert emit('c17', [api, app]) == emit('c17', [app, api])
+        assert emit('llvm-ir', [api, app]) == emit('llvm-ir', [app, api])
         changed = api.read_text().replace('return N;', 'return N + 1usize;')
         api.write_text(changed)
         assert interface != emit('interface', [api, app])
@@ -86,7 +92,7 @@ i32 main() {
         assert interface == emit('interface', [app, api])
         assert ('(constant call "constants.sizes:usize: size_of :: < $0 > ( )" (parameter "T"))'
                 in interface)
-        assert emit('c17', [api, app]) == emit('c17', [app, api])
+        assert emit('llvm-ir', [api, app]) == emit('llvm-ir', [app, api])
 
         # R-TYPE-0047: typed constant parameters keep their type and value in interfaces.
         api.write_text('''module constants.typed;
@@ -110,7 +116,7 @@ i32 main() {
         for text in ('constant_type=bool', 'constant_type=i8', 'constant_type=u32',
                      '(constant bool true)', '(constant i8 -3)', 'mask<constant[u32,15]>'):
             assert text in interface, text
-        assert emit('c17', [api, app]) == emit('c17', [app, api])
+        assert emit('llvm-ir', [api, app]) == emit('llvm-ir', [app, api])
 
         # R-TYPE-0050: a trait lists its associated constants; a bound over one is written as its
         # trait, name and owner, closed by an implementation in another module.
@@ -139,7 +145,7 @@ i32 main() {
                      '(name="PACKED" type=bool default=true))',
                      '(constant associated "constants.codec" "Encoded" "SIZE" (parameter "T"))'):
             assert text in interface, text
-        assert emit('c17', [api, app]) == emit('c17', [app, api])
+        assert emit('llvm-ir', [api, app]) == emit('llvm-ir', [app, api])
         app.write_text(app.read_text().replace('SIZE = 3usize', 'SIZE = 4usize'))
         assert interface != emit('interface', [api, app])
     print('const generics: canonical values, source imports, cache, interface fingerprints, '

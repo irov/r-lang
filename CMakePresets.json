@@ -11,6 +11,7 @@
       "displayName": "R frontend debug",
       "generator": "Unix Makefiles",
       "binaryDir": "${sourceDir}/build/debug",
+      "toolchainFile": "${sourceDir}/cmake/RToolchainLLVM.cmake",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "R_FRONTEND_BUILD_TESTS": "ON"

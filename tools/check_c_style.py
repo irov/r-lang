@@ -16,6 +16,7 @@ GENERATED_FILES = {
     "compiler/source/unicode_data.h",
     "runtime/freestanding/include/r_runtime_target_abi.h",
     "runtime/include/r_runtime_target_abi.h",
+    "runtime/llvm/inline_shims.generated.c",
 }
 GENERATED_PREFIXES = ("library/generated/",)
 ALLOCATION_BOUNDARIES = {

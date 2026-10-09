@@ -405,6 +405,14 @@ static void native_completed(RRuntimeDarwinIoRequest *request, void *context) {
     if (r_runtime_task_external_try_select_completion_at(payload->execution,
                                                          native_result.terminal_event_sequence)) {
         bits |= R_LIBRARY_NET_READ_COMPLETION_SELECTED;
+    } else if ((native_result.terminal_event == R_RUNTIME_DARWIN_IO_TERMINAL_NATIVE) &&
+               (native_result.bytes_transferred != 0U) &&
+               r_runtime_task_external_select_terminal_completion(payload->execution)) {
+        /* R-SLIB-ASYNC-0007: the transfer ran after the cancellation was selected, as a ready
+           socket can on its queue before the cancellation reaches it. Bytes taken from the socket
+           cannot be undone, so the operation completes with them instead of being cancelled
+           (B6-6). */
+        bits |= R_LIBRARY_NET_READ_COMPLETION_SELECTED;
     }
     payload->native_result = native_result;
     previous = atomic_fetch_or_explicit(&payload->state, bits, memory_order_acq_rel);

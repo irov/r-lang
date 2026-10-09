@@ -1,3 +1,2 @@
-#define R_TEST_TASK_SLOT r_l00000002
-#define R_TEST_TASK_INITIALIZED r_l00000002_initialized
+/* The same checks when suspended_cleanup awaits the call of child without naming its task. */
 #include "codegen_async_cancel_finally_wrapper.c"

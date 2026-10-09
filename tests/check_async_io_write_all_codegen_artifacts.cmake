@@ -47,38 +47,23 @@ r_require_match_count(mir_output
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
+        --emit=llvm-ir
         --entry test.codegen.async_io_write_all::main
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"
         "${SOURCE_FILE}"
-    RESULT_VARIABLE c17_result
-    OUTPUT_VARIABLE c17_output
-    ERROR_VARIABLE c17_error
+    RESULT_VARIABLE ir_result
+    OUTPUT_VARIABLE ir_output
+    ERROR_VARIABLE ir_error
 )
-if(NOT c17_result EQUAL 0)
-    message(FATAL_ERROR "C17 emit failed (${c17_result}): ${c17_error}")
+if(NOT ir_result EQUAL 0)
+    message(FATAL_ERROR "LLVM IR emit failed (${ir_result}): ${ir_error}")
 endif()
-r_require_match_count(c17_output "#include \"r_std_io[.]h\"" 1
-    "generated std.io include")
-r_require_match_count(c17_output "r_std_io_write_all[(]" 1
-    "generated write_all calls")
-r_require_match_count(c17_output "RStdIoDeadline r_io_deadline_[0-9]+" 1
-    "generated deadline adapters")
-r_require_match_count(c17_output
-    "R_INTERNAL_ASSERT[(]" 0
-    "generated C omits assertions")
-r_require_match_count(c17_output "[.]r_tag > UINT32_C[(]1[)]" 0
-    "generated deadline runtime guards")
-r_require_match_count(c17_output "RRuntimeArray r_io_buffer_before_[0-9]+" 0
-    "generated C omits debug ownership snapshots")
-r_require_match_count(c17_output
-    "if [(]r_io_start_[0-9]+[.]is_ok[)] [{][\n ]+frame->r_l[0-9]+_initialized = 0" 1
-    "generated successful-start ownership transition")
-r_require_match_count(c17_output "RStdIoTaskStartResult r_io_start_[0-9]+" 1
-    "generated start-result adapters")
-r_require_match_count(c17_output "r_io_start_[0-9]+[.]task = NULL" 1
-    "generated task ownership transfers")
+r_require_match_count(ir_output "call [^\n]*@r_std_io_write_all[(]" 1
+    "write_all calls")
+# R-STMT-0019 (L23): the write start narrows its deadline argument by the structural deadline.
+r_require_match_count(ir_output "call [^\n]*@r_runtime_task_deadline_narrow[(]" 1
+    "write_all deadline narrowing")
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"

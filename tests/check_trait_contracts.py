@@ -3,8 +3,26 @@
 
 import argparse
 from pathlib import Path
+import re
 import subprocess
 import tempfile
+
+
+def emit_options(mode):
+    """Options of one output; LLVM IR lowers every function, not only those main reaches, so
+    that code generation also accepts the functions main never calls."""
+    return ['--emit=' + mode, '--all-functions'] if mode == 'llvm-ir' else ['--emit=' + mode]
+
+
+def dispatch_tags(program, dispatcher):
+    """Map each tag the LLVM IR dispatcher of an interface method switches on to its callee."""
+    start = program.index('define internal i32 @"' + dispatcher + '"(')
+    body = program[start:program.index('\n}\n', start)]
+    cases = re.search(r'switch i32 %\w+, label %\w+ \[(.*?)\]', body, re.S).group(1)
+    blocks = {match.group(1): match.group(2)
+              for match in re.finditer(r'^(\d+):[^\n]*\n(.*?)(?=\n\n|\Z)', body, re.M | re.S)}
+    return {int(tag): re.search(r'call [^@]*@"([^"]+)"\(', blocks[label]).group(1)
+            for tag, label in re.findall(r'i32 (\d+), label %(\d+)', cases)}
 
 
 def main():
@@ -52,7 +70,7 @@ i32 main() { Counter value={.count=42}; return read_report(&value)+converted(&va
 ''')
 
         def emit(mode, paths, accepted=True):
-            result = subprocess.run([args.front, '--emit=' + mode, *map(str, paths)],
+            result = subprocess.run([args.front, *emit_options(mode), *map(str, paths)],
                                     text=True, capture_output=True, timeout=30)
             expected = 0 if accepted else 1
             assert result.returncode == expected, result.stderr
@@ -67,7 +85,7 @@ i32 main() { Counter value={.count=42}; return read_report(&value)+converted(&va
         assert 'constraints=(copy)' in interface
         assert 'noalloc=true nonblocking=true' in interface
         assert interface == emit('interface', [consumer, provider])
-        assert emit('c17', [provider, consumer]) == emit('c17', [consumer, provider])
+        assert emit('llvm-ir', [provider, consumer]) == emit('llvm-ir', [consumer, provider])
 
         # A changed default body changes the defining trait's fingerprint.
         provider.write_text(definition.replace('return value;', 'return move value;'))
@@ -114,9 +132,19 @@ i32 main() {
         assert interface == emit('interface', [consumer, provider])
         assert '(const_borrow (dyn "dyn(traits.provider::Named & traits.provider::Store)"))' in \
             interface, interface
-        program = emit('c17', [provider, consumer])
-        assert program == emit('c17', [consumer, provider])
-        assert 'typedef struct r_dyn {' in program
+        program = emit('llvm-ir', [provider, consumer])
+        reordered = emit('llvm-ir', [consumer, provider])
+        # Both spellings dispatch through the methods of the canonical contract, and each tag
+        # selects the same implementation in either order of sources.
+        canonical = 'dyn(traits.provider::Named & traits.provider::Store)'
+        assert 'dyn(traits.provider::Store & traits.provider::Named)' not in program
+        for trait, method in (('Store', 'get'), ('Named', 'name')):
+            dispatcher = f'traits.provider::{trait}::{method}<{canonical}>'
+            tags = dispatch_tags(program, dispatcher)
+            assert sorted(tags.values()) == [f'traits.consumer::{name}::{method}'
+                                             for name in ('Alpha', 'Zeta')], tags
+            assert tags == dispatch_tags(reordered, dispatcher), dispatcher
+        assert program == reordered
 
         # R-TYPE-0045 (L16): interface schema 22 records lending methods, the parameters of an
         # associated type and a binding with parameters, independently of the source order.
@@ -170,8 +198,8 @@ i32 main() {
         assert 'bindings=((type_function parameters=("T") body=(option (parameter "T"))))' in \
             interface, interface
         assert '(application (parameter "Of") i32)' in interface, interface
-        program = emit('c17', [provider, consumer])
-        assert program == emit('c17', [consumer, provider])
+        program = emit('llvm-ir', [provider, consumer])
+        assert program == emit('llvm-ir', [consumer, provider])
 
 
 if __name__ == '__main__':

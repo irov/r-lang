@@ -43,10 +43,18 @@ checks that a duplicate acquisition is rejected, and releases the first attachme
 A callback must reuse its trampoline context rather than attach a second time. `target` prints the selected C capabilities
 and manifest availability, rather than probing arbitrary installed libraries.
 
-To emit the program manually, supply both maps:
+To compile the program manually, supply both maps and the link manifest. The object goes to
+standard output, and `--emit=c17-bridge` with the same options writes the C unit that forwards
+the calls of reserved C names such as `strlen`. The CTest case
+`r_frontend_codegen_example_c_bridge` also compiles the verifier unit of `--emit=abi-verifier`
+against the headers and links the object and the bridge with the runtime and the library into
+`build/debug/tests/codegen_example_c_bridge`:
 
 ```sh
-build-debug/r-front --module-map examples/c_bridge/modules.map \
+build/debug/r-front --module-map examples/c_bridge/modules.map \
   --entry example.c_bridge.main --library-map library/r/library.map \
-  --link-manifest examples/c_bridge/link_manifest.json --emit=c17 > /tmp/c_bridge.c
+  --link-manifest examples/c_bridge/link_manifest.json --emit=object > /tmp/c_bridge.o
+build/debug/r-front --module-map examples/c_bridge/modules.map \
+  --entry example.c_bridge.main --library-map library/r/library.map \
+  --link-manifest examples/c_bridge/link_manifest.json --emit=c17-bridge > /tmp/c_bridge_bridge.c
 ```

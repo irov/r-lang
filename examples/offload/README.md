@@ -95,10 +95,12 @@ With an index inside the plan the call returns, `call 1 returned after 20 ms`. A
 `await move chosen` would continue the panic in this task instead, up to `main`, which ends the
 program with the report on standard error.
 
-To emit the program manually, supply both maps and the link manifest:
+To compile the program manually, supply both maps and the link manifest (the object goes to
+standard output; the CTest case `r_frontend_codegen_example_offload` links it with the runtime
+and the library into `build/debug/tests/codegen_example_offload`):
 
 ```sh
-build-debug/r-front --module-map examples/offload/modules.map \
+build/debug/r-front --module-map examples/offload/modules.map \
   --entry example.offload.main --library-map library/r/library.map \
-  --link-manifest examples/offload/link_manifest.json --emit=c17 > /tmp/offload.c
+  --link-manifest examples/offload/link_manifest.json --emit=object > /tmp/offload.o
 ```

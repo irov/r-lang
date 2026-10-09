@@ -13,16 +13,9 @@ function(r_require_match_count variable pattern expected description)
     endif()
 endfunction()
 
-function(r_require_text variable expected description)
-    string(FIND "${${variable}}" "${expected}" offset)
-    if(offset EQUAL -1)
-        message(FATAL_ERROR "${description}: exact text not found:\n${${variable}}")
-    endif()
-endfunction()
-
 function(r_capture_artifact emit_kind output_variable)
     set(arguments --emit=${emit_kind})
-    if(emit_kind STREQUAL "c17" OR emit_kind STREQUAL "link-plan")
+    if(emit_kind STREQUAL "llvm-ir" OR emit_kind STREQUAL "link-plan")
         list(APPEND arguments
             --entry "test.codegen.fs_path_is_absolute::main"
             --profile hosted-native-async
@@ -75,15 +68,12 @@ r_require_match_count(mir_output
     4
     "MIR local path borrows including the helper call")
 
-r_capture_artifact(c17 c17_output)
-r_capture_artifact(c17 c17_repeated)
-r_require_deterministic(c17_output c17_repeated "std.fs::path_is_absolute C17 artifact")
-r_require_match_count(c17_output "#include \"r_std_fs[.]h\"" 1
-    "generated std.fs include")
-r_require_match_count(c17_output "r_std_fs_path_is_absolute[(]" 4
-    "generated native path observations")
-r_require_text(c17_output "typedef const RStdFsPath *" "generated shared path borrow ABI")
-r_require_text(c17_output "_Bool" "generated bool ABI")
+r_capture_artifact(llvm-ir ir_output)
+r_capture_artifact(llvm-ir ir_repeated)
+r_require_deterministic(ir_output ir_repeated "std.fs::path_is_absolute LLVM IR artifact")
+# Each observation passes the borrowed path by address and receives a bool.
+r_require_match_count(ir_output "call zeroext i1 @r_std_fs_path_is_absolute[(]ptr [^)]+[)]" 4
+    "library path observations")
 
 r_capture_artifact(link-plan plan_output)
 r_capture_artifact(link-plan plan_repeated)

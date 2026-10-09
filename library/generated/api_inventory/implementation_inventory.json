@@ -3735,7 +3735,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "The semantic pass requires one non-null mutable raw T pointer in a lexical unsafe context and infers an outermost-unqualified complete, sized, inhabited and non-void T. HIR and MIR preserve the inferred pointee and strict C17 lowering evaluates the pointer once before calling r_runtime_own_adopt with inline size and alignment metadata. The valid-contract path allocates no memory, does not copy, move or drop T, and introduces no R panic; the helper status represents an impossible internal state after the compiler checks. Runtime conformance tests prove exact pointer identity and no-drop adoption. Inventory-validated generated ABI registries supply exact headers, C type spellings, generic arities and destruction callbacks for every inventory-listed named standard representation. Copy and general Move registries preserve their existing semantic classifications; a separate adopt-only layout registry covers the remaining resource and result representations without classifying them as Copy or enabling value movement. Existing specialized lowering covers the thread join schemas. Generated strict-C17 tests exercise adopt/release for every registry entry. For C17-representable T, the compiler emits recursive move/drop metadata for named structs, fixed arrays, options, results, dynamic containers, arc/rc/weak owners and atomic values. Executable generated-C tests cover reverse-order exactly-once destruction, both result alternatives, relaxed atomic snapshot initialization, early exits and allocation-failure injection.",
+        "compiler_contract": "The semantic pass requires one non-null mutable raw T pointer in a lexical unsafe context and infers an outermost-unqualified complete, sized, inhabited and non-void T. HIR and MIR preserve the inferred pointee and the lowering evaluates the pointer once before calling r_runtime_own_adopt with inline size and alignment metadata. The valid-contract path allocates no memory, does not copy, move or drop T, and introduces no R panic; the helper status represents an impossible internal state after the compiler checks. Runtime conformance tests prove exact pointer identity and no-drop adoption. Inventory-validated generated ABI registries supply exact headers, C type spellings, generic arities and destruction callbacks for every inventory-listed named standard representation. Copy and general Move registries preserve their existing semantic classifications; a separate adopt-only layout registry covers the remaining resource and result representations without classifying them as Copy or enabling value movement. Existing specialized lowering covers the thread join schemas. Generated program tests exercise adopt/release for every registry entry. For representable T, the compiler emits recursive move/drop metadata for named structs, fixed arrays, options, results, dynamic containers, arc/rc/weak owners and atomic values. Executable program tests cover reverse-order exactly-once destruction, both result alternatives, relaxed atomic snapshot initialization, early exits and allocation-failure injection.",
         "generator_contract": "The compiler emits inline size and alignment metadata, reusable recursive move/drop callbacks and the exact runtime owner ABI for user and derived types. For named standard representations it selects an exact generated Copy, Move or adopt-only layout record and emits the required header and drop adapter.",
         "conformance_status": "complete"
       },
@@ -3782,7 +3782,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "The semantic pass requires one bool operand in a lexical unsafe context; HIR and MIR preserve the intrinsic, and the strict C17 emitter evaluates the operand once and reaches C undefined behavior only when the asserted contract is false. No runtime symbol, allocation, panic or synchronization edge is introduced."
+        "compiler_contract": "The semantic pass requires one bool operand in a lexical unsafe context; HIR and MIR preserve the intrinsic, and the lowering evaluates the operand once and reaches undefined behavior only when the asserted contract is false. No runtime symbol, allocation, panic or synchronization edge is introduced."
       },
       "source_signature": "unsafe core::assume(bool condition) -> void",
       "checked_effect": {
@@ -3828,7 +3828,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Typed C17 atomic compare-exchange lowering validates the success and failure orders independently, evaluates every operand once, and constructs the ordinary exchanged(observed) or unchanged(observed) outcome."
+        "compiler_contract": "Typed atomic compare-exchange lowering validates the success and failure orders independently, evaluates every operand once, and constructs the ordinary exchanged(observed) or unchanged(observed) outcome."
       },
       "source_signature": "core::atomic_compare_exchange(const (atomic T)* obj, T expected, T desired, core::memory_order success_order, core::memory_order failure_order) -> core::atomic_compare_exchange_result<T>",
       "checked_effect": {
@@ -3890,7 +3890,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Typed C17 atomic exchange lowering after memory-order and fixed-integer validation."
+        "compiler_contract": "Typed atomic exchange lowering after memory-order and fixed-integer validation."
       },
       "source_signature": "core::atomic_exchange(const (atomic T)* obj, T desired, core::memory_order order) -> T",
       "checked_effect": {
@@ -3982,7 +3982,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Integer-only typed C17 atomic fetch-and lowering."
+        "compiler_contract": "Integer-only typed atomic fetch-and lowering."
       },
       "source_signature": "core::atomic_fetch_and(const (atomic T)* obj, T operand, core::memory_order order) -> T",
       "checked_effect": {
@@ -4028,7 +4028,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Integer-only typed C17 atomic fetch-or lowering."
+        "compiler_contract": "Integer-only typed atomic fetch-or lowering."
       },
       "source_signature": "core::atomic_fetch_or(const (atomic T)* obj, T operand, core::memory_order order) -> T",
       "checked_effect": {
@@ -4120,7 +4120,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Integer-only typed C17 atomic fetch-xor lowering."
+        "compiler_contract": "Integer-only typed atomic fetch-xor lowering."
       },
       "source_signature": "core::atomic_fetch_xor(const (atomic T)* obj, T operand, core::memory_order order) -> T",
       "checked_effect": {
@@ -4210,7 +4210,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Typed C17 atomic load lowering after memory-order validation."
+        "compiler_contract": "Typed atomic load lowering after memory-order validation."
       },
       "source_signature": "core::atomic_load(const (atomic T)* obj, core::memory_order order) -> T",
       "checked_effect": {
@@ -4255,7 +4255,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Typed C17 atomic store lowering after memory-order validation."
+        "compiler_contract": "Typed atomic store lowering after memory-order validation."
       },
       "source_signature": "core::atomic_store(const (atomic T)* obj, T desired, core::memory_order order) -> void",
       "checked_effect": {
@@ -4300,7 +4300,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Five unsigned literal-suffix operations and the form without the suffix call a static ISO C17 helper built from half-width words and return a tuple; narrowing_div checks the divisor and the high half at the call site."
+        "compiler_contract": "Five unsigned literal-suffix operations and the form without the suffix lower to double-width integer arithmetic and return a tuple; narrowing_div checks the divisor and the high half at the call site."
       },
       "source_signature": "core::borrowing_sub_SUFFIX(SUFFIX left, SUFFIX right, bool borrow) -> (SUFFIX, bool)",
       "checked_effect": {
@@ -4345,7 +4345,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Five unsigned literal-suffix operations and the form without the suffix call a static ISO C17 helper built from half-width words and return a tuple; narrowing_div checks the divisor and the high half at the call site."
+        "compiler_contract": "Five unsigned literal-suffix operations and the form without the suffix lower to double-width integer arithmetic and return a tuple; narrowing_div checks the divisor and the high half at the call site."
       },
       "source_signature": "core::carrying_add_SUFFIX(SUFFIX left, SUFFIX right, bool carry) -> (SUFFIX, bool)",
       "checked_effect": {
@@ -4390,7 +4390,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Ten literal-suffix operations lower to checked ISO C17 arithmetic and o<SUFFIX>."
+        "compiler_contract": "Ten literal-suffix operations lower to the overflow-reporting arithmetic of the target and o<SUFFIX>."
       },
       "source_signature": "core::checked_add_SUFFIX(SUFFIX left, SUFFIX right) -> o<SUFFIX>",
       "checked_effect": {
@@ -4435,7 +4435,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Ten literal-suffix operations lower to checked ISO C17 arithmetic and o<SUFFIX>."
+        "compiler_contract": "Ten literal-suffix operations lower to the overflow-reporting arithmetic of the target and o<SUFFIX>."
       },
       "source_signature": "core::checked_mul_SUFFIX(SUFFIX left, SUFFIX right) -> o<SUFFIX>",
       "checked_effect": {
@@ -4480,7 +4480,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Ten literal-suffix operations lower to checked ISO C17 arithmetic and o<SUFFIX>."
+        "compiler_contract": "Ten literal-suffix operations lower to the overflow-reporting arithmetic of the target and o<SUFFIX>."
       },
       "source_signature": "core::checked_sub_SUFFIX(SUFFIX left, SUFFIX right) -> o<SUFFIX>",
       "checked_effect": {
@@ -4571,7 +4571,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Ten literal-suffix operations and the form without the suffix call a static ISO C17 helper of portable shifts and masks; translation-time evaluation folds them inside an evaluated function."
+        "compiler_contract": "Ten literal-suffix operations and the form without the suffix lower to the bit intrinsics of the target; translation-time evaluation folds them inside an evaluated function."
       },
       "source_signature": "core::count_ones_SUFFIX(SUFFIX value) -> u32",
       "checked_effect": {
@@ -4616,7 +4616,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "A standard call whose C17 lowering is a switch over the usize index constructing o::some of the variant at that declaration index, or o::none."
+        "compiler_contract": "A standard call whose lowering is a switch over the usize index constructing o::some of the variant at that declaration index, or o::none."
       },
       "source_signature": "core::enum_at::<T>(usize index) -> o<T>",
       "checked_effect": {
@@ -4706,7 +4706,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "A standard call whose C17 lowering searches a static const table of the variant names with a translation-unit-local helper and constructs o::some of the matching variant, or o::none."
+        "compiler_contract": "A standard call whose lowering searches a static const table of the variant names with a translation-unit-local helper and constructs o::some of the matching variant, or o::none."
       },
       "source_signature": "core::enum_from_name::<T>(str name) -> o<T>",
       "checked_effect": {
@@ -4841,7 +4841,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "A standard call whose C17 lowering is a switch over the enumeration value assigning the program string of the declared variant name."
+        "compiler_contract": "A standard call whose lowering is a switch over the enumeration value assigning the program string of the declared variant name."
       },
       "source_signature": "core::enum_name(T value) -> constexpr str",
       "checked_effect": {
@@ -4886,7 +4886,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "A standard call whose C17 lowering is a switch over the enumeration value assigning the zero-based declaration index."
+        "compiler_contract": "A standard call whose lowering is a switch over the enumeration value assigning the zero-based declaration index."
       },
       "source_signature": "core::enum_ordinal(T value) -> usize",
       "checked_effect": {
@@ -5021,7 +5021,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "The semantic pass checks the attribute type and the C17 emitter selects the arguments of the attribute on the indexed field from a translation-time table."
+        "compiler_contract": "The semantic pass checks the attribute type and the emitter selects the arguments of the attribute on the indexed field from a translation-time table."
       },
       "source_signature": "core::field_attribute::<A, T>(usize index) -> o<A>",
       "checked_effect": {
@@ -5299,7 +5299,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Ten literal-suffix operations and the form without the suffix call a static ISO C17 helper of portable shifts and masks; translation-time evaluation folds them inside an evaluated function."
+        "compiler_contract": "Ten literal-suffix operations and the form without the suffix lower to the bit intrinsics of the target; translation-time evaluation folds them inside an evaluated function."
       },
       "source_signature": "core::leading_zeros_SUFFIX(SUFFIX value) -> u32",
       "checked_effect": {
@@ -5439,7 +5439,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Five unsigned literal-suffix operations and the form without the suffix call a static ISO C17 helper built from half-width words and return a tuple; narrowing_div checks the divisor and the high half at the call site."
+        "compiler_contract": "Five unsigned literal-suffix operations and the form without the suffix lower to double-width integer arithmetic and return a tuple; narrowing_div checks the divisor and the high half at the call site."
       },
       "source_signature": "core::narrowing_div_SUFFIX(SUFFIX high, SUFFIX low, SUFFIX divisor) -> (SUFFIX, SUFFIX)",
       "checked_effect": {
@@ -5549,7 +5549,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "The semantic pass requires one non-null own T pointer in a lexical unsafe context, infers an outermost-unqualified complete, sized, inhabited and non-void T, and requires explicit move for a named owner. HIR and MIR preserve the consuming move and inferred pointee; sync and async strict C17 lowering evaluate the owner once, call r_runtime_own_into_raw, return the exact T pointer and clear the consumed owner's initialized/drop state. The operation allocates no memory, does not copy, move or drop T, and introduces no R panic; the helper status represents an impossible internal state after compiler checks. Runtime conformance tests prove exact pointer identity, exactly-once state clearing and no drop during release. Inventory-validated generated ABI registries supply exact headers, C type spellings, generic arities and destruction callbacks for every inventory-listed named standard representation. The separate adopt-only layout registry does not change Copy/Move classification or permit value movement; existing specialized lowering covers the thread join schemas. Generated strict-C17 tests exercise adopt/release for every registry entry. Recursive generated metadata preserves the eventual exactly-once drop duty for C17-representable named structs, fixed arrays, options, results, dynamic containers, arc/rc/weak owners and atomic values, including async-frame cleanup.",
+        "compiler_contract": "The semantic pass requires one non-null own T pointer in a lexical unsafe context, infers an outermost-unqualified complete, sized, inhabited and non-void T, and requires explicit move for a named owner. HIR and MIR preserve the consuming move and inferred pointee; sync and async lowering evaluate the owner once, call r_runtime_own_into_raw, return the exact T pointer and clear the consumed owner's initialized/drop state. The operation allocates no memory, does not copy, move or drop T, and introduces no R panic; the helper status represents an impossible internal state after compiler checks. Runtime conformance tests prove exact pointer identity, exactly-once state clearing and no drop during release. Inventory-validated generated ABI registries supply exact headers, C type spellings, generic arities and destruction callbacks for every inventory-listed named standard representation. The separate adopt-only layout registry does not change Copy/Move classification or permit value movement; existing specialized lowering covers the thread join schemas. Generated program tests exercise adopt/release for every registry entry. Recursive generated metadata preserves the eventual exactly-once drop duty for representable named structs, fixed arrays, options, results, dynamic containers, arc/rc/weak owners and atomic values, including async-frame cleanup.",
         "generator_contract": "The compiler emits consuming owner-state transfer plus the exact runtime raw pointer ABI for user and derived types. For named standard representations it selects an exact generated Copy, Move or adopt-only layout record and emits the required header and drop adapter.",
         "conformance_status": "complete"
       },
@@ -5598,7 +5598,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "R-OWN-0019 proves initialized exclusive access, unborrowed Copy/Move and exact replacement type. Arguments follow ordinary call-free and aliasing rules. HIR/MIR preserve the destination loan and explicit replacement or proven R default. Sync and async C17 stage operands once, move or copy the previous value out, commit the replacement and track both initialization flags. The exchange allocates nothing, adds no panic or checked effect and does not invoke user drop. Exactly-once cleanup follows existing glue.",
+        "compiler_contract": "R-OWN-0019 proves initialized exclusive access, unborrowed Copy/Move and exact replacement type. Arguments follow ordinary call-free and aliasing rules. HIR/MIR preserve the destination loan and explicit replacement or proven R default. Sync and async lowering stage operands once, move or copy the previous value out, commit the replacement and track both initialization flags. The exchange allocates nothing, adds no panic or checked effect and does not invoke user drop. Exactly-once cleanup follows existing glue.",
         "conformance_status": "complete"
       },
       "source_signature": "core::replace(T* destination, T replacement) -> T",
@@ -5644,7 +5644,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Ten literal-suffix operations and the form without the suffix call a static ISO C17 helper of portable shifts and masks; translation-time evaluation folds them inside an evaluated function."
+        "compiler_contract": "Ten literal-suffix operations and the form without the suffix lower to the bit intrinsics of the target; translation-time evaluation folds them inside an evaluated function."
       },
       "source_signature": "core::rotate_left_SUFFIX(SUFFIX value, u32 count) -> SUFFIX",
       "checked_effect": {
@@ -5689,7 +5689,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Ten literal-suffix operations and the form without the suffix call a static ISO C17 helper of portable shifts and masks; translation-time evaluation folds them inside an evaluated function."
+        "compiler_contract": "Ten literal-suffix operations and the form without the suffix lower to the bit intrinsics of the target; translation-time evaluation folds them inside an evaluated function."
       },
       "source_signature": "core::rotate_right_SUFFIX(SUFFIX value, u32 count) -> SUFFIX",
       "checked_effect": {
@@ -5734,7 +5734,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Ten literal-suffix operations emit overflow-free ISO C17 arithmetic clamped to the exact type bounds."
+        "compiler_contract": "Ten literal-suffix operations emit overflow-free arithmetic clamped to the exact type bounds."
       },
       "source_signature": "core::saturating_add_SUFFIX(SUFFIX left, SUFFIX right) -> SUFFIX",
       "checked_effect": {
@@ -5779,7 +5779,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Ten literal-suffix operations emit overflow-free ISO C17 arithmetic clamped to the exact type bounds."
+        "compiler_contract": "Ten literal-suffix operations emit overflow-free arithmetic clamped to the exact type bounds."
       },
       "source_signature": "core::saturating_mul_SUFFIX(SUFFIX left, SUFFIX right) -> SUFFIX",
       "checked_effect": {
@@ -5824,7 +5824,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Ten literal-suffix operations emit overflow-free ISO C17 arithmetic clamped to the exact type bounds."
+        "compiler_contract": "Ten literal-suffix operations emit overflow-free arithmetic clamped to the exact type bounds."
       },
       "source_signature": "core::saturating_sub_SUFFIX(SUFFIX left, SUFFIX right) -> SUFFIX",
       "checked_effect": {
@@ -5869,7 +5869,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "The semantic pass infers an outermost-unqualified complete, sized and inhabited T from one compatible raw const pointer, accepts nullable and non-null pointer values through the standard non-null-to-nullable conversion, and requires an exact usize length in a lexical unsafe context. The result carries a fresh nonescaping region represented by its mandatory destination binding; return escape and liveness across await are rejected. HIR and MIR preserve the intrinsic and inferred pointee. Strict C17 lowering evaluates pointer then length once and initializes exactly one shared slice descriptor without a runtime symbol, allocation, element access, copy or panic. The caller retains the complete R-SAFETY-SLICE-PARTS duty, including null only at zero length. Borrow-bearing aggregate fields and aggregate returns remain outside the current frontend slice and are diagnosed with R-DIAG-SLICE-001; they are never treated as static or origin-free values."
+        "compiler_contract": "The semantic pass infers an outermost-unqualified complete, sized and inhabited T from one compatible raw const pointer, accepts nullable and non-null pointer values through the standard non-null-to-nullable conversion, and requires an exact usize length in a lexical unsafe context. The result carries a fresh nonescaping region represented by its mandatory destination binding; return escape and liveness across await are rejected. HIR and MIR preserve the intrinsic and inferred pointee. The lowering evaluates pointer then length once and initializes exactly one shared slice descriptor without a runtime symbol, allocation, element access, copy or panic. The caller retains the complete R-SAFETY-SLICE-PARTS duty, including null only at zero length. Borrow-bearing aggregate fields and aggregate returns remain outside the current frontend slice and are diagnosed with R-DIAG-SLICE-001; they are never treated as static or origin-free values."
       },
       "source_signature": "unsafe core::slice_from_raw_parts(raw const T*? pointer, usize length) -> const T[]",
       "checked_effect": {
@@ -5914,7 +5914,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "The semantic pass applies the core::slice_from_raw_parts pointer, element and length rules in a lexical unsafe context and lowers the anchor first: a borrow, slice or str value, a written &place borrowing the place shared. The anchor shall be a place, a field or dereference of one, or a borrow of one; it is never evaluated and the result takes its borrow origin instead of a fresh region, so the result may be stored and returned wherever a borrow derived from the anchor could, while the ordinary borrow rules keep the anchor live and unmoved. HIR and MIR keep the core::slice_from_raw_parts operation with the pointer and length operands and mark the node anchored; strict C17 lowering is the unanchored descriptor without a runtime symbol, allocation, element access, copy or panic. The caller retains the R-SAFETY-SLICE-PARTS duty for the anchored region."
+        "compiler_contract": "The semantic pass applies the core::slice_from_raw_parts pointer, element and length rules in a lexical unsafe context and lowers the anchor first: a borrow, slice or str value, a written &place borrowing the place shared. The anchor shall be a place, a field or dereference of one, or a borrow of one; it is never evaluated and the result takes its borrow origin instead of a fresh region, so the result may be stored and returned wherever a borrow derived from the anchor could, while the ordinary borrow rules keep the anchor live and unmoved. HIR and MIR keep the core::slice_from_raw_parts operation with the pointer and length operands and mark the node anchored; the lowering is the unanchored descriptor without a runtime symbol, allocation, element access, copy or panic. The caller retains the R-SAFETY-SLICE-PARTS duty for the anchored region."
       },
       "source_signature": "unsafe core::slice_from_raw_parts_in(A anchor, raw const T*? pointer, usize length) -> const T[]",
       "checked_effect": {
@@ -5959,7 +5959,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "The semantic pass applies the core::slice_from_raw_parts_mut pointer, element and length rules in a lexical unsafe context and lowers the anchor first: an exclusive borrow or mutable slice value, a written &place borrowing the place exclusively. The anchor shall be a place, a field or dereference of one, or a borrow of one; it is never evaluated and the result takes its borrow origin, so the ordinary borrow rules keep the anchor live, unmoved and otherwise unused while the result is live. HIR and MIR keep the core::slice_from_raw_parts_mut operation with the pointer and length operands and mark the node anchored; strict C17 lowering is the unanchored descriptor without a runtime symbol, allocation, element access, copy or panic. The caller retains the R-SAFETY-SLICE-PARTS duty for the anchored region."
+        "compiler_contract": "The semantic pass applies the core::slice_from_raw_parts_mut pointer, element and length rules in a lexical unsafe context and lowers the anchor first: an exclusive borrow or mutable slice value, a written &place borrowing the place exclusively. The anchor shall be a place, a field or dereference of one, or a borrow of one; it is never evaluated and the result takes its borrow origin, so the ordinary borrow rules keep the anchor live, unmoved and otherwise unused while the result is live. HIR and MIR keep the core::slice_from_raw_parts_mut operation with the pointer and length operands and mark the node anchored; the lowering is the unanchored descriptor without a runtime symbol, allocation, element access, copy or panic. The caller retains the R-SAFETY-SLICE-PARTS duty for the anchored region."
       },
       "source_signature": "unsafe core::slice_from_raw_parts_in_mut(A anchor, raw T*? pointer, usize length) -> T[]",
       "checked_effect": {
@@ -6004,7 +6004,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "The semantic pass infers an outermost-unqualified complete, sized and inhabited T from one compatible mutable raw pointer, accepts nullable and non-null pointer values through the standard non-null-to-nullable conversion, and requires an exact usize length in a lexical unsafe context. The result carries a fresh exclusive nonescaping region represented by its mandatory destination binding; return escape and liveness across await are rejected. HIR and MIR preserve the intrinsic and inferred pointee. Strict C17 lowering evaluates pointer then length once and initializes exactly one mutable slice descriptor without a runtime symbol, allocation, element access, copy or panic. The caller retains the complete R-SAFETY-SLICE-PARTS duty, including null only at zero length. Borrow-bearing aggregate fields and aggregate returns remain outside the current frontend slice and are diagnosed with R-DIAG-SLICE-001; they are never treated as static or origin-free values."
+        "compiler_contract": "The semantic pass infers an outermost-unqualified complete, sized and inhabited T from one compatible mutable raw pointer, accepts nullable and non-null pointer values through the standard non-null-to-nullable conversion, and requires an exact usize length in a lexical unsafe context. The result carries a fresh exclusive nonescaping region represented by its mandatory destination binding; return escape and liveness across await are rejected. HIR and MIR preserve the intrinsic and inferred pointee. The lowering evaluates pointer then length once and initializes exactly one mutable slice descriptor without a runtime symbol, allocation, element access, copy or panic. The caller retains the complete R-SAFETY-SLICE-PARTS duty, including null only at zero length. Borrow-bearing aggregate fields and aggregate returns remain outside the current frontend slice and are diagnosed with R-DIAG-SLICE-001; they are never treated as static or origin-free values."
       },
       "source_signature": "unsafe core::slice_from_raw_parts_mut(raw T*? pointer, usize length) -> T[]",
       "checked_effect": {
@@ -6050,7 +6050,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "R-OWN-0019 proves two initialized exclusive places of one unborrowed Copy/Move type; both loans stay active, so an overlap is the ordinary aliasing diagnostic. Sync and async C17 exchange the values through one temporary with copy or move glue; nothing is dropped, allocated or run in user code.",
+        "compiler_contract": "R-OWN-0019 proves two initialized exclusive places of one unborrowed Copy/Move type; both loans stay active, so an overlap is the ordinary aliasing diagnostic. Sync and async lowering exchange the values through one temporary with copy or move glue; nothing is dropped, allocated or run in user code.",
         "conformance_status": "complete"
       },
       "source_signature": "core::swap(T* first, T* second) -> void",
@@ -6096,7 +6096,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Ten literal-suffix operations and the form without the suffix call a static ISO C17 helper of portable shifts and masks; translation-time evaluation folds them inside an evaluated function."
+        "compiler_contract": "Ten literal-suffix operations and the form without the suffix lower to the bit intrinsics of the target; translation-time evaluation folds them inside an evaluated function."
       },
       "source_signature": "core::swap_bytes_SUFFIX(SUFFIX value) -> SUFFIX",
       "checked_effect": {
@@ -6142,7 +6142,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "R-OWN-0019 proves initialized exclusive access, unborrowed Copy/Move and exact replacement type. Arguments follow ordinary call-free and aliasing rules. HIR/MIR preserve the destination loan and explicit replacement or proven R default. Sync and async C17 stage operands once, move or copy the previous value out, commit the replacement and track both initialization flags. The exchange allocates nothing, adds no panic or checked effect and does not invoke user drop. Exactly-once cleanup follows existing glue.",
+        "compiler_contract": "R-OWN-0019 proves initialized exclusive access, unborrowed Copy/Move and exact replacement type. Arguments follow ordinary call-free and aliasing rules. HIR/MIR preserve the destination loan and explicit replacement or proven R default. Sync and async lowering stage operands once, move or copy the previous value out, commit the replacement and track both initialization flags. The exchange allocates nothing, adds no panic or checked effect and does not invoke user drop. Exactly-once cleanup follows existing glue.",
         "conformance_status": "complete"
       },
       "source_signature": "core::take(T* destination) -> T",
@@ -6233,7 +6233,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Ten literal-suffix operations and the form without the suffix call a static ISO C17 helper of portable shifts and masks; translation-time evaluation folds them inside an evaluated function."
+        "compiler_contract": "Ten literal-suffix operations and the form without the suffix lower to the bit intrinsics of the target; translation-time evaluation folds them inside an evaluated function."
       },
       "source_signature": "core::trailing_zeros_SUFFIX(SUFFIX value) -> u32",
       "checked_effect": {
@@ -6278,7 +6278,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "The semantic pass checks the attribute type and the C17 emitter writes the arguments of the attribute on the type as a translation-time constant."
+        "compiler_contract": "The semantic pass checks the attribute type and the emitter writes the arguments of the attribute on the type as a translation-time constant."
       },
       "source_signature": "core::type_attribute::<A, T>() -> o<A>",
       "checked_effect": {
@@ -6453,7 +6453,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "The semantic pass checks the attribute type and the C17 emitter selects the arguments of the attribute on the enumerator from a translation-time table."
+        "compiler_contract": "The semantic pass checks the attribute type and the emitter selects the arguments of the attribute on the enumerator from a translation-time table."
       },
       "source_signature": "core::variant_attribute::<A, T>(T value) -> o<A>",
       "checked_effect": {
@@ -6543,7 +6543,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "A standard call over a shared borrow whose C17 lowering is a switch over the active tag assigning the program string of the declared variant name."
+        "compiler_contract": "A standard call over a shared borrow whose lowering is a switch over the active tag assigning the program string of the declared variant name."
       },
       "source_signature": "core::variant_name(const T* value) -> constexpr str",
       "checked_effect": {
@@ -6588,7 +6588,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "The semantic pass infers T from one non-null raw const pointer in a lexical unsafe context and accepts only the closed complete, sized, inhabited Copy value family of R-UNSAFE-0008. HIR and MIR retain the inferred pointee type; strict C17 lowering evaluates the address once and performs exactly one const volatile T read. No runtime symbol, allocation, panic, atomic operation or synchronization edge is introduced."
+        "compiler_contract": "The semantic pass infers T from one non-null raw const pointer in a lexical unsafe context and accepts only the closed complete, sized, inhabited Copy value family of R-UNSAFE-0008. HIR and MIR retain the inferred pointee type; the lowering evaluates the address once and performs exactly one const volatile T read. No runtime symbol, allocation, panic, atomic operation or synchronization edge is introduced."
       },
       "source_signature": "unsafe core::volatile_load(raw const T* address) -> T",
       "checked_effect": {
@@ -6633,7 +6633,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "The semantic pass infers T from one non-null mutable raw pointer in a lexical unsafe context, requires one exact T value, and accepts only the closed complete, sized, inhabited Copy value family of R-UNSAFE-0008. HIR and MIR retain the inferred pointee type; strict C17 lowering evaluates address then value once and performs exactly one volatile T write. No runtime symbol, allocation, panic, atomic operation or synchronization edge is introduced."
+        "compiler_contract": "The semantic pass infers T from one non-null mutable raw pointer in a lexical unsafe context, requires one exact T value, and accepts only the closed complete, sized, inhabited Copy value family of R-UNSAFE-0008. HIR and MIR retain the inferred pointee type; the lowering evaluates address then value once and performs exactly one volatile T write. No runtime symbol, allocation, panic, atomic operation or synchronization edge is introduced."
       },
       "source_signature": "unsafe core::volatile_store(raw T* address, T value) -> void",
       "checked_effect": {
@@ -6678,7 +6678,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Five unsigned literal-suffix operations and the form without the suffix call a static ISO C17 helper built from half-width words and return a tuple; narrowing_div checks the divisor and the high half at the call site."
+        "compiler_contract": "Five unsigned literal-suffix operations and the form without the suffix lower to double-width integer arithmetic and return a tuple; narrowing_div checks the divisor and the high half at the call site."
       },
       "source_signature": "core::widening_mul_SUFFIX(SUFFIX left, SUFFIX right) -> (SUFFIX, SUFFIX)",
       "checked_effect": {
@@ -6723,7 +6723,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Ten literal-suffix operations emit modulo-width arithmetic through unsigned ISO C17 representations."
+        "compiler_contract": "Ten literal-suffix operations emit modulo-width arithmetic on the two's complement representation."
       },
       "source_signature": "core::wrapping_add_SUFFIX(SUFFIX left, SUFFIX right) -> SUFFIX",
       "checked_effect": {
@@ -6768,7 +6768,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Ten literal-suffix operations emit modulo-width arithmetic through unsigned ISO C17 representations."
+        "compiler_contract": "Ten literal-suffix operations emit modulo-width arithmetic on the two's complement representation."
       },
       "source_signature": "core::wrapping_mul_SUFFIX(SUFFIX left, SUFFIX right) -> SUFFIX",
       "checked_effect": {
@@ -6813,7 +6813,7 @@
       ],
       "implementation": {
         "kind": "intrinsic",
-        "compiler_contract": "Ten literal-suffix operations emit modulo-width arithmetic through unsigned ISO C17 representations."
+        "compiler_contract": "Ten literal-suffix operations emit modulo-width arithmetic on the two's complement representation."
       },
       "source_signature": "core::wrapping_sub_SUFFIX(SUFFIX left, SUFFIX right) -> SUFFIX",
       "checked_effect": {
@@ -12108,7 +12108,7 @@
         "kind": "source",
         "source": "library/std/c/source/checked.c",
         "c_symbol": "r_std_c_checked",
-        "generator_contract": "The listed C symbol is the type-erased checked-conversion kernel. The reference compiler recognizes the closed suffix set and emits exact call-site carrier/result lowering for statically typed values. The complete source/destination matrix and deterministic link-plan integration are verified. Target-manifest-driven ABI generation supplies C spellings, carrier storage, runtime range descriptors and host representation assertions; C17 emission validates the exact selected target-manifest identity before producing output.",
+        "generator_contract": "The listed C symbol is the type-erased checked-conversion kernel. The reference compiler recognizes the closed suffix set and emits exact call-site carrier/result lowering for statically typed values. The complete source/destination matrix and deterministic link-plan integration are verified. Target-manifest-driven ABI generation supplies C spellings, carrier storage, runtime range descriptors and host representation assertions; compilation validates the exact selected target-manifest identity before producing output.",
         "filename_exception": true
       },
       "source_signature": "std.c::checked_D(S value) -> D throws std.convert::range_error",
@@ -12346,7 +12346,7 @@
         "kind": "source",
         "source": "library/std/c/source/link_available.c",
         "c_symbol": "r_std_c_link_available",
-        "generator_contract": "Generated C17 passes the current program's immutable resolved logical-link manifest as a hidden first ABI argument; the public R operation retains its single constexpr-str parameter."
+        "generator_contract": "Generated code passes the current program's immutable resolved logical-link manifest as a hidden first ABI argument; the public R operation retains its single constexpr-str parameter."
       },
       "source_signature": "std.c::link_available(constexpr str logical_name) -> bool",
       "checked_effect": {
@@ -13419,7 +13419,7 @@
         "kind": "source",
         "source": "library/std/convert/source/checked.c",
         "c_symbol": "r_std_convert_checked",
-        "generator_contract": "The listed C symbol is the type-erased checked-conversion kernel. The reference compiler recognizes the closed suffix set and emits exact call-site carrier/result lowering for statically typed values. The complete source/destination matrix and deterministic link-plan integration are verified. Target-manifest-driven ABI generation supplies C spellings, carrier storage, runtime range descriptors and host representation assertions; C17 emission validates the exact selected target-manifest identity before producing output.",
+        "generator_contract": "The listed C symbol is the type-erased checked-conversion kernel. The reference compiler recognizes the closed suffix set and emits exact call-site carrier/result lowering for statically typed values. The complete source/destination matrix and deterministic link-plan integration are verified. Target-manifest-driven ABI generation supplies C spellings, carrier storage, runtime range descriptors and host representation assertions; compilation validates the exact selected target-manifest identity before producing output.",
         "filename_exception": true
       },
       "source_signature": "std.convert::checked_D(S value) -> D throws std.convert::range_error",
@@ -16760,8 +16760,8 @@
       ],
       "implementation": {
         "kind": "generated",
-        "generator": "compiler/codegen/hosted_main.inc",
-        "generator_contract": "Strict C17 lowering selects the held error by its tag and forms the portable error with the mapping of the generated main boundary; it calls no runtime symbol, allocates nothing and cannot panic."
+        "generator": "compiler/llvm/hosted_main.c",
+        "generator_contract": "The lowering selects the held error by its tag and forms the portable error with the mapping of the generated main boundary; it calls no runtime symbol, allocates nothing and cannot panic."
       },
       "source_signature": "std.error::from_fault(std.error::fault value) -> std.error::error",
       "checked_effect": {
@@ -24851,7 +24851,7 @@
       ],
       "implementation": {
         "kind": "generated",
-        "generator": "compiler/codegen/json_reader.inc",
+        "generator": "compiler/llvm/json_stream.c",
         "generator_contract": "Concrete transport and checked-result adapters retain typed streaming reader state. Native and generated R tests cover file, pipe input and TCP, transactional start, completion errors, cancellation, EOF and detached owners."
       },
       "source_signature": "std.json::detach(std.json::reader<S> reader) -> std.json::detached<S> throws std.alloc::alloc_error, std.json::error",
@@ -25649,7 +25649,7 @@
       ],
       "implementation": {
         "kind": "generated",
-        "generator_contract": "Concrete sync/async C17 codecs for scalars, strings, arrays, lists, string-key dictionaries, structs, enum/error payloads, optional values, generic JSON constraints and independent hooks/defaults. Embedded structures and object collectors share checked field schemas. Recursive type graphs use nominal back references and runtime nesting limits; typed streaming decoders and asynchronous reader adapters share the checked schema."
+        "generator_contract": "Concrete sync/async codecs for scalars, strings, arrays, lists, string-key dictionaries, structs, enum/error payloads, optional values, generic JSON constraints and independent hooks/defaults. Embedded structures and object collectors share checked field schemas. Recursive type graphs use nominal back references and runtime nesting limits; typed streaming decoders and asynchronous reader adapters share the checked schema."
       },
       "source_signature": "std.json::marshal(const T* source) -> std.string::string throws std.alloc::alloc_error, std.json::error",
       "checked_effect": {
@@ -25720,7 +25720,7 @@
       ],
       "implementation": {
         "kind": "generated",
-        "generator_contract": "Concrete sync/async C17 codecs for scalars, strings, arrays, lists, string-key dictionaries, structs, enum/error payloads, optional values, generic JSON constraints and independent hooks/defaults. Embedded structures and object collectors share checked field schemas. Recursive type graphs use nominal back references and runtime nesting limits; typed streaming decoders and asynchronous reader adapters share the checked schema."
+        "generator_contract": "Concrete sync/async codecs for scalars, strings, arrays, lists, string-key dictionaries, structs, enum/error payloads, optional values, generic JSON constraints and independent hooks/defaults. Embedded structures and object collectors share checked field schemas. Recursive type graphs use nominal back references and runtime nesting limits; typed streaming decoders and asynchronous reader adapters share the checked schema."
       },
       "source_signature": "std.json::marshal_with_options(const T* source, std.json::options options) -> std.string::string throws std.alloc::alloc_error, std.json::error",
       "checked_effect": {
@@ -25926,7 +25926,7 @@
       ],
       "implementation": {
         "kind": "generated",
-        "generator": "compiler/codegen/json_reader.inc",
+        "generator": "compiler/llvm/json_stream.c",
         "generator_contract": "Concrete transport and checked-result adapters retain typed streaming reader state. Native and generated R tests cover file, pipe input and TCP, transactional start, completion errors, cancellation, EOF and detached owners."
       },
       "source_signature": "std.json::new_reader(S source, std.json::options options) -> std.json::reader<S> throws std.alloc::alloc_error, std.json::error",
@@ -26471,7 +26471,7 @@
       ],
       "implementation": {
         "kind": "generated",
-        "generator": "compiler/codegen/json_reader.inc",
+        "generator": "compiler/llvm/json_stream.c",
         "generator_contract": "Concrete transport and checked-result adapters retain typed streaming reader state. Native and generated R tests cover file, pipe input and TCP, transactional start, completion errors, cancellation, EOF and detached owners."
       },
       "source_signature": "std.json::read_next(std.json::reader<S>* reader, o<std.time::instant> deadline) -> task<o<T> throws std.json::error, std.alloc::alloc_error, TransportError> throws std.async::start_error",
@@ -26555,7 +26555,7 @@
       ],
       "implementation": {
         "kind": "generated",
-        "generator_contract": "The semantic pass derives the JSON Schema 2020-12 text of the closed type argument from the checked conversion schema of marshal and unmarshal (field names, optional, string, embed, descriptions, variants, options, containers, integer ranges, $defs for recursive types); strict C17 parses that text once per call and inserts under $defs the values of the json_schema hooks of types with converters."
+        "generator_contract": "The semantic pass derives the JSON Schema 2020-12 text of the closed type argument from the checked conversion schema of marshal and unmarshal (field names, optional, string, embed, descriptions, variants, options, containers, integer ranges, $defs for recursive types); the generated code parses that text once per call and inserts under $defs the values of the json_schema hooks of types with converters."
       },
       "source_signature": "std.json::schema() -> std.json::value throws std.alloc::alloc_error, std.json::error",
       "checked_effect": {
@@ -26844,7 +26844,7 @@
       ],
       "implementation": {
         "kind": "generated",
-        "generator": "compiler/codegen/json_reader.inc",
+        "generator": "compiler/llvm/json_stream.c",
         "generator_contract": "Concrete transport and checked-result adapters retain typed streaming reader state. Native and generated R tests cover file, pipe input and TCP, transactional start, completion errors, cancellation, EOF and detached owners."
       },
       "source_signature": "std.json::take_bytes(std.json::detached<S>* detached) -> bytes throws std.alloc::alloc_error, std.json::error",
@@ -26989,7 +26989,7 @@
       ],
       "implementation": {
         "kind": "generated",
-        "generator": "compiler/codegen/json_reader.inc",
+        "generator": "compiler/llvm/json_stream.c",
         "generator_contract": "Concrete transport and checked-result adapters retain typed streaming reader state. Native and generated R tests cover file, pipe input and TCP, transactional start, completion errors, cancellation, EOF and detached owners."
       },
       "source_signature": "std.json::take_handle(std.json::detached<S>* detached) -> S throws std.alloc::alloc_error, std.json::error",
@@ -27185,7 +27185,7 @@
       ],
       "implementation": {
         "kind": "generated",
-        "generator_contract": "Concrete sync/async C17 codecs for scalars, strings, arrays, lists, string-key dictionaries, structs, enum/error payloads, optional values, generic JSON constraints and independent hooks/defaults. Embedded structures and object collectors share checked field schemas. Recursive type graphs use nominal back references and runtime nesting limits; typed streaming decoders and asynchronous reader adapters share the checked schema."
+        "generator_contract": "Concrete sync/async codecs for scalars, strings, arrays, lists, string-key dictionaries, structs, enum/error payloads, optional values, generic JSON constraints and independent hooks/defaults. Embedded structures and object collectors share checked field schemas. Recursive type graphs use nominal back references and runtime nesting limits; typed streaming decoders and asynchronous reader adapters share the checked schema."
       },
       "source_signature": "std.json::unmarshal(const u8[] source) -> T throws std.alloc::alloc_error, std.json::error",
       "checked_effect": {
@@ -27256,7 +27256,7 @@
       ],
       "implementation": {
         "kind": "generated",
-        "generator_contract": "Concrete sync/async C17 codecs for scalars, strings, arrays, lists, string-key dictionaries, structs, enum/error payloads, optional values, generic JSON constraints and independent hooks/defaults. Embedded structures and object collectors share checked field schemas. Recursive type graphs use nominal back references and runtime nesting limits; typed streaming decoders and asynchronous reader adapters share the checked schema."
+        "generator_contract": "Concrete sync/async codecs for scalars, strings, arrays, lists, string-key dictionaries, structs, enum/error payloads, optional values, generic JSON constraints and independent hooks/defaults. Embedded structures and object collectors share checked field schemas. Recursive type graphs use nominal back references and runtime nesting limits; typed streaming decoders and asynchronous reader adapters share the checked schema."
       },
       "source_signature": "std.json::unmarshal_with_options(const u8[] source, std.json::options options) -> T throws std.alloc::alloc_error, std.json::error",
       "checked_effect": {

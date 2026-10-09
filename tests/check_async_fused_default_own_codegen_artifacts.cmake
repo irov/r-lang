@@ -35,109 +35,54 @@ r_require_match_count(mir_output
     1 "Scratch own allocation MIR source")
 r_require_match_count(mir_output "= await " 1 "real await after owner construction")
 
+set(ir_arguments
+    --emit=llvm-ir
+    --entry test.codegen.async_fused_default_own::main
+    --profile hosted-native-async
+    --target-manifest "${TARGET_MANIFEST}"
+    "${SOURCE_FILE}")
 execute_process(
-    COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
-        --entry test.codegen.async_fused_default_own::main
-        --profile hosted-native-async
-        --target-manifest "${TARGET_MANIFEST}"
-        "${SOURCE_FILE}"
-    RESULT_VARIABLE c17_result
-    OUTPUT_VARIABLE c17_output
-    ERROR_VARIABLE c17_error
+    COMMAND "${R_FRONT_EXECUTABLE}" ${ir_arguments}
+    RESULT_VARIABLE ir_result
+    OUTPUT_VARIABLE ir_output
+    ERROR_VARIABLE ir_error
 )
-if(NOT c17_result EQUAL 0)
+if(NOT ir_result EQUAL 0)
     message(FATAL_ERROR
-        "async fused default-own C17 emit failed (${c17_result}): ${c17_error}")
+        "async fused default-own LLVM IR emit failed (${ir_result}): ${ir_error}")
 endif()
-r_require_match_count(c17_output "#include <string[.]h>" 1
-    "memory initializer include")
-r_require_match_count(c17_output
-    "static void r_async_default_own_initialize_[0-9]+_[0-9]+[(]"
-    1 "per-NEW heap initializer definition")
-r_require_match_count(c17_output
-    "static void r_async_default_own_initialize_[0-9]+_[0-9]+_gate[(]"
-    1 "heap initializer gate definition")
-r_require_match_count(c17_output
-    "R_STACK_ENTRY[(]r_async_default_own_initialize_[0-9]+_[0-9]+[)]"
-    1 "heap initializer gate entry bound")
-r_require_match_count(c17_output
-    "r_async_default_own_initialize_[0-9]+_[0-9]+_gate,"
-    1 "gated heap initializer callback")
-r_require_match_count(c17_output "r_runtime_own_create_initialize[(]" 1
-    "transactional own allocation")
-r_require_match_count(c17_output
-    "RRuntimeOwn r_fused_owner_[0-9]+ = [{]0[}]"
-    1 "small temporary owner handle")
-r_require_match_count(c17_output "[(]void[)]memset[(]" 1
-    "in-place default initialization")
-r_require_match_count(c17_output
-    "destination->r_m[0-9]+[.]r_data"
-    2 "fixed byte field initialized directly in heap storage")
-r_require_match_count(c17_output "uint8_t r_data\\[1048576\\]" 1
-    "fixed byte array representation")
-r_require_match_count(c17_output "r_new_own[(]" 0
-    "legacy payload-copy allocation helper")
-r_require_match_count(c17_output "r_runtime_own_create[(]" 0
-    "legacy runtime payload-copy allocation")
-r_require_match_count(c17_output
-    "frame->r_v[0-9]+ = r_fused_owner_[0-9]+"
-    1 "owner publication")
 
-string(REGEX MATCH
-    "struct (r_d[0-9]+) \\{[\n ]+uint8_t r_data\\[1048576\\];[\n ]+\\};"
-    fixed_array_declaration "${c17_output}")
-if(fixed_array_declaration STREQUAL "")
-    message(FATAL_ERROR "fixed byte array C17 type was not found")
-endif()
-set(fixed_array_type "${CMAKE_MATCH_1}")
-string(REGEX MATCH
-    "struct (r_a[0-9]+) \\{[\n ]+${fixed_array_type} r_m[0-9]+;[\n ]+\\};"
-    scratch_declaration "${c17_output}")
-if(scratch_declaration STREQUAL "")
-    message(FATAL_ERROR "Scratch C17 type was not found")
-endif()
-set(scratch_type "${CMAKE_MATCH_1}")
-string(REGEX MATCH
-    "typedef struct r_async_frame_[0-9]+ \\{[^}]*RRuntimeOwn[^}]*\\} r_async_frame_[0-9]+;"
-    owner_frame "${c17_output}")
-if(owner_frame STREQUAL "")
-    message(FATAL_ERROR "async frame retaining the owner was not found")
-endif()
-string(FIND "${owner_frame}" "${fixed_array_type} " fixed_array_frame_field)
-if(NOT fixed_array_frame_field EQUAL -1)
-    message(FATAL_ERROR "fixed array SSA leaked into the async frame:\n${owner_frame}")
-endif()
-string(FIND "${owner_frame}" "${scratch_type} " scratch_frame_field)
-if(NOT scratch_frame_field EQUAL -1)
-    message(FATAL_ERROR "Scratch aggregate SSA leaked into the async frame:\n${owner_frame}")
-endif()
-string(LENGTH "${owner_frame}" owner_frame_text_size)
-if(owner_frame_text_size GREATER 4096)
-    message(FATAL_ERROR
-        "owner async frame declaration is unexpectedly large (${owner_frame_text_size} bytes)")
-endif()
-r_require_match_count(c17_output "${fixed_array_type} r_stack_" 0
+# new Scratch{} is default-initialized in its heap storage by the transactional allocation; the
+# 1 MiB value is neither built in the async frame nor on the stack and then copied.
+r_require_match_count(ir_output "call [^\n]*@r_runtime_own_create_initialize[(]" 1
+    "transactional own allocation")
+r_require_match_count(ir_output "call [^\n]*@r_runtime_own_create[(]" 0
+    "payload-copy own allocation")
+r_require_match_count(ir_output "alloca [[]1048576 x i8[]]" 0
     "fixed array automatic temporary")
-r_require_match_count(c17_output "${scratch_type} r_stack_" 0
-    "Scratch automatic temporary")
+string(REGEX MATCH
+    "@\"test[.]codegen[.]async_fused_default_own::main[$]frame_size\" = private constant i64 ([0-9]+)"
+    frame_size_match "${ir_output}")
+if(frame_size_match STREQUAL "")
+    message(FATAL_ERROR "async frame size of main was not found:\n${ir_output}")
+endif()
+if(CMAKE_MATCH_1 GREATER_EQUAL 1048576)
+    message(FATAL_ERROR
+        "the Scratch value or its fixed array leaked into the async frame of main "
+        "(${CMAKE_MATCH_1} bytes)")
+endif()
 
 execute_process(
-    COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
-        --entry test.codegen.async_fused_default_own::main
-        --profile hosted-native-async
-        --target-manifest "${TARGET_MANIFEST}"
-        "${SOURCE_FILE}"
+    COMMAND "${R_FRONT_EXECUTABLE}" ${ir_arguments}
     RESULT_VARIABLE repeated_result
     OUTPUT_VARIABLE repeated_output
     ERROR_VARIABLE repeated_error
 )
 if(NOT repeated_result EQUAL 0)
     message(FATAL_ERROR
-        "repeated async fused default-own C17 emit failed "
+        "repeated async fused default-own LLVM IR emit failed "
         "(${repeated_result}): ${repeated_error}")
 endif()
-if(NOT c17_output STREQUAL repeated_output)
-    message(FATAL_ERROR "async fused default-own C17 output is not deterministic")
+if(NOT ir_output STREQUAL repeated_output)
+    message(FATAL_ERROR "async fused default-own LLVM IR output is not deterministic")
 endif()

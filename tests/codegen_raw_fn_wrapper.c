@@ -71,7 +71,8 @@ static void *r_test_foreign_thread(void *argument) {
 
 static int r_test_entry_status;
 
-static void r_test_hosted_drain(void) {
+void r_test_hosted_drain(void);
+void r_test_hosted_drain(void) {
     static _Bool checked;
     if (checked) {
         r_runtime_hosted_drain();
@@ -103,13 +104,14 @@ static void r_test_hosted_drain(void) {
     r_runtime_hosted_drain();
 }
 
-static int r_test_hosted_finish(int32_t result) {
+int r_test_hosted_finish(int32_t result);
+int r_test_hosted_finish(int32_t result) {
     return r_runtime_hosted_finish(r_test_entry_status == 0 ? result : r_test_entry_status);
 }
 
 #define r_runtime_hosted_drain r_test_hosted_drain
 #define r_runtime_hosted_finish r_test_hosted_finish
-#include R_TEST_GENERATED_C
+#include R_TEST_PROGRAM_PRELUDE
 #undef r_runtime_hosted_finish
 
 #undef r_runtime_hosted_drain

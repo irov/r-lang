@@ -4,18 +4,18 @@
 #include <stddef.h>
 #include <stdint.h>
 
-static void r_test_array_destroy(RRuntimeArray *array);
+void r_test_array_destroy(RRuntimeArray *array);
 
 #define r_runtime_array_destroy r_test_array_destroy
 #define main r_generated_main
 int main(int argc, char *argv[]);
-#include R_TEST_GENERATED_C
+#include R_TEST_PROGRAM_PRELUDE
 #undef main
 #undef r_runtime_array_destroy
 
 static size_t r_test_array_drop_count;
 
-static void r_test_array_destroy(RRuntimeArray *array) {
+void r_test_array_destroy(RRuntimeArray *array) {
     ++r_test_array_drop_count;
     r_runtime_array_destroy(array);
 }

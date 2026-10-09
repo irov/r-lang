@@ -2,7 +2,7 @@
 """Run bounded ownership and compiler-memory-safety regression probes.
 
 Invalid safety probes must be rejected by semantic analysis. Valid controls
-must reach C17. Compiler-memory probes must finish without sanitizer findings.
+must reach LLVM IR. Compiler-memory probes must finish without sanitizer findings.
 The audit intentionally exits with status 1 while any safety defect is present.
 """
 
@@ -653,6 +653,7 @@ def run_compiler(
             str(compiler),
             "--profile=hosted-native-async",
             f"--emit={emit}",
+            "--all-functions",
             "--diagnostics=json",
             str(source),
         ],
@@ -705,7 +706,7 @@ def main() -> int:
     for name, filename, expected, contracts in SEMANTIC_PROBES:
         source = fixtures / filename
         try:
-            process = run_compiler(root, compiler, source, "c17")
+            process = run_compiler(root, compiler, source, "llvm-ir")
         except subprocess.TimeoutExpired:
             results.append(
                 {

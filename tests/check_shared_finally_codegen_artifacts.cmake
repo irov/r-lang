@@ -68,46 +68,29 @@ r_require_match_count(mir_output
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
+        --emit=llvm-ir
         --entry test.codegen.checked_finally_control::main
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"
         "${SOURCE_FILE}"
-    RESULT_VARIABLE c17_result
-    OUTPUT_VARIABLE c17_output
-    ERROR_VARIABLE c17_error
+    RESULT_VARIABLE ir_result
+    OUTPUT_VARIABLE ir_output
+    ERROR_VARIABLE ir_error
 )
-if(NOT c17_result EQUAL 0)
-    message(FATAL_ERROR "shared-finally C17 emit failed (${c17_result}): ${c17_error}")
+if(NOT ir_result EQUAL 0)
+    message(FATAL_ERROR "shared-finally LLVM IR emit failed (${ir_result}): ${ir_error}")
 endif()
 
-# The marker occurs three times in main's result checks and exactly once in the
-# single emitted body of structural_finally. A cloned body raises this count.
-r_require_match_count(c17_output "INT32_C[(]314159[)]" 4
+# structural_finally stores the marker once, in its finally body; main only compares with it.
+# A finally body cloned per exit raises this count.
+r_require_match_count(ir_output "store i32 314159, " 1
     "one emitted structural_finally body")
-r_require_match_count(c17_output "r_finally_body_[0-9]+:" 12
-    "one shared C label per lexical finally body")
-if(NOT c17_output MATCHES
-   "uint32_t r_pc_level_[0-9]+ = UINT32_C[(]0[)];")
-    message(FATAL_ERROR "shared-finally C17 lacks a hidden pending-record level")
-endif()
-if(NOT c17_output MATCHES
-   "uint32_t r_pc_reason_[0-9]+\\[UINT32_C[(][0-9]+[)]\\]")
-    message(FATAL_ERROR "shared-finally C17 lacks pending-reason slots")
-endif()
-if(NOT c17_output MATCHES "union r_pc_payload_[0-9]+")
-    message(FATAL_ERROR "shared-finally C17 lacks a hidden pending-payload union")
-endif()
-if(NOT c17_output MATCHES
-   "switch [(]r_pc_reason_[0-9]+\\[r_pc_level_[0-9]+ - UINT32_C[(]1[)]\\][)]")
-    message(FATAL_ERROR "shared-finally C17 lacks pending-completion dispatch")
-endif()
-r_require_match_count(c17_output "setjmp|longjmp" 0
-    "shared-finally lowering does not use non-local C control transfer")
+r_require_match_count(ir_output "@_?(setjmp|longjmp|sigsetjmp|siglongjmp)[(]" 0
+    "shared-finally lowering does not use non-local control transfer")
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
+        --emit=llvm-ir
         --entry test.codegen.checked_finally_control::main
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"
@@ -118,8 +101,8 @@ execute_process(
 )
 if(NOT repeated_result EQUAL 0)
     message(FATAL_ERROR
-        "repeated shared-finally C17 emit failed (${repeated_result}): ${repeated_error}")
+        "repeated shared-finally LLVM IR emit failed (${repeated_result}): ${repeated_error}")
 endif()
-if(NOT c17_output STREQUAL repeated_output)
-    message(FATAL_ERROR "shared-finally C17 output is not deterministic")
+if(NOT ir_output STREQUAL repeated_output)
+    message(FATAL_ERROR "shared-finally LLVM IR output is not deterministic")
 endif()

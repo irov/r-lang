@@ -3,18 +3,18 @@
 
 #include <stddef.h>
 
-static RStdIoTaskStartResult r_test_close_input(RStdIoInput *stream, RStdIoDeadline deadline);
+RStdIoTaskStartResult r_test_close_input(RStdIoInput *stream, RStdIoDeadline deadline);
 #define r_std_io_close_input r_test_close_input
 #define main r_generated_main
 int main(int argc, char *argv[]);
-#include R_TEST_GENERATED_C
+#include R_TEST_PROGRAM_PRELUDE
 #undef main
 #undef r_std_io_close_input
 
 static unsigned r_test_close_calls;
 static RRuntimeDarwinIoHandle *r_test_original_input;
 
-static RStdIoTaskStartResult r_test_close_input(RStdIoInput *stream, RStdIoDeadline deadline) {
+RStdIoTaskStartResult r_test_close_input(RStdIoInput *stream, RStdIoDeadline deadline) {
     ++r_test_close_calls;
     if (r_test_close_calls == 1U) {
         r_test_original_input = stream->handle;

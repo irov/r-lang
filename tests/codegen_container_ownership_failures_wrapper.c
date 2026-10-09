@@ -8,25 +8,22 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-static void r_test_own_release(RRuntimeOwn *owner);
-static RStdAllocTryNewResult
+void r_test_own_release(RRuntimeOwn *owner);
+RStdAllocTryNewResult
 r_test_alloc_try_new(RRuntimeAllocator *allocator, RRuntimeTypeInfo type, void *staged_value);
-static RRuntimeAllocationStatus r_test_allocator_allocate(RRuntimeAllocator *allocator,
-                                                          size_t size,
-                                                          size_t alignment,
-                                                          void **result);
-static RStdDictInsertResult
+RStdListInsertResult r_test_list_push_back(RStdList *target, void *staged_value);
+RStdDictInsertResult
 r_test_dict_insert(RStdDict *target, void *staged_key, void *staged_value, void *replaced_storage);
 
 #define r_runtime_own_release r_test_own_release
 #define r_std_alloc_try_new r_test_alloc_try_new
 #define r_std_dict_insert r_test_dict_insert
-#define r_runtime_allocator_allocate r_test_allocator_allocate
+#define r_std_list_push_back r_test_list_push_back
 #define main r_generated_main
 int main(int argc, char *argv[]);
-#include R_TEST_GENERATED_C
+#include R_TEST_PROGRAM_PRELUDE
 #undef main
-#undef r_runtime_allocator_allocate
+#undef r_std_list_push_back
 #undef r_std_dict_insert
 #undef r_std_alloc_try_new
 #undef r_runtime_own_release
@@ -45,7 +42,7 @@ static bool r_test_same_owner(const RRuntimeOwn *left, const RRuntimeOwn *right)
            (left->allocation_alignment == right->allocation_alignment);
 }
 
-static void r_test_own_release(RRuntimeOwn *owner) {
+void r_test_own_release(RRuntimeOwn *owner) {
     static const int32_t expected[] = {11, 22, 33};
 
     if ((owner->allocation == NULL) || (releases >= 3U) ||
@@ -56,7 +53,7 @@ static void r_test_own_release(RRuntimeOwn *owner) {
     r_runtime_own_release(owner);
 }
 
-static RStdAllocTryNewResult
+RStdAllocTryNewResult
 r_test_alloc_try_new(RRuntimeAllocator *allocator, RRuntimeTypeInfo type, void *staged_value) {
     const RRuntimeOwn snapshot = *(const RRuntimeOwn *)staged_value;
     RStdAllocTryNewResult result;
@@ -71,22 +68,24 @@ r_test_alloc_try_new(RRuntimeAllocator *allocator, RRuntimeTypeInfo type, void *
     return result;
 }
 
-/* The generated list helper allocates the node itself (one node for `own i32*`), so the
- * failure is injected at the allocator: the helper must report OUT_OF_MEMORY, leave the list
+/* The push allocates one node (for `own i32*`): it must report OUT_OF_MEMORY, leave the list
  * empty and hand the staged owner back to the R catch clause, which checks its value. */
-static RRuntimeAllocationStatus r_test_allocator_allocate(RRuntimeAllocator *allocator,
-                                                          size_t size,
-                                                          size_t alignment,
-                                                          void **result) {
-    if (!list_failed && (size == sizeof(RRuntimeListNode) + sizeof(RRuntimeOwn))) {
-        list_failed = true;
-        *result = NULL;
-        return R_RUNTIME_ALLOCATION_EXHAUSTED;
-    }
-    return r_runtime_allocator_allocate(allocator, size, alignment, result);
+RStdListInsertResult r_test_list_push_back(RStdList *target, void *staged_value) {
+    const RRuntimeOwn snapshot = *(const RRuntimeOwn *)staged_value;
+    RStdListInsertResult result;
+
+    r_runtime_allocator_set_failure(target->allocator, UINT64_C(1));
+    result = r_std_list_push_back(target, staged_value);
+    list_failed = (r_runtime_allocator_attempt_count(target->allocator) == UINT64_C(1)) &&
+                  (result.status == R_STD_LIST_CALL_ERROR) &&
+                  (result.reason == R_STD_ALLOC_ERROR_OUT_OF_MEMORY) && (target->length == 0U) &&
+                  (target->first == NULL) &&
+                  r_test_same_owner((const RRuntimeOwn *)staged_value, &snapshot);
+    r_runtime_allocator_set_failure(target->allocator, UINT64_C(0));
+    return result;
 }
 
-static RStdDictInsertResult
+RStdDictInsertResult
 r_test_dict_insert(RStdDict *target, void *staged_key, void *staged_value, void *replaced_storage) {
     const int32_t key = *(const int32_t *)staged_key;
     const RRuntimeOwn snapshot = *(const RRuntimeOwn *)staged_value;

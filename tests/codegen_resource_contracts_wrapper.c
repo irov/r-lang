@@ -2,7 +2,9 @@
 
 #define main r_generated_main
 int main(int argc, char *argv[]);
-#include R_TEST_GENERATED_C
+/* The C export of check_resources (@export_name). */
+int checkResources(void);
+#include R_TEST_PROGRAM_PRELUDE
 #undef main
 
 int main(int argc, char *argv[]) {

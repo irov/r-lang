@@ -7,6 +7,12 @@ import subprocess
 import tempfile
 
 
+def emit_options(mode):
+    """Options of one output; LLVM IR lowers every function, not only those main reaches, so
+    that code generation also accepts the functions main never calls."""
+    return ['--emit=' + mode, '--all-functions'] if mode == 'llvm-ir' else ['--emit=' + mode]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--front', required=True)
@@ -43,7 +49,7 @@ i32 main() {
 ''')
 
         def emit(mode, paths):
-            result = subprocess.run([args.front, '--emit=' + mode, *map(str, paths)],
+            result = subprocess.run([args.front, *emit_options(mode), *map(str, paths)],
                                     capture_output=True, text=True, timeout=30)
             assert result.returncode == 0, (result.returncode, result.stderr)
             return result.stdout
@@ -59,7 +65,7 @@ i32 main() {
         assert 'call callee="items.provider::increment"' in mir
         assert 'call callee="items.provider::checked"' in mir
         assert 'indirect_call' not in mir
-        assert emit('c17', [provider, consumer]) == emit('c17', [consumer, provider])
+        assert emit('llvm-ir', [provider, consumer]) == emit('llvm-ir', [consumer, provider])
 
         provider.write_text(provider.read_text().replace('throws First, Second',
                                                         'throws Second, First'))

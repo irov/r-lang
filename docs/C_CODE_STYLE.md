@@ -53,8 +53,8 @@ Library operations and must not appear in generated application interfaces.
 - Each `core` or `std.*` module has its own directory and static-library target.
 - One public R operation has one `.c` file and exactly one non-`static` public C operation symbol.
   The file name is the operation's lower-snake-case name.
-- A generic operation has one type-erased implementation file. The compiler generates concrete
-  wrappers; handwritten monomorphic copies are not accepted.
+- A generic operation has one type-erased implementation file. Generated code calls it with the
+  type information of the concrete types; handwritten monomorphic copies are not accepted.
 - Helpers used by only one operation are `static` in that operation's file. Helpers used by two or
   more operations live under `library/internal/<subsystem>`.
 - Common code must not define public `r_core_*` or `r_std_*` operation symbols.
@@ -80,10 +80,11 @@ fails while any normative public item is still recorded as `unimplemented`.
 - Validate external and runtime-dependent input with ordinary error handling. This includes bounds,
   overflow, allocation, encoding, operating-system, cancellation, deadline, closed-state, and race
   outcomes required by the public contract.
-- Production compiler, runtime, Standard Library, and generated application C contain no runtime
-  assertion facility and do not use the C library `assert` macro. Compiler-proven preconditions are
-  emitted as direct operations rather than repeated at runtime. Do not replace removed checks with
-  `__builtin_assume`, `__builtin_unreachable`, or deliberate undefined behavior.
+- Production compiler, runtime and Standard Library C, and the C translation units the compiler
+  generates, contain no runtime assertion facility and do not use the C library `assert` macro.
+  Compiler-proven preconditions are emitted as direct operations rather than repeated at runtime.
+  Do not replace removed checks with `__builtin_assume`, `__builtin_unreachable`, or deliberate
+  undefined behavior.
 - Test compiler-proven preconditions and internal state-machine invariants through semantic negative
   tests, property tests, allocation/start-failure sweeps, fuzzing, sanitizer configurations, and
   concurrency stress. Compile-time `_Static_assert` remains required for ABI, layout, and other
@@ -105,7 +106,8 @@ The following families are excluded from handwritten formatting:
 - the committed re2c lexer output;
 - generated Unicode tables;
 - generated API inventories and ABI records;
-- generated R application C.
+- the C ABI bridge and verifier translation units that `r-front` writes for C imports
+  (`--emit=c17-bridge`, `--emit=abi-verifier`).
 
 Their generators emit deterministic canonical text. Regeneration verification, golden tests, and
 strict C17 compilation provide their formatting and integrity gate.

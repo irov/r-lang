@@ -2773,8 +2773,9 @@ static void r_semantic_test_mir_pending_completion(void) {
             }
         }
     }
-    /* L39 (R-ERR-0005): the panic block of the async body runs its active finally once. */
-    R_SEMANTIC_CHECK(set_count == 19U);
+    /* L39 (R-ERR-0005): the panic block of every body of an unwinding profile, synchronous or
+       async (B1), runs its active finally once. */
+    R_SEMANTIC_CHECK(set_count == 27U);
     R_SEMANTIC_CHECK(resume_count == set_count);
     R_SEMANTIC_CHECK(finally_push_count == 15U);
     R_SEMANTIC_CHECK(finally_enter_count == finally_push_count);
@@ -2786,7 +2787,7 @@ static void r_semantic_test_mir_pending_completion(void) {
     R_SEMANTIC_CHECK(reason_counts[R_MIR_PENDING_COMPLETION_CONTINUE] == 1U);
     R_SEMANTIC_CHECK(reason_counts[R_MIR_PENDING_COMPLETION_CANCEL] == 1U);
     R_SEMANTIC_CHECK(reason_counts[R_MIR_PENDING_COMPLETION_FALLTHROUGH] == 0U);
-    R_SEMANTIC_CHECK(reason_counts[R_MIR_PENDING_COMPLETION_PANIC_UNWIND] == 1U);
+    R_SEMANTIC_CHECK(reason_counts[R_MIR_PENDING_COMPLETION_PANIC_UNWIND] == 9U);
     R_SEMANTIC_CHECK(checked_target_count == 1U);
     R_SEMANTIC_CHECK(checked_propagate_count == 2U);
     R_SEMANTIC_CHECK(staged_before_drop_count == 4U);
@@ -5922,31 +5923,37 @@ static RFrontendContext *r_semantic_make_import_program(bool qualified, bool rev
 static void r_semantic_test_cross_module_bindings(void) {
     RFrontendContext *selected = r_semantic_make_import_program(false, true);
     RFrontendContext *qualified = r_semantic_make_import_program(true, false);
-    RSemanticTestBuffer selected_c17 = {0};
-    RSemanticTestBuffer qualified_c17 = {0};
+    RSemanticTestBuffer selected_program = {0};
+    RSemanticTestBuffer qualified_program = {0};
 
     R_SEMANTIC_CHECK(selected != NULL);
     R_SEMANTIC_CHECK(qualified != NULL);
     if ((selected != NULL) && (qualified != NULL)) {
         R_SEMANTIC_CHECK(r_frontend_diagnostic_count(selected) == 0U);
         R_SEMANTIC_CHECK(r_frontend_diagnostic_count(qualified) == 0U);
-        R_SEMANTIC_CHECK(r_frontend_emit_c17(selected, r_semantic_test_write, &selected_c17) ==
-                         R_FRONTEND_OK);
-        R_SEMANTIC_CHECK(r_frontend_emit_c17(qualified, r_semantic_test_write, &qualified_c17) ==
-                         R_FRONTEND_OK);
-        R_SEMANTIC_CHECK((selected_c17.bytes != NULL) && (selected_c17.length != 0U));
-        R_SEMANTIC_CHECK((qualified_c17.bytes != NULL) && (qualified_c17.length != 0U));
-        /* The imported select() reads values[index] after `index >= size` returned, so the
-           index is proven and emitted without its bounds check (index_proofs.inc). */
-        R_SEMANTIC_CHECK((selected_c17.bytes != NULL) &&
-                         (strstr(selected_c17.bytes, ".r_data[(size_t)") != NULL) &&
-                         (strstr(selected_c17.bytes, "R_RUNTIME_PANIC_BOUNDS") == NULL));
-        R_SEMANTIC_CHECK((qualified_c17.bytes != NULL) &&
-                         (strstr(qualified_c17.bytes, ".r_data[(size_t)") != NULL) &&
-                         (strstr(qualified_c17.bytes, "R_RUNTIME_PANIC_BOUNDS") == NULL));
+        R_SEMANTIC_CHECK(
+            r_frontend_emit_llvm(
+                selected, NULL, R_FRONTEND_LLVM_IR, r_semantic_test_write, &selected_program) ==
+            R_FRONTEND_OK);
+        R_SEMANTIC_CHECK(
+            r_frontend_emit_llvm(
+                qualified, NULL, R_FRONTEND_LLVM_IR, r_semantic_test_write, &qualified_program) ==
+            R_FRONTEND_OK);
+        R_SEMANTIC_CHECK((selected_program.bytes != NULL) && (selected_program.length != 0U));
+        R_SEMANTIC_CHECK((qualified_program.bytes != NULL) && (qualified_program.length != 0U));
+        /* Both spellings of the imports bind the calls to the provider's functions. */
+        R_SEMANTIC_CHECK(
+            (selected_program.bytes != NULL) &&
+            (strstr(selected_program.bytes, "call i32 @\"semantic.import_api::add\"(") != NULL) &&
+            (strstr(selected_program.bytes, "call i32 @\"semantic.import_api::select\"(") != NULL));
+        R_SEMANTIC_CHECK(
+            (qualified_program.bytes != NULL) &&
+            (strstr(qualified_program.bytes, "call i32 @\"semantic.import_api::add\"(") != NULL) &&
+            (strstr(qualified_program.bytes, "call i32 @\"semantic.import_api::select\"(") !=
+             NULL));
     }
-    free(selected_c17.bytes);
-    free(qualified_c17.bytes);
+    free(selected_program.bytes);
+    free(qualified_program.bytes);
     r_frontend_destroy(selected);
     r_frontend_destroy(qualified);
 }
@@ -8607,7 +8614,7 @@ static void r_semantic_test_move_values(void) {
     RFrontendContext *negative = NULL;
     RFrontendContext *forward = NULL;
     RFrontendContext *reverse = NULL;
-    RSemanticTestBuffer c17 = {0};
+    RSemanticTestBuffer program = {0};
     RSemanticTestBuffer forward_mir = {0};
     RSemanticTestBuffer reverse_mir = {0};
     RSourceId source_id = R_SOURCE_ID_INVALID;
@@ -8664,9 +8671,12 @@ static void r_semantic_test_move_values(void) {
     R_SEMANTIC_CHECK(mir_moves == hir_moves);
     R_SEMANTIC_CHECK(mir_drops == hir_drops);
     R_SEMANTIC_CHECK(mir_standard_calls == hir_standard_calls);
-    R_SEMANTIC_CHECK(r_frontend_emit_c17(positive, r_semantic_test_write, &c17) ==
-                     R_FRONTEND_NOT_LOWERABLE);
-    R_SEMANTIC_CHECK(c17.length == 0U);
+    /* R-FUNC-0008: the module has no entry point, so it is not a program to emit. */
+    R_SEMANTIC_CHECK(r_frontend_entry_point_count(positive) == 0U);
+    R_SEMANTIC_CHECK(
+        r_frontend_emit_llvm(positive, NULL, R_FRONTEND_LLVM_IR, r_semantic_test_write, &program) ==
+        R_FRONTEND_INVALID_ARGUMENT);
+    R_SEMANTIC_CHECK(program.length == 0U);
 
     negative = r_frontend_create(NULL);
     R_SEMANTIC_CHECK(negative != NULL);
@@ -8716,7 +8726,7 @@ static void r_semantic_test_move_values(void) {
 cleanup:
     free(positive_source);
     free(negative_source);
-    free(c17.bytes);
+    free(program.bytes);
     free(forward_mir.bytes);
     free(reverse_mir.bytes);
     r_frontend_destroy(positive);

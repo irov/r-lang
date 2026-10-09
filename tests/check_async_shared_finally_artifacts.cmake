@@ -89,75 +89,39 @@ r_require_match_count(mir_output
     "pending_resume reason=checked_error type=\\(struct \"test.codegen.async_shared_finally\"::\"move_error\"\\) payload=%v4 resume=bb3 stop_depth=0 first_finally=1" 1
     "outer Move error resume after nested completion")
 
-set(c17_arguments
-    --emit=c17
+set(ir_arguments
+    --emit=llvm-ir
     --entry test.codegen.async_shared_finally::main
     --profile hosted-native-async
     --target-manifest "${TARGET_MANIFEST}"
     "${SOURCE_FILE}"
 )
 execute_process(
-    COMMAND "${R_FRONT_EXECUTABLE}" ${c17_arguments}
-    RESULT_VARIABLE c17_result
-    OUTPUT_VARIABLE c17_output
-    ERROR_VARIABLE c17_error
+    COMMAND "${R_FRONT_EXECUTABLE}" ${ir_arguments}
+    RESULT_VARIABLE ir_result
+    OUTPUT_VARIABLE ir_output
+    ERROR_VARIABLE ir_error
 )
-if(NOT c17_result EQUAL 0)
-    message(FATAL_ERROR "async shared-finally C17 emit failed (${c17_result}): ${c17_error}")
+if(NOT ir_result EQUAL 0)
+    message(FATAL_ERROR "async shared-finally LLVM IR emit failed (${ir_result}): ${ir_error}")
 endif()
 execute_process(
-    COMMAND "${R_FRONT_EXECUTABLE}" ${c17_arguments}
-    RESULT_VARIABLE repeated_c17_result
-    OUTPUT_VARIABLE repeated_c17_output
-    ERROR_VARIABLE repeated_c17_error
+    COMMAND "${R_FRONT_EXECUTABLE}" ${ir_arguments}
+    RESULT_VARIABLE repeated_ir_result
+    OUTPUT_VARIABLE repeated_ir_output
+    ERROR_VARIABLE repeated_ir_error
 )
-if(NOT repeated_c17_result EQUAL 0)
+if(NOT repeated_ir_result EQUAL 0)
     message(FATAL_ERROR
-        "repeated async shared-finally C17 emit failed "
-        "(${repeated_c17_result}): ${repeated_c17_error}")
+        "repeated async shared-finally LLVM IR emit failed "
+        "(${repeated_ir_result}): ${repeated_ir_error}")
 endif()
-if(NOT c17_output STREQUAL repeated_c17_output)
-    message(FATAL_ERROR "async shared-finally C17 output is not deterministic")
+if(NOT ir_output STREQUAL repeated_ir_output)
+    message(FATAL_ERROR "async shared-finally LLVM IR output is not deterministic")
 endif()
 
-r_require_match_count(c17_output "uint32_t r_finally_depth" 2
-    "generated active-finally depths")
-r_require_match_count(c17_output "uint32_t r_finally_stack\\[UINT32_C\\(2\\)\\]" 1
-    "generated two-level active-finally stack")
-r_require_match_count(c17_output "uint32_t r_finally_stack\\[UINT32_C\\(3\\)\\]" 1
-    "generated three-level active-finally stack")
-r_require_match_count(c17_output "uint32_t r_pending_depth" 2
-    "generated pending-completion depths")
-r_require_match_count(c17_output "r_pending\\[UINT32_C\\(2\\)\\]" 1
-    "generated two-level nested pending-completion records")
-r_require_match_count(c17_output "r_pending\\[UINT32_C\\(3\\)\\]" 1
-    "generated three-level nested pending-completion records")
-r_require_match_count(c17_output "uint32_t r_reason" 2
-    "generated pending reasons")
-r_require_match_count(c17_output "uint32_t r_resume_state" 2
-    "generated pending resume states")
-r_require_match_count(c17_output "uint32_t r_stop_depth" 2
-    "generated pending finally stop depths")
-r_require_match_count(c17_output "uint32_t r_payload_tag" 2
-    "generated pending payload tags")
-r_require_match_count(c17_output
-    "frame->r_finally_stack\\[frame->r_finally_depth\\] = UINT32_C\\([123]\\)" 5
-    "generated lexical finally pushes")
-# L39 (Core R-ERR-0005): each function also runs its two nested finalies for a panic, which adds
-# two pending pushes and two pops per function.
-r_require_match_count(c17_output "frame->r_pending_depth \\+= UINT32_C\\(1\\)" 10
-    "generated pending-completion pushes")
-r_require_match_count(c17_output "frame->r_pending_depth -= UINT32_C\\(1\\)" 12
-    "generated pending-completion pops including frame-drop fallback")
-r_require_match_count(c17_output "r_runtime_task_execution_cancel_requested\\(execution\\)" 2
+# The program has two awaits; cancellation is observed there and never inside a finally body.
+r_require_match_count(ir_output "call [^\n]*@r_runtime_task_execution_cancel_requested[(]" 2
     "cancellation polls must remain at awaits, outside all finally bodies")
-r_require_match_count(c17_output "setjmp|longjmp" 0
-    "generated async finally must use branch-based strict C17 lowering")
-r_require_order(c17_output
-    ".r_payload_tag = UINT32_C("
-    ".r_reason = UINT32_C("
-    "generated pending payload tag must be committed before its reason")
-r_require_order(c17_output
-    ".r_reason = UINT32_C("
-    "frame->r_pending_depth += UINT32_C(1);"
-    "generated pending reason must be committed before cleanup can observe the record")
+r_require_match_count(ir_output "@_?(setjmp|longjmp|sigsetjmp|siglongjmp)[(]" 0
+    "async finally lowering does not use non-local control transfer")

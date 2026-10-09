@@ -14,9 +14,16 @@ function(r_require_match_count variable pattern expected description)
     endif()
 endfunction()
 
+function(r_require_present variable pattern description)
+    string(REGEX MATCH "${pattern}" match "${${variable}}")
+    if(match STREQUAL "")
+        message(FATAL_ERROR "${description}: '${pattern}' is absent:\n${${variable}}")
+    endif()
+endfunction()
+
 function(r_capture_artifact emit_kind output_variable)
     set(arguments --emit=${emit_kind})
-    if(emit_kind STREQUAL "c17" OR emit_kind STREQUAL "link-plan")
+    if(emit_kind STREQUAL "llvm-ir" OR emit_kind STREQUAL "link-plan")
         list(APPEND arguments
             --entry test.codegen.async_io_write_result::main
             --profile hosted-native-async
@@ -38,13 +45,6 @@ endfunction()
 function(r_require_deterministic first second description)
     if(NOT "${${first}}" STREQUAL "${${second}}")
         message(FATAL_ERROR "${description} is not deterministic")
-    endif()
-endfunction()
-
-function(r_require_text variable expected description)
-    string(FIND "${${variable}}" "${expected}" offset)
-    if(offset EQUAL -1)
-        message(FATAL_ERROR "${description}: exact text not found:\n${${variable}}")
     endif()
 endfunction()
 
@@ -80,55 +80,14 @@ r_require_match_count(mir_output
     "variant_payload value=%v[0-9]+ tag=1 type=[(]standard_payload \"std[.]io::write_result::failed\"[)]" 1
     "MIR failed payload variants")
 
-r_capture_artifact(c17 c17_output)
-r_capture_artifact(c17 c17_repeated)
-r_require_deterministic(c17_output c17_repeated "C17 std.io::write_result artifact")
-r_require_match_count(c17_output "#include \"r_std_io[.]h\"" 1
-    "generated std.io includes")
-r_require_match_count(c17_output "r_std_io_write[(]" 1
-    "generated write calls")
-r_require_match_count(c17_output "R_STD_IO_WRITE_RESULT_WRITTEN" 0
-    "generated C omits assertion-only written-tag references")
-r_require_match_count(c17_output "R_STD_IO_WRITE_RESULT_FAILED" 0
-    "generated C omits assertion-only failed-tag references")
-r_require_match_count(c17_output
-    "frame->r_v00000027 = [(]uint32_t[)]frame->r_v00000026[.]kind" 1
-    "generated direct write-result discrimination")
-r_require_match_count(c17_output "R_INTERNAL_ASSERT[(]" 0
-    "generated C omits assertions")
-r_require_match_count(c17_output "r_std_io_write_result_move_initialize[(]" 1
-    "generated write-result moves")
-
-string(REPLACE ";" "<SEMICOLON>" c17_without_semicolons "${c17_output}")
-r_require_match_count(c17_without_semicolons
-    "struct r_a[0-9]+ [{]\n    RRuntimeArray r_m00000001<SEMICOLON>\n    size_t r_m00000002<SEMICOLON>\n[}]<SEMICOLON>" 1
-    "generated written payload layouts")
-r_require_match_count(c17_without_semicolons
-    "struct r_a[0-9]+ [{]\n    RStdIoError r_m00000001<SEMICOLON>\n    size_t r_m00000002<SEMICOLON>\n    RRuntimeArray r_m00000003<SEMICOLON>\n[}]<SEMICOLON>" 1
-    "generated failed payload layouts")
-r_require_match_count(c17_output "= [(]RStdIoWriteResult[)][{]0[}]" 2
-    "generated native-owner clears")
-r_require_match_count(c17_output
-    "frame->r_v[0-9]+[.]r_m00000002 = frame->r_v[0-9]+[.]count" 2
-    "generated written-count transfers")
-r_require_match_count(c17_output
-    "frame->r_v[0-9]+[.]r_m00000001 = frame->r_v[0-9]+[.]error" 1
-    "generated failed-error transfers")
-r_require_match_count(c17_output
-    "r_type_move_array_gate[(]&frame->r_v[0-9]+[.]r_m00000001, &frame->r_v[0-9]+[.]buffer[)]" 1
-    "generated written-buffer transfers")
-r_require_match_count(c17_output
-    "r_type_move_array_gate[(]&frame->r_v[0-9]+[.]r_m00000003, &frame->r_v[0-9]+[.]buffer[)]" 1
-    "generated failed-buffer transfers")
-r_require_text(c17_output [=[frame->r_v00000030.r_m00000002 = frame->r_v00000026.count;
-            r_type_move_array_gate(&frame->r_v00000030.r_m00000001, &frame->r_v00000026.buffer);
-            frame->r_v00000026 = (RStdIoWriteResult){0};]=]
-    "generated ordered written-payload transfer")
-r_require_text(c17_output [=[frame->r_v00000044.r_m00000001 = frame->r_v00000026.error;
-            frame->r_v00000044.r_m00000002 = frame->r_v00000026.count;
-            r_type_move_array_gate(&frame->r_v00000044.r_m00000003, &frame->r_v00000026.buffer);
-            frame->r_v00000026 = (RStdIoWriteResult){0};]=]
-    "generated ordered failed-payload transfer")
+r_capture_artifact(llvm-ir ir_output)
+r_capture_artifact(llvm-ir ir_repeated)
+r_require_deterministic(ir_output ir_repeated "LLVM IR std.io::write_result artifact")
+r_require_match_count(ir_output "call [^\n]*@r_std_io_write[(]" 1
+    "write calls")
+# The write result moves through the library's own entry.
+r_require_present(ir_output "call [^\n]*@(r_shim_)?r_std_io_write_result_move_initialize[(]"
+    "write-result move glue")
 
 r_capture_artifact(link-plan plan_output)
 r_capture_artifact(link-plan plan_repeated)

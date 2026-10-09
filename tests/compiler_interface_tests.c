@@ -206,8 +206,8 @@ static void r_compiler_test_mir_and_determinism(void) {
     RCompilerTestBuffer reverse_interface = {0};
     RCompilerTestBuffer link_plan = {0};
     RCompilerTestBuffer reverse_link_plan = {0};
-    RCompilerTestBuffer c17 = {0};
-    RCompilerTestBuffer reverse_c17 = {0};
+    RCompilerTestBuffer program = {0};
+    RCompilerTestBuffer reverse_program = {0};
     RFrontendArtifactOptions options;
 
     R_COMPILER_CHECK(forward != NULL);
@@ -232,14 +232,16 @@ static void r_compiler_test_mir_and_determinism(void) {
     R_COMPILER_CHECK(strstr(forward_mir.bytes, "(store place=%local") != NULL);
     R_COMPILER_CHECK(strstr(forward_mir.bytes, "symbol=") == NULL);
 
-    R_COMPILER_CHECK(r_frontend_emit_c17(forward, r_compiler_test_write, &c17) == R_FRONTEND_OK);
-    R_COMPILER_CHECK(r_frontend_emit_c17(reverse, r_compiler_test_write, &reverse_c17) ==
-                     R_FRONTEND_OK);
-    R_COMPILER_CHECK(c17.length == reverse_c17.length);
-    R_COMPILER_CHECK((c17.length == reverse_c17.length) &&
-                     (memcmp(c17.bytes, reverse_c17.bytes, c17.length) == 0));
-    R_COMPILER_CHECK(strstr(c17.bytes, "static _Thread_local int32_t") != NULL);
-    R_COMPILER_CHECK(strstr(c17.bytes, "static int32_t") != NULL);
+    R_COMPILER_CHECK(
+        r_frontend_emit_llvm(forward, NULL, R_FRONTEND_LLVM_IR, r_compiler_test_write, &program) ==
+        R_FRONTEND_OK);
+    R_COMPILER_CHECK(
+        r_frontend_emit_llvm(
+            reverse, NULL, R_FRONTEND_LLVM_IR, r_compiler_test_write, &reverse_program) ==
+        R_FRONTEND_OK);
+    R_COMPILER_CHECK(program.length == reverse_program.length);
+    R_COMPILER_CHECK((program.length == reverse_program.length) &&
+                     (memcmp(program.bytes, reverse_program.bytes, program.length) == 0));
 
     (void)memset(&options, 0, sizeof(options));
     options.profile = "hosted";
@@ -310,8 +312,8 @@ static void r_compiler_test_mir_and_determinism(void) {
     r_compiler_test_buffer_destroy(&reverse_interface);
     r_compiler_test_buffer_destroy(&link_plan);
     r_compiler_test_buffer_destroy(&reverse_link_plan);
-    r_compiler_test_buffer_destroy(&c17);
-    r_compiler_test_buffer_destroy(&reverse_c17);
+    r_compiler_test_buffer_destroy(&program);
+    r_compiler_test_buffer_destroy(&reverse_program);
     r_frontend_destroy(forward);
     r_frontend_destroy(reverse);
 }
@@ -561,9 +563,10 @@ static void r_compiler_test_generic_interface_permutation(void) {
         R_COMPILER_CHECK(r_frontend_dump_interface(
                              context, &options, r_compiler_test_write, &interfaces[order]) ==
                          R_FRONTEND_OK);
-        R_COMPILER_CHECK(r_frontend_emit_c17_with_options(
-                             context, &options, r_compiler_test_write, &programs[order]) ==
-                         R_FRONTEND_OK);
+        R_COMPILER_CHECK(
+            r_frontend_emit_llvm(
+                context, &options, R_FRONTEND_LLVM_IR, r_compiler_test_write, &programs[order]) ==
+            R_FRONTEND_OK);
         r_frontend_destroy(context);
     }
     if (interfaces[0].bytes != NULL && interfaces[1].bytes != NULL) {
@@ -624,9 +627,10 @@ static void r_compiler_test_json_interface_permutation(void) {
         R_COMPILER_CHECK(r_frontend_dump_interface(
                              context, &options, r_compiler_test_write, &interfaces[order]) ==
                          R_FRONTEND_OK);
-        R_COMPILER_CHECK(r_frontend_emit_c17_with_options(
-                             context, &options, r_compiler_test_write, &programs[order]) ==
-                         R_FRONTEND_OK);
+        R_COMPILER_CHECK(
+            r_frontend_emit_llvm(
+                context, &options, R_FRONTEND_LLVM_IR, r_compiler_test_write, &programs[order]) ==
+            R_FRONTEND_OK);
         RCompilerTestBuffer link = {0};
         R_COMPILER_CHECK(r_frontend_dump_link_plan(
                              context, &options, r_compiler_test_write, &link) == R_FRONTEND_OK);

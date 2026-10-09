@@ -56,7 +56,7 @@ f64 total_area(const T* first, const T* second) { ... }
 ```
 
 Dispatch is static. Instantiating `total_area` with `Circle` binds `area` to the definition of
-the implementation, so the generated C17 contains direct calls only.
+the implementation, so the generated code contains direct calls only.
 
 `Paintable : Area` requires an `Area` implementation and supplies `paint_cost` as a default
 method. Both shapes reuse its checked body; an implementation may supply an exact-signature
@@ -81,7 +81,7 @@ lets the loop consume `f64` values while the range implementation remains privat
 From the repository root, inspect the generated program with:
 
 ```sh
-build-debug/r-front --module-map examples/methods/modules.map \
-    --entry example.methods.main --emit=c17
-ctest --test-dir build-debug -R r_frontend_codegen_method_example --output-on-failure
+build/debug/r-front --module-map examples/methods/modules.map \
+    --entry example.methods.main --emit=llvm-ir
+ctest --test-dir build/debug -R r_frontend_codegen_method_example --output-on-failure
 ```

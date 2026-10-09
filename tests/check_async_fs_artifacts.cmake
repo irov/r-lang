@@ -16,34 +16,28 @@ function(r_require_match_count variable pattern expected description)
 endfunction()
 
 if(CASE STREQUAL "read_file")
-    set(start_count 1)
     set(deadline_count 1)
     set(entry "test.codegen.async_fs_read_file::main")
     set(operation "read_file")
     set(hir_value "[(]array u8[)]")
     set(mir_call
         "standard_call operation=std[.]fs::read_file path=%local[0-9]+ limit=%v[0-9]+ deadline=%v[0-9]+")
-    set(native_call "r_std_fs_read_file[(]")
-    set(native_completion "RStdFsArrayResult canonical result ABI")
+    set(native_call "@r_std_fs_read_file[(]")
 elseif(CASE STREQUAL "open_directory")
-    set(start_count 1)
     set(deadline_count 1)
     set(entry "test.codegen.async_fs_open_directory::main")
     set(operation "open_directory")
     set(hir_value "[(]standard \"std[.]fs::directory\"[)]")
     set(mir_call
         "standard_call operation=std[.]fs::open_directory path=%local[0-9]+ deadline=%v[0-9]+")
-    set(native_call "r_std_fs_open_directory[(]")
-    set(native_completion "RStdFsDirectoryResult canonical result ABI")
+    set(native_call "@r_std_fs_open_directory[(]")
 elseif(CASE STREQUAL "file_metadata")
-    set(start_count 2)
     set(deadline_count 2)
     set(entry "test.codegen.async_fs_file_metadata::main")
     set(operation "file_metadata")
     set(hir_value "[(]standard \"std[.]fs::metadata\"[)]")
     set(mir_call "standard_call operation=std[.]fs::file_metadata [^\n]+")
-    set(native_call "r_std_fs_file_metadata[(]")
-    set(native_completion "RStdFsMetadataResult canonical result ABI")
+    set(native_call "@r_std_fs_file_metadata[(]")
 else()
     message(FATAL_ERROR "unknown async filesystem artifact CASE: ${CASE}")
 endif()
@@ -80,40 +74,26 @@ r_require_match_count(mir_output
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
+        --emit=llvm-ir
         --entry "${entry}"
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"
         "${SOURCE_FILE}"
-    RESULT_VARIABLE c17_status
-    OUTPUT_VARIABLE c17_output
-    ERROR_VARIABLE c17_error
+    RESULT_VARIABLE ir_status
+    OUTPUT_VARIABLE ir_output
+    ERROR_VARIABLE ir_error
 )
-if(NOT c17_status EQUAL 0)
-    message(FATAL_ERROR "C17 emit failed (${c17_status}): ${c17_error}")
+if(NOT ir_status EQUAL 0)
+    message(FATAL_ERROR "LLVM IR emit failed (${ir_status}): ${ir_error}")
 endif()
-r_require_match_count(c17_output "#include \"r_std_fs[.]h\"" 1
-    "generated std.fs include")
-r_require_match_count(c17_output "r_std_fs_path_from_utf8[(]" 1
-    "generated path_from_utf8 calls")
-r_require_match_count(c17_output "RStdFsPathResult r_fs_path_result_[0-9]+" 1
-    "generated native path-result adapters")
-r_require_match_count(c17_output
-    "r_fs_path_result_[0-9]+[.]value = [(]RStdFsPath[)][{]0[}]" 1
-    "generated path ownership transfers")
-r_require_match_count(c17_output "${native_call}" 1
-    "generated ${operation} calls")
-r_require_match_count(c17_output "RStdFsDeadline r_fs_deadline_[0-9]+" ${deadline_count}
-    "generated filesystem deadline adapters")
-r_require_match_count(c17_output
-    "R_INTERNAL_ASSERT[(]" 0
-    "generated filesystem C omits assertions")
-r_require_match_count(c17_output "[.]r_tag > UINT32_C[(]1[)]" 0
-    "generated filesystem deadline runtime guards")
-r_require_match_count(c17_output "RStdFsTaskStartResult r_fs_start_[0-9]+" ${start_count}
-    "generated filesystem start-result adapters")
-r_require_match_count(c17_output "${native_completion}" 1
-    "generated ${operation} completion ABI mapping")
+r_require_match_count(ir_output "call [^\n]*@r_std_fs_path_from_utf8[(]" 1
+    "path_from_utf8 calls")
+r_require_match_count(ir_output "call [^\n]*${native_call}" 1
+    "${operation} calls")
+# R-STMT-0019 (L23): every filesystem start narrows its deadline argument by the structural
+# deadline of the starting task.
+r_require_match_count(ir_output "call [^\n]*@r_runtime_task_deadline_narrow[(]" ${deadline_count}
+    "filesystem deadline narrowing")
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"

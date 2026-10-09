@@ -66,58 +66,57 @@ r_require_match_count(async_mir_output
     "callback_storage=[(]carrier [(]struct \"test[.]codegen[.]async_sync_checked_retry\"::\"move_value\"[)]"
     3 "async MIR hidden Move-value callback carriers")
 
+# Each once operation is one call of its std.sync entry, and every initializer the program
+# reaches gets one callback the library runs.
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
+        --emit=llvm-ir
         --entry test.codegen.sync_checked_retry::main
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"
         "${SYNC_SOURCE_FILE}"
-    RESULT_VARIABLE sync_c17_result
-    OUTPUT_VARIABLE sync_c17_output
-    ERROR_VARIABLE sync_c17_error
+    RESULT_VARIABLE sync_ir_result
+    OUTPUT_VARIABLE sync_ir_output
+    ERROR_VARIABLE sync_ir_error
 )
-if(NOT sync_c17_result EQUAL 0)
-    message(FATAL_ERROR "sync checked-retry C17 emit failed (${sync_c17_result}): ${sync_c17_error}")
+if(NOT sync_ir_result EQUAL 0)
+    message(FATAL_ERROR
+        "sync checked-retry LLVM IR emit failed (${sync_ir_result}): ${sync_ir_error}")
 endif()
-r_require_match_count(sync_c17_output "#include \"r_std_sync[.]h\"" 1
-    "generated std.sync include")
-r_require_match_count(sync_c17_output "r_std_sync_call_once[(]" 6
+r_require_match_count(sync_ir_output "call [^\n]*@r_std_sync_call_once[(]" 6
     "runtime call_once submissions")
-r_require_match_count(sync_c17_output "r_std_sync_call_once_force[(]" 3
+r_require_match_count(sync_ir_output "call [^\n]*@r_std_sync_call_once_force[(]" 3
     "runtime call_once_force submissions")
-r_require_match_count(sync_c17_output "r_std_sync_get_or_init[(]" 7
+r_require_match_count(sync_ir_output "call [^\n]*@r_std_sync_get_or_init[(]" 7
     "runtime get_or_init submissions")
-r_require_match_count(sync_c17_output "static _Bool r_sync_initializer_[0-9]+[(]" 10
-    "one generated callback thunk per reachable initializer")
+r_require_match_count(sync_ir_output "define internal i1 @r_sync_initializer[.][0-9]+[(]" 10
+    "one callback per reachable initializer")
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
+        --emit=llvm-ir
         --entry test.codegen.async_sync_checked_retry::main
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"
         "${ASYNC_SOURCE_FILE}"
-    RESULT_VARIABLE async_c17_result
-    OUTPUT_VARIABLE async_c17_output
-    ERROR_VARIABLE async_c17_error
+    RESULT_VARIABLE async_ir_result
+    OUTPUT_VARIABLE async_ir_output
+    ERROR_VARIABLE async_ir_error
 )
-if(NOT async_c17_result EQUAL 0)
+if(NOT async_ir_result EQUAL 0)
     message(FATAL_ERROR
-        "async checked-retry C17 emit failed (${async_c17_result}): ${async_c17_error}")
+        "async checked-retry LLVM IR emit failed (${async_ir_result}): ${async_ir_error}")
 endif()
-r_require_match_count(async_c17_output "#include \"r_std_sync[.]h\"" 1
-    "generated async std.sync include")
-r_require_match_count(async_c17_output "r_std_sync_call_once[(]" 2
+r_require_match_count(async_ir_output "call [^\n]*@r_std_sync_call_once[(]" 2
     "async runtime call_once submissions")
-r_require_match_count(async_c17_output "r_std_sync_get_or_init[(]" 3
+r_require_match_count(async_ir_output "call [^\n]*@r_std_sync_get_or_init[(]" 3
     "async runtime get_or_init submissions")
-r_require_match_count(async_c17_output "static _Bool r_sync_initializer_[0-9]+[(]" 4
-    "async callback thunks")
+r_require_match_count(async_ir_output "define internal i1 @r_sync_initializer[.][0-9]+[(]" 4
+    "async initializer callbacks")
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
+        --emit=llvm-ir
         --entry test.codegen.async_sync_checked_retry::main
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"
@@ -128,8 +127,8 @@ execute_process(
 )
 if(NOT repeated_result EQUAL 0)
     message(FATAL_ERROR
-        "repeated async checked-retry C17 emit failed (${repeated_result}): ${repeated_error}")
+        "repeated async checked-retry LLVM IR emit failed (${repeated_result}): ${repeated_error}")
 endif()
-if(NOT async_c17_output STREQUAL repeated_output)
-    message(FATAL_ERROR "async checked-retry C17 output is not deterministic")
+if(NOT async_ir_output STREQUAL repeated_output)
+    message(FATAL_ERROR "async checked-retry LLVM IR output is not deterministic")
 endif()

@@ -138,7 +138,7 @@ endif()
 # R-BORROW-0024: a rejection by the MIR await-liveness check is not an implementation slice.
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
+        --emit=llvm-ir
         --profile hosted-native-async
         "${fixture_directory}/compiler_await_borrow_argument.r"
     RESULT_VARIABLE await_borrow_result
@@ -151,4 +151,22 @@ if(NOT await_borrow_result EQUAL 1 OR
     message(FATAL_ERROR
             "await-liveness rejection was reported as a slice "
             "(${await_borrow_result}): ${await_borrow_stderr}")
+endif()
+
+# Programs are emitted as LLVM IR or objects only; the former C program artifact is no longer
+# an emit kind, so asking for it is a usage error rather than a silently different artifact.
+execute_process(
+    COMMAND "${R_FRONT_EXECUTABLE}"
+        --emit=c17
+        "${SOURCE_FILE}"
+    RESULT_VARIABLE removed_emit_result
+    OUTPUT_VARIABLE removed_emit_stdout
+    ERROR_VARIABLE removed_emit_stderr
+)
+if(NOT removed_emit_result EQUAL 2 OR
+   NOT removed_emit_stderr MATCHES "r-front: unknown option: --emit=c17" OR
+   NOT removed_emit_stdout STREQUAL "")
+    message(FATAL_ERROR
+            "--emit=c17 was not rejected as an unknown option "
+            "(${removed_emit_result}): ${removed_emit_stderr}")
 endif()

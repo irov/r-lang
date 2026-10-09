@@ -2,7 +2,7 @@
 
 #define main r_generated_main
 int main(int argc, char *argv[]);
-#include R_TEST_GENERATED_C
+#include R_TEST_PROGRAM_PRELUDE
 #undef main
 
 void r_library_internal_fs_directory_move(RStdFsDirectory *destination, RStdFsDirectory *source) {

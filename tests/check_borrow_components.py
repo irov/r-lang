@@ -6,6 +6,12 @@ import subprocess
 import tempfile
 
 
+def emit_options(mode):
+    """Options of one output; LLVM IR lowers every function, not only those main reaches, so
+    that code generation also accepts the functions main never calls."""
+    return ['--emit=' + mode, '--all-functions'] if mode == 'llvm-ir' else ['--emit=' + mode]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--front', required=True)
@@ -46,7 +52,7 @@ i32 main() {
 ''')
 
         def emit(mode, paths):
-            result = subprocess.run([args.front, '--emit=' + mode, *map(str, paths)],
+            result = subprocess.run([args.front, *emit_options(mode), *map(str, paths)],
                                     capture_output=True, text=True, timeout=30)
             assert result.returncode == 0, (result.returncode, result.stderr)
             return result.stdout
@@ -54,7 +60,7 @@ i32 main() {
         interface = emit('interface', [api, app])
         assert '(interface version=34 ' in interface
         assert interface == emit('interface', [app, api])
-        assert emit('c17', [api, app]) == emit('c17', [app, api])
+        assert emit('llvm-ir', [api, app]) == emit('llvm-ir', [app, api])
         views = next(line for line in interface.splitlines()
                      if '(function name="components.api::views"' in line)
         assert 'output=((field "first")) input=0 path=()' in views
@@ -71,7 +77,7 @@ i32 main() {
         assert len(closed) == 1 and 'output=((field "second")) input=1 path=()' in closed[0]
 
         api.write_text(api.read_text().replace('.second=second', '.second=first'))
-        invalid = subprocess.run([args.front, '--emit=c17', str(app), str(api)],
+        invalid = subprocess.run([args.front, *emit_options('llvm-ir'), str(app), str(api)],
                                  capture_output=True, text=True, timeout=30)
         assert invalid.returncode != 0 and 'R-DIAG-BORROW-001' in invalid.stderr
     print('borrow components: imported paths, errors, generic instances and stable metadata passed')

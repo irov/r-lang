@@ -6,21 +6,21 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-static RRuntimeTaskPrepareResult r_test_prepare(RRuntimeTypeInfo payload_type,
-                                                RRuntimeTypeInfo result_type,
-                                                RRuntimeTaskStepFn step);
-static RStdThreadSpawnResult r_test_spawn(RRuntimeAllocator *allocator,
-                                          RRuntimeTypeInfo payload_type,
-                                          RStdThreadCompletionTypeInfo completion_type,
-                                          RStdThreadEntryFn entry,
-                                          void *staged_payload);
-static void r_test_release(RRuntimeOwn *owner);
+RRuntimeTaskPrepareResult r_test_prepare(RRuntimeTypeInfo payload_type,
+                                         RRuntimeTypeInfo result_type,
+                                         RRuntimeTaskStepFn step);
+RStdThreadSpawnResult r_test_spawn(RRuntimeAllocator *allocator,
+                                   RRuntimeTypeInfo payload_type,
+                                   RStdThreadCompletionTypeInfo completion_type,
+                                   RStdThreadEntryFn entry,
+                                   void *staged_payload);
+void r_test_release(RRuntimeOwn *owner);
 #define r_runtime_task_resumable_start_prepare r_test_prepare
 #define r_library_internal_thread_spawn_checked r_test_spawn
 #define r_runtime_own_release r_test_release
 #define main r_generated_main
 int main(int argc, char *argv[]);
-#include R_TEST_GENERATED_C
+#include R_TEST_PROGRAM_PRELUDE
 #undef main
 #undef r_runtime_own_release
 #undef r_library_internal_thread_spawn_checked
@@ -33,9 +33,9 @@ static bool task_rejected;
 static bool thread_rejected;
 static bool valid = true;
 
-static RRuntimeTaskPrepareResult r_test_prepare(RRuntimeTypeInfo payload_type,
-                                                RRuntimeTypeInfo result_type,
-                                                RRuntimeTaskStepFn step) {
+RRuntimeTaskPrepareResult r_test_prepare(RRuntimeTypeInfo payload_type,
+                                         RRuntimeTypeInfo result_type,
+                                         RRuntimeTaskStepFn step) {
     RRuntimeAllocator *allocator = r_runtime_hosted_allocator();
     const bool reject = ++task_starts == 2U;
     if (reject)
@@ -50,11 +50,11 @@ static RRuntimeTaskPrepareResult r_test_prepare(RRuntimeTypeInfo payload_type,
     return result;
 }
 
-static RStdThreadSpawnResult r_test_spawn(RRuntimeAllocator *allocator,
-                                          RRuntimeTypeInfo payload_type,
-                                          RStdThreadCompletionTypeInfo completion_type,
-                                          RStdThreadEntryFn entry,
-                                          void *staged_payload) {
+RStdThreadSpawnResult r_test_spawn(RRuntimeAllocator *allocator,
+                                   RRuntimeTypeInfo payload_type,
+                                   RStdThreadCompletionTypeInfo completion_type,
+                                   RStdThreadEntryFn entry,
+                                   void *staged_payload) {
     const bool reject = ++thread_starts == 1U;
     if (reject)
         r_runtime_allocator_set_failure(allocator, UINT64_C(1));
@@ -68,7 +68,7 @@ static RStdThreadSpawnResult r_test_spawn(RRuntimeAllocator *allocator,
     return result;
 }
 
-static void r_test_release(RRuntimeOwn *owner) {
+void r_test_release(RRuntimeOwn *owner) {
     if (owner->allocation == NULL || *(int32_t *)owner->allocation != INT32_C(9))
         valid = false;
     ++releases;

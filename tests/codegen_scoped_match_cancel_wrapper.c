@@ -1,4 +1,3 @@
+/* The matched cargo, moved into the child, is released as well as the owner. */
 #define R_TEST_EXPECTED_OWN_DROPS 2U
-#define R_TEST_ROOT_START r_async_start_00000004_gate
-#define R_TEST_ROOT_INITIALIZE r_async_frame_initialize_00000004_gate
 #include "codegen_scoped_cancel_wrapper.c"

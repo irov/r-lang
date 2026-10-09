@@ -103,65 +103,55 @@ r_require_match_count(mir_output
     "operation=std[.]bits::align_byte arguments=[(]%v[0-9]+[)] call_bounded_borrows=[(]reader[)]"
     2 "bits align MIR reader call-bounded borrows")
 
-set(r_c17_arguments
-    --emit=c17
+set(r_ir_arguments
+    --emit=llvm-ir
     --entry test.codegen.bytes_operations::main
     --profile hosted-native-async
     --target-manifest "${TARGET_MANIFEST}"
     "${SOURCE_FILE}"
 )
 execute_process(
-    COMMAND "${R_FRONT_EXECUTABLE}" ${r_c17_arguments}
-    RESULT_VARIABLE c17_result
-    OUTPUT_VARIABLE c17_output
-    ERROR_VARIABLE c17_error
+    COMMAND "${R_FRONT_EXECUTABLE}" ${r_ir_arguments}
+    RESULT_VARIABLE ir_result
+    OUTPUT_VARIABLE ir_output
+    ERROR_VARIABLE ir_error
 )
-if(NOT c17_result EQUAL 0)
-    message(FATAL_ERROR "bytes C17 emit failed (${c17_result}): ${c17_error}")
+if(NOT ir_result EQUAL 0)
+    message(FATAL_ERROR "bytes LLVM IR emit failed (${ir_result}): ${ir_error}")
 endif()
 execute_process(
-    COMMAND "${R_FRONT_EXECUTABLE}" ${r_c17_arguments}
-    RESULT_VARIABLE repeated_c17_result
-    OUTPUT_VARIABLE repeated_c17_output
-    ERROR_VARIABLE repeated_c17_error
+    COMMAND "${R_FRONT_EXECUTABLE}" ${r_ir_arguments}
+    RESULT_VARIABLE repeated_ir_result
+    OUTPUT_VARIABLE repeated_ir_output
+    ERROR_VARIABLE repeated_ir_error
 )
-if(NOT repeated_c17_result EQUAL 0)
+if(NOT repeated_ir_result EQUAL 0)
     message(FATAL_ERROR
-        "repeated bytes C17 emit failed (${repeated_c17_result}): ${repeated_c17_error}")
+        "repeated bytes LLVM IR emit failed (${repeated_ir_result}): ${repeated_ir_error}")
 endif()
-if(NOT c17_output STREQUAL repeated_c17_output)
-    message(FATAL_ERROR "bytes C17 emission is not deterministic")
+if(NOT ir_output STREQUAL repeated_ir_output)
+    message(FATAL_ERROR "bytes LLVM IR emission is not deterministic")
 endif()
-r_require_match_count(c17_output "#include \"r_std_bytes[.]h\"" 1
-    "generated std.bytes include")
-r_require_match_count(c17_output "#include \"r_std_hash[.]h\"" 1
-    "generated std.hash include")
-r_require_match_count(c17_output "#include \"r_std_utf8[.]h\"" 1
-    "generated std.utf8 include")
-r_require_match_count(c17_output "#include \"r_std_bits[.]h\"" 1
-    "generated std.bits include")
+# Every operation of the HIR above is one call of its library entry.
 foreach(operation IN LISTS r_bytes_operations)
-    r_require_match_count(c17_output "r_std_bytes_${operation}[(]" 2
-        "generated ${operation} calls")
+    r_require_match_count(ir_output "call [^\n]*@r_std_bytes_${operation}[(]" 2
+        "${operation} calls")
 endforeach()
 foreach(operation IN LISTS r_hash_operations)
-    r_require_match_count(c17_output "r_std_hash_${operation}[(]" 2
-        "generated ${operation} calls")
+    r_require_match_count(ir_output "call [^\n]*@r_std_hash_${operation}[(]" 2
+        "${operation} calls")
 endforeach()
-r_require_match_count(c17_output "r_std_utf8_is_valid[(]" 8
-    "generated UTF-8 validation calls")
-r_require_match_count(c17_output "r_std_utf8_validate[(]" 9
-    "generated UTF-8 view validation calls")
-r_require_match_count(c17_output "r_std_bits_read[(]" 4
-    "generated bits read calls")
-r_require_match_count(c17_output "r_std_bits_align_byte[(]" 2
-    "generated bits align calls")
-r_require_match_count(c17_output "r_runtime_array_initialize[(]" 3
+r_require_match_count(ir_output "call [^\n]*@r_std_utf8_is_valid[(]" 8
+    "UTF-8 validation calls")
+r_require_match_count(ir_output "call [^\n]*@r_std_utf8_validate[(]" 9
+    "UTF-8 view validation calls")
+r_require_match_count(ir_output "call [^\n]*@r_std_bits_read[(]" 4
+    "bits read calls")
+r_require_match_count(ir_output "call [^\n]*@r_std_bits_align_byte[(]" 2
+    "bits align calls")
+# The three empty byte arrays ({} of bytes and array<u8>) are initialized by the runtime.
+r_require_match_count(ir_output "call [^\n]*@r_runtime_array_initialize[(]" 3
     "empty bytes runtime initialization")
-r_require_match_count(c17_output "[.]size = sizeof[(]uint8_t[)]" 3
-    "empty bytes u8 type information")
-r_require_match_count(c17_output "R_INTERNAL_ASSERT[(]" 0
-    "generated C omits assertion infrastructure")
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"

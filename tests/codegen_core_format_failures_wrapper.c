@@ -14,7 +14,8 @@ static RRuntimeAllocator r_test_allocator;
 static void *r_test_owned[256];
 static size_t r_test_owned_count;
 
-static RRuntimeAllocator *r_test_hosted_allocator(void) {
+RRuntimeAllocator *r_test_hosted_allocator(void);
+RRuntimeAllocator *r_test_hosted_allocator(void) {
     return &r_test_allocator;
 }
 
@@ -42,8 +43,8 @@ static void r_test_release(void *data) {
     }
 }
 
-static RStdStringAllocValueResult r_test_from_str(RRuntimeAllocator *allocator,
-                                                  RStdStringView view) {
+RStdStringAllocValueResult r_test_from_str(RRuntimeAllocator *allocator, RStdStringView view);
+RStdStringAllocValueResult r_test_from_str(RRuntimeAllocator *allocator, RStdStringView view) {
     RStdStringAllocValueResult result = r_std_string_from_str(allocator, view);
     if (result.status == R_STD_STRING_CALL_SUCCESS) {
         r_test_record(result.value.bytes.data);
@@ -51,13 +52,15 @@ static RStdStringAllocValueResult r_test_from_str(RRuntimeAllocator *allocator,
     return result;
 }
 
-static RStdString r_test_finish(RStdFormatBuilder *builder) {
+RStdString r_test_finish(RStdFormatBuilder *builder);
+RStdString r_test_finish(RStdFormatBuilder *builder) {
     RStdString result = r_std_format_finish(builder);
     r_test_record(result.bytes.data);
     return result;
 }
 
-static void r_test_string_destroy(RStdString *source) {
+void r_test_string_destroy(RStdString *source);
+void r_test_string_destroy(RStdString *source) {
     r_test_release(source->bytes.data);
     r_std_string_destroy(source);
 }
@@ -68,7 +71,7 @@ static void r_test_string_destroy(RStdString *source) {
 #define r_std_string_destroy r_test_string_destroy
 #define main r_generated_main
 int main(int argc, char *argv[]);
-#include R_TEST_GENERATED_C
+#include R_TEST_PROGRAM_PRELUDE
 #undef main
 #undef r_std_string_destroy
 #undef r_std_format_finish

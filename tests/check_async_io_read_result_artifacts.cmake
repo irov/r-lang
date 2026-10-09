@@ -14,9 +14,16 @@ function(r_require_match_count variable pattern expected description)
     endif()
 endfunction()
 
+function(r_require_present variable pattern description)
+    string(REGEX MATCH "${pattern}" match "${${variable}}")
+    if(match STREQUAL "")
+        message(FATAL_ERROR "${description}: '${pattern}' is absent:\n${${variable}}")
+    endif()
+endfunction()
+
 function(r_capture_artifact emit_kind output_variable)
     set(arguments --emit=${emit_kind})
-    if(emit_kind STREQUAL "c17" OR emit_kind STREQUAL "link-plan")
+    if(emit_kind STREQUAL "llvm-ir" OR emit_kind STREQUAL "link-plan")
         list(APPEND arguments
             --entry test.codegen.async_io_read_result::main
             --profile hosted-native-async
@@ -38,13 +45,6 @@ endfunction()
 function(r_require_deterministic first second description)
     if(NOT "${${first}}" STREQUAL "${${second}}")
         message(FATAL_ERROR "${description} is not deterministic")
-    endif()
-endfunction()
-
-function(r_require_text variable expected description)
-    string(FIND "${${variable}}" "${expected}" offset)
-    if(offset EQUAL -1)
-        message(FATAL_ERROR "${description}: exact text not found:\n${${variable}}")
     endif()
 endfunction()
 
@@ -88,55 +88,14 @@ r_require_match_count(mir_output
     "variant_payload value=%v[0-9]+ tag=2 type=[(]standard_payload \"std[.]io::read_result::failed\"[)]" 1
     "MIR failed payload variants")
 
-r_capture_artifact(c17 c17_output)
-r_capture_artifact(c17 c17_repeated)
-r_require_deterministic(c17_output c17_repeated "C17 std.io::read_result artifact")
-r_require_match_count(c17_output "#include \"r_std_io[.]h\"" 1
-    "generated std.io includes")
-r_require_match_count(c17_output "r_std_io_read[(]" 1
-    "generated read calls")
-r_require_match_count(c17_output "R_STD_IO_READ_RESULT_READ" 0
-    "generated C omits assertion-only read-tag references")
-r_require_match_count(c17_output "R_STD_IO_READ_RESULT_END" 0
-    "generated C omits assertion-only end-tag references")
-r_require_match_count(c17_output "R_STD_IO_READ_RESULT_FAILED" 0
-    "generated C omits assertion-only failed-tag references")
-r_require_match_count(c17_output
-    "frame->r_v00000027 = [(]uint32_t[)]frame->r_v00000026[.]kind" 1
-    "generated direct read-result discrimination")
-r_require_match_count(c17_output "R_INTERNAL_ASSERT[(]" 0
-    "generated C omits assertions")
-r_require_match_count(c17_output "r_std_io_read_result_move_initialize[(]" 1
-    "generated read-result moves")
-r_require_text(c17_output [=[struct r_a00000002 {
-    RRuntimeArray r_m00000001;
-    size_t r_m00000002;
-};]=] "generated read payload layout")
-r_require_text(c17_output [=[struct r_a00000003 {
-    RStdIoError r_m00000001;
-    size_t r_m00000002;
-    RRuntimeArray r_m00000003;
-};]=] "generated failed payload layout")
-r_require_match_count(c17_output "= [(]RStdIoReadResult[)][{]0[}]" 3
-    "generated native-owner clears")
-r_require_match_count(c17_output
-    "frame->r_v[0-9]+[.]r_m[0-9]+ = frame->r_v[0-9]+[.]count" 2
-    "generated read and failed count transfers")
-r_require_match_count(c17_output
-    "frame->r_v[0-9]+[.]r_m[0-9]+ = frame->r_v[0-9]+[.]error" 1
-    "generated failed error transfers")
-r_require_match_count(c17_output
-    "r_type_move_array_gate[(]&frame->r_v[0-9]+[^\n]*[.]buffer[)]" 3
-    "generated payload buffer transfers")
-r_require_text(c17_output [=[frame->r_v00000032.r_m00000002 = frame->r_v00000026.count;
-            r_type_move_array_gate(&frame->r_v00000032.r_m00000001, &frame->r_v00000026.buffer);
-            frame->r_v00000026 = (RStdIoReadResult){0};]=]
-    "generated ordered read payload transfer")
-r_require_text(c17_output [=[frame->r_v00000049.r_m00000001 = frame->r_v00000026.error;
-            frame->r_v00000049.r_m00000002 = frame->r_v00000026.count;
-            r_type_move_array_gate(&frame->r_v00000049.r_m00000003, &frame->r_v00000026.buffer);
-            frame->r_v00000026 = (RStdIoReadResult){0};]=]
-    "generated ordered failed payload transfer")
+r_capture_artifact(llvm-ir ir_output)
+r_capture_artifact(llvm-ir ir_repeated)
+r_require_deterministic(ir_output ir_repeated "LLVM IR std.io::read_result artifact")
+r_require_match_count(ir_output "call [^\n]*@r_std_io_read[(]" 1
+    "read calls")
+# The read result moves through the library's own entry.
+r_require_present(ir_output "call [^\n]*@(r_shim_)?r_std_io_read_result_move_initialize[(]"
+    "read-result move glue")
 
 r_capture_artifact(link-plan plan_output)
 r_capture_artifact(link-plan plan_repeated)

@@ -51,19 +51,26 @@ static void start_pending(void) {
     r_runtime_task_detach(&started.task);
 }
 
-static RRuntimeStartResult test_start(int argc, char *argv[]) {
+RRuntimeStartResult test_start(int argc, char *argv[]);
+RRuntimeStartResult test_start(int argc, char *argv[]) {
     RRuntimeStartResult result = r_runtime_hosted_start(argc, argv);
     if (result.started)
         start_pending();
     return result;
 }
 
-static void test_report(const char *domain,
-                        size_t domain_length,
-                        const uint8_t *name,
-                        size_t name_length,
-                        uint32_t code,
-                        int64_t native_code) {
+void test_report(const char *domain,
+                 size_t domain_length,
+                 const uint8_t *name,
+                 size_t name_length,
+                 uint32_t code,
+                 int64_t native_code);
+void test_report(const char *domain,
+                 size_t domain_length,
+                 const uint8_t *name,
+                 size_t name_length,
+                 uint32_t code,
+                 int64_t native_code) {
     require(domain_length == 2U && memcmp(domain, "io", 2U) == 0);
     require(name_length == 17U && memcmp(name, "permission_denied", 17U) == 0);
     require(code == 2U && native_code == INT64_MIN && static_drops == 0U);
@@ -83,7 +90,8 @@ static void cleanup_thread(void *payload, void *result) {
     (void)atomic_fetch_add(&thread_runs, 1U);
 }
 
-static void test_destroy(RRuntimeArray *array) {
+void test_destroy(RRuntimeArray *array);
+void test_destroy(RRuntimeArray *array) {
     require(atomic_load(&diagnostic_count) == 1U);
     require(atomic_load(&acknowledged) == static_drops + 1U);
     require(atomic_load(&payload_drops) == static_drops + 1U);
@@ -105,7 +113,7 @@ static void test_destroy(RRuntimeArray *array) {
 #define r_runtime_array_destroy test_destroy
 #define main r_generated_main
 int r_generated_main(int argc, char *argv[]);
-#include R_TEST_GENERATED_C
+#include R_TEST_PROGRAM_PRELUDE
 #undef main
 #undef r_runtime_array_destroy
 #undef r_runtime_report_main_error

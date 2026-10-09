@@ -22,6 +22,26 @@ set(CMAKE_C_EXTENSIONS OFF)
 
 find_package(Threads REQUIRED)
 
+# LLVM transition B0: r-front links the LLVM release of the pinned toolchain through its C
+# interface (llvm-c); compiler/llvm verifies the target machine against the target manifest.
+if(NOT DEFINED R_LLVM_ROOT)
+    set(R_LLVM_ROOT "/opt/homebrew/opt/llvm@22" CACHE PATH "Root of the pinned LLVM 22.1.8 installation")
+endif()
+find_program(R_LLVM_CONFIG llvm-config HINTS "${R_LLVM_ROOT}/bin" NO_DEFAULT_PATH)
+if(NOT R_LLVM_CONFIG)
+    message(FATAL_ERROR "llvm-config of the pinned LLVM 22.1.8 is not found under ${R_LLVM_ROOT}")
+endif()
+execute_process(COMMAND "${R_LLVM_CONFIG}" --version
+    OUTPUT_VARIABLE R_LLVM_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
+if(NOT R_LLVM_VERSION STREQUAL "22.1.8")
+    message(FATAL_ERROR "LLVM ${R_LLVM_VERSION} at ${R_LLVM_ROOT} is not the pinned LLVM 22.1.8")
+endif()
+execute_process(COMMAND "${R_LLVM_CONFIG}" --includedir
+    OUTPUT_VARIABLE R_LLVM_INCLUDE_DIR OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
+execute_process(COMMAND "${R_LLVM_CONFIG}" --libdir
+    OUTPUT_VARIABLE R_LLVM_LIBRARY_DIR OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
+find_library(R_LLVM_LIBRARY NAMES LLVM PATHS "${R_LLVM_LIBRARY_DIR}" NO_DEFAULT_PATH REQUIRED)
+
 add_library(r_frontend STATIC
     compiler/source/frontend.c
     compiler/source/link_manifest.c
@@ -33,6 +53,7 @@ add_library(r_frontend STATIC
     compiler/source/standard_math_operations.c
     compiler/source/unicode.c
     compiler/source/unicode_data.c
+    compiler/source/target_manifest.c
     compiler/lexer/lexer.c
     compiler/lexer/lexer_generated.c
     compiler/parser/parser.c
@@ -41,8 +62,38 @@ add_library(r_frontend STATIC
     compiler/semantic/semantic.c
     compiler/hir/hir.c
     compiler/mir/mir.c
-    compiler/codegen/c17.c
     compiler/codegen/c_abi_bridge.c
+    compiler/llvm/abi.c
+    compiler/llvm/async.c
+    compiler/llvm/atomics.c
+    compiler/llvm/clone.c
+    compiler/llvm/containers.c
+    compiler/llvm/dispatch.c
+    compiler/llvm/emit.c
+    compiler/llvm/ffi.c
+    compiler/llvm/format.c
+    compiler/llvm/glue.c
+    compiler/llvm/hosted_main.c
+    compiler/llvm/json.c
+    compiler/llvm/json_decode.c
+    compiler/llvm/json_encode.c
+    compiler/llvm/json_stream.c
+    compiler/llvm/keys.c
+    compiler/llvm/library.c
+    compiler/llvm/outcome.c
+    compiler/llvm/reflection.c
+    compiler/llvm/runtime.c
+    compiler/llvm/stack.c
+    compiler/llvm/standard.c
+    compiler/llvm/statics.c
+    compiler/llvm/surface.c
+    compiler/llvm/sync.c
+    compiler/llvm/tagged.c
+    compiler/llvm/target.c
+    compiler/llvm/text.c
+    compiler/llvm/threads.c
+    compiler/llvm/types.c
+    compiler/llvm/values.c
     compiler/source/dump.c
 )
 
@@ -50,12 +101,22 @@ target_include_directories(r_frontend
     PUBLIC compiler/include
     PRIVATE compiler/source runtime/include
 )
+# Only the llvm-c headers are used; the include directory also holds C++ and system-like headers,
+# so it is a private system directory of the compiler library.
+target_include_directories(r_frontend SYSTEM PRIVATE "${R_LLVM_INCLUDE_DIR}")
+target_link_libraries(r_frontend PUBLIC "${R_LLVM_LIBRARY}")
 
-# Native layout facts are compiled from the same pinned ABI headers as emitted C17.
+# Native layout facts are compiled from the same pinned ABI headers the program is linked with.
 file(GLOB R_STANDARD_LAYOUT_INCLUDE_DIRS LIST_DIRECTORIES true
     "${CMAKE_CURRENT_SOURCE_DIR}/library/std/*/include")
 target_include_directories(r_frontend PRIVATE
     library/core/include runtime/darwin/include ${R_STANDARD_LAYOUT_INCLUDE_DIRS})
+
+# LLVM transition (B4): the static inline functions of the runtime and library headers as
+# external functions for programs the LLVM emitter builds (tools/generate_runtime_surface.py).
+add_library(r_runtime_inline_shims STATIC runtime/llvm/inline_shims.generated.c)
+target_include_directories(r_runtime_inline_shims PRIVATE
+    runtime/include runtime/darwin/include library/core/include ${R_STANDARD_LAYOUT_INCLUDE_DIRS})
 
 add_library(r_runtime_0_1 STATIC
     runtime/source/allocator.c
@@ -135,6 +196,13 @@ if(Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_SOURCE_DIR}/targets/arm64-apple-darwin.hosted-native-async.json"
             --verify
         COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_runtime_surface.py"
+            --root "${CMAKE_CURRENT_SOURCE_DIR}"
+            --manifest
+            "${CMAKE_CURRENT_SOURCE_DIR}/targets/arm64-apple-darwin.hosted-native-async.json"
+            --cc "${CMAKE_C_COMPILER}"
+            --verify
+        COMMAND "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_target_abi.py"
             --root "${CMAKE_CURRENT_SOURCE_DIR}"
             --manifest
@@ -166,6 +234,18 @@ if(Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_SOURCE_DIR}/specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc"
             --manifest
             "${CMAKE_CURRENT_SOURCE_DIR}/compiler/grammar/annex_a_manifest.json"
+            --write
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        VERBATIM
+    )
+    # B2 of the LLVM transition: the runtime surface tables of the LLVM backend.
+    add_custom_target(regenerate-runtime-surface
+        COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_runtime_surface.py"
+            --root "${CMAKE_CURRENT_SOURCE_DIR}"
+            --manifest
+            "${CMAKE_CURRENT_SOURCE_DIR}/targets/arm64-apple-darwin.hosted-native-async.json"
+            --cc "${CMAKE_C_COMPILER}"
             --write
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         VERBATIM

@@ -26,9 +26,12 @@ functions of the module in declaration order, prints `test NAME ... ` and the ou
 then the summary, and returns 0 when every test passed and 1 otherwise:
 
 ```sh
-r-front --emit=c17 --test --module-map examples/testing/modules.map \
-    --entry example.testing.tests --library-map library/r/library.map > tests.c
+r-front --emit=object --test --module-map examples/testing/modules.map \
+    --entry example.testing.tests --library-map library/r/library.map > tests.o
 ```
+
+The object goes to standard output; the CTest case `r_frontend_codegen_example_testing` links it
+with the runtime and the library into `build/debug/tests/codegen_example_testing`.
 
 A test function takes no parameters and returns `void`; it may be asynchronous and may throw
 any error it declares. It passes when it returns, and fails with the message of a failed

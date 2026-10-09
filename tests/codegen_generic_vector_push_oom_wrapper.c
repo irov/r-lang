@@ -5,13 +5,13 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-static void r_test_own_release(RRuntimeOwn *owner);
-static RStdArrayPushResult r_test_push(RStdArray *array, void *value);
+void r_test_own_release(RRuntimeOwn *owner);
+RStdArrayPushResult r_test_push(RStdArray *array, void *value);
 #define r_runtime_own_release r_test_own_release
 #define r_std_array_push r_test_push
 #define main r_generated_main
 int main(int argc, char *argv[]);
-#include R_TEST_GENERATED_C
+#include R_TEST_PROGRAM_PRELUDE
 #undef main
 #undef r_std_array_push
 #undef r_runtime_own_release
@@ -22,7 +22,7 @@ static size_t second_push_length;
 static bool valid = true;
 static bool failed_growth;
 
-static void r_test_own_release(RRuntimeOwn *owner) {
+void r_test_own_release(RRuntimeOwn *owner) {
     static const int32_t expected[] = {29, 17};
     if (owner->allocation == NULL || releases >= 2U ||
         *(int32_t *)owner->allocation != expected[releases]) {
@@ -32,7 +32,7 @@ static void r_test_own_release(RRuntimeOwn *owner) {
     r_runtime_own_release(owner);
 }
 
-static RStdArrayPushResult r_test_push(RStdArray *array, void *value) {
+RStdArrayPushResult r_test_push(RStdArray *array, void *value) {
     RStdArrayPushResult result;
 
     ++push_calls;

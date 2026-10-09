@@ -32,30 +32,22 @@ r_require_match_count(mir_output
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
+        --emit=llvm-ir
         --entry test.codegen.async_enum::main
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"
         "${SOURCE_FILE}"
-    RESULT_VARIABLE c17_result
-    OUTPUT_VARIABLE c17_output
-    ERROR_VARIABLE c17_error
+    RESULT_VARIABLE ir_result
+    OUTPUT_VARIABLE ir_output
+    ERROR_VARIABLE ir_error
 )
-if(NOT c17_result EQUAL 0)
-    message(FATAL_ERROR "async enum C17 emit failed (${c17_result}): ${c17_error}")
+if(NOT ir_result EQUAL 0)
+    message(FATAL_ERROR "async enum LLVM IR emit failed (${ir_result}): ${ir_error}")
 endif()
-r_require_match_count(c17_output "typedef int32_t r_a[0-9]+" 1
-    "nominal signed enum representation")
-r_require_match_count(c17_output "typedef uint32_t r_a[0-9]+" 1
-    "nominal unsigned enum representation")
-r_require_match_count(c17_output "[(]r_a[0-9]+[)]INT32_C[(]1[)]" 2
-    "signed enum C17 constants")
-r_require_match_count(c17_output "[(]r_a[0-9]+[)]UINT32_C[(]1[)]" 2
-    "unsigned enum C17 constants")
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
+        --emit=llvm-ir
         --entry test.codegen.async_enum::main
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"
@@ -66,8 +58,8 @@ execute_process(
 )
 if(NOT repeated_result EQUAL 0)
     message(FATAL_ERROR
-        "repeated async enum C17 emit failed (${repeated_result}): ${repeated_error}")
+        "repeated async enum LLVM IR emit failed (${repeated_result}): ${repeated_error}")
 endif()
-if(NOT c17_output STREQUAL repeated_output)
-    message(FATAL_ERROR "async enum C17 output is not deterministic")
+if(NOT ir_output STREQUAL repeated_output)
+    message(FATAL_ERROR "async enum LLVM IR output is not deterministic")
 endif()

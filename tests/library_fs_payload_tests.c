@@ -1223,6 +1223,15 @@ static void test_payload_engine_follows_file_type(RRuntimeAllocator *allocator) 
     (void)r_runtime_darwin_io_request_wait(closing.request);
     r_runtime_darwin_io_request_release(closing.request);
     r_runtime_darwin_io_handle_release(created.handle);
+    /* The work item returns its admission slot after it publishes the result, so the wait above
+       can return while the slot is still counted. */
+    for (spin = 0U;
+         (spin != 5000U) && (r_runtime_darwin_io_testing_file_transfers_admitted() != 0U);
+         ++spin) {
+        (void)usleep(1000U);
+    }
+    require(r_runtime_darwin_io_testing_file_transfers_admitted() == 0U,
+            "regular read returns its admission slot");
 
     created =
         r_library_internal_fs_payload_handle_create(allocator, fifo, R_RUNTIME_DARWIN_IO_STREAM);

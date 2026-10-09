@@ -85,8 +85,9 @@ Fifteen levels of parentheses evaluate. At the sixteenth the call that would beg
 activation 17 of `sum` throws `core::recursion_error` before its body runs, every activation
 below it ends, and `main` reports `expression nests deeper than 16 levels` with status 65. So
 does an input of five thousand parentheses: it never reaches the end of the stack. The stack
-bound that the build derives for the entry counts 16 frames of each of the three functions; the
-stack header of the build records it as `R_STACK_RECURSION_...` with the functions it counts.
+bound that the compiler derives for the entry counts 16 frames of each of the three functions;
+the `!r.stack.frames` metadata of `r-front --emit=llvm-ir` records it with the depth of each
+function it counts.
 A misplaced byte is `syntax error at byte N`, also with status 65.
 
 ## Postfix expressions and a state machine

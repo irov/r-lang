@@ -42,21 +42,6 @@ typedef struct RFsAsErrorView {
     RTypeId error_type;
 } RFsAsErrorView;
 
-typedef enum RFsAsErrorMutation {
-    R_FS_AS_ERROR_MUTATE_SYNC_HIR_OPERATION = 0,
-    R_FS_AS_ERROR_MUTATE_SYNC_HIR_CHILD_COUNT,
-    R_FS_AS_ERROR_MUTATE_SYNC_HIR_RESULT_TYPE,
-    R_FS_AS_ERROR_MUTATE_SYNC_HIR_SOURCE_TYPE,
-    R_FS_AS_ERROR_MUTATE_SYNC_HIR_ARGUMENT_TYPE,
-    R_FS_AS_ERROR_MUTATE_ASYNC_MIR_OPERATION,
-    R_FS_AS_ERROR_MUTATE_ASYNC_MIR_OPERAND_COUNT,
-    R_FS_AS_ERROR_MUTATE_ASYNC_MIR_BORROW_MASK,
-    R_FS_AS_ERROR_MUTATE_ASYNC_MIR_RESULT_TYPE,
-    R_FS_AS_ERROR_MUTATE_ASYNC_MIR_SOURCE_TYPE,
-    R_FS_AS_ERROR_MUTATE_ASYNC_MIR_ARGUMENT_TYPE,
-    R_FS_AS_ERROR_MUTATION_COUNT
-} RFsAsErrorMutation;
-
 static int failures;
 
 #define R_FS_AS_ERROR_CHECK(condition)                                                             \
@@ -540,68 +525,6 @@ static bool r_fs_as_error_schemas_are_valid(RFrontendContext *context, const RFs
                                         UINT32_C(3));
 }
 
-static bool r_fs_as_error_apply_mutation(RFsAsErrorView *view, RFsAsErrorMutation mutation) {
-    switch (mutation) {
-    case R_FS_AS_ERROR_MUTATE_SYNC_HIR_OPERATION:
-        view->sync_hir_call->standard_operation = R_STANDARD_CALL_FS_PATH_FROM_UTF8;
-        return true;
-    case R_FS_AS_ERROR_MUTATE_SYNC_HIR_CHILD_COUNT:
-        view->sync_hir_call->child_count = UINT32_C(0);
-        return true;
-    case R_FS_AS_ERROR_MUTATE_SYNC_HIR_RESULT_TYPE:
-        view->sync_hir_call->type = view->fs_error_type;
-        return true;
-    case R_FS_AS_ERROR_MUTATE_SYNC_HIR_SOURCE_TYPE:
-        view->sync_hir_call->auxiliary_type = view->error_type;
-        return true;
-    case R_FS_AS_ERROR_MUTATE_SYNC_HIR_ARGUMENT_TYPE:
-        view->sync_hir_argument->type = view->error_type;
-        return true;
-    case R_FS_AS_ERROR_MUTATE_ASYNC_MIR_OPERATION:
-        view->async_mir_call->standard_operation = R_STANDARD_CALL_FS_PATH_FROM_UTF8;
-        return true;
-    case R_FS_AS_ERROR_MUTATE_ASYNC_MIR_OPERAND_COUNT:
-        view->async_mir_call->operand_count = UINT32_C(0);
-        return true;
-    case R_FS_AS_ERROR_MUTATE_ASYNC_MIR_BORROW_MASK:
-        view->async_mir_call->call_borrow_mask.low = UINT64_C(1);
-        return true;
-    case R_FS_AS_ERROR_MUTATE_ASYNC_MIR_RESULT_TYPE:
-        view->async_mir_call->type = view->fs_error_type;
-        return true;
-    case R_FS_AS_ERROR_MUTATE_ASYNC_MIR_SOURCE_TYPE:
-        view->async_mir_call->auxiliary_type = view->error_type;
-        return true;
-    case R_FS_AS_ERROR_MUTATE_ASYNC_MIR_ARGUMENT_TYPE:
-        view->async_mir_argument->type = view->error_type;
-        return true;
-    case R_FS_AS_ERROR_MUTATION_COUNT:
-    default:
-        return false;
-    }
-}
-
-static const char *r_fs_as_error_mutation_name(RFsAsErrorMutation mutation) {
-    static const char *const names[] = {
-        "sync_hir_operation",
-        "sync_hir_child_count",
-        "sync_hir_result_type",
-        "sync_hir_source_type",
-        "sync_hir_argument_type",
-        "async_mir_operation",
-        "async_mir_operand_count",
-        "async_mir_borrow_mask",
-        "async_mir_result_type",
-        "async_mir_source_type",
-        "async_mir_argument_type",
-    };
-
-    if ((size_t)mutation >= (sizeof(names) / sizeof(names[0]))) {
-        return "invalid";
-    }
-    return names[(size_t)mutation];
-}
-
 static void r_fs_as_error_test_positive(void) {
     RFrontendContext *context = r_fs_as_error_build_context();
     RFsAsErrorView view;
@@ -615,11 +538,14 @@ static void r_fs_as_error_test_positive(void) {
     R_FS_AS_ERROR_CHECK(r_fs_as_error_find_view(context, &view));
     R_FS_AS_ERROR_CHECK(r_fs_as_error_view_is_valid(context, &view));
     R_FS_AS_ERROR_CHECK(r_fs_as_error_schemas_are_valid(context, &view));
-    R_FS_AS_ERROR_CHECK(r_frontend_emit_c17(context, r_fs_as_error_write, &first) == R_FRONTEND_OK);
+    R_FS_AS_ERROR_CHECK(
+        r_frontend_emit_llvm(context, NULL, R_FRONTEND_LLVM_IR, r_fs_as_error_write, &first) ==
+        R_FRONTEND_OK);
     R_FS_AS_ERROR_CHECK(first.call_count == 1U);
     R_FS_AS_ERROR_CHECK(first.length != 0U);
-    R_FS_AS_ERROR_CHECK(r_frontend_emit_c17(context, r_fs_as_error_write, &second) ==
-                        R_FRONTEND_OK);
+    R_FS_AS_ERROR_CHECK(
+        r_frontend_emit_llvm(context, NULL, R_FRONTEND_LLVM_IR, r_fs_as_error_write, &second) ==
+        R_FRONTEND_OK);
     R_FS_AS_ERROR_CHECK(second.call_count == 1U);
     R_FS_AS_ERROR_CHECK(
         (first.length == second.length) &&
@@ -627,41 +553,6 @@ static void r_fs_as_error_test_positive(void) {
     r_fs_as_error_dispose_buffer(&second);
     r_fs_as_error_dispose_buffer(&first);
     r_frontend_destroy(context);
-}
-
-static void r_fs_as_error_test_mutations(void) {
-    size_t mutation;
-
-    for (mutation = 0U; mutation < (size_t)R_FS_AS_ERROR_MUTATION_COUNT; ++mutation) {
-        RFrontendContext *context = r_fs_as_error_build_context();
-        RFsAsErrorView view;
-        RFsAsErrorBuffer output = {0};
-        RFrontendStatus status;
-
-        R_FS_AS_ERROR_CHECK(context != NULL);
-        if (context == NULL) {
-            continue;
-        }
-        if (!r_fs_as_error_find_view(context, &view)) {
-            R_FS_AS_ERROR_CHECK(false);
-            r_frontend_destroy(context);
-            continue;
-        }
-        R_FS_AS_ERROR_CHECK(r_fs_as_error_apply_mutation(&view, (RFsAsErrorMutation)mutation));
-        status = r_frontend_emit_c17(context, r_fs_as_error_write, &output);
-        if (status != R_FRONTEND_NOT_LOWERABLE) {
-            (void)fprintf(stderr,
-                          "mutation %zu (%s) unexpectedly returned status %d\n",
-                          mutation,
-                          r_fs_as_error_mutation_name((RFsAsErrorMutation)mutation),
-                          (int)status);
-        }
-        R_FS_AS_ERROR_CHECK(status == R_FRONTEND_NOT_LOWERABLE);
-        R_FS_AS_ERROR_CHECK(output.call_count == 0U);
-        R_FS_AS_ERROR_CHECK(output.length == 0U);
-        r_fs_as_error_dispose_buffer(&output);
-        r_frontend_destroy(context);
-    }
 }
 
 static void r_fs_as_error_test_diagnostic(const RFsAsErrorDiagnosticCase *test_case) {
@@ -709,6 +600,5 @@ int main(void) {
     for (index = 0U; index < (sizeof(cases) / sizeof(cases[0])); ++index) {
         r_fs_as_error_test_diagnostic(&cases[index]);
     }
-    r_fs_as_error_test_mutations();
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

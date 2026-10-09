@@ -14,6 +14,13 @@ function(r_require_match_count variable pattern expected description)
     endif()
 endfunction()
 
+function(r_require_present variable pattern description)
+    string(REGEX MATCH "${pattern}" match "${${variable}}")
+    if(match STREQUAL "")
+        message(FATAL_ERROR "${description}: '${pattern}' is absent:\n${${variable}}")
+    endif()
+endfunction()
+
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}" --emit=hir "${SOURCE_FILE}"
     RESULT_VARIABLE hir_status
@@ -72,89 +79,29 @@ r_require_match_count(plan_output
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
+        --emit=llvm-ir
         --entry test.codegen.async_fs_write_file_atomic_no_replace_beneath::main
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"
         "${SOURCE_FILE}"
-    RESULT_VARIABLE c17_status
-    OUTPUT_VARIABLE c17_output
-    ERROR_VARIABLE c17_error
+    RESULT_VARIABLE ir_status
+    OUTPUT_VARIABLE ir_output
+    ERROR_VARIABLE ir_error
 )
-if(NOT c17_status EQUAL 0)
-    message(FATAL_ERROR "C17 emit failed (${c17_status}): ${c17_error}")
+if(NOT ir_status EQUAL 0)
+    message(FATAL_ERROR "LLVM IR emit failed (${ir_status}): ${ir_error}")
 endif()
-r_require_match_count(c17_output
-    "#include \"r_std_fs[.]h\"" 1
-    "C17 std.fs includes")
-r_require_match_count(c17_output
-    "r_std_fs_write_file_atomic_no_replace_beneath" 1
-    "C17 atomic-write-beneath native calls")
-r_require_match_count(c17_output
-    "r_d[0-9]+ r_stack_r_v00000065 = [{]0[}]" 1
-    "C17 transient root borrow storage")
-r_require_match_count(c17_output
-    "r_d[0-9]+ r_stack_r_v00000066 = [{]0[}]" 1
-    "C17 transient relative borrow storage")
-r_require_match_count(c17_output
-    "frame->r_v00000065" 0
-    "C17 escaped root borrow frame fields")
-r_require_match_count(c17_output
-    "frame->r_v00000066" 0
-    "C17 escaped relative borrow frame fields")
-r_require_match_count(c17_output
-    "r_std_fs_write_file_atomic_no_replace_beneath[(]r_stack_r_v[0-9]+,[\n ]+r_stack_r_v[0-9]+,[\n ]+&frame->r_l[0-9]+,[\n ]+r_fs_deadline_[0-9]+[)]" 1
-    "C17 exact native atomic-write operands")
-r_require_match_count(c17_output
-    "const RRuntimeArray r_fs_data_before_00000070 = frame->r_l00000013" 0
-    "C17 omits debug staged-data snapshots")
-r_require_match_count(c17_output
-    "if [(]r_fs_start_00000070[.]is_ok[)] [{]" 2
-    "C17 native success and result adaptation branches")
-r_require_match_count(c17_output
-    "frame->r_l00000013_initialized = 0" 3
-    "C17 conditional consume and terminal data cleanup transitions")
-r_require_match_count(c17_output
-    "r_fs_start_00000070[.]error == R_STD_ASYNC_START_ALLOCATION_FAILED" 0
-    "C17 omits allocation-failure assertions")
-r_require_match_count(c17_output
-    "r_fs_start_00000070[.]error == R_STD_ASYNC_START_RUNTIME_STOPPING" 0
-    "C17 omits runtime-stopping assertions")
-r_require_match_count(c17_output
-    "r_fs_data_before_00000070[.]data" 0
-    "C17 omits start-failure data-owner snapshots")
-r_require_match_count(c17_output
-    "r_fs_data_before_00000070[.]length" 0
-    "C17 omits start-failure data-length snapshots")
-r_require_match_count(c17_output
-    "r_fs_data_before_00000070[.]capacity" 0
-    "C17 omits start-failure data-capacity snapshots")
-r_require_match_count(c17_output "R_INTERNAL_ASSERT[(]" 0
-    "C17 omits assertions")
-r_require_match_count(c17_output
-    "r_runtime_task_execution_await[(]execution, &frame->r_l[0-9]+, &frame->r_v[0-9]+[)]" 3
-    "C17 filesystem await ABI calls")
-r_require_match_count(c17_output
-    "RStdFsWriteFileResult r_v00000076" 1
-    "C17 write_file_result await storage")
-r_require_match_count(c17_output
-    "r_std_fs_write_file_result_move_initialize" 1
-    "C17 write_file_result move adapter")
-r_require_match_count(c17_output
-    "r_std_fs_write_file_result_destroy" 1
-    "C17 write_file_result drop adapter")
-r_require_match_count(c17_output
-    "R_STD_FS_WRITE_FILE_COMMITTED" 0
-    "C17 omits assertion-only committed-tag references")
-r_require_match_count(c17_output
-    "R_STD_FS_WRITE_FILE_FAILED" 0
-    "C17 omits assertion-only failed-tag references")
-r_require_match_count(c17_output
-    "frame->r_v00000077 = [(]uint32_t[)]frame->r_v00000076[.]kind" 1
-    "C17 directly discriminates the write-file outcome")
-r_require_match_count(c17_output
-    "R_STD_FS_WRITE_FILE_RESULT_" 0
-    "C17 non-ABI filesystem outcome tags")
-r_require_match_count(c17_output
-    "[(]RStdFsErrorCode[)]INT32_C[(]4[)]" 1
-    "C17 already_exists ABI value")
+r_require_match_count(ir_output
+    "call [^\n]*@r_std_fs_write_file_atomic_no_replace_beneath[(]" 1
+    "atomic-write-beneath library calls")
+# open_directory, read_file and the atomic write are the three awaited filesystem tasks.
+r_require_match_count(ir_output
+    "call [^\n]*@r_runtime_task_execution_await[(]" 3
+    "filesystem task awaits")
+# The move and drop glue of std.fs::write_file_result reach the library's own entries.
+r_require_present(ir_output
+    "call [^\n]*@(r_shim_)?r_std_fs_write_file_result_move_initialize[(]"
+    "write_file_result move glue")
+r_require_present(ir_output
+    "call [^\n]*@(r_shim_)?r_std_fs_write_file_result_destroy[(]"
+    "write_file_result drop glue")

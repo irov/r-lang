@@ -2536,6 +2536,35 @@ add_test(
         -DLINK_MANIFEST=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/compiler_link_manifest.json
         -P ${CMAKE_CURRENT_SOURCE_DIR}/check_compiler_cli_options.cmake
 )
+# LLVM transition B0: the linked LLVM is the manifest toolchain's release and its target machine
+# has the manifest data layout; --version prints nothing on a mismatch.
+add_test(NAME r_frontend_backend_version COMMAND r-front --version)
+# B2: the runtime surface tables are consistent and found by name.
+add_executable(r_llvm_surface_tests llvm_surface_tests.c)
+target_include_directories(r_llvm_surface_tests PRIVATE "${PROJECT_SOURCE_DIR}/compiler/llvm")
+target_link_libraries(r_llvm_surface_tests PRIVATE r_frontend)
+if(NOT MSVC)
+    target_compile_options(r_llvm_surface_tests PRIVATE
+        -Wall -Wextra -Wpedantic -Werror
+        -Wconversion -Wsign-conversion -Wshadow
+        -Wstrict-prototypes -Wmissing-prototypes
+    )
+endif()
+add_test(NAME r_llvm_surface COMMAND r_llvm_surface_tests)
+# B3: the AAPCS64 classifier lowers every runtime surface function as clang does.
+add_executable(r_llvm_abi_tests llvm_abi_tests.c)
+target_include_directories(r_llvm_abi_tests PRIVATE "${PROJECT_SOURCE_DIR}/compiler/llvm")
+target_link_libraries(r_llvm_abi_tests PRIVATE r_frontend)
+if(NOT MSVC)
+    target_compile_options(r_llvm_abi_tests PRIVATE
+        -Wall -Wextra -Wpedantic -Werror
+        -Wconversion -Wsign-conversion -Wshadow
+        -Wstrict-prototypes -Wmissing-prototypes
+    )
+endif()
+add_test(NAME r_llvm_abi COMMAND r_llvm_abi_tests)
+set_tests_properties(r_frontend_backend_version PROPERTIES
+    PASS_REGULAR_EXPRESSION "LLVM 22\\.1\\.8 arm64-apple-macosx26\\.5\\.0 apple-m1")
 
 add_executable(r_runtime_tests
     runtime_tests.c
@@ -3747,8 +3776,6 @@ target_compile_definitions(r_frontend_codegen_tests PRIVATE
     R_CODEGEN_MATH_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_math.r"
     R_CODEGEN_MAIN_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_main.r"
     R_CODEGEN_RECURSIVE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_recursive.r"
-    R_CODEGEN_GOLDEN_SOURCE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_golden.r"
-    R_CODEGEN_GOLDEN_PATH="${CMAKE_CURRENT_SOURCE_DIR}/golden/codegen.c"
     R_CODEGEN_VALUE_TYPES_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_value_types.r"
     R_CODEGEN_ASYNC_SCALAR_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_async_scalar.r"
     R_CODEGEN_ASYNC_ENUM_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_async_enum.r"
@@ -3800,62 +3827,6 @@ endif()
 
 add_test(NAME r_frontend_codegen_unit COMMAND r_frontend_codegen_tests)
 
-foreach(R_STACK_USAGE_SELF_TEST_CASE IN ITEMS
-        positive_deterministic_header
-        missing_artifact
-        empty_artifact
-        malformed_record
-        dynamic_frame
-        duplicate_function
-        ceiling_violation
-        merge_ceiling_preserves_header
-        fixed_point_merge
-        final_under_bound
-        final_over_bound
-        final_name_mismatch
-        wrapper_huge_frame)
-    add_test(
-        NAME r_frontend_codegen_stack_usage_${R_STACK_USAGE_SELF_TEST_CASE}
-        COMMAND "${CMAKE_COMMAND}"
-            -DSTACK_USAGE_CHECK_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/check_codegen_stack_usage.cmake
-            -DSTACK_USAGE_SELF_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/stack_usage_self_tests
-            -DSTACK_USAGE_SELF_TEST_CASE=${R_STACK_USAGE_SELF_TEST_CASE}
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/check_codegen_stack_usage_self_test.cmake
-    )
-endforeach()
-
-set(CLANG_FORMAT "" CACHE FILEPATH
-    "Optional path to clang-format 22.1.8 for generated C17 regression tests")
-unset(R_CODEGEN_CLANG_FORMAT)
-if(CLANG_FORMAT)
-    set(R_CODEGEN_CLANG_FORMAT "${CLANG_FORMAT}")
-else()
-    find_program(R_CODEGEN_CLANG_FORMAT
-        NAMES clang-format-22.1.8 clang-format-22 clang-format
-        NO_CACHE
-    )
-endif()
-if(R_CODEGEN_CLANG_FORMAT)
-    execute_process(
-        COMMAND "${R_CODEGEN_CLANG_FORMAT}" --version
-        RESULT_VARIABLE R_CODEGEN_CLANG_FORMAT_RESULT
-        OUTPUT_VARIABLE R_CODEGEN_CLANG_FORMAT_OUTPUT
-        ERROR_VARIABLE R_CODEGEN_CLANG_FORMAT_ERROR
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-    string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" R_CODEGEN_CLANG_FORMAT_VERSION
-        "${R_CODEGEN_CLANG_FORMAT_OUTPUT}")
-    if(NOT R_CODEGEN_CLANG_FORMAT_RESULT EQUAL 0 OR
-       NOT R_CODEGEN_CLANG_FORMAT_VERSION STREQUAL "22.1.8")
-        if(CLANG_FORMAT)
-            message(FATAL_ERROR
-                "CLANG_FORMAT must name clang-format 22.1.8: "
-                "${R_CODEGEN_CLANG_FORMAT_OUTPUT}${R_CODEGEN_CLANG_FORMAT_ERROR}")
-        endif()
-        set(R_CODEGEN_CLANG_FORMAT "")
-    endif()
-endif()
-
 if(NOT MSVC)
     if(NOT Python3_Interpreter_FOUND)
         message(FATAL_ERROR
@@ -3898,18 +3869,6 @@ if(NOT MSVC)
             "${R_CODEGEN_CORE_INTEGER_ALL_ERROR}")
     endif()
 
-    if(R_CODEGEN_CLANG_FORMAT)
-        add_test(
-            NAME r_frontend_codegen_golden_format
-            COMMAND "${CMAKE_COMMAND}"
-                -DR_FRONT_EXECUTABLE=$<TARGET_FILE:r-front>
-                -DCLANG_FORMAT=${R_CODEGEN_CLANG_FORMAT}
-                -DSOURCE_1=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_golden.r
-                -DFORMAT_STYLE=${PROJECT_SOURCE_DIR}/.clang-format
-                -DOUTPUT_C=${CMAKE_CURRENT_BINARY_DIR}/codegen_golden_format.c
-                -P ${CMAKE_CURRENT_SOURCE_DIR}/check_codegen_format.cmake
-        )
-    endif()
     include("${PROJECT_SOURCE_DIR}/examples/catalogue.cmake")
     # R-FUNC-0025 (M24): the tests of the standard modules written in R, one test program per
     # file of library/r/tests translated in test mode.
@@ -4210,7 +4169,6 @@ if(NOT MSVC)
             library_slice_heap
             library_sorted_text
             regex
-            regex_o2
             regex_driver
             regex_oom
             regex_example
@@ -4282,6 +4240,10 @@ if(NOT MSVC)
             core_bits_division_overflow
             switch_dispatch
             async_switch_dispatch
+            tagged_switch_break
+            async_tagged_switch_break
+            alloc_into_value
+            async_alloc_into_value
             field_access_instances
             user_attributes
             async_user_attributes
@@ -4292,7 +4254,6 @@ if(NOT MSVC)
             core_integer_intrinsics
             async_core_integer_intrinsics
             core_integer_all
-            core_integer_all_o2
             core_atomic_intrinsics
             async_core_atomic_intrinsics
             core_atomic_invalid_order
@@ -4312,7 +4273,6 @@ if(NOT MSVC)
             generic_enum
             generic_vector
             generic_vector_push_oom
-            generic_vector_push_oom_o2
             array_create
             async_array_create
             array_filled
@@ -4500,7 +4460,6 @@ if(NOT MSVC)
             sync_async_start_std
             async_sync_checked_retry
             checked_finally_control
-            checked_finally_control_o2
             effect_cleanup
             unwind_second_panic_finally
             unwind_second_panic_drop
@@ -4645,6 +4604,7 @@ if(NOT MSVC)
             async_io_close_output
             async_fs_read_file
             async_fs_open_directory
+            sync_fs_start
             async_fs_file_metadata
             async_fs_create_directory_beneath
             async_fs_write_file_atomic_no_replace_beneath
@@ -4659,7 +4619,6 @@ if(NOT MSVC)
             c_callbacks_example
             format_literals
             json_tree
-            json_tree_o2
             json_decode
             async_json_decode
             json_example
@@ -4667,7 +4626,6 @@ if(NOT MSVC)
             json_stream_example
             json_reader_example
             async_json_tree
-            async_json_tree_o2
             json_stream
             async_json_stream
             json_reader
@@ -4816,18 +4774,20 @@ if(NOT MSVC)
         set(R_CODEGEN_ATOMIC_WRITE_SOURCE "")
         set(R_CODEGEN_ATOMIC_WRITE_REPLACEMENT_SOURCE "")
         set(R_CODEGEN_ATOMIC_WRITE_RELATIVE "")
-        set(R_CODEGEN_MEASURE_STACK_USAGE TRUE)
-        set(R_CODEGEN_STACK_MAX_FRAME_SIZE 262144)
-        set(R_CODEGEN_STACK_EXPECT_FRAME_GREATER_THAN "")
+        set(R_CODEGEN_STACK_FRAME_LIMIT "")
+        set(R_CODEGEN_STACK_REPORT OFF)
         set(R_CODEGEN_CHECK_STDOUT FALSE)
         set(R_CODEGEN_EXPECTED_STDOUT "")
-        set(R_CODEGEN_GENERATED_C_OPTIMIZATION "-O0")
         # R-FUNC-0025 (M24): cases translated in test mode.
         set(R_CODEGEN_TEST_MODE OFF)
         if(R_CODEGEN_CASE IN_LIST R_EXAMPLE_CASES)
             set(R_CODEGEN_SOURCE_1 "")
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_MODULE_MAP "${PROJECT_SOURCE_DIR}/${R_EXAMPLE_${R_CODEGEN_CASE}_MAP}")
+            # The command driver of the calculator checks the bound of its parser recursion.
+            if(R_CODEGEN_CASE STREQUAL "example_calculator")
+                set(R_CODEGEN_STACK_REPORT ON)
+            endif()
             set(R_CODEGEN_ENTRY "${R_EXAMPLE_${R_CODEGEN_CASE}_ENTRY}")
             if(DEFINED R_EXAMPLE_${R_CODEGEN_CASE}_LINK_MANIFEST)
                 set(R_CODEGEN_LINK_MANIFEST "${PROJECT_SOURCE_DIR}/${R_EXAMPLE_${R_CODEGEN_CASE}_LINK_MANIFEST}")
@@ -4853,25 +4813,13 @@ if(NOT MSVC)
             set(R_CODEGEN_EXPECTED_PANIC "")
             set(R_CODEGEN_C_WRAPPER "${CMAKE_CURRENT_SOURCE_DIR}/codegen_json_reader_wrapper.c")
         elseif(R_CODEGEN_CASE STREQUAL "json_tree" OR
-               R_CODEGEN_CASE STREQUAL "json_tree_o2" OR
                R_CODEGEN_CASE STREQUAL "async_json_tree" OR
-               R_CODEGEN_CASE STREQUAL "async_json_tree_o2" OR
                R_CODEGEN_CASE STREQUAL "json_decode" OR
                R_CODEGEN_CASE STREQUAL "async_json_decode" OR
                R_CODEGEN_CASE STREQUAL "json_stream" OR
                R_CODEGEN_CASE STREQUAL "async_json_stream")
-            if(R_CODEGEN_CASE STREQUAL "json_tree_o2")
-                set(R_CODEGEN_SOURCE_1
-                    "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_json_tree.r")
-                set(R_CODEGEN_GENERATED_C_OPTIMIZATION "-O2")
-            elseif(R_CODEGEN_CASE STREQUAL "async_json_tree_o2")
-                set(R_CODEGEN_SOURCE_1
-                    "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_async_json_tree.r")
-                set(R_CODEGEN_GENERATED_C_OPTIMIZATION "-O2")
-            else()
-                set(R_CODEGEN_SOURCE_1
-                    "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
-            endif()
+            set(R_CODEGEN_SOURCE_1
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_EXPECTED_PANIC "")
             if(R_CODEGEN_CASE STREQUAL "json_decode" OR R_CODEGEN_CASE STREQUAL "async_json_decode" OR R_CODEGEN_CASE STREQUAL "json_stream" OR R_CODEGEN_CASE STREQUAL "async_json_stream")
@@ -5398,19 +5346,11 @@ if(NOT MSVC)
             set(R_CODEGEN_EXPECTED_PANIC "")
         elseif(R_CODEGEN_CASE STREQUAL "generic_vector" OR
                R_CODEGEN_CASE STREQUAL "generic_vector_push_oom" OR
-               R_CODEGEN_CASE STREQUAL "generic_vector_push_oom_o2" OR
                R_CODEGEN_CASE STREQUAL "async_generic_vector")
-            if(R_CODEGEN_CASE STREQUAL "generic_vector_push_oom_o2")
-                set(R_CODEGEN_SOURCE_1
-                    "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_generic_vector_push_oom.r")
-                set(R_CODEGEN_GENERATED_C_OPTIMIZATION "-O2")
-            else()
-                set(R_CODEGEN_SOURCE_1
-                    "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
-            endif()
+            set(R_CODEGEN_SOURCE_1
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
             set(R_CODEGEN_SOURCE_2 "")
-            if(R_CODEGEN_CASE STREQUAL "generic_vector_push_oom" OR
-               R_CODEGEN_CASE STREQUAL "generic_vector_push_oom_o2")
+            if(R_CODEGEN_CASE STREQUAL "generic_vector_push_oom")
                 set(R_CODEGEN_C_WRAPPER
                     "${CMAKE_CURRENT_SOURCE_DIR}/codegen_generic_vector_push_oom_wrapper.c")
             else()
@@ -5465,17 +5405,13 @@ if(NOT MSVC)
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_async_sync_checked_retry.r")
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_EXPECTED_PANIC "")
-        elseif(R_CODEGEN_CASE STREQUAL "checked_finally_control" OR
-               R_CODEGEN_CASE STREQUAL "checked_finally_control_o2")
+        elseif(R_CODEGEN_CASE STREQUAL "checked_finally_control")
             set(R_CODEGEN_SOURCE_1
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_checked_finally_control.r")
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_C_WRAPPER
                 "${CMAKE_CURRENT_SOURCE_DIR}/codegen_checked_finally_control_wrapper.c")
             set(R_CODEGEN_EXPECTED_PANIC "")
-            if(R_CODEGEN_CASE STREQUAL "checked_finally_control_o2")
-                set(R_CODEGEN_GENERATED_C_OPTIMIZATION "-O2")
-            endif()
         elseif(R_CODEGEN_CASE STREQUAL "effect_cleanup")
             set(R_CODEGEN_SOURCE_1
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_effect_cleanup.r")
@@ -5595,7 +5531,7 @@ if(NOT MSVC)
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_EXPECTED_PANIC "")
-        elseif(R_CODEGEN_CASE MATCHES "^(async_arc_last_release|string_place_views|async_string_place_views|string_view_owners|async_string_view_owners|field_destructuring|field_access|async_field_access|field_access_instances|core_bits|async_core_bits|switch_dispatch|async_switch_dispatch|generic_field_access|async_generic_field_access|user_attributes|async_user_attributes|async_owner_shapes|async_owner_matrix|null_type|async_null_type|explicit_generics|async_explicit_generics|consteval|async_consteval|consteval_checked|async_consteval_checked|consteval_floats|async_consteval_floats|consteval_owners|consteval_frozen|async_consteval_frozen|deadline_blocks|budget_blocks|recursion_bounds|async_for|expression_forms|async_channels|group_detach|group_vacancy|group_capacity|effect_relay|swap_clone|async_swap_clone|derive|async_derive|cmp_impls|function_values|static_values|async_static_values|computed_bounds|async_computed_bounds|typed_constants|async_typed_constants|associated_constants|async_associated_constants|dyn_interfaces|async_dyn_interfaces|dyn_owners|async_dyn_owners|async_locks|async_broadcast|async_reserve|async_blocking|async_blocking_start|core_format|async_core_format|field_defaults|async_field_defaults|json_field_defaults|overloads|dict_custom_keys|common_error_fields|sync_initializer_cleanup_growth|fs_metadata_fields|string_outcomes|async_parameter_reassignment|process_outcome_records|async_math_records|numeric_error_codes|regex|regex_o2|async_regex|regex_oom|regex_driver|regex_example|regex_captures|library_text|library_encoding|library_iter_reductions|library_byte_cursor|async_library_text|library_text_oom|encoding_driver|json_schema_driver|json_schema_generics|async_json_schema_generics|library_random|library_uuid|library_hmac|async_library_tokens|hash_driver|hash_digest_values|hash_operations|hash_independent|async_hash_independent|library_time_formats|library_time_interval|standard_record_constructors|time_driver|cbor_driver|crypto_driver|jwt_driver|zone_driver|cose_driver|sqlite_driver|dead_new_helpers|library_signal|library_net_connect|library_net_options|library_net_unix|library_args|library_config|library_log|library_async_task_id|library_task_id_outside|async_direct_calls|arc_clone_only|async_arc_clone_only|test_mode|string_keys)$")
+        elseif(R_CODEGEN_CASE MATCHES "^(async_arc_last_release|string_place_views|async_string_place_views|string_view_owners|async_string_view_owners|field_destructuring|field_access|async_field_access|field_access_instances|core_bits|async_core_bits|switch_dispatch|async_switch_dispatch|tagged_switch_break|async_tagged_switch_break|alloc_into_value|async_alloc_into_value|generic_field_access|async_generic_field_access|user_attributes|async_user_attributes|async_owner_shapes|async_owner_matrix|null_type|async_null_type|explicit_generics|async_explicit_generics|consteval|async_consteval|consteval_checked|async_consteval_checked|consteval_floats|async_consteval_floats|consteval_owners|consteval_frozen|async_consteval_frozen|deadline_blocks|budget_blocks|recursion_bounds|async_for|expression_forms|async_channels|group_detach|group_vacancy|group_capacity|effect_relay|swap_clone|async_swap_clone|derive|async_derive|cmp_impls|function_values|static_values|async_static_values|computed_bounds|async_computed_bounds|typed_constants|async_typed_constants|associated_constants|async_associated_constants|dyn_interfaces|async_dyn_interfaces|dyn_owners|async_dyn_owners|async_locks|async_broadcast|async_reserve|async_blocking|async_blocking_start|core_format|async_core_format|field_defaults|async_field_defaults|json_field_defaults|overloads|dict_custom_keys|common_error_fields|sync_initializer_cleanup_growth|fs_metadata_fields|string_outcomes|async_parameter_reassignment|process_outcome_records|async_math_records|numeric_error_codes|regex|async_regex|regex_oom|regex_driver|regex_example|regex_captures|library_text|library_encoding|library_iter_reductions|library_byte_cursor|async_library_text|library_text_oom|encoding_driver|json_schema_driver|json_schema_generics|async_json_schema_generics|library_random|library_uuid|library_hmac|async_library_tokens|hash_driver|hash_digest_values|hash_operations|hash_independent|async_hash_independent|library_time_formats|library_time_interval|standard_record_constructors|time_driver|cbor_driver|crypto_driver|jwt_driver|zone_driver|cose_driver|sqlite_driver|dead_new_helpers|library_signal|library_net_connect|library_net_options|library_net_unix|library_args|library_config|library_log|library_async_task_id|library_task_id_outside|async_direct_calls|arc_clone_only|async_arc_clone_only|test_mode|string_keys)$")
             set(R_CODEGEN_SOURCE_1
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
             set(R_CODEGEN_SOURCE_2 "")
@@ -5607,11 +5543,7 @@ if(NOT MSVC)
                 set(R_CODEGEN_CHECK_STDOUT TRUE)
                 set(R_CODEGEN_EXPECTED_STDOUT "ok\ndone 1 1\ncolumns 78 747970656f66287829\nrow i42 t696e7465676572\nend\nerror sql 1\n")
             endif()
-            if(R_CODEGEN_CASE STREQUAL "regex_o2")
-                set(R_CODEGEN_SOURCE_1 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_regex.r")
-                set(R_CODEGEN_GENERATED_C_OPTIMIZATION -O2)
-            endif()
-            if(R_CODEGEN_CASE MATCHES "^(regex|regex_o2|async_regex)$")
+            if(R_CODEGEN_CASE MATCHES "^(regex|async_regex)$")
                 set(R_CODEGEN_SOURCE_2 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/regex_cases.r")
             endif()
             if(R_CODEGEN_CASE STREQUAL "regex_example")
@@ -5971,8 +5903,7 @@ if(NOT MSVC)
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_async_fused_default_own.r")
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_EXPECTED_PANIC "")
-            set(R_CODEGEN_MEASURE_STACK_USAGE TRUE)
-            set(R_CODEGEN_STACK_MAX_FRAME_SIZE 4096)
+            set(R_CODEGEN_STACK_FRAME_LIMIT 4096)
         elseif(R_CODEGEN_CASE STREQUAL "async_sync_call")
             set(R_CODEGEN_SOURCE_1
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_async_sync_call.r")
@@ -6169,6 +6100,13 @@ if(NOT MSVC)
             set(R_CODEGEN_EXPECTED_PANIC "")
             set(R_CODEGEN_PROGRAM_ARGUMENTS
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_async_fs_read_file.r")
+        elseif(R_CODEGEN_CASE STREQUAL "sync_fs_start")
+            # B6-5: synchronous functions start std.fs tasks on a borrowed path.
+            set(R_CODEGEN_SOURCE_1 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_sync_fs_start.r")
+            set(R_CODEGEN_SOURCE_2 "")
+            set(R_CODEGEN_EXPECTED_PANIC "")
+            set(R_CODEGEN_PROGRAM_ARGUMENTS
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_sync_fs_start.r;${PROJECT_SOURCE_DIR}")
         elseif(R_CODEGEN_CASE STREQUAL "async_fs_open_directory")
             set(R_CODEGEN_SOURCE_1
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_async_fs_open_directory.r")
@@ -6281,8 +6219,7 @@ if(NOT MSVC)
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_async_large_frame.r")
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_EXPECTED_PANIC "")
-            set(R_CODEGEN_MEASURE_STACK_USAGE TRUE)
-            set(R_CODEGEN_STACK_MAX_FRAME_SIZE 1024)
+            set(R_CODEGEN_STACK_FRAME_LIMIT 1024)
         elseif(R_CODEGEN_CASE STREQUAL "slice_import")
             set(R_CODEGEN_SOURCE_1
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_slice_api.r")
@@ -6313,14 +6250,10 @@ if(NOT MSVC)
             set(R_CODEGEN_SOURCE_1 "${R_CODEGEN_CHECKED_MATRIX_SOURCE}")
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_EXPECTED_PANIC "")
-        elseif(R_CODEGEN_CASE STREQUAL "core_integer_all" OR
-               R_CODEGEN_CASE STREQUAL "core_integer_all_o2")
+        elseif(R_CODEGEN_CASE STREQUAL "core_integer_all")
             set(R_CODEGEN_SOURCE_1 "${R_CODEGEN_CORE_INTEGER_ALL_SOURCE}")
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_EXPECTED_PANIC "")
-            if(R_CODEGEN_CASE STREQUAL "core_integer_all_o2")
-                set(R_CODEGEN_GENERATED_C_OPTIMIZATION "-O2")
-            endif()
         elseif(R_CODEGEN_CASE STREQUAL "link_available")
             set(R_CODEGEN_SOURCE_1
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_link_available.r")
@@ -6505,7 +6438,6 @@ if(NOT MSVC)
                 -DABI_INVENTORY=${R_CODEGEN_ABI_INVENTORY}
                 -DABI_RECORD_TOOL=${PROJECT_SOURCE_DIR}/tools/generate_c_abi_record.py
                 -DHEADER_INCLUDE_DIRS=${R_CODEGEN_HEADER_INCLUDE_DIRS}
-                -DOUTPUT_C=${CMAKE_CURRENT_BINARY_DIR}/codegen_${R_CODEGEN_CASE}.c
                 -DOUTPUT_EXE=${CMAKE_CURRENT_BINARY_DIR}/codegen_${R_CODEGEN_CASE}
                 -DHASH_ONLY=${R_CODEGEN_HASH_ONLY}
                 -DC_WRAPPER=${R_CODEGEN_C_WRAPPER}
@@ -6580,7 +6512,7 @@ if(NOT MSVC)
                 -DEXPECTED_SECOND_PANIC=${R_CODEGEN_EXPECTED_SECOND_PANIC}
                 -DEXPECTED_EXIT_STATUS=${R_CODEGEN_EXPECTED_EXIT_STATUS}
                 "-DEXPECTED_STDERR=${R_CODEGEN_EXPECTED_STDERR}"
-                -DPROGRAM_ARGUMENTS=${R_CODEGEN_PROGRAM_ARGUMENTS}
+                "-DPROGRAM_ARGUMENTS=${R_CODEGEN_PROGRAM_ARGUMENTS}"
                 -DPROGRAM_INPUT_FILE=${R_CODEGEN_PROGRAM_INPUT_FILE}
                 -DCHECK_STDOUT=${R_CODEGEN_CHECK_STDOUT}
                 -DEXPECTED_STDOUT=${R_CODEGEN_EXPECTED_STDOUT}
@@ -6589,12 +6521,11 @@ if(NOT MSVC)
                 -DATOMIC_WRITE_SOURCE=${R_CODEGEN_ATOMIC_WRITE_SOURCE}
                 -DATOMIC_WRITE_REPLACEMENT_SOURCE=${R_CODEGEN_ATOMIC_WRITE_REPLACEMENT_SOURCE}
                 -DATOMIC_WRITE_RELATIVE=${R_CODEGEN_ATOMIC_WRITE_RELATIVE}
-                -DMEASURE_GENERATED_STACK_USAGE=${R_CODEGEN_MEASURE_STACK_USAGE}
-                -DSTACK_USAGE_MAX_FRAME_SIZE=${R_CODEGEN_STACK_MAX_FRAME_SIZE}
-                -DSTACK_USAGE_EXPECT_FRAME_GREATER_THAN=${R_CODEGEN_STACK_EXPECT_FRAME_GREATER_THAN}
+                -DSTACK_FRAME_LIMIT=${R_CODEGEN_STACK_FRAME_LIMIT}
+                -DSTACK_REPORT=${R_CODEGEN_STACK_REPORT}
                 -DENABLE_SANITIZERS=${R_FRONTEND_ENABLE_SANITIZERS}
                 -DENABLE_THREAD_SANITIZER=${R_FRONTEND_ENABLE_THREAD_SANITIZER}
-                -DGENERATED_C_OPTIMIZATION=${R_CODEGEN_GENERATED_C_OPTIMIZATION}
+                -DR_RUNTIME_INLINE_SHIMS_LIBRARY=$<TARGET_FILE:r_runtime_inline_shims>
                 -P ${R_CODEGEN_CHECK_SCRIPT}
         )
         if(R_CODEGEN_CASE MATCHES "^async_io_close_(input|output)$" OR
@@ -6611,35 +6542,10 @@ if(NOT MSVC)
         unset(R_CODEGEN_ATOMIC_WRITE_SOURCE)
         unset(R_CODEGEN_ATOMIC_WRITE_REPLACEMENT_SOURCE)
         unset(R_CODEGEN_ATOMIC_WRITE_RELATIVE)
-        unset(R_CODEGEN_MEASURE_STACK_USAGE)
-        unset(R_CODEGEN_STACK_MAX_FRAME_SIZE)
-        unset(R_CODEGEN_STACK_EXPECT_FRAME_GREATER_THAN)
+        unset(R_CODEGEN_STACK_FRAME_LIMIT)
+        unset(R_CODEGEN_STACK_REPORT)
         unset(R_CODEGEN_CHECK_STDOUT)
         unset(R_CODEGEN_EXPECTED_STDOUT)
-        unset(R_CODEGEN_GENERATED_C_OPTIMIZATION)
-        if(R_CODEGEN_CLANG_FORMAT AND NOT R_CODEGEN_CASE MATCHES "_o2$")
-            add_test(
-                NAME r_frontend_codegen_${R_CODEGEN_CASE}_format
-                COMMAND "${CMAKE_COMMAND}"
-                    -DR_FRONT_EXECUTABLE=$<TARGET_FILE:r-front>
-                    -DCLANG_FORMAT=${R_CODEGEN_CLANG_FORMAT}
-                    -DC_COMPILER=${CMAKE_C_COMPILER}
-                    -DPYTHON_EXECUTABLE=${Python3_EXECUTABLE}
-                    -DABI_RECORD_TOOL=${PROJECT_SOURCE_DIR}/tools/generate_c_abi_record.py
-                    -DABI_INVENTORY=${R_CODEGEN_ABI_INVENTORY}
-                    -DHEADER_INCLUDE_DIRS=${R_CODEGEN_HEADER_INCLUDE_DIRS}
-                    -DMODULE_MAP=${R_CODEGEN_MODULE_MAP}
-                    -DENTRY=${R_CODEGEN_ENTRY}
-                -DSOURCE_1=${R_CODEGEN_SOURCE_1}
-                    -DSOURCE_2=${R_CODEGEN_SOURCE_2}
-                    -DLIBRARY_MAP=${PROJECT_SOURCE_DIR}/library/r/library.map
-                    -DLINK_MANIFEST=${R_CODEGEN_LINK_MANIFEST}
-                    -DFORMAT_STYLE=${PROJECT_SOURCE_DIR}/.clang-format
-                    -DTEST_MODE=${R_CODEGEN_TEST_MODE}
-                    -DOUTPUT_C=${CMAKE_CURRENT_BINARY_DIR}/codegen_${R_CODEGEN_CASE}_format.c
-                    -P ${CMAKE_CURRENT_SOURCE_DIR}/check_codegen_format.cmake
-            )
-        endif()
         unset(R_CODEGEN_LINK_MANIFEST)
         unset(R_CODEGEN_EXTRA_C_SOURCES)
         unset(R_CODEGEN_ABI_VERIFY)
@@ -7010,14 +6916,14 @@ if(NOT MSVC)
             "ffi_import_aggregate:hir:none:reject:R-DIAG-FFI-004"
             "ffi_import_reserved_name:hir:none:accept:none"
             "ffi_import_reserved_no_header:hir:none:reject:R-DIAG-FFI-003"
-            "ffi_import_definition_conflict:c17:conflict:reject:R-DIAG-FFI-004"
-            "codegen_ffi_import:c17:none:reject:R-DIAG-LINK-001"
-            "ffi_import_unknown_link:c17:probe:reject:R-DIAG-LINK-001"
-            "ffi_import_missing_symbol:c17:probe:reject:R-DIAG-LINK-003"
-            "ffi_import_kind_mismatch:c17:probe:reject:R-DIAG-LINK-002"
-            "ffi_import_data_symbol:c17:probe:reject:R-DIAG-LINK-003"
-            "ffi_import_implicit_ok:c17:implicit:accept:none"
-            "codegen_ffi_import:c17:probe:accept:none"
+            "ffi_import_definition_conflict:llvm-ir:conflict:reject:R-DIAG-FFI-004"
+            "codegen_ffi_import:llvm-ir:none:reject:R-DIAG-LINK-001"
+            "ffi_import_unknown_link:llvm-ir:probe:reject:R-DIAG-LINK-001"
+            "ffi_import_missing_symbol:llvm-ir:probe:reject:R-DIAG-LINK-003"
+            "ffi_import_kind_mismatch:llvm-ir:probe:reject:R-DIAG-LINK-002"
+            "ffi_import_data_symbol:llvm-ir:probe:reject:R-DIAG-LINK-003"
+            "ffi_import_implicit_ok:llvm-ir:implicit:accept:none"
+            "codegen_ffi_import:llvm-ir:probe:accept:none"
             "ffi_opaque_by_value:hir:none:reject:R-DIAG-FFI-003"
             "ffi_opaque_deref:hir:none:reject:R-DIAG-FFI-003"
             "ffi_opaque_enum_kind:hir:none:reject:R-DIAG-FFI-003"
@@ -7029,14 +6935,14 @@ if(NOT MSVC)
             "ffi_object_bad_type:hir:none:reject:R-DIAG-FFI-001"
             "ffi_variadic_no_fixed:hir:none:reject:R-DIAG-SYN-001"
             "ffi_variadic_bad_argument:hir:none:reject:R-DIAG-FFI-002"
-            "ffi_object_kind_mismatch:c17:probe:reject:R-DIAG-LINK-003"
-            "codegen_ffi_types:c17:probe:accept:none"
+            "ffi_object_kind_mismatch:llvm-ir:probe:reject:R-DIAG-LINK-003"
+            "codegen_ffi_types:llvm-ir:probe:accept:none"
             "ffi_record_missing_abi:hir:none:reject:R-DIAG-FFI-004"
             "ffi_record_missing_c_type:hir:none:reject:R-DIAG-FFI-003"
             "ffi_record_union_kind:hir:none:reject:R-DIAG-FFI-003"
-            "codegen_ffi_records:c17:probe:reject:R-DIAG-FFI-004"
+            "codegen_ffi_records:llvm-ir:probe:reject:R-DIAG-FFI-004"
             "ffi_variadic_definition:hir:none:reject:R-DIAG-SYN-001"
-            "ffi_import_unavailable:c17:probe:reject:R-DIAG-LINK-001"
+            "ffi_import_unavailable:llvm-ir:probe:reject:R-DIAG-LINK-001"
             "ffi_two_provider_collision:hir:none:reject:R-DIAG-FFI-003"
             "ffi_import_r_struct_no_header:hir:none:reject:R-DIAG-FFI-003"
             "ffi_import_r_struct_variadic:hir:none:reject:R-DIAG-FFI-003"
@@ -7186,8 +7092,7 @@ if(NOT MSVC)
     add_test(NAME r_example_calculator_commands
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/run_calculator_examples.py"
             --executable "${CMAKE_CURRENT_BINARY_DIR}/codegen_example_calculator"
-            --stack-header
-            "${CMAKE_CURRENT_BINARY_DIR}/codegen_example_calculator.c.stack-usage.h")
+            --stack-ir "${CMAKE_CURRENT_BINARY_DIR}/codegen_example_calculator.ll")
     set_tests_properties(r_example_calculator_commands PROPERTIES
         FIXTURES_REQUIRED r_example_calculator TIMEOUT 300 LABELS "examples;math")
     add_test(NAME r_example_calculator_generated
@@ -7212,6 +7117,12 @@ if(NOT MSVC)
         set_tests_properties(r_example_${R_EXAMPLE_APP}_commands PROPERTIES
             FIXTURES_REQUIRED r_example_${R_EXAMPLE_APP} TIMEOUT 300 LABELS "examples")
     endforeach()
+    if(R_FRONTEND_ENABLE_THREAD_SANITIZER)
+        # B0-2: every command of json_tool is a process of its own, and ThreadSanitizer sleeps at
+        # each exit (atexit_sleep_ms) to report threads that outlive main; its 120 commands need
+        # about six minutes there.
+        set_tests_properties(r_example_json_tool_commands PROPERTIES TIMEOUT 600)
+    endif()
 
     # Library R-SLIB-PG-0001..0016 (M35, M41): the std.postgres tests and the database commands
     # of the examples run against a temporary PostgreSQL cluster when its server programs are
@@ -7566,7 +7477,6 @@ if(NOT MSVC)
         COMMAND "${CMAKE_COMMAND}"
             -DR_FRONT_EXECUTABLE=$<TARGET_FILE:r-front>
             -DC_COMPILER=${CMAKE_C_COMPILER}
-            -DPYTHON_EXECUTABLE=${Python3_EXECUTABLE}
             -DTARGET_MANIFEST=${PROJECT_SOURCE_DIR}/targets/arm64-apple-darwin.freestanding.json
             -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/freestanding_program.r
             -DENVIRONMENT_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/freestanding/environment.c
@@ -7641,7 +7551,7 @@ if(NOT MSVC)
                 -DHEADER_INCLUDE_DIRS=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ffi
                 -DOUTPUT_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/abi_record_${R_RECORD_FIXTURE}
                 -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/${R_RECORD_FIXTURE}.r
-                -DEMIT=c17
+                -DEMIT=llvm-ir
                 -DLINK_MANIFEST=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_ffi_link_manifest.json
                 -DEXPECTATION=${R_RECORD_EXPECTATION}
                 -DREQUIRED_DIAGNOSTIC=${R_RECORD_DIAGNOSTIC}
@@ -7669,7 +7579,7 @@ if(NOT MSVC)
             COMMAND "${CMAKE_COMMAND}"
                 -DR_FRONT_EXECUTABLE=$<TARGET_FILE:r-front>
                 -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/${R_IDENTITY_FIXTURE}.r
-                -DEMIT=c17
+                -DEMIT=llvm-ir
                 -DTARGET_MANIFEST=${PROJECT_SOURCE_DIR}/targets/arm64-apple-darwin.hosted-native-async.json
                 -DLINK_MANIFEST=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_ffi_link_manifest.json
                 -DABI_RECORD=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ffi/${R_IDENTITY_RECORD}
@@ -9549,8 +9459,6 @@ if(NOT MSVC)
             -DR_FRONT_EXECUTABLE=$<TARGET_FILE:r-front>
             -DSOURCE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_sync_aggregate_destination.r
             -DTARGET_MANIFEST=${PROJECT_SOURCE_DIR}/targets/arm64-apple-darwin.hosted-native-async.json
-            -DC_COMPILER=${CMAKE_C_COMPILER}
-            -DRUNTIME_INCLUDE=${PROJECT_SOURCE_DIR}/runtime/include
             -P ${CMAKE_CURRENT_SOURCE_DIR}/check_sync_aggregate_destination_codegen_artifacts.cmake
     )
 
@@ -9602,7 +9510,6 @@ if(NOT MSVC)
             -DENTRY=example.unzip.tests.main::main
             -DPROFILE=hosted-native-async
             -DTARGET_MANIFEST=${PROJECT_SOURCE_DIR}/targets/arm64-apple-darwin.hosted-native-async.json
-            -DOUTPUT_C=${CMAKE_CURRENT_BINARY_DIR}/codegen_unzip_pure.c
             -DOUTPUT_EXE=${CMAKE_CURRENT_BINARY_DIR}/codegen_unzip_pure
             -DRUNTIME_INCLUDE=${PROJECT_SOURCE_DIR}/runtime/include
             -DRUNTIME_DARWIN_INCLUDE=${PROJECT_SOURCE_DIR}/runtime/darwin/include
@@ -9670,10 +9577,9 @@ if(NOT MSVC)
             -DRUNTIME_UTF8_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/utf8.c
             -DRUNTIME_PANIC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/panic_abort.c
             -DEXPECTED_PANIC=
-            -DMEASURE_GENERATED_STACK_USAGE=TRUE
-            -DSTACK_USAGE_MAX_FRAME_SIZE=262144
             -DENABLE_SANITIZERS=${R_FRONTEND_ENABLE_SANITIZERS}
             -DENABLE_THREAD_SANITIZER=${R_FRONTEND_ENABLE_THREAD_SANITIZER}
+            -DR_RUNTIME_INLINE_SHIMS_LIBRARY=$<TARGET_FILE:r_runtime_inline_shims>
             -P ${CMAKE_CURRENT_SOURCE_DIR}/check_codegen_program.cmake
     )
     add_test(
@@ -9687,12 +9593,8 @@ if(NOT MSVC)
             -DENTRY=example.unzip.main::main
             -DPROFILE=hosted-native-async
             -DTARGET_MANIFEST=${PROJECT_SOURCE_DIR}/targets/arm64-apple-darwin.hosted-native-async.json
-            -DOUTPUT_C=${CMAKE_CURRENT_BINARY_DIR}/codegen_unzip_full.c
             -DOUTPUT_EXE=${CMAKE_CURRENT_BINARY_DIR}/codegen_unzip_full
             -DC_WRAPPER=${CMAKE_CURRENT_SOURCE_DIR}/codegen_unzip_full_wrapper.c
-            -DMEASURE_GENERATED_STACK_USAGE=TRUE
-            -DSTACK_USAGE_MAX_FRAME_SIZE=262144
-            -DSTACK_USAGE_EXPECT_FRAME_GREATER_THAN=4096
             -DRUNTIME_INCLUDE=${PROJECT_SOURCE_DIR}/runtime/include
             -DRUNTIME_DARWIN_INCLUDE=${PROJECT_SOURCE_DIR}/runtime/darwin/include
             -DR_STD_ALLOC_INCLUDE=${PROJECT_SOURCE_DIR}/library/std/alloc/include
@@ -9761,6 +9663,7 @@ if(NOT MSVC)
             -DEXPECTED_PANIC=
             -DENABLE_SANITIZERS=${R_FRONTEND_ENABLE_SANITIZERS}
             -DENABLE_THREAD_SANITIZER=${R_FRONTEND_ENABLE_THREAD_SANITIZER}
+            -DR_RUNTIME_INLINE_SHIMS_LIBRARY=$<TARGET_FILE:r_runtime_inline_shims>
             -P ${CMAKE_CURRENT_SOURCE_DIR}/check_codegen_program.cmake
     )
     add_test(
@@ -9774,7 +9677,6 @@ if(NOT MSVC)
             -DENTRY=example.zip.tests.main::main
             -DPROFILE=hosted-native-async
             -DTARGET_MANIFEST=${PROJECT_SOURCE_DIR}/targets/arm64-apple-darwin.hosted-native-async.json
-            -DOUTPUT_C=${CMAKE_CURRENT_BINARY_DIR}/codegen_zip_pure.c
             -DOUTPUT_EXE=${CMAKE_CURRENT_BINARY_DIR}/codegen_zip_pure
             -DRUNTIME_INCLUDE=${PROJECT_SOURCE_DIR}/runtime/include
             -DRUNTIME_DARWIN_INCLUDE=${PROJECT_SOURCE_DIR}/runtime/darwin/include
@@ -9842,10 +9744,9 @@ if(NOT MSVC)
             -DRUNTIME_UTF8_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/utf8.c
             -DRUNTIME_PANIC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/panic_abort.c
             -DEXPECTED_PANIC=
-            -DMEASURE_GENERATED_STACK_USAGE=TRUE
-            -DSTACK_USAGE_MAX_FRAME_SIZE=262144
             -DENABLE_SANITIZERS=${R_FRONTEND_ENABLE_SANITIZERS}
             -DENABLE_THREAD_SANITIZER=${R_FRONTEND_ENABLE_THREAD_SANITIZER}
+            -DR_RUNTIME_INLINE_SHIMS_LIBRARY=$<TARGET_FILE:r_runtime_inline_shims>
             -P ${CMAKE_CURRENT_SOURCE_DIR}/check_codegen_program.cmake
     )
     add_test(
@@ -9859,7 +9760,6 @@ if(NOT MSVC)
             -DENTRY=example.zip.main::main
             -DPROFILE=hosted-native-async
             -DTARGET_MANIFEST=${PROJECT_SOURCE_DIR}/targets/arm64-apple-darwin.hosted-native-async.json
-            -DOUTPUT_C=${CMAKE_CURRENT_BINARY_DIR}/codegen_zip_full.c
             -DOUTPUT_EXE=${CMAKE_CURRENT_BINARY_DIR}/codegen_zip_full
             -DRUNTIME_INCLUDE=${PROJECT_SOURCE_DIR}/runtime/include
             -DRUNTIME_DARWIN_INCLUDE=${PROJECT_SOURCE_DIR}/runtime/darwin/include
@@ -9927,11 +9827,10 @@ if(NOT MSVC)
             -DRUNTIME_UTF8_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/utf8.c
             -DRUNTIME_PANIC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/panic_abort.c
             -DEXPECTED_PANIC=
-            -DMEASURE_GENERATED_STACK_USAGE=TRUE
-            -DSTACK_USAGE_MAX_FRAME_SIZE=262144
             -DCOMPILE_ONLY=TRUE
             -DENABLE_SANITIZERS=${R_FRONTEND_ENABLE_SANITIZERS}
             -DENABLE_THREAD_SANITIZER=${R_FRONTEND_ENABLE_THREAD_SANITIZER}
+            -DR_RUNTIME_INLINE_SHIMS_LIBRARY=$<TARGET_FILE:r_runtime_inline_shims>
             -P ${CMAKE_CURRENT_SOURCE_DIR}/check_codegen_program.cmake
     )
     add_test(
@@ -9945,7 +9844,6 @@ if(NOT MSVC)
             -DENTRY=example.unzip.main::main
             -DPROFILE=hosted-native-async
             -DTARGET_MANIFEST=${PROJECT_SOURCE_DIR}/targets/arm64-apple-darwin.hosted-native-async.json
-            -DOUTPUT_C=${CMAKE_CURRENT_BINARY_DIR}/codegen_unzip_roundtrip.c
             -DOUTPUT_EXE=${CMAKE_CURRENT_BINARY_DIR}/codegen_unzip_roundtrip
             -DRUNTIME_INCLUDE=${PROJECT_SOURCE_DIR}/runtime/include
             -DRUNTIME_DARWIN_INCLUDE=${PROJECT_SOURCE_DIR}/runtime/darwin/include
@@ -10013,11 +9911,10 @@ if(NOT MSVC)
             -DRUNTIME_UTF8_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/utf8.c
             -DRUNTIME_PANIC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/panic_abort.c
             -DEXPECTED_PANIC=
-            -DMEASURE_GENERATED_STACK_USAGE=TRUE
-            -DSTACK_USAGE_MAX_FRAME_SIZE=262144
             -DCOMPILE_ONLY=TRUE
             -DENABLE_SANITIZERS=${R_FRONTEND_ENABLE_SANITIZERS}
             -DENABLE_THREAD_SANITIZER=${R_FRONTEND_ENABLE_THREAD_SANITIZER}
+            -DR_RUNTIME_INLINE_SHIMS_LIBRARY=$<TARGET_FILE:r_runtime_inline_shims>
             -P ${CMAKE_CURRENT_SOURCE_DIR}/check_codegen_program.cmake
     )
     set_tests_properties(
@@ -10249,60 +10146,6 @@ if(NOT MSVC)
             "-DTARGET_MANIFEST=${PROJECT_SOURCE_DIR}/targets/arm64-apple-darwin.hosted-native-async.json"
             -P ${CMAKE_CURRENT_SOURCE_DIR}/check_standard_outcome_codegen_artifacts.cmake
     )
-    if(R_CODEGEN_CLANG_FORMAT)
-        add_test(
-            NAME r_frontend_codegen_unzip_pure_format
-            COMMAND "${CMAKE_COMMAND}"
-                -DR_FRONT_EXECUTABLE=$<TARGET_FILE:r-front>
-                -DCLANG_FORMAT=${R_CODEGEN_CLANG_FORMAT}
-                -DMODULE_MAP=${PROJECT_SOURCE_DIR}/examples/unzip/modules.map
-                -DENTRY=example.unzip.tests.main::main
-                -DPROFILE=hosted-native-async
-                -DTARGET_MANIFEST=${PROJECT_SOURCE_DIR}/targets/arm64-apple-darwin.hosted-native-async.json
-                -DFORMAT_STYLE=${PROJECT_SOURCE_DIR}/.clang-format
-                -DOUTPUT_C=${CMAKE_CURRENT_BINARY_DIR}/codegen_unzip_pure_format.c
-                -P ${CMAKE_CURRENT_SOURCE_DIR}/check_codegen_format.cmake
-        )
-        add_test(
-            NAME r_frontend_codegen_unzip_full_format
-            COMMAND "${CMAKE_COMMAND}"
-                -DR_FRONT_EXECUTABLE=$<TARGET_FILE:r-front>
-                -DCLANG_FORMAT=${R_CODEGEN_CLANG_FORMAT}
-                -DMODULE_MAP=${PROJECT_SOURCE_DIR}/examples/unzip/modules.map
-                -DENTRY=example.unzip.main::main
-                -DPROFILE=hosted-native-async
-                -DTARGET_MANIFEST=${PROJECT_SOURCE_DIR}/targets/arm64-apple-darwin.hosted-native-async.json
-                -DFORMAT_STYLE=${PROJECT_SOURCE_DIR}/.clang-format
-                -DOUTPUT_C=${CMAKE_CURRENT_BINARY_DIR}/codegen_unzip_full_format.c
-                -P ${CMAKE_CURRENT_SOURCE_DIR}/check_codegen_format.cmake
-        )
-        add_test(
-            NAME r_frontend_codegen_zip_pure_format
-            COMMAND "${CMAKE_COMMAND}"
-                -DR_FRONT_EXECUTABLE=$<TARGET_FILE:r-front>
-                -DCLANG_FORMAT=${R_CODEGEN_CLANG_FORMAT}
-                -DMODULE_MAP=${PROJECT_SOURCE_DIR}/examples/zip/modules.map
-                -DENTRY=example.zip.tests.main::main
-                -DPROFILE=hosted-native-async
-                -DTARGET_MANIFEST=${PROJECT_SOURCE_DIR}/targets/arm64-apple-darwin.hosted-native-async.json
-                -DFORMAT_STYLE=${PROJECT_SOURCE_DIR}/.clang-format
-                -DOUTPUT_C=${CMAKE_CURRENT_BINARY_DIR}/codegen_zip_pure_format.c
-                -P ${CMAKE_CURRENT_SOURCE_DIR}/check_codegen_format.cmake
-        )
-        add_test(
-            NAME r_frontend_codegen_zip_full_format
-            COMMAND "${CMAKE_COMMAND}"
-                -DR_FRONT_EXECUTABLE=$<TARGET_FILE:r-front>
-                -DCLANG_FORMAT=${R_CODEGEN_CLANG_FORMAT}
-                -DMODULE_MAP=${PROJECT_SOURCE_DIR}/examples/zip/modules.map
-                -DENTRY=example.zip.main::main
-                -DPROFILE=hosted-native-async
-                -DTARGET_MANIFEST=${PROJECT_SOURCE_DIR}/targets/arm64-apple-darwin.hosted-native-async.json
-                -DFORMAT_STYLE=${PROJECT_SOURCE_DIR}/.clang-format
-                -DOUTPUT_C=${CMAKE_CURRENT_BINARY_DIR}/codegen_zip_full_format.c
-                -P ${CMAKE_CURRENT_SOURCE_DIR}/check_codegen_format.cmake
-        )
-    endif()
 endif()
 
 add_test(

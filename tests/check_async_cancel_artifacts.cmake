@@ -40,22 +40,21 @@ r_require_match_count(mir_output "operation=std\.async::cancel" 2
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
+        --emit=llvm-ir
         --entry test.codegen.async_cancel::main
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"
         "${SOURCE_FILE}"
-    RESULT_VARIABLE c17_result
-    OUTPUT_VARIABLE c17_output
-    ERROR_VARIABLE c17_error
+    RESULT_VARIABLE ir_result
+    OUTPUT_VARIABLE ir_output
+    ERROR_VARIABLE ir_error
 )
-if(NOT c17_result EQUAL 0)
-    message(FATAL_ERROR "C17 emit failed (${c17_result}): ${c17_error}")
+if(NOT ir_result EQUAL 0)
+    message(FATAL_ERROR "LLVM IR emit failed (${ir_result}): ${ir_error}")
 endif()
-r_require_match_count(c17_output "#include \"r_std_async\.h\"" 1
-    "generated std.async include")
-r_require_match_count(c17_output "r_std_async_cancel[(]" 2
-    "generated async cancel calls")
+# Each cancel operation is one call of its std.async entry.
+r_require_match_count(ir_output "call [^\n]*@r_std_async_cancel[(]" 2
+    "async cancel calls")
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"

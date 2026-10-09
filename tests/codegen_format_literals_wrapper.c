@@ -35,7 +35,9 @@ static size_t r_test_live_count(void) {
     return count;
 }
 
-static RRuntimeTaskExecutionAwaitStatus
+RRuntimeTaskExecutionAwaitStatus
+r_test_await(RRuntimeTaskExecution *execution, RRuntimeTask **task, void *storage);
+RRuntimeTaskExecutionAwaitStatus
 r_test_await(RRuntimeTaskExecution *execution, RRuntimeTask **task, void *storage) {
     RRuntimeTaskExecutionAwaitStatus status =
         r_runtime_task_execution_await(execution, task, storage);
@@ -48,14 +50,16 @@ r_test_await(RRuntimeTaskExecution *execution, RRuntimeTask **task, void *storag
     }
     return status;
 }
-static _Bool r_test_cancel_requested(const RRuntimeTaskExecution *execution) {
+_Bool r_test_cancel_requested(const RRuntimeTaskExecution *execution);
+_Bool r_test_cancel_requested(const RRuntimeTaskExecution *execution) {
     return (atomic_load_explicit(&r_test_cancel_enabled, memory_order_acquire) &&
             atomic_load_explicit(&r_test_cancel_armed, memory_order_acquire)) ||
            r_runtime_task_execution_cancel_requested(execution);
 }
 /* P4.4: an awaited call that runs directly is a point of cancellation as the await of a started
    task is; the code after it reads the cancellation request. */
-static _Bool r_test_direct_begin(size_t stack_bytes) {
+_Bool r_test_direct_begin(size_t stack_bytes);
+_Bool r_test_direct_begin(size_t stack_bytes) {
     const _Bool direct = r_runtime_task_direct_begin(stack_bytes);
     if (direct && atomic_load_explicit(&r_test_cancel_enabled, memory_order_acquire) &&
         r_test_live_count() != 0U) {
@@ -63,7 +67,8 @@ static _Bool r_test_direct_begin(size_t stack_bytes) {
     }
     return direct;
 }
-static RRuntimeTaskAwaitStatus r_test_root_await(RRuntimeTask **task, void *storage) {
+RRuntimeTaskAwaitStatus r_test_root_await(RRuntimeTask **task, void *storage);
+RRuntimeTaskAwaitStatus r_test_root_await(RRuntimeTask **task, void *storage) {
     RRuntimeTaskAwaitStatus status = r_runtime_task_await(task, storage);
     if (atomic_load_explicit(&r_test_cancel_enabled, memory_order_acquire) &&
         status == R_RUNTIME_TASK_AWAIT_CANCELLED) {
@@ -74,7 +79,8 @@ static RRuntimeTaskAwaitStatus r_test_root_await(RRuntimeTask **task, void *stor
     return status;
 }
 
-static RRuntimeAllocator *r_test_hosted_allocator(void) {
+RRuntimeAllocator *r_test_hosted_allocator(void);
+RRuntimeAllocator *r_test_hosted_allocator(void) {
     return &r_test_allocator;
 }
 static void r_test_record(void *data) {
@@ -104,15 +110,16 @@ static void r_test_release(void *data) {
     }
     r_test_unlock_owned();
 }
-static RStdStringAllocValueResult r_test_from_str(RRuntimeAllocator *allocator,
-                                                  RStdStringView view) {
+RStdStringAllocValueResult r_test_from_str(RRuntimeAllocator *allocator, RStdStringView view);
+RStdStringAllocValueResult r_test_from_str(RRuntimeAllocator *allocator, RStdStringView view) {
     RStdStringAllocValueResult result = r_std_string_from_str(allocator, view);
     if (result.status == R_STD_STRING_CALL_SUCCESS) {
         r_test_record(result.value.bytes.data);
     }
     return result;
 }
-static RStdString r_test_finish(RStdFormatBuilder *builder) {
+RStdString r_test_finish(RStdFormatBuilder *builder);
+RStdString r_test_finish(RStdFormatBuilder *builder) {
     RStdString result = r_std_format_finish(builder);
     r_test_record(result.bytes.data);
     if (result.bytes.length == 9U && memcmp(result.bytes.data, "finalized", 9U) == 0) {
@@ -120,11 +127,13 @@ static RStdString r_test_finish(RStdFormatBuilder *builder) {
     }
     return result;
 }
-static void r_test_string_destroy(RStdString *source) {
+void r_test_string_destroy(RStdString *source);
+void r_test_string_destroy(RStdString *source) {
     r_test_release(source->bytes.data);
     r_std_string_destroy(source);
 }
-static void r_test_array_destroy(RRuntimeArray *source) {
+void r_test_array_destroy(RRuntimeArray *source);
+void r_test_array_destroy(RRuntimeArray *source) {
     r_test_release(source->data);
     r_runtime_array_destroy(source);
 }
@@ -140,7 +149,7 @@ static void r_test_array_destroy(RRuntimeArray *source) {
 #define r_runtime_task_direct_begin r_test_direct_begin
 #define main r_generated_main
 int main(int argc, char *argv[]);
-#include R_TEST_GENERATED_C
+#include R_TEST_PROGRAM_PRELUDE
 #undef main
 #undef r_runtime_task_direct_begin
 #undef r_runtime_task_await

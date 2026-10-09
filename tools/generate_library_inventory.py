@@ -1432,7 +1432,7 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
         "implementation": {
             "kind": "intrinsic",
             "compiler_contract": (
-                "A standard call whose C17 lowering is a switch over the enumeration value assigning the program string of the declared variant name."
+                "A standard call whose lowering is a switch over the enumeration value assigning the program string of the declared variant name."
             ),
         },
     },
@@ -1442,7 +1442,7 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
         "implementation": {
             "kind": "intrinsic",
             "compiler_contract": (
-                "A standard call whose C17 lowering is a switch over the enumeration value assigning the zero-based declaration index."
+                "A standard call whose lowering is a switch over the enumeration value assigning the zero-based declaration index."
             ),
         },
     },
@@ -1452,7 +1452,7 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
         "implementation": {
             "kind": "intrinsic",
             "compiler_contract": (
-                "A standard call whose C17 lowering is a switch over the usize index constructing o::some of the variant at that declaration index, or o::none."
+                "A standard call whose lowering is a switch over the usize index constructing o::some of the variant at that declaration index, or o::none."
             ),
         },
     },
@@ -1462,7 +1462,7 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
         "implementation": {
             "kind": "intrinsic",
             "compiler_contract": (
-                "A standard call whose C17 lowering searches a static const table of the variant names with a translation-unit-local helper and constructs o::some of the matching variant, or o::none."
+                "A standard call whose lowering searches a static const table of the variant names with a translation-unit-local helper and constructs o::some of the matching variant, or o::none."
             ),
         },
     },
@@ -1482,7 +1482,7 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
         "implementation": {
             "kind": "intrinsic",
             "compiler_contract": (
-                "A standard call over a shared borrow whose C17 lowering is a switch over the active tag assigning the program string of the declared variant name."
+                "A standard call over a shared borrow whose lowering is a switch over the active tag assigning the program string of the declared variant name."
             ),
         },
     },
@@ -1574,7 +1574,7 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
         "implementation": {
             "kind": "intrinsic",
             "compiler_contract": (
-                "The semantic pass checks the attribute type and the C17 emitter writes the "
+                "The semantic pass checks the attribute type and the emitter writes the "
                 "arguments of the attribute on the type as a translation-time constant."
             ),
         },
@@ -1585,7 +1585,7 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
         "implementation": {
             "kind": "intrinsic",
             "compiler_contract": (
-                "The semantic pass checks the attribute type and the C17 emitter selects the "
+                "The semantic pass checks the attribute type and the emitter selects the "
                 "arguments of the attribute on the indexed field from a translation-time table."
             ),
         },
@@ -1596,7 +1596,7 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
         "implementation": {
             "kind": "intrinsic",
             "compiler_contract": (
-                "The semantic pass checks the attribute type and the C17 emitter selects the "
+                "The semantic pass checks the attribute type and the emitter selects the "
                 "arguments of the attribute on the enumerator from a translation-time table."
             ),
         },
@@ -1611,7 +1611,7 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
         "implementation": {
             "kind": "intrinsic",
             "compiler_contract": (
-                "Typed C17 atomic compare-exchange lowering validates the success and failure "
+                "Typed atomic compare-exchange lowering validates the success and failure "
                 "orders independently, evaluates every operand once, and constructs the "
                 "ordinary exchanged(observed) or unchanged(observed) outcome."
             ),
@@ -1622,7 +1622,7 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
         "source_signature": "core::replace(T* destination, T replacement) -> T",
         "implementation": {
             "kind": "intrinsic",
-            "compiler_contract": "R-OWN-0019 proves initialized exclusive access, unborrowed Copy/Move and exact replacement type. Arguments follow ordinary call-free and aliasing rules. HIR/MIR preserve the destination loan and explicit replacement or proven R default. Sync and async C17 stage operands once, move or copy the previous value out, commit the replacement and track both initialization flags. The exchange allocates nothing, adds no panic or checked effect and does not invoke user drop. Exactly-once cleanup follows existing glue.",
+            "compiler_contract": "R-OWN-0019 proves initialized exclusive access, unborrowed Copy/Move and exact replacement type. Arguments follow ordinary call-free and aliasing rules. HIR/MIR preserve the destination loan and explicit replacement or proven R default. Sync and async lowering stage operands once, move or copy the previous value out, commit the replacement and track both initialization flags. The exchange allocates nothing, adds no panic or checked effect and does not invoke user drop. Exactly-once cleanup follows existing glue.",
             "conformance_status": "complete",
         },
     },
@@ -1631,7 +1631,7 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
         "source_signature": "core::take(T* destination) -> T",
         "implementation": {
             "kind": "intrinsic",
-            "compiler_contract": "R-OWN-0019 proves initialized exclusive access, unborrowed Copy/Move and exact replacement type. Arguments follow ordinary call-free and aliasing rules. HIR/MIR preserve the destination loan and explicit replacement or proven R default. Sync and async C17 stage operands once, move or copy the previous value out, commit the replacement and track both initialization flags. The exchange allocates nothing, adds no panic or checked effect and does not invoke user drop. Exactly-once cleanup follows existing glue.",
+            "compiler_contract": "R-OWN-0019 proves initialized exclusive access, unborrowed Copy/Move and exact replacement type. Arguments follow ordinary call-free and aliasing rules. HIR/MIR preserve the destination loan and explicit replacement or proven R default. Sync and async lowering stage operands once, move or copy the previous value out, commit the replacement and track both initialization flags. The exchange allocates nothing, adds no panic or checked effect and does not invoke user drop. Exactly-once cleanup follows existing glue.",
             "conformance_status": "complete",
         },
     },
@@ -1640,7 +1640,7 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
         "source_signature": "core::swap(T* first, T* second) -> void",
         "implementation": {
             "kind": "intrinsic",
-            "compiler_contract": "R-OWN-0019 proves two initialized exclusive places of one unborrowed Copy/Move type; both loans stay active, so an overlap is the ordinary aliasing diagnostic. Sync and async C17 exchange the values through one temporary with copy or move glue; nothing is dropped, allocated or run in user code.",
+            "compiler_contract": "R-OWN-0019 proves two initialized exclusive places of one unborrowed Copy/Move type; both loans stay active, so an overlap is the ordinary aliasing diagnostic. Sync and async lowering exchange the values through one temporary with copy or move glue; nothing is dropped, allocated or run in user code.",
             "conformance_status": "complete",
         },
     },
@@ -1661,7 +1661,7 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
             "compiler_contract": (
                 "The semantic pass requires one non-null mutable raw T pointer in a lexical "
                 "unsafe context and infers an outermost-unqualified complete, sized, inhabited "
-                "and non-void T. HIR and MIR preserve the inferred pointee and strict C17 "
+                "and non-void T. HIR and MIR preserve the inferred pointee and the "
                 "lowering evaluates the pointer once before calling r_runtime_own_adopt with "
                 "inline size and alignment metadata. The valid-contract path allocates no "
                 "memory, does not copy, move or drop T, and introduces no R panic; the helper "
@@ -1673,11 +1673,11 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
                 "existing semantic classifications; a separate adopt-only layout registry covers "
                 "the remaining resource and result representations without classifying them as "
                 "Copy or enabling value movement. Existing specialized lowering covers the thread "
-                "join schemas. Generated strict-C17 tests exercise adopt/release for every registry "
+                "join schemas. Generated program tests exercise adopt/release for every registry "
                 "entry. "
-                "For C17-representable T, the compiler emits recursive move/drop metadata for "
+                "For representable T, the compiler emits recursive move/drop metadata for "
                 "named structs, fixed arrays, options, results, dynamic containers, arc/rc/weak "
-                "owners and atomic values. Executable generated-C tests cover reverse-order "
+                "owners and atomic values. Executable program tests cover reverse-order "
                 "exactly-once destruction, both result alternatives, relaxed atomic snapshot "
                 "initialization, early exits and allocation-failure injection."
             ),
@@ -1699,7 +1699,7 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
                 "The semantic pass requires one non-null own T pointer in a lexical unsafe "
                 "context, infers an outermost-unqualified complete, sized, inhabited and "
                 "non-void T, and requires explicit move for a named owner. HIR and MIR preserve "
-                "the consuming move and inferred pointee; sync and async strict C17 lowering "
+                "the consuming move and inferred pointee; sync and async lowering "
                 "evaluate the owner once, call r_runtime_own_into_raw, return the exact T "
                 "pointer and clear the consumed owner's initialized/drop state. The operation "
                 "allocates no memory, does not copy, move or drop T, and introduces no R panic; "
@@ -1710,9 +1710,9 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
                 "callbacks for every inventory-listed named standard representation. The separate "
                 "adopt-only layout registry does not change Copy/Move classification or permit value "
                 "movement; existing specialized lowering covers the thread join schemas. Generated "
-                "strict-C17 tests exercise adopt/release for every registry entry. Recursive "
+                "program tests exercise adopt/release for every registry entry. Recursive "
                 "generated metadata preserves "
-                "the eventual exactly-once drop duty for C17-representable named structs, fixed "
+                "the eventual exactly-once drop duty for representable named structs, fixed "
                 "arrays, options, results, dynamic containers, arc/rc/weak owners and atomic "
                 "values, including async-frame cleanup."
             ),
@@ -1732,8 +1732,8 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
             "kind": "intrinsic",
             "compiler_contract": (
                 "The semantic pass requires one bool operand in a lexical unsafe context; HIR "
-                "and MIR preserve the intrinsic, and the strict C17 emitter evaluates the "
-                "operand once and reaches C undefined behavior only when the asserted contract "
+                "and MIR preserve the intrinsic, and the lowering evaluates the "
+                "operand once and reaches undefined behavior only when the asserted contract "
                 "is false. No runtime symbol, allocation, panic or synchronization edge is "
                 "introduced."
             ),
@@ -1753,7 +1753,7 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
                 "exact usize length in a lexical unsafe context. The result carries a fresh "
                 "nonescaping region represented by its mandatory destination binding; return "
                 "escape and liveness across await are rejected. HIR and MIR preserve the "
-                "intrinsic and inferred pointee. Strict C17 lowering evaluates pointer then "
+                "intrinsic and inferred pointee. The lowering evaluates pointer then "
                 "length once and initializes exactly one shared slice descriptor without a "
                 "runtime symbol, allocation, element access, copy or panic. The caller retains "
                 "the complete R-SAFETY-SLICE-PARTS duty, including null only at zero length."
@@ -1777,7 +1777,7 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
                 "exact usize length in a lexical unsafe context. The result carries a fresh "
                 "exclusive nonescaping region represented by its mandatory destination binding; "
                 "return escape and liveness across await are rejected. HIR and MIR preserve the "
-                "intrinsic and inferred pointee. Strict C17 lowering evaluates pointer then "
+                "intrinsic and inferred pointee. The lowering evaluates pointer then "
                 "length once and initializes exactly one mutable slice descriptor without a "
                 "runtime symbol, allocation, element access, copy or panic. The caller retains "
                 "the complete R-SAFETY-SLICE-PARTS duty, including null only at zero length."
@@ -1804,7 +1804,7 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
                 "region, so the result may be stored and returned wherever a borrow derived "
                 "from the anchor could, while the ordinary borrow rules keep the anchor live and "
                 "unmoved. HIR and MIR keep the core::slice_from_raw_parts operation with the "
-                "pointer and length operands and mark the node anchored; strict C17 lowering is "
+                "pointer and length operands and mark the node anchored; the lowering is "
                 "the unanchored descriptor without a runtime symbol, allocation, element access, "
                 "copy or panic. The caller retains the R-SAFETY-SLICE-PARTS duty for the "
                 "anchored region."
@@ -1827,7 +1827,7 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
                 "the ordinary borrow rules keep the anchor live, unmoved and otherwise unused "
                 "while the result is live. HIR and MIR keep the core::slice_from_raw_parts_mut "
                 "operation with the pointer and length operands and mark the node anchored; "
-                "strict C17 lowering is the unanchored descriptor without a runtime symbol, "
+                "the lowering is the unanchored descriptor without a runtime symbol, "
                 "allocation, element access, copy or panic. The caller retains the "
                 "R-SAFETY-SLICE-PARTS duty for the anchored region."
             ),
@@ -1842,7 +1842,7 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
                 "The semantic pass infers T from one non-null raw const pointer in a lexical "
                 "unsafe context and accepts only the closed complete, sized, inhabited Copy "
                 "value family of R-UNSAFE-0008. HIR and MIR retain the inferred pointee type; "
-                "strict C17 lowering evaluates the address once and performs exactly one "
+                "the lowering evaluates the address once and performs exactly one "
                 "const volatile T read. No runtime symbol, allocation, panic, atomic operation "
                 "or synchronization edge is introduced."
             ),
@@ -1857,15 +1857,16 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
                 "The semantic pass infers T from one non-null mutable raw pointer in a lexical "
                 "unsafe context, requires one exact T value, and accepts only the closed "
                 "complete, sized, inhabited Copy value family of R-UNSAFE-0008. HIR and MIR "
-                "retain the inferred pointee type; strict C17 lowering evaluates address then "
+                "retain the inferred pointee type; the lowering evaluates address then "
                 "value once and performs exactly one volatile T write. No runtime symbol, "
                 "allocation, panic, atomic operation or synchronization edge is introduced."
             ),
         },
     },
 }
-# Library R-LIB-0027 (L45): the bit and wide integer families are lowered by the compiler to static
-# strict C17 helpers (compiler/codegen/core_bits.inc), like the arithmetic families of R-LIB-0001.
+# Library R-LIB-0027 (L45): the bit and wide integer families are lowered by the compiler inline,
+# to the bit intrinsics of the target and double-width arithmetic, like the arithmetic families of
+# R-LIB-0001.
 WIDE_SUFFIX_OPERATIONS = frozenset(
     ("widening_mul", "carrying_add", "borrowing_sub", "narrowing_div")
 )
@@ -1878,16 +1879,95 @@ CORE_INTRINSIC_IMPLEMENTATIONS.update(
                 "kind": "intrinsic",
                 "compiler_contract": (
                     "Five unsigned literal-suffix operations and the form without the suffix "
-                    "call a static ISO C17 helper built from half-width words and return a "
+                    "lower to double-width integer arithmetic and return a "
                     "tuple; narrowing_div checks the divisor and the high half at the call site."
                     if name in WIDE_SUFFIX_OPERATIONS
-                    else "Ten literal-suffix operations and the form without the suffix call a "
-                    "static ISO C17 helper of portable shifts and masks; translation-time "
+                    else "Ten literal-suffix operations and the form without the suffix lower "
+                    "to the bit intrinsics of the target; translation-time "
                     "evaluation folds them inside an evaluated function."
                 ),
             },
         }
         for name, parameters, result in BIT_SUFFIX_OPERATIONS
+    }
+)
+# The typed atomic operations of Core R-MEM, lowered to LLVM atomic instructions.
+CORE_INTRINSIC_IMPLEMENTATIONS.update(
+    {
+        f"core::{name}": {
+            "item_kind": "intrinsic_family",
+            "source_signature": f"core::{name}({parameters}) -> {result}",
+            "implementation": {"kind": "intrinsic", "compiler_contract": contract},
+        }
+        for name, parameters, result, contract in (
+            (
+                "atomic_exchange",
+                "const (atomic T)* obj, T desired, core::memory_order order",
+                "T",
+                "Typed atomic exchange lowering after memory-order and fixed-integer validation.",
+            ),
+            (
+                "atomic_fetch_and",
+                "const (atomic T)* obj, T operand, core::memory_order order",
+                "T",
+                "Integer-only typed atomic fetch-and lowering.",
+            ),
+            (
+                "atomic_fetch_or",
+                "const (atomic T)* obj, T operand, core::memory_order order",
+                "T",
+                "Integer-only typed atomic fetch-or lowering.",
+            ),
+            (
+                "atomic_fetch_xor",
+                "const (atomic T)* obj, T operand, core::memory_order order",
+                "T",
+                "Integer-only typed atomic fetch-xor lowering.",
+            ),
+            (
+                "atomic_load",
+                "const (atomic T)* obj, core::memory_order order",
+                "T",
+                "Typed atomic load lowering after memory-order validation.",
+            ),
+            (
+                "atomic_store",
+                "const (atomic T)* obj, T desired, core::memory_order order",
+                "void",
+                "Typed atomic store lowering after memory-order validation.",
+            ),
+        )
+    }
+)
+# Library R-LIB-0001: the checked, wrapping and saturating arithmetic families, lowered inline.
+CORE_INTRINSIC_IMPLEMENTATIONS.update(
+    {
+        f"core::{family}_{operation}_SUFFIX": {
+            "item_kind": "intrinsic_closed_family",
+            "source_signature": (
+                f"core::{family}_{operation}_SUFFIX(SUFFIX left, SUFFIX right) -> "
+                + ("o<SUFFIX>" if family == "checked" else "SUFFIX")
+            ),
+            "implementation": {"kind": "intrinsic", "compiler_contract": contract},
+        }
+        for family, contract in (
+            (
+                "checked",
+                "Ten literal-suffix operations lower to the overflow-reporting arithmetic of the "
+                "target and o<SUFFIX>.",
+            ),
+            (
+                "wrapping",
+                "Ten literal-suffix operations emit modulo-width arithmetic on the two's "
+                "complement representation.",
+            ),
+            (
+                "saturating",
+                "Ten literal-suffix operations emit overflow-free arithmetic clamped to the exact "
+                "type bounds.",
+            ),
+        )
+        for operation in ("add", "sub", "mul")
     }
 )
 
@@ -2025,7 +2105,7 @@ CHECKED_SCHEMA_KERNEL_CONTRACT = (
     "recognizes the closed suffix set and emits exact call-site carrier/result lowering for "
     "statically typed values. The complete source/destination matrix and deterministic link-plan "
     "integration are verified. Target-manifest-driven ABI generation supplies C spellings, "
-    "carrier storage, runtime range descriptors and host representation assertions; C17 emission "
+    "carrier storage, runtime range descriptors and host representation assertions; compilation "
     "validates the exact selected target-manifest identity before producing output."
 )
 
@@ -2434,7 +2514,7 @@ STD_C_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
             "source": "library/std/c/source/link_available.c",
             "c_symbol": "r_std_c_link_available",
             "generator_contract": (
-                "Generated C17 passes the current program's immutable resolved logical-link "
+                "Generated code passes the current program's immutable resolved logical-link "
                 "manifest as a hidden first ABI argument; the public R operation retains its "
                 "single constexpr-str parameter."
             ),
@@ -2670,7 +2750,7 @@ for _json_operation in ("marshal", "unmarshal", "marshal_with_options", "unmarsh
         "source_signature": f"std.json::{_json_operation}({_source}{_options}) -> {_result} throws std.json::error, std.alloc::alloc_error",
         "implementation": {
             "kind": "generated",
-            "generator_contract": "Concrete sync/async C17 codecs for scalars, strings, arrays, lists, string-key dictionaries, structs, enum/error payloads, optional values, generic JSON constraints and independent hooks/defaults. Embedded structures and object collectors share checked field schemas. Recursive type graphs use nominal back references and runtime nesting limits; typed streaming decoders and asynchronous reader adapters share the checked schema."
+            "generator_contract": "Concrete sync/async codecs for scalars, strings, arrays, lists, string-key dictionaries, structs, enum/error payloads, optional values, generic JSON constraints and independent hooks/defaults. Embedded structures and object collectors share checked field schemas. Recursive type graphs use nominal back references and runtime nesting limits; typed streaming decoders and asynchronous reader adapters share the checked schema."
         }
     }
 
@@ -2680,7 +2760,7 @@ STD_JSON_IMPLEMENTATIONS["std.json::schema"] = {
     "source_signature": "std.json::schema() -> std.json::value throws std.json::error, std.alloc::alloc_error",
     "implementation": {
         "kind": "generated",
-        "generator_contract": "The semantic pass derives the JSON Schema 2020-12 text of the closed type argument from the checked conversion schema of marshal and unmarshal (field names, optional, string, embed, descriptions, variants, options, containers, integer ranges, $defs for recursive types); strict C17 parses that text once per call and inserts under $defs the values of the json_schema hooks of types with converters.",
+        "generator_contract": "The semantic pass derives the JSON Schema 2020-12 text of the closed type argument from the checked conversion schema of marshal and unmarshal (field names, optional, string, embed, descriptions, variants, options, containers, integer ranges, $defs for recursive types); the generated code parses that text once per call and inserts under $defs the values of the json_schema hooks of types with converters.",
     },
 }
 
@@ -2696,7 +2776,7 @@ for _reader_operation, _reader_signature in (
         "source_signature": _reader_signature + (" throws std.async::start_error" if _reader_operation == "read_next"
                                                    else " throws std.json::error, std.alloc::alloc_error"),
         "implementation": {
-            "kind": "generated", "generator": "compiler/codegen/json_reader.inc",
+            "kind": "generated", "generator": "compiler/llvm/json_stream.c",
             "generator_contract": "Concrete transport and checked-result adapters retain typed streaming reader state. Native and generated R tests cover file, pipe input and TCP, transactional start, completion errors, cancellation, EOF and detached owners.",
         },
     }
@@ -4996,9 +5076,9 @@ STD_ERROR_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
         ),
         "implementation": {
             "kind": "generated",
-            "generator": "compiler/codegen/hosted_main.inc",
+            "generator": "compiler/llvm/hosted_main.c",
             "generator_contract": (
-                "Strict C17 lowering selects the held error by its tag and forms the portable "
+                "The lowering selects the held error by its tag and forms the portable "
                 "error with the mapping of the generated main boundary; it calls no runtime "
                 "symbol, allocates nothing and cannot panic."
             ),

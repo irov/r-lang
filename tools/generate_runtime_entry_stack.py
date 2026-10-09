@@ -13,13 +13,13 @@ from typing import Any, Iterable
 
 
 SCHEMA = "r-runtime-entry-stack-inventory-0.1"
-INVENTORY_REVISION = 21
+INVENTORY_REVISION = 22
 TARGET_MANIFEST = "targets/arm64-apple-darwin.hosted-native-async.json"
 TARGET_NAME = "arm64-apple-darwin-hosted-native-async"
-TARGET_MANIFEST_REVISION = 10
-COMPILER = "Apple clang"
-COMPILER_VERSION = "21.0.0"
-COMPILER_BUILD = "clang-2100.3.34.2"
+TARGET_MANIFEST_REVISION = 11
+COMPILER = "Homebrew clang"
+COMPILER_VERSION = "22.1.8"
+COMPILER_BUILD = "sha256:68bb87f784f09da01b7aea0f70952fb23f606242cdc4f6ff3cc26c372af0706f"
 FRAME_CEILING_BYTES = 262144
 MAXIMUM_INPUT_REPORTS = 128
 MAXIMUM_INPUT_RECORDS = 4096
@@ -55,7 +55,7 @@ EXTERNAL_ENTRIES = (
     (
         "r_runtime_thread_detach",
         "runtime/source/thread_attachment.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     ("r_runtime_c_call_begin", "runtime/source/thread_attachment.c", "runtime-c-boundary"),
     ("r_runtime_c_call_end", "runtime/source/thread_attachment.c", "runtime-c-boundary"),
@@ -69,10 +69,10 @@ EXTERNAL_ENTRIES = (
     (
         "r_runtime_unwinding_current_thread",
         "runtime/source/panic_abort.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     # Lock guards of std.sync poison their lock when dropped during a panic (R-LIB-0014).
-    ("r_runtime_panicking", "runtime/source/panic_abort.c", "type-glue-downstream"),
+    ("r_runtime_panicking", "runtime/source/panic_abort.c", "type-glue-direct"),
     ("r_runtime_unwind_cleanup_enter", "runtime/source/panic_abort.c", "runtime-panic"),
     ("r_runtime_unwind_cleanup_leave", "runtime/source/panic_abort.c", "runtime-panic"),
     ("r_runtime_unwind_terminate", "runtime/source/panic_abort.c", "runtime-panic"),
@@ -478,7 +478,7 @@ EXTERNAL_ENTRIES = (
     ("r_library_internal_format_float32", "library/internal/text/source/format_spec.c", "stdlib-operation"),
     ("r_library_internal_format_text", "library/internal/text/source/format_spec.c", "stdlib-operation"),
     ("r_library_internal_format_char", "library/internal/text/source/format_spec.c", "stdlib-operation"),
-    ("r_runtime_string_destroy", "runtime/source/string.c", "type-glue-downstream"),
+    ("r_runtime_string_destroy", "runtime/source/string.c", "type-glue-direct"),
     # External project symbols reached by the header-static type-glue helpers below.
     # Reached directly by the generated per-element-type list helpers (node allocation and
     # release) and by the header type-glue helpers.
@@ -489,107 +489,107 @@ EXTERNAL_ENTRIES = (
     (
         "r_runtime_darwin_io_handle_release",
         "runtime/darwin/source/io_handle.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_fs_directory_drop",
         "library/internal/filesystem/source/handle.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_fs_directory_move",
         "library/internal/filesystem/source/handle.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_fs_directory_entry_drop",
         "library/internal/filesystem/source/handle.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_fs_directory_entry_move",
         "library/internal/filesystem/source/handle.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_fs_directory_iter_drop",
         "library/internal/filesystem/source/handle.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_fs_directory_iter_move",
         "library/internal/filesystem/source/handle.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_fs_directory_next_result_drop",
         "library/internal/filesystem/source/handle.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_fs_directory_next_result_move",
         "library/internal/filesystem/source/handle.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_fs_file_drop",
         "library/internal/filesystem/source/handle.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_fs_file_move",
         "library/internal/filesystem/source/handle.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_fs_write_file_result_drop",
         "library/internal/filesystem/source/async_atomic_write.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_fs_write_file_result_move",
         "library/internal/filesystem/source/async_atomic_write.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_io_read_result_drop",
         "library/internal/io/source/async_stream.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_io_read_result_move",
         "library/internal/io/source/async_stream.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_io_shared_write_result_drop",
         "library/internal/io/source/async_stream.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_io_shared_write_result_move",
         "library/internal/io/source/async_stream.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_io_write_result_drop",
         "library/internal/io/source/async_stream.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_io_write_result_move",
         "library/internal/io/source/async_stream.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_io_write_all_result_drop",
         "library/internal/io/source/async_stream.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_io_write_all_result_move",
         "library/internal/io/source/async_stream.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_thread_handle_destroy",
@@ -614,17 +614,17 @@ EXTERNAL_ENTRIES = (
     (
         "r_library_internal_sync_once_destroy",
         "library/internal/synchronization/source/once.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_sync_once_move",
         "library/internal/synchronization/source/once.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_sync_once_lock_destroy",
         "library/internal/synchronization/source/once_lock.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_sync_once_lock_move",
@@ -654,9 +654,9 @@ EXTERNAL_ENTRIES += (
     ("r_std_json_parse_number", "library/std/json/source/parse_number.c", "stdlib-operation"),
     ("r_std_json_stringify", "library/std/json/source/stringify.c", "stdlib-operation"),
     ("r_std_json_text", "library/std/json/source/text.c", "stdlib-operation"),
-    ("r_json_value_destroy", "library/internal/json/source/tree.c", "type-glue-downstream"),
-    ("r_json_number_destroy", "library/internal/json/source/common.c", "type-glue-downstream"),
-    ("r_json_error_destroy", "library/internal/json/source/common.c", "type-glue-downstream"),
+    ("r_json_value_destroy", "library/internal/json/source/tree.c", "type-glue-direct"),
+    ("r_json_number_destroy", "library/internal/json/source/common.c", "type-glue-direct"),
+    ("r_json_error_destroy", "library/internal/json/source/common.c", "type-glue-direct"),
 )
 
 EXTERNAL_ENTRIES += (
@@ -667,7 +667,7 @@ EXTERNAL_ENTRIES += (
     ("r_json_decoder_initialize", "library/internal/json/source/decoder.c", "stdlib-operation"),
     ("r_json_decoder_feed", "library/internal/json/source/decoder.c", "stdlib-operation"),
     ("r_json_decoder_take", "library/internal/json/source/decoder.c", "stdlib-operation"),
-    ("r_json_decoder_destroy", "library/internal/json/source/decoder.c", "type-glue-downstream"),
+    ("r_json_decoder_destroy", "library/internal/json/source/decoder.c", "type-glue-direct"),
     ("r_json_cursor_boolean", "library/internal/json/source/cursor.c", "stdlib-operation"),
     ("r_json_cursor_char", "library/internal/json/source/cursor.c", "stdlib-operation"),
     ("r_json_cursor_default_string", "library/internal/json/source/cursor.c", "stdlib-operation"),
@@ -713,8 +713,8 @@ EXTERNAL_ENTRIES += (
     ("r_json_reader_detach", "library/internal/json/source/reader.c", "stdlib-operation"),
     ("r_json_detached_take_handle", "library/internal/json/source/reader.c", "stdlib-operation"),
     ("r_json_detached_take_bytes", "library/internal/json/source/reader.c", "stdlib-operation"),
-    ("r_json_reader_destroy", "library/internal/json/source/reader.c", "type-glue-downstream"),
-    ("r_json_detached_destroy", "library/internal/json/source/reader.c", "type-glue-downstream"),
+    ("r_json_reader_destroy", "library/internal/json/source/reader.c", "type-glue-direct"),
+    ("r_json_detached_destroy", "library/internal/json/source/reader.c", "type-glue-direct"),
     ("r_std_fs_read", "library/std/fs/source/read.c", "stdlib-operation"),
     ("r_std_net_tcp_read", "library/std/net/source/tcp_read.c", "stdlib-operation"),
     ("r_std_io_read_into", "library/std/io/source/read_into.c", "stdlib-operation"),
@@ -750,17 +750,17 @@ EXTERNAL_ENTRIES += (
 )
 
 EXTERNAL_ENTRIES += (
-    ("r_library_internal_net_tcp_stream_move", "library/internal/networking/source/handle.c", "type-glue-downstream"),
-    ("r_library_internal_net_tcp_stream_drop", "library/internal/networking/source/handle.c", "type-glue-downstream"),
+    ("r_library_internal_net_tcp_stream_move", "library/internal/networking/source/handle.c", "type-glue-direct"),
+    ("r_library_internal_net_tcp_stream_drop", "library/internal/networking/source/handle.c", "type-glue-direct"),
 )
 
 EXTERNAL_ENTRIES += (
-    ("r_library_internal_net_unix_listener_move", "library/internal/networking/source/unix.c", "type-glue-downstream"),
-    ("r_library_internal_net_unix_listener_drop", "library/internal/networking/source/unix.c", "type-glue-downstream"),
-    ("r_library_internal_net_unix_stream_move", "library/internal/networking/source/unix.c", "type-glue-downstream"),
-    ("r_library_internal_net_unix_stream_drop", "library/internal/networking/source/unix.c", "type-glue-downstream"),
-    ("r_library_internal_net_unix_datagram_move", "library/internal/networking/source/unix.c", "type-glue-downstream"),
-    ("r_library_internal_net_unix_datagram_drop", "library/internal/networking/source/unix.c", "type-glue-downstream"),
+    ("r_library_internal_net_unix_listener_move", "library/internal/networking/source/unix.c", "type-glue-direct"),
+    ("r_library_internal_net_unix_listener_drop", "library/internal/networking/source/unix.c", "type-glue-direct"),
+    ("r_library_internal_net_unix_stream_move", "library/internal/networking/source/unix.c", "type-glue-direct"),
+    ("r_library_internal_net_unix_stream_drop", "library/internal/networking/source/unix.c", "type-glue-direct"),
+    ("r_library_internal_net_unix_datagram_move", "library/internal/networking/source/unix.c", "type-glue-direct"),
+    ("r_library_internal_net_unix_datagram_drop", "library/internal/networking/source/unix.c", "type-glue-direct"),
 )
 
 EXTERNAL_ENTRIES += (
@@ -809,13 +809,13 @@ EXTERNAL_ENTRIES += (
     ("r_std_thread_yield_now", "library/std/thread/source/yield_now.c", "stdlib-operation"),
     ("r_std_time_sleep_for", "library/std/time/source/sleep_for.c", "stdlib-operation"),
     ("r_std_time_sleep_until", "library/std/time/source/sleep_until.c", "stdlib-operation"),
-    ("r_library_internal_sync_barrier_destroy", "library/internal/synchronization/source/barrier.c", "type-glue-downstream"),
-    ("r_library_internal_sync_barrier_move", "library/internal/synchronization/source/barrier.c", "type-glue-downstream"),
-    ("r_library_internal_sync_condvar_destroy", "library/internal/synchronization/source/condvar.c", "type-glue-downstream"),
-    ("r_library_internal_sync_condvar_move", "library/internal/synchronization/source/condvar.c", "type-glue-downstream"),
-    ("r_library_internal_thread_identity_destroy", "library/internal/thread/source/thread.c", "type-glue-downstream"),
-    ("r_library_internal_thread_join_result_destroy", "library/internal/thread/source/thread.c", "type-glue-downstream"),
-    ("r_library_internal_thread_panic_report_destroy", "library/internal/thread/source/thread.c", "type-glue-downstream"),
+    ("r_library_internal_sync_barrier_destroy", "library/internal/synchronization/source/barrier.c", "type-glue-direct"),
+    ("r_library_internal_sync_barrier_move", "library/internal/synchronization/source/barrier.c", "type-glue-direct"),
+    ("r_library_internal_sync_condvar_destroy", "library/internal/synchronization/source/condvar.c", "type-glue-direct"),
+    ("r_library_internal_sync_condvar_move", "library/internal/synchronization/source/condvar.c", "type-glue-direct"),
+    ("r_library_internal_thread_identity_destroy", "library/internal/thread/source/thread.c", "type-glue-direct"),
+    ("r_library_internal_thread_join_result_destroy", "library/internal/thread/source/thread.c", "type-glue-direct"),
+    ("r_library_internal_thread_panic_report_destroy", "library/internal/thread/source/thread.c", "type-glue-direct"),
 )
 
 EXTERNAL_ENTRIES += (
@@ -1058,127 +1058,127 @@ EXTERNAL_ENTRIES += (
     (
         "r_library_internal_net_tcp_listener_drop",
         "library/internal/networking/source/handle.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_net_tcp_listener_move",
         "library/internal/networking/source/handle.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_net_udp_socket_drop",
         "library/internal/networking/source/handle.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_net_udp_socket_move",
         "library/internal/networking/source/handle.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_process_child_destroy",
         "library/internal/process/source/child.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_signal_listener_destroy",
         "library/internal/signal/source/listener.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_signal_listener_move",
         "library/internal/signal/source/listener.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_process_child_move",
         "library/internal/process/source/child.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_process_command_destroy",
         "library/internal/process/source/command.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_process_command_move",
         "library/internal/process/source/command.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_sync_channel_destroy",
         "library/internal/synchronization/source/channel.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_sync_channel_move",
         "library/internal/synchronization/source/channel.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_sync_mutex_destroy",
         "library/internal/synchronization/source/mutex.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_sync_mutex_guard_destroy",
         "library/internal/synchronization/source/mutex.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_sync_receiver_destroy",
         "library/internal/synchronization/source/channel.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_sync_receiver_move",
         "library/internal/synchronization/source/channel.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_sync_rw_lock_destroy",
         "library/internal/synchronization/source/rwlock.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_sync_rw_read_guard_destroy",
         "library/internal/synchronization/source/rwlock.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_sync_rw_write_guard_destroy",
         "library/internal/synchronization/source/rwlock.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_sync_sender_destroy",
         "library/internal/synchronization/source/channel.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_sync_sender_move",
         "library/internal/synchronization/source/channel.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_sync_sync_channel_destroy",
         "library/internal/synchronization/source/channel.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_sync_sync_channel_move",
         "library/internal/synchronization/source/channel.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_sync_sync_sender_destroy",
         "library/internal/synchronization/source/channel.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_sync_sync_sender_move",
         "library/internal/synchronization/source/channel.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
 )
 
@@ -1260,68 +1260,418 @@ EXTERNAL_ENTRIES += (
     (
         "r_library_internal_async_mutex_release",
         "library/internal/async_sync/source/mutex.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_async_mutex_unlock",
         "library/internal/async_sync/source/mutex.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_async_rwlock_release",
         "library/internal/async_sync/source/rwlock.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_async_rwlock_read_unlock",
         "library/internal/async_sync/source/rwlock.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_async_rwlock_write_unlock",
         "library/internal/async_sync/source/rwlock.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_async_semaphore_release",
         "library/internal/async_sync/source/semaphore.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_async_semaphore_return",
         "library/internal/async_sync/source/semaphore.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_async_notify_release",
         "library/internal/async_sync/source/notify.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_async_broadcast_release",
         "library/internal/async_sync/source/broadcast.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_async_broadcast_unsubscribe",
         "library/internal/async_sync/source/broadcast.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_sync_permit_destroy",
         "library/internal/synchronization/source/channel.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
     (
         "r_library_internal_sync_permit_move",
         "library/internal/synchronization/source/channel.c",
-        "type-glue-downstream",
+        "type-glue-direct",
     ),
 )
 
+# B6: further entries the LLVM emitter names by string literals. Sorted by symbol.
+EXTERNAL_ENTRIES += (
+    ("r_json_cursor_destroy", "library/internal/json/source/cursor.c", "type-glue-direct"),
+    ("r_json_decoder_abort", "library/internal/json/source/decoder.c", "type-glue-direct"),
+    ("r_json_decoder_rebind", "library/internal/json/source/decoder.c", "type-glue-direct"),
+    ("r_json_scanner_destroy", "library/internal/json/source/scanner.c", "type-glue-direct"),
+    ("r_json_scanner_failure", "library/internal/json/source/scanner.c", "type-glue-direct"),
+    ("r_json_scanner_feed", "library/internal/json/source/scanner.c", "type-glue-direct"),
+    ("r_json_scanner_initialize", "library/internal/json/source/scanner.c", "type-glue-direct"),
+    ("r_json_tree_builder_destroy", "library/internal/json/source/tree.c", "type-glue-direct"),
+    ("r_json_tree_builder_initialize", "library/internal/json/source/tree.c", "type-glue-direct"),
+    ("r_json_tree_builder_token", "library/internal/json/source/tree.c", "type-glue-direct"),
+    (
+        "r_library_internal_thread_panic_report_from",
+        "library/internal/thread/source/thread.c",
+        "type-glue-direct",
+    ),
+    (
+        "r_library_internal_thread_panic_report_take",
+        "library/internal/thread/source/thread.c",
+        "type-glue-direct",
+    ),
+    ("r_runtime_allocator_attempt_count", "runtime/source/allocator.c", "runtime-allocator"),
+    ("r_runtime_allocator_initialize", "runtime/source/allocator.c", "runtime-allocator"),
+    ("r_runtime_allocator_reallocate", "runtime/source/allocator.c", "runtime-allocator"),
+    ("r_runtime_allocator_set_failure", "runtime/source/allocator.c", "runtime-allocator"),
+    ("r_runtime_arc_destroy_begin", "runtime/source/arc.c", "runtime-owner"),
+    ("r_runtime_arc_destroy_finish", "runtime/source/arc.c", "runtime-owner"),
+    ("r_runtime_arc_destroy_scratch", "runtime/source/arc.c", "runtime-owner"),
+    ("r_runtime_arc_destroy_value", "runtime/source/arc.c", "runtime-owner"),
+    ("r_runtime_arc_downgrade", "runtime/source/arc.c", "runtime-owner"),
+    ("r_runtime_arc_from_raw", "runtime/source/arc.c", "runtime-owner"),
+    ("r_runtime_arc_get_mut", "runtime/source/arc.c", "runtime-owner"),
+    ("r_runtime_arc_into_raw", "runtime/source/arc.c", "runtime-owner"),
+    ("r_runtime_arc_ptr_eq", "runtime/source/arc.c", "runtime-owner"),
+    ("r_runtime_arc_strong_count", "runtime/source/arc.c", "runtime-owner"),
+    ("r_runtime_arc_try_unwrap", "runtime/source/arc.c", "runtime-owner"),
+    ("r_runtime_arc_weak_count", "runtime/source/arc.c", "runtime-owner"),
+    ("r_runtime_array_clear", "runtime/source/array.c", "runtime-container"),
+    ("r_runtime_array_destroy_count", "runtime/source/array.c", "runtime-container"),
+    ("r_runtime_array_destroy_element", "runtime/source/array.c", "runtime-container"),
+    ("r_runtime_array_destroy_finish", "runtime/source/array.c", "runtime-container"),
+    ("r_runtime_array_destroy_locate", "runtime/source/array.c", "runtime-container"),
+    ("r_runtime_array_destroy_scratch", "runtime/source/array.c", "runtime-container"),
+    ("r_runtime_array_get", "runtime/source/array.c", "runtime-container"),
+    ("r_runtime_array_get_mut", "runtime/source/array.c", "runtime-container"),
+    ("r_runtime_array_pop", "runtime/source/array.c", "runtime-container"),
+    ("r_runtime_array_push", "runtime/source/array.c", "runtime-container"),
+    ("r_runtime_array_remove", "runtime/source/array.c", "runtime-container"),
+    ("r_runtime_array_reserve", "runtime/source/array.c", "runtime-container"),
+    ("r_runtime_blocking_reserve", "runtime/darwin/source/blocking_pool.inc", "runtime-task"),
+    ("r_runtime_blocking_start", "runtime/darwin/source/blocking_pool.inc", "runtime-task"),
+    ("r_runtime_blocking_stop", "runtime/darwin/source/blocking_pool.inc", "runtime-task"),
+    ("r_runtime_blocking_submit", "runtime/darwin/source/blocking_pool.inc", "runtime-task"),
+    ("r_runtime_blocking_unreserve", "runtime/darwin/source/blocking_pool.inc", "runtime-task"),
+    ("r_runtime_blocking_withdraw", "runtime/darwin/source/blocking_pool.inc", "runtime-task"),
+    ("r_runtime_budget_bytes_available", "runtime/source/allocator.c", "runtime-task"),
+    ("r_runtime_budget_bytes_limit", "runtime/source/allocator.c", "runtime-task"),
+    ("r_runtime_budget_bytes_used", "runtime/source/allocator.c", "runtime-task"),
+    ("r_runtime_budget_charge_task", "runtime/source/allocator.c", "runtime-task"),
+    ("r_runtime_budget_create", "runtime/source/allocator.c", "runtime-task"),
+    ("r_runtime_budget_current", "runtime/source/allocator.c", "runtime-task"),
+    ("r_runtime_budget_note_refusal", "runtime/source/allocator.c", "runtime-task"),
+    ("r_runtime_budget_refusing", "runtime/source/allocator.c", "runtime-task"),
+    ("r_runtime_budget_release", "runtime/source/allocator.c", "runtime-task"),
+    ("r_runtime_budget_retain", "runtime/source/allocator.c", "runtime-task"),
+    ("r_runtime_budget_return_task", "runtime/source/allocator.c", "runtime-task"),
+    ("r_runtime_budget_swap_current", "runtime/source/allocator.c", "runtime-task"),
+    ("r_runtime_budget_tasks_limit", "runtime/source/allocator.c", "runtime-task"),
+    ("r_runtime_budget_tasks_used", "runtime/source/allocator.c", "runtime-task"),
+    ("r_runtime_darwin_io_buffer_allocate", "runtime/darwin/source/io_buffer.c", "runtime-io"),
+    ("r_runtime_darwin_io_buffer_release", "runtime/darwin/source/io_buffer.c", "runtime-io"),
+    ("r_runtime_darwin_io_handle_create", "runtime/darwin/source/io_handle.c", "runtime-io"),
+    ("r_runtime_darwin_io_handle_create_file", "runtime/darwin/source/io_handle.c", "runtime-io"),
+    (
+        "r_runtime_darwin_io_handle_create_socket",
+        "runtime/darwin/source/io_handle.c",
+        "runtime-io",
+    ),
+    (
+        "r_runtime_darwin_io_handle_release_with_cleanup",
+        "runtime/darwin/source/io_handle.c",
+        "runtime-io",
+    ),
+    ("r_runtime_darwin_io_handle_retain_view", "runtime/darwin/source/io_handle.c", "runtime-io"),
+    (
+        "r_runtime_darwin_io_handle_terminal_close_failure",
+        "runtime/darwin/source/io_handle.c",
+        "runtime-io",
+    ),
+    (
+        "r_runtime_darwin_io_prepare_borrowed_random_shared_write",
+        "runtime/darwin/source/io_write.c",
+        "runtime-io",
+    ),
+    ("r_runtime_darwin_io_prepare_close", "runtime/darwin/source/io_close.c", "runtime-io"),
+    ("r_runtime_darwin_io_prepare_flush", "runtime/darwin/source/io_flush.c", "runtime-io"),
+    ("r_runtime_darwin_io_prepare_read", "runtime/darwin/source/io_read.c", "runtime-io"),
+    ("r_runtime_darwin_io_prepare_read_some", "runtime/darwin/source/io_read.c", "runtime-io"),
+    ("r_runtime_darwin_io_prepare_shared_write", "runtime/darwin/source/io_write.c", "runtime-io"),
+    ("r_runtime_darwin_io_prepare_shutdown", "runtime/darwin/source/io_shutdown.c", "runtime-io"),
+    ("r_runtime_darwin_io_prepare_write", "runtime/darwin/source/io_write.c", "runtime-io"),
+    ("r_runtime_darwin_io_prepare_write_some", "runtime/darwin/source/io_write.c", "runtime-io"),
+    ("r_runtime_darwin_io_prepared_abort", "runtime/darwin/source/io_prepare.c", "runtime-io"),
+    ("r_runtime_darwin_io_prepared_activate", "runtime/darwin/source/io_prepare.c", "runtime-io"),
+    (
+        "r_runtime_darwin_io_prepared_activate_close",
+        "runtime/darwin/source/io_close.c",
+        "runtime-io",
+    ),
+    (
+        "r_runtime_darwin_io_prepared_bind_activate_borrowed_random_shared_write",
+        "runtime/darwin/source/io_write.c",
+        "runtime-io",
+    ),
+    (
+        "r_runtime_darwin_io_prepared_set_offset",
+        "runtime/darwin/source/io_prepare.c",
+        "runtime-io",
+    ),
+    (
+        "r_runtime_darwin_io_prepared_set_shutdown_entry",
+        "runtime/darwin/source/io_shutdown.c",
+        "runtime-io",
+    ),
+    (
+        "r_runtime_darwin_io_prepared_set_stream_position",
+        "runtime/darwin/source/io_prepare.c",
+        "runtime-io",
+    ),
+    (
+        "r_runtime_darwin_io_process_console_start",
+        "runtime/darwin/source/io_console.c",
+        "runtime-io",
+    ),
+    (
+        "r_runtime_darwin_io_process_console_stop",
+        "runtime/darwin/source/io_console.c",
+        "runtime-io",
+    ),
+    (
+        "r_runtime_darwin_io_process_stderr_retain",
+        "runtime/darwin/source/io_console.c",
+        "runtime-io",
+    ),
+    (
+        "r_runtime_darwin_io_process_stdin_retain",
+        "runtime/darwin/source/io_console.c",
+        "runtime-io",
+    ),
+    (
+        "r_runtime_darwin_io_process_stdout_retain",
+        "runtime/darwin/source/io_console.c",
+        "runtime-io",
+    ),
+    ("r_runtime_darwin_io_request_cancel", "runtime/darwin/source/io_request.c", "runtime-io"),
+    (
+        "r_runtime_darwin_io_request_deadline_expired",
+        "runtime/darwin/source/io_request.c",
+        "runtime-io",
+    ),
+    ("r_runtime_darwin_io_request_progress", "runtime/darwin/source/io_request.c", "runtime-io"),
+    ("r_runtime_darwin_io_request_release", "runtime/darwin/source/io_request.c", "runtime-io"),
+    (
+        "r_runtime_darwin_io_request_set_completion",
+        "runtime/darwin/source/io_request.c",
+        "runtime-io",
+    ),
+    (
+        "r_runtime_darwin_io_request_set_completion_inline",
+        "runtime/darwin/source/io_request.c",
+        "runtime-io",
+    ),
+    ("r_runtime_darwin_io_request_state", "runtime/darwin/source/io_request.c", "runtime-io"),
+    (
+        "r_runtime_darwin_io_request_take_buffer",
+        "runtime/darwin/source/io_request.c",
+        "runtime-io",
+    ),
+    ("r_runtime_darwin_io_request_wait", "runtime/darwin/source/io_request.c", "runtime-io"),
+    ("r_runtime_darwin_io_submit_close", "runtime/darwin/source/io_close.c", "runtime-io"),
+    ("r_runtime_darwin_io_submit_flush", "runtime/darwin/source/io_flush.c", "runtime-io"),
+    ("r_runtime_darwin_io_submit_read", "runtime/darwin/source/io_read.c", "runtime-io"),
+    ("r_runtime_darwin_io_submit_read_some", "runtime/darwin/source/io_read.c", "runtime-io"),
+    ("r_runtime_darwin_io_submit_write", "runtime/darwin/source/io_write.c", "runtime-io"),
+    ("r_runtime_darwin_io_submit_write_some", "runtime/darwin/source/io_write.c", "runtime-io"),
+    ("r_runtime_dict_clear", "runtime/source/dict.c", "runtime-container"),
+    ("r_runtime_dict_contains", "runtime/source/dict.c", "runtime-container"),
+    ("r_runtime_dict_destroy_count", "runtime/source/dict.c", "runtime-container"),
+    ("r_runtime_dict_destroy_finish", "runtime/source/dict.c", "runtime-container"),
+    ("r_runtime_dict_destroy_key", "runtime/source/dict.c", "runtime-container"),
+    ("r_runtime_dict_destroy_locate", "runtime/source/dict.c", "runtime-container"),
+    ("r_runtime_dict_destroy_scratch", "runtime/source/dict.c", "runtime-container"),
+    ("r_runtime_dict_destroy_value", "runtime/source/dict.c", "runtime-container"),
+    ("r_runtime_dict_get", "runtime/source/dict.c", "runtime-container"),
+    ("r_runtime_dict_get_mut", "runtime/source/dict.c", "runtime-container"),
+    ("r_runtime_dict_initialize", "runtime/source/dict.c", "runtime-container"),
+    ("r_runtime_dict_remove", "runtime/source/dict.c", "runtime-container"),
+    ("r_runtime_dict_reserve", "runtime/source/dict.c", "runtime-container"),
+    ("r_runtime_executor_cancel_pending", "runtime/darwin/source/task.c", "runtime-task"),
+    ("r_runtime_executor_join_begin", "runtime/darwin/source/task.c", "runtime-task"),
+    ("r_runtime_executor_join_end", "runtime/darwin/source/task.c", "runtime-task"),
+    ("r_runtime_executor_lifecycle_start", "runtime/darwin/source/task.c", "runtime-task"),
+    ("r_runtime_executor_lifecycle_stop", "runtime/darwin/source/task.c", "runtime-task"),
+    ("r_runtime_executor_on_worker", "runtime/darwin/source/task.c", "runtime-task"),
+    ("r_runtime_executor_quiesce_for_exit", "runtime/darwin/source/task.c", "runtime-task"),
+    ("r_runtime_hosted_exit", "runtime/source/hosted_entry.c", "runtime-hosted"),
+    ("r_runtime_hosted_work_begin", "runtime/source/thread_attachment.c", "runtime-hosted"),
+    ("r_runtime_hosted_work_drain", "runtime/source/thread_attachment.c", "runtime-hosted"),
+    ("r_runtime_hosted_work_end", "runtime/source/thread_attachment.c", "runtime-hosted"),
+    ("r_runtime_list_back", "runtime/source/list.c", "runtime-container"),
+    ("r_runtime_list_back_mut", "runtime/source/list.c", "runtime-container"),
+    ("r_runtime_list_clear", "runtime/source/list.c", "runtime-container"),
+    ("r_runtime_list_destroy_finish", "runtime/source/list.c", "runtime-container"),
+    ("r_runtime_list_destroy_is_last", "runtime/source/list.c", "runtime-container"),
+    ("r_runtime_list_destroy_last", "runtime/source/list.c", "runtime-container"),
+    ("r_runtime_list_destroy_release_last", "runtime/source/list.c", "runtime-container"),
+    ("r_runtime_list_destroy_scratch", "runtime/source/list.c", "runtime-container"),
+    ("r_runtime_list_front", "runtime/source/list.c", "runtime-container"),
+    ("r_runtime_list_front_mut", "runtime/source/list.c", "runtime-container"),
+    ("r_runtime_list_get", "runtime/source/list.c", "runtime-container"),
+    ("r_runtime_list_get_mut", "runtime/source/list.c", "runtime-container"),
+    ("r_runtime_list_insert_after", "runtime/source/list.c", "runtime-container"),
+    ("r_runtime_list_insert_before", "runtime/source/list.c", "runtime-container"),
+    ("r_runtime_list_pop_back", "runtime/source/list.c", "runtime-container"),
+    ("r_runtime_list_pop_front", "runtime/source/list.c", "runtime-container"),
+    ("r_runtime_list_push_front", "runtime/source/list.c", "runtime-container"),
+    ("r_runtime_list_remove", "runtime/source/list.c", "runtime-container"),
+    ("r_runtime_own_into_value", "runtime/source/own.c", "runtime-owner"),
+    ("r_runtime_panic_category_name", "runtime/source/panic_abort.c", "runtime-panic"),
+    ("r_runtime_panic_deliver", "runtime/source/panic_abort.c", "runtime-panic"),
+    ("r_runtime_panic_resume", "runtime/source/panic_abort.c", "runtime-panic"),
+    ("r_runtime_panic_second", "runtime/source/panic_abort.c", "runtime-panic"),
+    ("r_runtime_panic_set_sink", "runtime/source/panic_abort.c", "runtime-panic"),
+    ("r_runtime_panic_take", "runtime/source/panic_abort.c", "runtime-panic"),
+    ("r_runtime_panic_terminate", "runtime/source/panic_abort.c", "runtime-panic"),
+    ("r_runtime_rc_destroy_begin", "runtime/source/rc.c", "runtime-owner"),
+    ("r_runtime_rc_destroy_finish", "runtime/source/rc.c", "runtime-owner"),
+    ("r_runtime_rc_destroy_scratch", "runtime/source/rc.c", "runtime-owner"),
+    ("r_runtime_rc_destroy_value", "runtime/source/rc.c", "runtime-owner"),
+    ("r_runtime_rc_downgrade", "runtime/source/rc.c", "runtime-owner"),
+    ("r_runtime_rc_from_raw", "runtime/source/rc.c", "runtime-owner"),
+    ("r_runtime_rc_get_mut", "runtime/source/rc.c", "runtime-owner"),
+    ("r_runtime_rc_into_raw", "runtime/source/rc.c", "runtime-owner"),
+    ("r_runtime_rc_ptr_eq", "runtime/source/rc.c", "runtime-owner"),
+    ("r_runtime_rc_strong_count", "runtime/source/rc.c", "runtime-owner"),
+    ("r_runtime_rc_try_unwrap", "runtime/source/rc.c", "runtime-owner"),
+    ("r_runtime_rc_weak_count", "runtime/source/rc.c", "runtime-owner"),
+    ("r_runtime_stack_can_require", "runtime/darwin/source/stack.c", "runtime-stack"),
+    ("r_runtime_string_append", "runtime/source/string.c", "runtime-container"),
+    ("r_runtime_string_append_utf8", "runtime/source/string.c", "runtime-container"),
+    ("r_runtime_string_bytes", "runtime/source/string.c", "runtime-container"),
+    ("r_runtime_string_capacity", "runtime/source/string.c", "runtime-container"),
+    ("r_runtime_string_clear", "runtime/source/string.c", "runtime-container"),
+    ("r_runtime_string_from_bytes", "runtime/source/string.c", "runtime-container"),
+    ("r_runtime_string_from_utf8", "runtime/source/string.c", "runtime-container"),
+    ("r_runtime_string_initialize", "runtime/source/string.c", "runtime-container"),
+    ("r_runtime_string_into_bytes", "runtime/source/string.c", "runtime-container"),
+    ("r_runtime_string_length", "runtime/source/string.c", "runtime-container"),
+    ("r_runtime_string_push_scalar", "runtime/source/string.c", "runtime-container"),
+    ("r_runtime_string_reserve", "runtime/source/string.c", "runtime-container"),
+    ("r_runtime_string_truncate", "runtime/source/string.c", "runtime-container"),
+    ("r_runtime_string_with_capacity", "runtime/source/string.c", "runtime-container"),
+    ("r_runtime_task_cancel", "runtime/darwin/source/task.c", "runtime-task"),
+    ("r_runtime_task_current_id", "runtime/darwin/source/task.c", "runtime-task"),
+    ("r_runtime_task_detach", "runtime/darwin/source/task.c", "runtime-task"),
+    ("r_runtime_task_external_acknowledge", "runtime/darwin/source/task.c", "runtime-task"),
+    ("r_runtime_task_external_acknowledge_panic", "runtime/darwin/source/task.c", "runtime-task"),
+    ("r_runtime_task_external_cancel_requested", "runtime/darwin/source/task.c", "runtime-task"),
+    (
+        "r_runtime_task_external_cancellation_sequence",
+        "runtime/darwin/source/task.c",
+        "runtime-task",
+    ),
+    (
+        "r_runtime_task_external_select_terminal_completion",
+        "runtime/darwin/source/task.c",
+        "runtime-task",
+    ),
+    ("r_runtime_task_external_start_prepare", "runtime/darwin/source/task.c", "runtime-task"),
+    ("r_runtime_task_external_start_ready", "runtime/darwin/source/task.c", "runtime-task"),
+    (
+        "r_runtime_task_external_try_select_completion",
+        "runtime/darwin/source/task.c",
+        "runtime-task",
+    ),
+    (
+        "r_runtime_task_external_try_select_completion_at",
+        "runtime/darwin/source/task.c",
+        "runtime-task",
+    ),
+    ("r_runtime_task_start_abort", "runtime/darwin/source/task.c", "runtime-task"),
+    ("r_runtime_task_start_allocator", "runtime/darwin/source/task.c", "runtime-task"),
+    ("r_runtime_task_start_commit", "runtime/darwin/source/task.c", "runtime-task"),
+    ("r_runtime_task_start_prepare", "runtime/darwin/source/task.c", "runtime-task"),
+    ("r_runtime_task_state", "runtime/darwin/source/task.c", "runtime-task"),
+    ("r_runtime_thread_attach", "runtime/source/thread_attachment.c", "runtime-thread"),
+    ("r_runtime_thread_lifecycle_start", "runtime/source/thread_attachment.c", "runtime-thread"),
+    ("r_runtime_thread_lifecycle_stop", "runtime/source/thread_attachment.c", "runtime-thread"),
+    (
+        "r_runtime_thread_local_cleanup_current",
+        "runtime/source/thread_attachment.c",
+        "runtime-thread",
+    ),
+    ("r_runtime_weak_arc_upgrade", "runtime/source/arc.c", "runtime-owner"),
+    ("r_runtime_weak_rc_upgrade", "runtime/source/rc.c", "runtime-owner"),
+    ("r_std_array_as_slice", "library/std/array/source/as_slice.c", "stdlib-operation"),
+    ("r_std_array_as_slice_mut", "library/std/array/source/as_slice_mut.c", "stdlib-operation"),
+    ("r_std_array_get", "library/std/array/source/get.c", "stdlib-operation"),
+    ("r_std_array_get_mut", "library/std/array/source/get_mut.c", "stdlib-operation"),
+    ("r_std_array_pop", "library/std/array/source/pop.c", "stdlib-operation"),
+    ("r_std_c_runtime_as_error", "library/std/c/source/runtime_as_error.c", "stdlib-operation"),
+    ("r_std_c_string_as_error", "library/std/c/source/string_as_error.c", "stdlib-operation"),
+    ("r_std_dict_contains", "library/std/dict/source/contains.c", "stdlib-operation"),
+    ("r_std_dict_get", "library/std/dict/source/get.c", "stdlib-operation"),
+    ("r_std_dict_get_mut", "library/std/dict/source/get_mut.c", "stdlib-operation"),
+    ("r_std_env_as_error", "library/std/env/source/as_error.c", "stdlib-operation"),
+    ("r_std_error_from_address", "library/std/error/source/from_address.c", "stdlib-operation"),
+    ("r_std_error_from_alloc", "library/std/error/source/from_alloc.c", "stdlib-operation"),
+    ("r_std_error_from_async", "library/std/error/source/from_async.c", "stdlib-operation"),
+    ("r_std_error_from_barrier", "library/std/error/source/from_barrier.c", "stdlib-operation"),
+    ("r_std_error_from_boundary", "library/std/error/source/from_boundary.c", "stdlib-operation"),
+    ("r_std_error_from_bytes", "library/std/error/source/from_bytes.c", "stdlib-operation"),
+    ("r_std_error_from_duration", "library/std/error/source/from_duration.c", "stdlib-operation"),
+    ("r_std_error_from_format", "library/std/error/source/from_format.c", "stdlib-operation"),
+    ("r_std_error_from_parse", "library/std/error/source/from_parse.c", "stdlib-operation"),
+    ("r_std_error_from_path", "library/std/error/source/from_path.c", "stdlib-operation"),
+    ("r_std_error_from_range", "library/std/error/source/from_range.c", "stdlib-operation"),
+    ("r_std_error_from_string", "library/std/error/source/from_string.c", "stdlib-operation"),
+    ("r_std_error_from_thread", "library/std/error/source/from_thread.c", "stdlib-operation"),
+    ("r_std_list_back", "library/std/list/source/back.c", "stdlib-operation"),
+    ("r_std_list_back_mut", "library/std/list/source/back_mut.c", "stdlib-operation"),
+    ("r_std_list_front", "library/std/list/source/front.c", "stdlib-operation"),
+    ("r_std_list_front_mut", "library/std/list/source/front_mut.c", "stdlib-operation"),
+    ("r_std_list_get", "library/std/list/source/get.c", "stdlib-operation"),
+    ("r_std_list_get_mut", "library/std/list/source/get_mut.c", "stdlib-operation"),
+    ("r_std_list_insert_after", "library/std/list/source/insert_after.c", "stdlib-operation"),
+    ("r_std_list_insert_before", "library/std/list/source/insert_before.c", "stdlib-operation"),
+    ("r_std_list_pop_back", "library/std/list/source/pop_back.c", "stdlib-operation"),
+    ("r_std_list_pop_front", "library/std/list/source/pop_front.c", "stdlib-operation"),
+    ("r_std_list_push_back", "library/std/list/source/push_back.c", "stdlib-operation"),
+    ("r_std_list_push_front", "library/std/list/source/push_front.c", "stdlib-operation"),
+    ("r_std_list_remove", "library/std/list/source/remove.c", "stdlib-operation"),
+    ("r_std_net_as_error", "library/std/net/source/as_error.c", "stdlib-operation"),
+    ("r_std_process_as_error", "library/std/process/source/as_error.c", "stdlib-operation"),
+    ("r_std_string_as_bytes", "library/std/string/source/as_bytes.c", "stdlib-operation"),
+    ("r_std_string_capacity", "library/std/string/source/capacity.c", "stdlib-operation"),
+    ("r_std_string_len", "library/std/string/source/len.c", "stdlib-operation"),
+    ("r_std_thread_spawn", "library/std/thread/source/spawn.c", "stdlib-operation"),
+    ("r_std_thread_spawn_scoped", "library/std/thread/source/spawn_scoped.c", "stdlib-operation"),
+)
+
 HEADER_HELPERS = (
-    # L39 (Core R-ERR-0005): the panic test of generated code.
-    ("r_runtime_unwinding", "runtime/include/r_runtime_0_1.h", "runtime-panic-header-helper"),
     (
         "r_std_signal_listener_destroy",
         "library/std/signal/include/r_std_signal.h",
@@ -1844,45 +2194,22 @@ HEADER_DOWNSTREAM_CALL_PATTERN = re.compile(
     r"\b(?P<symbol>r_(?:runtime|library_internal|json)_[a-z0-9_]+)\s*\("
 )
 
+# The names of functions the LLVM emitter defines itself (JSON glue) and the panic counter
+# it reads (r_runtime_unwinding_threads, an object, not an entry).
 GENERATED_NON_CALL_IDENTIFIERS = frozenset(
     {
-        "r_runtime_0_1",
-        "r_runtime_arc",
-        "r_runtime_array",
-        "r_runtime_core",
-        "r_runtime_dict",
-        "r_runtime_drop",
-        "r_runtime_freestanding",
-        "r_runtime_list",
-        "r_runtime_own",
-        "r_runtime_rc",
-        "r_runtime_target_abi",
-        "r_std_alloc",
-        "r_std_arc",
-        "r_std_array",
-        "r_std_async",
-        "r_std_bits",
-        "r_std_bytes",
-        "r_std_hash",
-        "r_std_format",
-        "r_std_c",
-        "r_std_convert",
-        "r_std_dict",
-        "r_std_error",
-        "r_std_fs",
-        "r_std_io",
-        "r_std_json",
-        "r_std_list",
-        "r_std_math",
-        "r_std_process",
-        "r_std_random",
-        "r_std_test",
-        "r_std_rc",
-        "r_std_secret",
-        "r_std_signal",
-        "r_std_sync",
-        "r_std_thread",
-        "r_std_utf8",
+        "r_json_decode",
+        "r_json_default",
+        "r_json_encode",
+        "r_json_reader_complete",
+        "r_json_reader_deadline",
+        "r_json_reader_start",
+        "r_json_reader_take",
+        "r_json_stream",
+        "r_json_stream_drop",
+        "r_json_stream_step",
+        "r_json_zero",
+        "r_runtime_unwinding_threads",
     }
 )
 MOVE_REGISTRY_NON_CALL_IDENTIFIERS = frozenset({"r_std_async", "r_std_c", "r_std_format", "r_std_fs", "r_std_io", "r_std_json", "r_std_json_reader", "r_std_net", "r_std_process", "r_std_secret", "r_std_signal", "r_std_string", "r_std_sync", "r_std_thread"})
@@ -1904,6 +2231,15 @@ HEADER_SOURCE_PATHS = (
     "library/std/thread/include/r_std_thread.h",
 )
 MATH_OPERATION_DESCRIPTOR_PATH = "compiler/source/standard_math_operations.generated.inc"
+# B6: the program emitter is compiled/llvm; a call target is a string literal there.
+GENERATED_LITERAL_PATTERN = re.compile(r'"(r_(?:library_internal|runtime|std|json)_[a-z0-9_]*[a-z0-9])\b')
+GENERATED_DESCRIPTOR_PATHS = (
+    "compiler/source/standard_async_sync.h",
+    "compiler/source/standard_fs_async.h",
+    "compiler/source/standard_scoped_operations.h",
+    "compiler/source/standard_sync.h",
+    MATH_OPERATION_DESCRIPTOR_PATH,
+)
 MATH_OPERATION_SYMBOL_PATTERN = re.compile(r'"(?P<symbol>r_std_math_[a-z0-9_]+)"')
 
 
@@ -1973,9 +2309,9 @@ def build_inventory(root: Path) -> dict[str, Any]:
             "header_without_stack_usage_inputs": "hard-fail",
         },
         "closed_source_surfaces": {
-            "generated_c_emitter": "compiler/codegen/c17.c",
-            "generated_c_fragments": list(generated_emitter_paths(root)[1:]),
-            "generated_c_non_call_identifiers": sorted(GENERATED_NON_CALL_IDENTIFIERS),
+            "program_emitter": "compiler/llvm",
+            "program_emitter_sources": list(generated_emitter_paths(root)),
+            "program_emitter_non_call_identifiers": sorted(GENERATED_NON_CALL_IDENTIFIERS),
             "named_standard_move_registry": (
                 "compiler/source/named_standard_move_abi.generated.inc"
             ),
@@ -2002,25 +2338,31 @@ def require(condition: bool, message: str) -> None:
 
 
 def generated_emitter_paths(root: Path) -> tuple[str, ...]:
-    fragments = tuple(
+    """The LLVM emitter and the descriptor headers it shares with the semantic analysis."""
+    emitter = tuple(
         str(path.relative_to(root))
-        for path in sorted((root / "compiler/codegen").glob("*.inc"))
+        for pattern in ("*.c", "*.h", "*.inc")
+        for path in sorted((root / "compiler/llvm").glob(pattern))
     )
     return (
-        "compiler/codegen/c17.c",
-        *fragments,
-        "compiler/source/standard_async_sync.h",
-        "compiler/source/standard_fs_async.h",
-        "compiler/source/standard_scoped_operations.h",
-        "compiler/source/standard_sync.h",
-        MATH_OPERATION_DESCRIPTOR_PATH,
+        *emitter,
+        *GENERATED_DESCRIPTOR_PATHS,
     )
 
 
 def generated_emitter_source(root: Path) -> str:
-    return "\n".join(
-        (root / path).read_text(encoding="utf-8") for path in generated_emitter_paths(root)
-    )
+    """The text the emitted program's calls are named in: every string literal of the LLVM
+    emitter that starts with a project prefix (the emitter names each runtime or library entry
+    it calls by a literal, and r_std_net_<name> through its descriptor table), and the
+    descriptor headers whole."""
+    literals = []
+    for path in generated_emitter_paths(root):
+        text = (root / path).read_text(encoding="utf-8")
+        if path.startswith("compiler/llvm/"):
+            literals.extend(GENERATED_LITERAL_PATTERN.findall(text))
+        else:
+            literals.append(text)
+    return "\n".join(literals)
 
 
 def generated_direct_symbols(root: Path) -> set[str]:

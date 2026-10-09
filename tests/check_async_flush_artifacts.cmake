@@ -14,26 +14,6 @@ function(r_require_match_count variable pattern expected description)
     endif()
 endfunction()
 
-function(r_require_near_order variable anchor first second description)
-    string(FIND "${${variable}}" "${anchor}" anchor_offset)
-    if(anchor_offset EQUAL -1)
-        message(FATAL_ERROR "${description}: anchor '${anchor}' is absent")
-    endif()
-    string(LENGTH "${${variable}}" output_length)
-    math(EXPR remaining "${output_length} - ${anchor_offset}")
-    if(remaining GREATER 3000)
-        set(remaining 3000)
-    endif()
-    string(SUBSTRING "${${variable}}" ${anchor_offset} ${remaining} tail)
-    string(FIND "${tail}" "${first}" first_offset)
-    string(FIND "${tail}" "${second}" second_offset)
-    if(first_offset EQUAL -1 OR second_offset EQUAL -1 OR
-       NOT first_offset LESS second_offset)
-        message(FATAL_ERROR
-            "${description}: expected '${first}' before '${second}':\n${tail}")
-    endif()
-endfunction()
-
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}" --emit=hir "${SOURCE_FILE}"
     RESULT_VARIABLE hir_result
@@ -67,56 +47,20 @@ r_require_match_count(mir_output
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
+        --emit=llvm-ir
         --entry test.codegen_async_flush::main
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"
         "${SOURCE_FILE}"
-    RESULT_VARIABLE c17_result
-    OUTPUT_VARIABLE c17_output
-    ERROR_VARIABLE c17_error
+    RESULT_VARIABLE ir_result
+    OUTPUT_VARIABLE ir_output
+    ERROR_VARIABLE ir_error
 )
-if(NOT c17_result EQUAL 0)
-    message(FATAL_ERROR "C17 emit failed (${c17_result}): ${c17_error}")
+if(NOT ir_result EQUAL 0)
+    message(FATAL_ERROR "LLVM IR emit failed (${ir_result}): ${ir_error}")
 endif()
-r_require_match_count(c17_output "#include \"r_std_io[.]h\"" 1
-    "generated std.io include")
-r_require_match_count(c17_output "r_std_io_flush[(]" 1
-    "generated flush calls")
-r_require_match_count(c17_output "RStdIoDeadline r_io_deadline_" 1
-    "generated deadline adapters")
-r_require_match_count(c17_output
-    "R_INTERNAL_ASSERT[(]" 0
-    "generated C omits assertions")
-r_require_match_count(c17_output "[.]r_tag > UINT32_C[(]1[)]" 0
-    "generated deadline runtime guards")
-r_require_match_count(c17_output "RStdIoTaskStartResult r_io_start_" 1
-    "generated start-result adapters")
-r_require_near_order(c17_output
-    "RStdIoTaskStartResult r_io_start_"
-    ".r_payload.r_ok = r_io_start_"
-    ".r_tag = UINT32_C(0)"
-    "generated flush success publication")
-r_require_near_order(c17_output
-    "RStdIoTaskStartResult r_io_start_"
-    ".r_payload.r_error_00000001 = r_io_start_"
-    ".r_tag = UINT32_C(1)"
-    "generated flush error publication")
-r_require_near_order(c17_output
-    "static inline void r_type_move_d"
-    "destination->r_payload.r_error_00000001"
-    "destination->r_tag = source->r_tag"
-    "generated effect-carrier move publication")
-r_require_near_order(c17_output
-    "switch (started.status)"
-    "r_effect_out->r_payload.r_ok = started.task"
-    "r_effect_out->r_tag = UINT32_C(0)"
-    "generated async launch success publication")
-r_require_near_order(c17_output
-    "switch (started.status)"
-    "r_effect_out->r_payload.r_error_00000001"
-    "r_effect_out->r_tag = UINT32_C(1)"
-    "generated async launch error publication")
+r_require_match_count(ir_output "call [^\n]*@r_std_io_flush[(]" 1
+    "flush calls")
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"

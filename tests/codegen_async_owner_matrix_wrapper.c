@@ -1,264 +1,319 @@
+/*
+ * Owners transferred into tasks and threads (Core R-FUNC-0010, R-FUNC-0012, R-AM-0014); the
+ * fixture's scenarios check what R observes (lengths, destructions, results, start errors) and
+ * this wrapper drives the failures and checks what only the runtime entry points observe:
+ *
+ * - The frame allocation of the 3rd, 6th, 9th, 12th and 16th task start of the program (the
+ *   hosted root is the 1st) is refused: the starts marked "refused" in the fixture. Each refused
+ *   start makes exactly that one allocation attempt.
+ * - std.thread::spawn is refused at its 1st, 2nd, ... allocation attempt in turn until a spawn
+ *   succeeds; a refused spawn reports resource exhaustion and stops at the refused attempt.
+ * - Every list or dict that is destroyed with an element still holds it at the address it was
+ *   stored at, so a container moved through a refused start, a task, a checked error or a thread
+ *   was never copied element by element.
+ * - parameter_resume creates the notify handles `gate` and `ready` and then starts `gated`, the
+ *   task wait_for awaits. Once wait_for has suspended on it, the wrapper opens `ready`; the
+ *   suspended frame keeps the task it awaits and its final await consumes it, by completion
+ *   after main opens the gate, or by cancellation while it waits.
+ */
+#include "r_runtime_0_1.h"
+#include "r_runtime_allocator.h"
+#include "r_runtime_dict.h"
+#include "r_runtime_list.h"
 #include "r_runtime_task.h"
+#include "r_std_async.h"
+#include "r_std_dict.h"
+#include "r_std_list.h"
+#include "r_std_thread.h"
 
+#include <stdatomic.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
-static RRuntimeTaskExecutionAwaitStatus
+RRuntimeTaskPrepareResult r_test_prepare(RRuntimeTypeInfo payload_type,
+                                         RRuntimeTypeInfo result_type,
+                                         RRuntimeTaskStepFn step);
+RRuntimeTaskStartResult r_test_commit(RRuntimeTask **transaction,
+                                      RRuntimeTaskPayloadInitializeFn initialize,
+                                      const void *context);
+RRuntimeTaskExecutionAwaitStatus
 r_test_await(RRuntimeTaskExecution *execution, RRuntimeTask **task, void *result);
-static _Bool r_test_cancel_requested(const RRuntimeTaskExecution *execution);
+RStdAsyncNotifyNewResult r_test_notify_new(RRuntimeAllocator *allocator);
+RStdThreadSpawnResult r_test_spawn(RRuntimeAllocator *allocator,
+                                   RRuntimeTypeInfo payload_type,
+                                   RStdThreadCompletionTypeInfo completion_type,
+                                   RStdThreadEntryFn entry,
+                                   void *staged_payload);
+RStdListInsertResult r_test_push_back(RStdList *target, void *staged_value);
+void r_test_list_destroy(RRuntimeList *list);
+RStdDictInsertResult
+r_test_dict_insert(RStdDict *target, void *staged_key, void *staged_value, void *replaced_storage);
+void r_test_dict_destroy(RRuntimeDict *dict);
 
+#define r_runtime_task_resumable_start_prepare r_test_prepare
+#define r_runtime_task_start_commit_initialize r_test_commit
 #define r_runtime_task_execution_await r_test_await
-#define r_runtime_task_execution_cancel_requested r_test_cancel_requested
+#define r_std_async_notify_new r_test_notify_new
+#define r_library_internal_thread_spawn_checked r_test_spawn
+#define r_std_list_push_back r_test_push_back
+#define r_runtime_list_destroy r_test_list_destroy
+#define r_std_dict_insert r_test_dict_insert
+#define r_runtime_dict_destroy r_test_dict_destroy
 #define main r_generated_main
 int main(int argc, char *argv[]);
-#include R_TEST_GENERATED_C
+#include R_TEST_PROGRAM_PRELUDE
 #undef main
-#undef r_runtime_task_execution_cancel_requested
+#undef r_runtime_dict_destroy
+#undef r_std_dict_insert
+#undef r_runtime_list_destroy
+#undef r_std_list_push_back
+#undef r_library_internal_thread_spawn_checked
+#undef r_std_async_notify_new
 #undef r_runtime_task_execution_await
+#undef r_runtime_task_start_commit_initialize
+#undef r_runtime_task_resumable_start_prepare
 
-#define CHECK(condition)                                                                           \
+/* The hooks run on executor workers and on the spawned threads; the scenarios run one after
+   another, so the runtime orders the events of one scenario, and atomics keep the unrelated
+   concurrent reads well defined. */
+static atomic_int r_test_failed_line;
+
+static void r_test_fail(int line) {
+    int expected = 0;
+    (void)atomic_compare_exchange_strong(&r_test_failed_line, &expected, line);
+}
+
+#define R_TEST_REQUIRE(condition)                                                                  \
     do {                                                                                           \
         if (!(condition)) {                                                                        \
-            (void)fprintf(stderr, "owner matrix check failed at line %d\n", __LINE__);             \
-            return __LINE__;                                                                       \
+            r_test_fail(__LINE__);                                                                 \
         }                                                                                          \
     } while (0)
 
-static max_align_t r_test_execution;
-static max_align_t r_test_child;
-static unsigned r_test_await_count;
-static _Bool r_test_cancelled;
+/* Refused task starts. */
+static const unsigned r_test_refused_starts[] = {3U, 6U, 9U, 12U, 16U};
+static atomic_uint r_test_starts;
+static atomic_uint r_test_start_refusals;
 
-static _Bool r_test_cancel_requested(const RRuntimeTaskExecution *execution) {
-    if (execution == (const RRuntimeTaskExecution *)(const void *)&r_test_execution) {
-        return 0;
-    }
-    return r_runtime_task_execution_cancel_requested(execution);
-}
-
-static RRuntimeTaskExecutionAwaitStatus
-r_test_await(RRuntimeTaskExecution *execution, RRuntimeTask **task, void *result) {
-    if (execution != (RRuntimeTaskExecution *)(void *)&r_test_execution) {
-        return r_runtime_task_execution_await(execution, task, result);
-    }
-    if (*task != (RRuntimeTask *)(void *)&r_test_child || result == NULL) {
-        return R_RUNTIME_TASK_EXECUTION_AWAIT_INVALID;
-    }
-    r_test_await_count += 1U;
-    if (r_test_await_count == 1U) {
-        return R_RUNTIME_TASK_EXECUTION_AWAIT_SUSPENDED;
-    }
-    *task = NULL;
-    if (r_test_cancelled) {
-        return R_RUNTIME_TASK_EXECUTION_AWAIT_CANCELLED;
-    }
-    *(int32_t *)result = INT32_C(42);
-    return R_RUNTIME_TASK_EXECUTION_AWAIT_OK;
-}
-
-static int r_test_parameter_resume(_Bool cancelled) {
-    r_async_frame_00000009 frame = {0};
-    RRuntimeTaskExecution *execution = (RRuntimeTaskExecution *)(void *)&r_test_execution;
-    int32_t result = -1;
-
-    frame.r_state = UINT32_C(1);
-    frame.r_p00000000 = (RRuntimeTask *)(void *)&r_test_child;
-    frame.r_p00000000_initialized = 1;
-    r_test_await_count = 0U;
-    r_test_cancelled = cancelled;
-    CHECK(r_async_step_00000009(execution, &frame, &result) == R_RUNTIME_TASK_STEP_SUSPENDED);
-    CHECK(frame.r_p00000000_initialized && frame.r_p00000000 != NULL);
-    CHECK(result == -1 && r_test_await_count == 1U);
-    CHECK(r_async_step_00000009(execution, &frame, &result) ==
-          (cancelled ? R_RUNTIME_TASK_STEP_CANCELLED : R_RUNTIME_TASK_STEP_COMPLETED));
-    CHECK(!frame.r_p00000000_initialized && frame.r_p00000000 == NULL);
-    CHECK(result == (cancelled ? -1 : 42) && r_test_await_count == 2U);
-    r_async_frame_drop_00000009(&frame);
-    return 0;
-}
-
-static RRuntimeTypeInfo r_test_tracked_type(void) {
-    return (RRuntimeTypeInfo){sizeof(r_a00000005),
-                              _Alignof(r_a00000005),
-                              r_type_move_a00000005_gate,
-                              r_type_drop_a00000005_gate};
-}
-
-static int r_test_item(RRuntimeAllocator *allocator, RRuntimeArc *counter, r_a00000005 *item) {
-    int32_t value = 71;
-    const RRuntimeTypeInfo type = {sizeof(value), _Alignof(int32_t), NULL, NULL};
-    CHECK(r_runtime_arc_clone(counter, &item->r_m00000001) == R_RUNTIME_ARC_OK);
-    CHECK(r_runtime_own_create(allocator, type, &value, &item->r_m00000002) == R_RUNTIME_OWN_OK);
-    return 0;
-}
-
-static uint32_t r_test_drop_count(const RRuntimeArc *counter) {
-    const r_a00000001 *value = r_runtime_arc_get(counter);
-    return atomic_load_explicit(&value->r_m00000001, memory_order_relaxed);
-}
-
-static int r_test_list(RRuntimeAllocator *allocator, RRuntimeArc *counter, _Bool cancel) {
-    RRuntimeList source = {0};
-    RRuntimeList result = {0};
-    r_a00000005 item = {0};
-    r_d00000019 started = {0};
-    uint32_t before = r_test_drop_count(counter);
-    void *stored = NULL;
-
-    r_runtime_allocator_set_failure(allocator, 0U);
-    CHECK(r_test_item(allocator, counter, &item) == 0);
-    CHECK(r_runtime_list_initialize(&source, allocator, r_test_tracked_type()) ==
-          R_RUNTIME_LIST_OK);
-    CHECK(r_runtime_list_push_back(&source, &item, &stored) == R_RUNTIME_LIST_OK);
-    const RRuntimeListNode *first = source.first;
-    r_runtime_allocator_set_failure(allocator, 1U);
-    r_f00000007(&started, &source);
-    CHECK(started.r_tag == 1U &&
-          started.r_payload.r_error_00000001 == R_STD_ASYNC_START_ALLOCATION_FAILED);
-    CHECK(source.first == first && source.length == 1U && r_test_drop_count(counter) == before);
-    r_runtime_allocator_set_failure(allocator, 0U);
-    r_f00000007(&started, &source);
-    CHECK(started.r_tag == 0U && source.first == NULL && source.length == 0U);
-    if (cancel) {
-        r_runtime_task_destroy(&started.r_payload.r_ok);
-        CHECK(r_runtime_executor_lifecycle_stop());
-        CHECK(r_runtime_executor_lifecycle_start(allocator) == R_RUNTIME_EXECUTOR_START_OK);
-    } else {
-        CHECK(r_runtime_task_await(&started.r_payload.r_ok, &result) == R_RUNTIME_TASK_AWAIT_OK);
-        CHECK(result.first == first && result.length == 1U);
-        CHECK(r_test_drop_count(counter) == before);
-        r_runtime_list_destroy(&result);
-    }
-    CHECK(r_test_drop_count(counter) == before + 1U);
-    return 0;
-}
-
-static int r_test_dict(RRuntimeAllocator *allocator, RRuntimeArc *counter, _Bool cancel) {
-    RRuntimeDict source = {0};
-    r_a00000005 item = {0};
-    r_d00000018 started = {0};
-    r_d00000014 result = {0};
-    const RRuntimeDictKeyInfo key_type = {
-        {sizeof(int32_t), _Alignof(int32_t), NULL, NULL}, r_kh_4_0, r_ke_4_0};
-    int32_t key = 11;
-    _Bool replaced = 0;
-    uint32_t before = r_test_drop_count(counter);
-
-    r_runtime_allocator_set_failure(allocator, 0U);
-    CHECK(r_test_item(allocator, counter, &item) == 0);
-    CHECK(r_runtime_dict_initialize(&source, allocator, key_type, r_test_tracked_type(), 0U) ==
-          R_RUNTIME_DICT_OK);
-    CHECK(r_runtime_dict_insert(&source, &key, &item, NULL, &replaced) == R_RUNTIME_DICT_OK);
-    const void *entry = r_runtime_dict_get(&source, &key);
-    r_runtime_allocator_set_failure(allocator, 1U);
-    r_f00000005(&started, &source);
-    CHECK(started.r_tag == 1U &&
-          started.r_payload.r_error_00000001 == R_STD_ASYNC_START_ALLOCATION_FAILED);
-    CHECK(source.length == 1U && r_runtime_dict_get(&source, &key) == entry);
-    CHECK(r_test_drop_count(counter) == before);
-    r_runtime_allocator_set_failure(allocator, 0U);
-    r_f00000005(&started, &source);
-    CHECK(started.r_tag == 0U && source.entries == NULL && source.length == 0U);
-    if (cancel) {
-        r_runtime_task_destroy(&started.r_payload.r_ok);
-        CHECK(r_runtime_executor_lifecycle_stop());
-        CHECK(r_runtime_executor_lifecycle_start(allocator) == R_RUNTIME_EXECUTOR_START_OK);
-    } else {
-        CHECK(r_runtime_task_await(&started.r_payload.r_ok, &result) == R_RUNTIME_TASK_AWAIT_OK);
-        CHECK(result.r_tag == 1U && r_test_drop_count(counter) == before);
-        CHECK(r_runtime_dict_get(&result.r_payload.r_error_00000001.r_m00000001, &key) == entry);
-        r_type_drop_d00000014(&result);
-    }
-    CHECK(r_test_drop_count(counter) == before + 1U);
-    return 0;
-}
-
-static int r_test_thread_start(RRuntimeAllocator *allocator, RRuntimeArc *counter) {
-    RRuntimeList source = {0};
-    r_a00000005 item = {0};
-    void *stored = NULL;
-    const uint32_t before = r_test_drop_count(counter);
-    const RRuntimeTypeInfo payload_type = {sizeof(r_thread_payload_00000002),
-                                           _Alignof(r_thread_payload_00000002),
-                                           r_thread_payload_move_00000002,
-                                           r_thread_payload_drop_00000002};
-    const RStdThreadCompletionTypeInfo completion_type = {
-        {sizeof(int32_t), _Alignof(int32_t), NULL, NULL}, 0U, 0U, 0U};
-
-    r_runtime_allocator_set_failure(allocator, 0U);
-    CHECK(r_test_item(allocator, counter, &item) == 0);
-    CHECK(r_runtime_list_initialize(&source, allocator, r_test_tracked_type()) ==
-          R_RUNTIME_LIST_OK);
-    CHECK(r_runtime_list_push_back(&source, &item, &stored) == R_RUNTIME_LIST_OK);
-    const RRuntimeListNode *first = source.first;
-    for (uint64_t failure = 1U; failure < 16U; ++failure) {
-        r_thread_stage_00000002 stage = {&source};
-        r_runtime_allocator_set_failure(allocator, failure);
-        RStdThreadSpawnResult started = r_library_internal_thread_spawn_checked(
-            allocator, payload_type, completion_type, r_thread_entry_00000002, &stage);
-        if (started.is_ok) {
-            int32_t count = 0;
-            r_runtime_allocator_set_failure(allocator, 0U);
-            CHECK(source.first == NULL && source.length == 0U);
-            RStdThreadJoinResult joined = r_std_thread_join(&started.value);
-            CHECK(joined.kind == R_STD_THREAD_JOIN_RETURNED);
-            r_library_internal_thread_join_result_move(&joined, &count);
-            r_library_internal_thread_join_result_destroy(&joined);
-            CHECK(count == 1 && r_test_drop_count(counter) == before + 1U);
-            return 0;
+static _Bool r_test_start_refused(unsigned ordinal) {
+    for (size_t index = 0U; index < sizeof(r_test_refused_starts) / sizeof(unsigned); ++index) {
+        if (r_test_refused_starts[index] == ordinal) {
+            return 1;
         }
-        CHECK(started.error == R_STD_THREAD_ERROR_RESOURCE_EXHAUSTED);
-        CHECK(r_runtime_allocator_attempt_count(allocator) == failure);
-        CHECK(source.first == first && source.length == 1U);
-        CHECK(r_test_drop_count(counter) == before);
     }
-    r_runtime_list_destroy(&source);
-    return __LINE__;
+    return 0;
 }
 
-static int r_test_task_start(RRuntimeAllocator *allocator) {
-    r_d00000016 child = {0};
-    r_d00000016 parent = {0};
-    int32_t result = -1;
-    r_runtime_allocator_set_failure(allocator, 0U);
-    r_f00000004(&child);
-    CHECK(child.r_tag == 0U);
-    r_task snapshot = child.r_payload.r_ok;
-    r_runtime_allocator_set_failure(allocator, 1U);
-    r_f00000009(&parent, &child.r_payload.r_ok);
-    CHECK(parent.r_tag == 1U && child.r_payload.r_ok == snapshot);
-    r_runtime_allocator_set_failure(allocator, 0U);
-    r_f00000009(&parent, &child.r_payload.r_ok);
-    CHECK(parent.r_tag == 0U && child.r_payload.r_ok == NULL);
-    CHECK(r_runtime_task_await(&parent.r_payload.r_ok, &result) == R_RUNTIME_TASK_AWAIT_OK);
-    CHECK(result == 42);
-    return 0;
+RRuntimeTaskPrepareResult r_test_prepare(RRuntimeTypeInfo payload_type,
+                                         RRuntimeTypeInfo result_type,
+                                         RRuntimeTaskStepFn step) {
+    const unsigned ordinal = atomic_fetch_add(&r_test_starts, 1U) + 1U;
+    RRuntimeAllocator *allocator;
+    RRuntimeTaskPrepareResult prepared;
+
+    if (!r_test_start_refused(ordinal)) {
+        return r_runtime_task_resumable_start_prepare(payload_type, result_type, step);
+    }
+    /* No other task allocates while a scenario starts its task: the earlier scenarios have
+       ended, and the only task started just before (number) allocates nothing. */
+    allocator = r_runtime_hosted_allocator();
+    r_runtime_allocator_set_failure(allocator, UINT64_C(1));
+    prepared = r_runtime_task_resumable_start_prepare(payload_type, result_type, step);
+    R_TEST_REQUIRE(prepared.transaction == NULL &&
+                   prepared.status == R_RUNTIME_TASK_START_ALLOCATION_FAILED);
+    R_TEST_REQUIRE(r_runtime_allocator_attempt_count(allocator) == UINT64_C(1));
+    r_runtime_allocator_set_failure(allocator, UINT64_C(0));
+    (void)atomic_fetch_add(&r_test_start_refusals, 1U);
+    return prepared;
+}
+
+/* Refused thread spawns. */
+#define R_TEST_SPAWN_FAILURE_POINTS 32U
+static atomic_uint r_test_spawn_refusals;
+static atomic_bool r_test_spawned;
+
+RStdThreadSpawnResult r_test_spawn(RRuntimeAllocator *allocator,
+                                   RRuntimeTypeInfo payload_type,
+                                   RStdThreadCompletionTypeInfo completion_type,
+                                   RStdThreadEntryFn entry,
+                                   void *staged_payload) {
+    const unsigned failure = atomic_load(&r_test_spawn_refusals) + 1U;
+    RStdThreadSpawnResult started;
+
+    if (atomic_load(&r_test_spawned)) {
+        return r_library_internal_thread_spawn_checked(
+            allocator, payload_type, completion_type, entry, staged_payload);
+    }
+    if (failure > R_TEST_SPAWN_FAILURE_POINTS) {
+        /* A spawn that never stops allocating would loop the fixture forever. */
+        r_test_fail(__LINE__);
+        atomic_store(&r_test_spawned, 1);
+        return r_library_internal_thread_spawn_checked(
+            allocator, payload_type, completion_type, entry, staged_payload);
+    }
+    r_runtime_allocator_set_failure(allocator, (uint64_t)failure);
+    started = r_library_internal_thread_spawn_checked(
+        allocator, payload_type, completion_type, entry, staged_payload);
+    if (started.is_ok) {
+        atomic_store(&r_test_spawned, 1);
+    } else {
+        R_TEST_REQUIRE(started.error == R_STD_THREAD_ERROR_RESOURCE_EXHAUSTED);
+        R_TEST_REQUIRE(r_runtime_allocator_attempt_count(allocator) == (uint64_t)failure);
+        (void)atomic_fetch_add(&r_test_spawn_refusals, 1U);
+    }
+    r_runtime_allocator_set_failure(allocator, UINT64_C(0));
+    return started;
+}
+
+/* Element addresses. Every list and dict of the fixture holds one element, and each is
+   destroyed before the next one is filled. */
+static _Atomic(void *) r_test_list_element;
+static _Atomic(const void *) r_test_dict_entry;
+static atomic_uint r_test_list_destroys;
+static atomic_uint r_test_dict_destroys;
+
+RStdListInsertResult r_test_push_back(RStdList *target, void *staged_value) {
+    const RStdListInsertResult inserted = r_std_list_push_back(target, staged_value);
+    if (inserted.status == R_STD_LIST_CALL_SUCCESS) {
+        atomic_store(&r_test_list_element, inserted.value);
+    }
+    return inserted;
+}
+
+void r_test_list_destroy(RRuntimeList *list) {
+    if (list->length != 0U) {
+        R_TEST_REQUIRE(list->length == 1U);
+        R_TEST_REQUIRE(r_runtime_list_front(list) == atomic_load(&r_test_list_element));
+        (void)atomic_fetch_add(&r_test_list_destroys, 1U);
+    }
+    r_runtime_list_destroy(list);
+}
+
+RStdDictInsertResult
+r_test_dict_insert(RStdDict *target, void *staged_key, void *staged_value, void *replaced_storage) {
+    int32_t key;
+    RStdDictInsertResult inserted;
+
+    /* Every dict of the fixture has i32 keys; the insert consumes the staged key. */
+    (void)memcpy(&key, staged_key, sizeof(key));
+    inserted = r_std_dict_insert(target, staged_key, staged_value, replaced_storage);
+    if (inserted.status == R_STD_DICT_CALL_SUCCESS) {
+        atomic_store(&r_test_dict_entry, r_runtime_dict_get(target, &key));
+    }
+    return inserted;
+}
+
+void r_test_dict_destroy(RRuntimeDict *dict) {
+    const int32_t key = INT32_C(11);
+    if (dict->length != 0U) {
+        R_TEST_REQUIRE(dict->length == 1U);
+        R_TEST_REQUIRE(r_runtime_dict_get(dict, &key) == atomic_load(&r_test_dict_entry));
+        (void)atomic_fetch_add(&r_test_dict_destroys, 1U);
+    }
+    r_runtime_dict_destroy(dict);
+}
+
+/* The suspension of wait_for in parameter_resume. A reference of its own to the notify handle
+   created last (`ready`) lets the wrapper open it although main may drop its handle as soon as
+   it wakes. */
+static _Atomic(RLibraryAsyncNotifyState *) r_test_last_notify;
+static atomic_bool r_test_capture_commit;
+static _Atomic(RRuntimeTask *) r_test_gated_task;
+static _Atomic(RRuntimeTask **) r_test_waiting_slot;
+static atomic_uint r_test_suspensions;
+static atomic_uint r_test_resumptions;
+static atomic_uint r_test_resumed_outcomes;
+
+RStdAsyncNotifyNewResult r_test_notify_new(RRuntimeAllocator *allocator) {
+    RStdAsyncNotifyNewResult created = r_std_async_notify_new(allocator);
+    if (created.status == R_STD_ASYNC_CALL_SUCCESS) {
+        RStdAsyncNotify previous = {NULL};
+        const RStdAsyncNotify own = r_std_async_clone_notify(&created.value);
+        previous.state = atomic_exchange(&r_test_last_notify, own.state);
+        r_std_async_notify_destroy(&previous);
+        atomic_store(&r_test_capture_commit, 1);
+    }
+    return created;
+}
+
+/* The first task committed after the notify handles is `gated`. */
+RRuntimeTaskStartResult r_test_commit(RRuntimeTask **transaction,
+                                      RRuntimeTaskPayloadInitializeFn initialize,
+                                      const void *context) {
+    const RRuntimeTaskStartResult started =
+        r_runtime_task_start_commit_initialize(transaction, initialize, context);
+    if (started.status == R_RUNTIME_TASK_START_OK && atomic_exchange(&r_test_capture_commit, 0)) {
+        atomic_store(&r_test_gated_task, started.task);
+    }
+    return started;
+}
+
+RRuntimeTaskExecutionAwaitStatus
+r_test_await(RRuntimeTaskExecution *execution, RRuntimeTask **task, void *result) {
+    RRuntimeTask *const awaited = *task;
+    const RRuntimeTaskExecutionAwaitStatus status =
+        r_runtime_task_execution_await(execution, task, result);
+
+    if (awaited == NULL || awaited != atomic_load(&r_test_gated_task)) {
+        return status;
+    }
+    if (status == R_RUNTIME_TASK_EXECUTION_AWAIT_SUSPENDED) {
+        /* A cancelled frame is resumed to pass the cancellation on to the task it awaits and
+           waits again until that task has finished. */
+        if (atomic_load(&r_test_waiting_slot) == NULL) {
+            RStdAsyncNotify ready = {atomic_exchange(&r_test_last_notify, NULL)};
+            R_TEST_REQUIRE(ready.state != NULL);
+            /* Recorded before main can complete or cancel the frame on another worker. */
+            atomic_store(&r_test_waiting_slot, task);
+            (void)atomic_fetch_add(&r_test_suspensions, 1U);
+            r_std_async_notify_one(&ready);
+            r_std_async_notify_destroy(&ready);
+        } else {
+            R_TEST_REQUIRE(atomic_load(&r_test_waiting_slot) == task);
+        }
+        return status;
+    }
+    /* The final await of the resumed frame names the same task in the same slot, and consumes
+       it whether the task completed or the frame was cancelled. */
+    R_TEST_REQUIRE(atomic_load(&r_test_waiting_slot) == task);
+    R_TEST_REQUIRE(*task == NULL);
+    (void)atomic_fetch_or(&r_test_resumed_outcomes,
+                          status == R_RUNTIME_TASK_EXECUTION_AWAIT_OK          ? 1U
+                          : status == R_RUNTIME_TASK_EXECUTION_AWAIT_CANCELLED ? 2U
+                                                                               : 4U);
+    (void)atomic_fetch_add(&r_test_resumptions, 1U);
+    atomic_store(&r_test_waiting_slot, NULL);
+    atomic_store(&r_test_gated_task, NULL);
+    return status;
 }
 
 int main(int argc, char *argv[]) {
-    RRuntimeAllocator allocator;
-    RRuntimeArc counter = {0};
-    r_a00000001 counter_value = {0};
-    const RRuntimeTypeInfo counter_type = {sizeof(counter_value),
-                                           _Alignof(r_a00000001),
-                                           r_type_move_a00000001_gate,
-                                           r_type_drop_a00000001_gate};
-    CHECK(r_runtime_stack_initialize_current_thread());
-    CHECK(r_test_parameter_resume(0) == 0);
-    CHECK(r_test_parameter_resume(1) == 0);
-    r_runtime_allocator_initialize(&allocator);
-    CHECK(r_runtime_executor_lifecycle_start(&allocator) == R_RUNTIME_EXECUTOR_START_OK);
-    CHECK(r_runtime_arc_create(&allocator, counter_type, &counter_value, &counter) ==
-          R_RUNTIME_ARC_OK);
-    CHECK(r_test_list(&allocator, &counter, 0) == 0);
-    CHECK(r_test_list(&allocator, &counter, 1) == 0);
-    CHECK(r_test_dict(&allocator, &counter, 0) == 0);
-    CHECK(r_test_dict(&allocator, &counter, 1) == 0);
-    CHECK(r_test_task_start(&allocator) == 0);
-    CHECK(r_test_thread_start(&allocator, &counter) == 0);
-    CHECK(r_test_drop_count(&counter) == 5U && r_runtime_arc_strong_count(&counter) == 1U);
-    r_runtime_arc_release(&counter);
-    CHECK(r_runtime_executor_lifecycle_stop());
-    return r_generated_main(argc, argv);
+    const int status = r_generated_main(argc, argv);
+    const int failed_line = atomic_load(&r_test_failed_line);
+
+    if (failed_line != 0) {
+        (void)fprintf(stderr, "owner matrix check failed at line %d\n", failed_line);
+        return failed_line;
+    }
+    if (status != 0) {
+        (void)fprintf(stderr, "owner matrix fixture failed with status %d\n", status);
+        return status;
+    }
+    R_TEST_REQUIRE(atomic_load(&r_test_start_refusals) ==
+                   sizeof(r_test_refused_starts) / sizeof(unsigned));
+    R_TEST_REQUIRE(atomic_load(&r_test_spawned) && atomic_load(&r_test_spawn_refusals) != 0U);
+    R_TEST_REQUIRE(atomic_load(&r_test_list_destroys) == 4U);
+    R_TEST_REQUIRE(atomic_load(&r_test_dict_destroys) == 3U);
+    R_TEST_REQUIRE(atomic_load(&r_test_last_notify) == NULL);
+    R_TEST_REQUIRE(atomic_load(&r_test_suspensions) == 2U);
+    R_TEST_REQUIRE(atomic_load(&r_test_resumptions) == 2U);
+    R_TEST_REQUIRE(atomic_load(&r_test_resumed_outcomes) == 3U);
+    if (atomic_load(&r_test_failed_line) != 0) {
+        (void)fprintf(
+            stderr, "owner matrix check failed at line %d\n", atomic_load(&r_test_failed_line));
+        return atomic_load(&r_test_failed_line);
+    }
+    return 0;
 }

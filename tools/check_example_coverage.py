@@ -207,7 +207,9 @@ def resolved_references(app: dict, frontend: Path) -> tuple[set[str], set[str]]:
     found = set()
     operations = set()
     for invocation in commands:
-        result = subprocess.run(invocation, capture_output=True, text=True, timeout=60)
+        # A sanitized r-front needs 20-30 s for the largest applications and several times that
+        # while a test battery loads the machine; the limit only has to catch a hang.
+        result = subprocess.run(invocation, capture_output=True, text=True, timeout=300)
         if result.returncode:
             raise ValueError(f"cannot resolve example {app['id']}: {result.stderr}")
         found.update(hir_types(result.stdout, modules))

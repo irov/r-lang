@@ -1491,14 +1491,16 @@ protected async relayed relay_parts(const T* output, std.sync::receiver<part> re
 
 /* R-SLIB-HTTP-0009: waits until the peer sends another byte or ends the connection; true when
    the connection ended or failed. A byte that it reads is consumed, so it marks taken: the
-   relay may finish as the byte arrives, and then the scope discards this result (M35-2). */
+   relay may finish as the byte arrives, and then the scope discards this result (M35-2). The
+   probe belongs to the caller, so the byte stays there even when this member is cancelled after
+   its read took it and taken is never marked (B6-6). */
 @generic<T: std.stream::Stream>
 @scoped
-protected async bool peer_left(const T* source, const (atomic u32)* taken) throws std.error::fault {
-    u8[1] probe = {0u8};
+protected async bool peer_left(const T* source, u8[] probe, const (atomic u32)* taken)
+    throws std.error::fault {
     try {
         task_scope(1) io {
-            usize count = await source->read_into(&probe);
+            usize count = await source->read_into(probe);
             if (count > 0usize) { core::atomic_store(taken, 1u32, core::memory_order::release); }
             return count == 0usize;
         }
@@ -1530,12 +1532,14 @@ protected async bool write_streamed(std.bufio::reader<T>* input, arc shared<S> c
     bool failed = false;
     bool gone = false;
     atomic u32 taken = 0u32;
+    /* The byte the watcher reads lands here, written by the read itself (B6-6). */
+    u8[1] probe = {0u8};
     switch (streamer) {
     case variant o::some(chosen):
         task_scope(3) stream {
             auto producer = (*chosen)(std.arc::clone(&context->state), move incoming, move writer);
             auto relay = relay_parts(&input->source, move receiver, &*context, sent, target, head, wanted);
-            auto watcher = peer_left(&input->source, &taken);
+            auto watcher = peer_left(&input->source, &probe, &taken);
             select (stream) {
             case relayed done = await move relay:
                 began = done.began;
@@ -1581,8 +1585,12 @@ protected async bool write_streamed(std.bufio::reader<T>* input, arc shared<S> c
     drop target;
     if (failed == true) { keep = false; }
     /* A byte of the next request that the watcher consumed cannot be read again: the connection
-       ends after this response, as for a pipelined request. */
-    if (core::atomic_load(&taken, core::memory_order::acquire) == 1u32) { keep = false; }
+       ends after this response, as for a pipelined request. The watcher's own count is lost
+       when it was cancelled after its read took the byte (Core R-STMT-0018), so the byte in the
+       probe, which no valid request begins with as zero, tells as well (B6-6). */
+    if (core::atomic_load(&taken, core::memory_order::acquire) == 1u32 || probe[0usize] != 0u8) {
+        keep = false;
+    }
     task_scope(1) end {
         if (failed == false && head == false) { await finish_chunks(&input->source); }
         if (failed == false && head == true) { await input->source.flush(); }

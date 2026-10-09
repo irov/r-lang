@@ -210,12 +210,12 @@ r-front --emit=ast \
   --entry example.unzip.main::main
 ```
 
-The workspace already contains a reference frontend and strict-C17 backend. It
+The workspace already contains a reference frontend and its LLVM backend. It
 builds CST/AST/HIR/MIR, lowers async state machines, and links the required
 `std.fs`/`std.io` operations to the Darwin runtime.
 The `r_frontend_codegen_unzip_pure` CTest loads the reachable graph for
-`example.unzip.tests.main`, generates strict C17, compiles it, and runs all four
-DEFLATE/CRC tests. `r_frontend_codegen_unzip_full` generates, compiles, and runs the
+`example.unzip.tests.main`, compiles it with `r-front --emit=object`, links it, and runs all
+four DEFLATE/CRC tests. `r_frontend_codegen_unzip_full` generates, compiles, and runs the
 complete async `unzip` against a ZIP fixture. An additional raw executable is used
 by `r_frontend_zip_unzip_roundtrip` to extract randomized archives created by the
 `zip` example, followed by a byte-for-byte tree comparison.

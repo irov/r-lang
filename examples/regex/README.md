@@ -2,7 +2,7 @@
 
 `std.regex` compiles reusable expressions and searches valid UTF-8 strings. Import the
 module with `import std.regex;` and pass `--library-map library/r/library.map` to `r-front`.
-The module is written in safe R and translated into C17 with your program. It requires
+The module is written in safe R and compiled with your program. It requires
 the `hosted` profile and has no external regex dependency.
 
 ```r
@@ -78,6 +78,5 @@ ctest --test-dir build-debug --output-on-failure -R regex
 ```
 
 The test suite compiles and runs this example, checks the same semantic cases in
-sync and async programs, compares generated C at `-O0` and `-O2`, injects every
-allocation failure in a representative pipeline, and runs a deterministic
-differential corpus against a substring-enumerating oracle.
+sync and async programs, injects every allocation failure in a representative pipeline,
+and runs a deterministic differential corpus against a substring-enumerating oracle.

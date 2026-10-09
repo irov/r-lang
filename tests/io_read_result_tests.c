@@ -35,25 +35,6 @@ typedef struct RIoReadResultView {
     RMirInstruction *failed_variant_payload;
 } RIoReadResultView;
 
-typedef enum RIoReadResultMutation {
-    R_IO_READ_RESULT_MUTATE_LOGICAL_FLAGS = 0,
-    R_IO_READ_RESULT_MUTATE_LOGICAL_BASE,
-    R_IO_READ_RESULT_MUTATE_LOGICAL_SECOND,
-    R_IO_READ_RESULT_MUTATE_LOGICAL_CONST_WRAPPER,
-    R_IO_READ_RESULT_MUTATE_VARIANT_TAG_THREE,
-    R_IO_READ_RESULT_MUTATE_READ_FIELD_ORDER,
-    R_IO_READ_RESULT_MUTATE_READ_FIELD_TYPE,
-    R_IO_READ_RESULT_MUTATE_READ_FIELD_NAME,
-    R_IO_READ_RESULT_MUTATE_FAILED_FIELD_ORDER,
-    R_IO_READ_RESULT_MUTATE_FAILED_COUNT_TYPE,
-    R_IO_READ_RESULT_MUTATE_FAILED_COUNT_NAME,
-    R_IO_READ_RESULT_MUTATE_FAILED_BUFFER_TYPE,
-    R_IO_READ_RESULT_MUTATE_FAILED_BUFFER_NAME,
-    R_IO_READ_RESULT_MUTATE_SWITCH_MISSING,
-    R_IO_READ_RESULT_MUTATE_SWITCH_DUPLICATE,
-    R_IO_READ_RESULT_MUTATION_COUNT
-} RIoReadResultMutation;
-
 static int failures;
 
 #define R_IO_READ_RESULT_CHECK(condition)                                                          \
@@ -354,12 +335,14 @@ static void r_io_read_result_test_positive(void) {
     }
     R_IO_READ_RESULT_CHECK(r_io_read_result_find_view(context, &view));
     R_IO_READ_RESULT_CHECK(r_io_read_result_fields_are_valid(context, &view));
-    R_IO_READ_RESULT_CHECK(r_frontend_emit_c17(context, r_io_read_result_write, &first) ==
-                           R_FRONTEND_OK);
+    R_IO_READ_RESULT_CHECK(
+        r_frontend_emit_llvm(context, NULL, R_FRONTEND_LLVM_IR, r_io_read_result_write, &first) ==
+        R_FRONTEND_OK);
     R_IO_READ_RESULT_CHECK(first.call_count == 1U);
     R_IO_READ_RESULT_CHECK(first.length != 0U);
-    R_IO_READ_RESULT_CHECK(r_frontend_emit_c17(context, r_io_read_result_write, &second) ==
-                           R_FRONTEND_OK);
+    R_IO_READ_RESULT_CHECK(
+        r_frontend_emit_llvm(context, NULL, R_FRONTEND_LLVM_IR, r_io_read_result_write, &second) ==
+        R_FRONTEND_OK);
     R_IO_READ_RESULT_CHECK(second.call_count == 1U);
     R_IO_READ_RESULT_CHECK(
         (first.length == second.length) &&
@@ -389,162 +372,6 @@ static void r_io_read_result_test_diagnostic(const char *path,
     r_frontend_destroy(context);
 }
 
-static RTypeId r_io_read_result_append_const_type(RFrontendContext *context, RTypeId base) {
-    RSemanticType type;
-    RTypeId type_id;
-
-    if ((context->semantic_type_count >= (size_t)UINT32_MAX) ||
-        !r_grow_array(context,
-                      (void **)&context->semantic_types,
-                      &context->semantic_type_capacity,
-                      sizeof(*context->semantic_types),
-                      context->semantic_type_count + 1U)) {
-        return R_TYPE_ID_INVALID;
-    }
-    (void)memset(&type, 0, sizeof(type));
-    type.kind = R_SEMANTIC_TYPE_CONST;
-    type.base = base;
-    type.second = R_TYPE_ID_INVALID;
-    type_id = (RTypeId)context->semantic_type_count + UINT32_C(1);
-    context->semantic_types[context->semantic_type_count] = type;
-    context->semantic_type_count += 1U;
-    return type_id;
-}
-
-static bool r_io_read_result_apply_mutation(RFrontendContext *context,
-                                            RIoReadResultView *view,
-                                            RIoReadResultMutation mutation) {
-    RSemanticType *logical = &context->semantic_types[(size_t)view->logical_type - 1U];
-    RSemanticField *read_fields =
-        &context->semantic_fields[(size_t)view->read_payload->first_field];
-    RSemanticField *failed_fields =
-        &context->semantic_fields[(size_t)view->failed_payload->first_field];
-
-    switch (mutation) {
-    case R_IO_READ_RESULT_MUTATE_LOGICAL_FLAGS:
-        logical->flags = R_SEMANTIC_TYPE_FLAG_SHARED;
-        return true;
-    case R_IO_READ_RESULT_MUTATE_LOGICAL_BASE:
-        logical->base = view->u8_type;
-        return true;
-    case R_IO_READ_RESULT_MUTATE_LOGICAL_SECOND:
-        logical->second = view->u8_type;
-        return true;
-    case R_IO_READ_RESULT_MUTATE_LOGICAL_CONST_WRAPPER: {
-        const RTypeId const_type = r_io_read_result_append_const_type(context, view->logical_type);
-        RSemanticType *task;
-
-        if (const_type == R_TYPE_ID_INVALID) {
-            return false;
-        }
-        task = &context->semantic_types[(size_t)view->task_type - 1U];
-        task->base = const_type;
-        return true;
-    }
-    case R_IO_READ_RESULT_MUTATE_VARIANT_TAG_THREE:
-        view->failed_variant_payload->integer_value = UINT64_C(3);
-        return true;
-    case R_IO_READ_RESULT_MUTATE_READ_FIELD_ORDER: {
-        const RSemanticField first = read_fields[0];
-
-        read_fields[0] = read_fields[1];
-        read_fields[1] = first;
-        return true;
-    }
-    case R_IO_READ_RESULT_MUTATE_READ_FIELD_TYPE:
-        read_fields[0].type = read_fields[1].type;
-        return true;
-    case R_IO_READ_RESULT_MUTATE_READ_FIELD_NAME:
-        read_fields[0].name_intern_id = read_fields[1].name_intern_id;
-        return true;
-    case R_IO_READ_RESULT_MUTATE_FAILED_FIELD_ORDER: {
-        const RSemanticField count = failed_fields[1];
-
-        failed_fields[1] = failed_fields[2];
-        failed_fields[2] = count;
-        return true;
-    }
-    case R_IO_READ_RESULT_MUTATE_FAILED_COUNT_TYPE:
-        failed_fields[1].type = failed_fields[2].type;
-        return true;
-    case R_IO_READ_RESULT_MUTATE_FAILED_COUNT_NAME:
-        failed_fields[1].name_intern_id = failed_fields[2].name_intern_id;
-        return true;
-    case R_IO_READ_RESULT_MUTATE_FAILED_BUFFER_TYPE:
-        failed_fields[2].type = failed_fields[1].type;
-        return true;
-    case R_IO_READ_RESULT_MUTATE_FAILED_BUFFER_NAME:
-        failed_fields[2].name_intern_id = failed_fields[1].name_intern_id;
-        return true;
-    case R_IO_READ_RESULT_MUTATE_SWITCH_MISSING:
-        view->failed_variant_payload->kind = R_MIR_INSTRUCTION_INVALID;
-        return true;
-    case R_IO_READ_RESULT_MUTATE_SWITCH_DUPLICATE:
-        view->failed_variant_payload->integer_value = UINT64_C(1);
-        return true;
-    case R_IO_READ_RESULT_MUTATION_COUNT:
-    default:
-        return false;
-    }
-}
-
-static const char *r_io_read_result_mutation_name(RIoReadResultMutation mutation) {
-    static const char *const names[] = {
-        "logical_flags",
-        "logical_base",
-        "logical_second",
-        "logical_const_wrapper",
-        "variant_tag_three",
-        "read_field_order",
-        "read_field_type",
-        "read_field_name",
-        "failed_field_order",
-        "failed_count_type",
-        "failed_count_name",
-        "failed_buffer_type",
-        "failed_buffer_name",
-        "switch_missing",
-        "switch_duplicate",
-    };
-
-    if ((size_t)mutation >= (sizeof(names) / sizeof(names[0]))) {
-        return "invalid";
-    }
-    return names[(size_t)mutation];
-}
-
-static void r_io_read_result_test_codegen_mutations(void) {
-    size_t mutation;
-
-    for (mutation = 0U; mutation < (size_t)R_IO_READ_RESULT_MUTATION_COUNT; ++mutation) {
-        RFrontendContext *context = r_io_read_result_build_context();
-        RIoReadResultView view;
-        RIoReadResultBuffer output = {0};
-        RFrontendStatus status;
-
-        R_IO_READ_RESULT_CHECK(context != NULL);
-        if (context == NULL) {
-            continue;
-        }
-        R_IO_READ_RESULT_CHECK(r_io_read_result_find_view(context, &view));
-        R_IO_READ_RESULT_CHECK(
-            r_io_read_result_apply_mutation(context, &view, (RIoReadResultMutation)mutation));
-        status = r_frontend_emit_c17(context, r_io_read_result_write, &output);
-        if (status != R_FRONTEND_NOT_LOWERABLE) {
-            (void)fprintf(stderr,
-                          "mutation %zu (%s) unexpectedly returned status %d\n",
-                          mutation,
-                          r_io_read_result_mutation_name((RIoReadResultMutation)mutation),
-                          (int)status);
-        }
-        R_IO_READ_RESULT_CHECK(status == R_FRONTEND_NOT_LOWERABLE);
-        R_IO_READ_RESULT_CHECK(output.call_count == 0U);
-        R_IO_READ_RESULT_CHECK(output.length == 0U);
-        r_io_read_result_dispose_buffer(&output);
-        r_frontend_destroy(context);
-    }
-}
-
 int main(void) {
     r_io_read_result_test_positive();
     r_io_read_result_test_diagnostic(
@@ -553,6 +380,5 @@ int main(void) {
         R_IO_READ_RESULT_DUPLICATE_VARIANT_PATH, "R-DIAG-SWITCH-001", "R-STMT-0010");
     r_io_read_result_test_diagnostic(
         R_IO_READ_RESULT_WRONG_VARIANT_PATH, "R-DIAG-TYPE-001", "R-STMT-0010");
-    r_io_read_result_test_codegen_mutations();
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

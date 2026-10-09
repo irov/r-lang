@@ -15,11 +15,17 @@ typedef enum REmitKind {
     R_EMIT_INTERFACE,
     R_EMIT_LINK_PLAN,
     R_EMIT_BUNDLE,
-    R_EMIT_C17,
     R_EMIT_ABI_VERIFIER,
     R_EMIT_C17_BRIDGE,
-    R_EMIT_ABI_INVENTORY
+    R_EMIT_ABI_INVENTORY,
+    R_EMIT_LLVM_IR,
+    R_EMIT_OBJECT
 } REmitKind;
+
+/* The artifacts that are a whole program: LLVM IR or an object from the LLVM emitter. */
+static bool r_cli_emits_program(REmitKind emit) {
+    return (emit == R_EMIT_LLVM_IR) || (emit == R_EMIT_OBJECT);
+}
 
 typedef enum RDiagnosticsKind {
     R_DIAGNOSTICS_TEXT = 0,
@@ -47,6 +53,11 @@ typedef struct RCliOptions {
     /* Header roots the ABI record header digests are verified against (R-FFI-0044). */
     const char *abi_header_dirs[64];
     size_t abi_header_dir_count;
+    /* --rename-symbol OLD=NEW of the LLVM backends (RFrontendArtifactOptions). */
+    const char *symbol_renames[64];
+    size_t symbol_rename_count;
+    /* --all-functions: lower every function, not only those the entry reaches. */
+    bool all_functions;
     const char **source_paths;
     size_t source_count;
     size_t source_capacity;
@@ -81,14 +92,34 @@ static bool r_cli_status_is_resource_failure(RFrontendStatus status);
 static void r_cli_usage(FILE *stream) {
     (void)fprintf(stream,
                   "usage: r-front "
-                  "[--emit=tokens|cst|ast|hir|mir|interface|link-plan|bundle|c17|"
+                  "[--emit=tokens|cst|ast|hir|mir|interface|link-plan|bundle|llvm-ir|object|"
                   "abi-verifier|c17-bridge|abi-inventory] "
                   "[--diagnostics=text|json] [--module-map FILE] [--library-map FILE] "
                   "[--entry MODULE[::FUNCTION]] "
                   "[--profile freestanding|allocation|hosted|hosted-thread|"
                   "hosted-native-async] [--deny-panic-alloc] [--test] [--target-manifest FILE] "
                   "[--link-manifest FILE] [--abi-record FILE] [--abi-header-dir DIR]... "
-                  "[FILE ...]\n");
+                  "[--rename-symbol OLD=NEW]... [--all-functions] [--version] [FILE ...]\n");
+}
+
+/* The compiler and its backend; the backend check fails when the linked LLVM or its target
+   machine disagrees with the target manifest (LLVM transition B0). */
+static bool r_cli_print_version(void) {
+    char version[32];
+    char message[512] = "LLVM version is unavailable";
+
+    if (!r_frontend_backend_version(version, sizeof(version)) ||
+        !r_frontend_backend_verify(message, sizeof(message))) {
+        (void)fprintf(stderr, "r-front: backend check failed: %s\n", message);
+        return false;
+    }
+    (void)printf("r-front %s (Core %s)\nLLVM %s %s %s\n",
+                 R_FRONTEND_VERSION,
+                 R_FRONTEND_CORE_REVISION,
+                 version,
+                 r_frontend_backend_triple(),
+                 r_frontend_backend_cpu());
+    return true;
 }
 
 static bool r_cli_option_error(const char *message, const char *argument) {
@@ -155,6 +186,29 @@ static void r_cli_destroy_options(RCliOptions *options) {
     r_cli_deallocate(options->link_manifest);
     r_cli_deallocate(options->abi_record);
     (void)memset(options, 0, sizeof(*options));
+}
+
+/* OLD=NEW with two C identifiers. */
+static bool r_cli_symbol_rename_is_valid(const char *pair) {
+    size_t index = 0U;
+    unsigned part;
+
+    if (pair == NULL) {
+        return false;
+    }
+    for (part = 0U; part < 2U; ++part) {
+        const size_t start = index;
+        while ((pair[index] == '_') || ((pair[index] >= 'a') && (pair[index] <= 'z')) ||
+               ((pair[index] >= 'A') && (pair[index] <= 'Z')) ||
+               ((index != start) && (pair[index] >= '0') && (pair[index] <= '9'))) {
+            index += 1U;
+        }
+        if ((index == start) || (pair[index] != (part == 0U ? '=' : '\0'))) {
+            return false;
+        }
+        index += 1U;
+    }
+    return true;
 }
 
 static bool r_cli_profile_is_valid(const char *profile) {
@@ -247,8 +301,12 @@ static bool r_cli_parse_arguments(int argc, char **argv, RCliOptions *options) {
             if (!r_cli_set_emit(options, R_EMIT_BUNDLE)) {
                 return false;
             }
-        } else if (strcmp(argument, "--emit=c17") == 0) {
-            if (!r_cli_set_emit(options, R_EMIT_C17)) {
+        } else if (strcmp(argument, "--emit=llvm-ir") == 0) {
+            if (!r_cli_set_emit(options, R_EMIT_LLVM_IR)) {
+                return false;
+            }
+        } else if (strcmp(argument, "--emit=object") == 0) {
+            if (!r_cli_set_emit(options, R_EMIT_OBJECT)) {
                 return false;
             }
         } else if (strcmp(argument, "--emit=abi-verifier") == 0) {
@@ -376,9 +434,30 @@ static bool r_cli_parse_arguments(int argc, char **argv, RCliOptions *options) {
                                          &options->link_manifest_path)) {
                 return false;
             }
+        } else if ((strcmp(argument, "--rename-symbol") == 0) ||
+                   (r_cli_option_value(argument, "--rename-symbol") != NULL)) {
+            const char *pair = NULL;
+            if (options->symbol_rename_count ==
+                sizeof(options->symbol_renames) / sizeof(options->symbol_renames[0])) {
+                return r_cli_option_error("too many options", "--rename-symbol");
+            }
+            if (!r_cli_take_option_value(argc, argv, &index, argument, "--rename-symbol", &pair)) {
+                return false;
+            }
+            if (!r_cli_symbol_rename_is_valid(pair)) {
+                return r_cli_option_error("expected OLD=NEW C identifiers", pair);
+            }
+            options->symbol_renames[options->symbol_rename_count++] = pair;
+        } else if (strcmp(argument, "--all-functions") == 0) {
+            if (options->all_functions) {
+                return r_cli_option_error("duplicate option", "--all-functions");
+            }
+            options->all_functions = true;
         } else if ((strcmp(argument, "--help") == 0) || (strcmp(argument, "-h") == 0)) {
             r_cli_usage(stdout);
             exit(0);
+        } else if (strcmp(argument, "--version") == 0) {
+            exit(r_cli_print_version() ? 0 : 1);
         } else if (argument[0] == '-') {
             return r_cli_option_error("unknown option", argument);
         } else if (!r_cli_add_path(options, argument)) {
@@ -1097,8 +1176,9 @@ static int r_cli_run(RFrontendContext *context, RCliOptions *options) {
             source_failure = source_failure || (status == R_FRONTEND_INVALID_SOURCE);
             if ((emit == R_EMIT_AST) || (emit == R_EMIT_HIR) || (emit == R_EMIT_MIR) ||
                 (emit == R_EMIT_INTERFACE) || (emit == R_EMIT_LINK_PLAN) ||
-                (emit == R_EMIT_BUNDLE) || (emit == R_EMIT_C17) || (emit == R_EMIT_ABI_VERIFIER) ||
-                (emit == R_EMIT_C17_BRIDGE) || (emit == R_EMIT_ABI_INVENTORY)) {
+                (emit == R_EMIT_BUNDLE) || r_cli_emits_program(emit) ||
+                (emit == R_EMIT_ABI_VERIFIER) || (emit == R_EMIT_C17_BRIDGE) ||
+                (emit == R_EMIT_ABI_INVENTORY)) {
                 RAstNodeId ast_root;
                 status = r_frontend_lower_ast(context, source_id, &ast_root);
                 if (r_cli_status_is_resource_failure(status)) {
@@ -1109,7 +1189,7 @@ static int r_cli_run(RFrontendContext *context, RCliOptions *options) {
         }
     }
     if ((emit == R_EMIT_HIR) || (emit == R_EMIT_MIR) || (emit == R_EMIT_INTERFACE) ||
-        (emit == R_EMIT_LINK_PLAN) || (emit == R_EMIT_BUNDLE) || (emit == R_EMIT_C17) ||
+        (emit == R_EMIT_LINK_PLAN) || (emit == R_EMIT_BUNDLE) || r_cli_emits_program(emit) ||
         (emit == R_EMIT_ABI_VERIFIER) || (emit == R_EMIT_C17_BRIDGE) ||
         (emit == R_EMIT_ABI_INVENTORY)) {
         RFrontendStatus status = r_frontend_analyze(context);
@@ -1118,7 +1198,7 @@ static int r_cli_run(RFrontendContext *context, RCliOptions *options) {
         }
         source_failure = source_failure || (status == R_FRONTEND_INVALID_SOURCE) ||
                          (status == R_FRONTEND_NOT_LOWERABLE);
-        if (((emit == R_EMIT_C17) || (emit == R_EMIT_LINK_PLAN) || (emit == R_EMIT_BUNDLE) ||
+        if ((r_cli_emits_program(emit) || (emit == R_EMIT_LINK_PLAN) || (emit == R_EMIT_BUNDLE) ||
              (emit == R_EMIT_INTERFACE) || (emit == R_EMIT_ABI_VERIFIER) ||
              (emit == R_EMIT_C17_BRIDGE) || (emit == R_EMIT_ABI_INVENTORY)) &&
             !source_failure) {
@@ -1137,7 +1217,7 @@ static int r_cli_run(RFrontendContext *context, RCliOptions *options) {
                 return 2;
             }
         }
-        if (((emit == R_EMIT_C17) || (emit == R_EMIT_LINK_PLAN) || (emit == R_EMIT_BUNDLE) ||
+        if ((r_cli_emits_program(emit) || (emit == R_EMIT_LINK_PLAN) || (emit == R_EMIT_BUNDLE) ||
              (emit == R_EMIT_INTERFACE) || (emit == R_EMIT_ABI_VERIFIER) ||
              (emit == R_EMIT_C17_BRIDGE)) &&
             !source_failure) {
@@ -1217,7 +1297,7 @@ static int r_cli_run(RFrontendContext *context, RCliOptions *options) {
                 return 2;
             }
         }
-        if ((emit == R_EMIT_C17) && !source_failure &&
+        if (r_cli_emits_program(emit) && !source_failure &&
             (r_frontend_diagnostic_count(context) == 0U)) {
             RFrontendArtifactOptions artifact_options;
 
@@ -1247,17 +1327,24 @@ static int r_cli_run(RFrontendContext *context, RCliOptions *options) {
             artifact_options.target_manifest_length = options->target_manifest_length;
             artifact_options.link_manifest = options->link_manifest;
             artifact_options.link_manifest_length = options->link_manifest_length;
-            status =
-                r_frontend_emit_c17_with_options(context, &artifact_options, r_file_writer, stdout);
+            artifact_options.symbol_renames = options->symbol_renames;
+            artifact_options.symbol_rename_count = options->symbol_rename_count;
+            artifact_options.all_functions = options->all_functions;
+            status = r_frontend_emit_llvm(context,
+                                          &artifact_options,
+                                          emit == R_EMIT_LLVM_IR ? R_FRONTEND_LLVM_IR
+                                                                 : R_FRONTEND_LLVM_OBJECT,
+                                          r_file_writer,
+                                          stdout);
             if (status == R_FRONTEND_NOT_LOWERABLE) {
                 (void)fprintf(stderr,
                               "r-front: R-DIAG-SLICE-001 [R-DIAG-0001]: the program is valid R "
-                              "but uses a construct outside the implemented C17 lowering\n");
+                              "but uses a construct outside the implemented LLVM lowering\n");
                 return 1;
             }
             if (status == R_FRONTEND_LIMIT_EXCEEDED) {
                 (void)fprintf(stderr,
-                              "r-front: R-DIAG-LIMIT-001 [R-LIMIT-0003]: C17 lowering exceeded a "
+                              "r-front: R-DIAG-LIMIT-001 [R-LIMIT-0003]: LLVM lowering exceeded a "
                               "translation limit\n");
                 return 2;
             }

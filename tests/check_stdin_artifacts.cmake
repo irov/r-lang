@@ -15,9 +15,16 @@ function(r_require_match_count variable pattern expected description)
     endif()
 endfunction()
 
+function(r_require_present variable pattern description)
+    string(REGEX MATCH "${pattern}" match "${${variable}}")
+    if(match STREQUAL "")
+        message(FATAL_ERROR "${description}: '${pattern}' is absent:\n${${variable}}")
+    endif()
+endfunction()
+
 function(r_capture_artifact source_file entry_name emit_kind output_variable)
     set(arguments --emit=${emit_kind})
-    if(emit_kind STREQUAL "c17" OR emit_kind STREQUAL "link-plan")
+    if(emit_kind STREQUAL "llvm-ir" OR emit_kind STREQUAL "link-plan")
         list(APPEND arguments
             --entry "${entry_name}"
             --profile hosted-native-async
@@ -68,17 +75,16 @@ function(r_check_stdin_source source_file entry_name)
         "[(]drop place=" 1
         "MIR input drops")
 
-    r_capture_artifact("${source_file}" "${entry_name}" c17 c17_output)
-    r_capture_artifact("${source_file}" "${entry_name}" c17 c17_repeated)
-    r_require_deterministic(c17_output c17_repeated "C17 stdin artifact")
-    r_require_match_count(c17_output "#include \"r_std_io[.]h\"" 1
-        "generated std.io includes")
-    r_require_match_count(c17_output "r_std_io_stdin[(]" 1
-        "generated stdin calls")
-    r_require_match_count(c17_output "r_std_io_input_move_initialize[(]" 1
-        "generated input moves")
-    r_require_match_count(c17_output "r_std_io_input_destroy[(]" 1
-        "generated input drops")
+    r_capture_artifact("${source_file}" "${entry_name}" llvm-ir ir_output)
+    r_capture_artifact("${source_file}" "${entry_name}" llvm-ir ir_repeated)
+    r_require_deterministic(ir_output ir_repeated "LLVM IR stdin artifact")
+    r_require_match_count(ir_output "call [^\n]*@r_std_io_stdin[(]" 1
+        "stdin calls")
+    # The move and drop glue of std.io::input reach the library's own entries.
+    r_require_present(ir_output "call [^\n]*@(r_shim_)?r_std_io_input_move_initialize[(]"
+        "input move glue")
+    r_require_present(ir_output "call [^\n]*@(r_shim_)?r_std_io_input_destroy[(]"
+        "input drop glue")
 
     r_capture_artifact("${source_file}" "${entry_name}" link-plan plan_output)
     r_capture_artifact("${source_file}" "${entry_name}" link-plan plan_repeated)

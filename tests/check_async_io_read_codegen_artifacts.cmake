@@ -14,9 +14,16 @@ function(r_require_match_count variable pattern expected description)
     endif()
 endfunction()
 
+function(r_require_present variable pattern description)
+    string(REGEX MATCH "${pattern}" match "${${variable}}")
+    if(match STREQUAL "")
+        message(FATAL_ERROR "${description}: '${pattern}' is absent:\n${${variable}}")
+    endif()
+endfunction()
+
 function(r_capture_artifact emit_kind output_variable)
     set(arguments --emit=${emit_kind})
-    if(emit_kind STREQUAL "c17" OR emit_kind STREQUAL "link-plan")
+    if(emit_kind STREQUAL "llvm-ir" OR emit_kind STREQUAL "link-plan")
         list(APPEND arguments
             --entry test.codegen.async_io_read::main
             --profile hosted-native-async
@@ -65,28 +72,19 @@ r_require_match_count(mir_output
     "await [^\n]*type=[(]standard \"std[.]io::read_result\"[)]" 1
     "MIR read awaits")
 
-r_capture_artifact(c17 c17_output)
-r_capture_artifact(c17 c17_repeated)
-r_require_deterministic(c17_output c17_repeated "C17 std.io::read artifact")
-r_require_match_count(c17_output "#include \"r_std_io[.]h\"" 1
-    "generated std.io includes")
-r_require_match_count(c17_output "r_std_io_stdin[(]" 1
-    "generated stdin calls")
-r_require_match_count(c17_output "r_std_io_read[(]" 1
-    "generated read calls")
-r_require_match_count(c17_output "RStdIoDeadline r_io_deadline_[0-9]+" 1
-    "generated deadline adapters")
-r_require_match_count(c17_output "RRuntimeArray r_io_buffer_before_[0-9]+" 0
-    "generated C omits debug ownership snapshots")
-r_require_match_count(c17_output
-    "if [(]r_io_start_[0-9]+[.]is_ok[)] [{][\n ]+frame->r_l[0-9]+_initialized = 0" 1
-    "generated successful-start ownership transition")
-r_require_match_count(c17_output "RStdIoTaskStartResult r_io_start_[0-9]+" 1
-    "generated start-result adapters")
-r_require_match_count(c17_output "r_io_start_[0-9]+[.]task = NULL" 1
-    "generated task ownership transfers")
-r_require_match_count(c17_output "r_std_io_read_result_destroy[(]" 1
-    "generated whole read-result drops")
+r_capture_artifact(llvm-ir ir_output)
+r_capture_artifact(llvm-ir ir_repeated)
+r_require_deterministic(ir_output ir_repeated "LLVM IR std.io::read artifact")
+r_require_match_count(ir_output "call [^\n]*@r_std_io_stdin[(]" 1
+    "stdin calls")
+r_require_match_count(ir_output "call [^\n]*@r_std_io_read[(]" 1
+    "read calls")
+# R-STMT-0019 (L23): the read start narrows its deadline argument by the structural deadline.
+r_require_match_count(ir_output "call [^\n]*@r_runtime_task_deadline_narrow[(]" 1
+    "read deadline narrowing")
+# The whole read result is dropped through the library's own entry.
+r_require_present(ir_output "call [^\n]*@(r_shim_)?r_std_io_read_result_destroy[(]"
+    "read-result drop glue")
 
 r_capture_artifact(link-plan plan_output)
 r_capture_artifact(link-plan plan_repeated)

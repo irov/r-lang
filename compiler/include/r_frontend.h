@@ -105,6 +105,13 @@ typedef struct RFrontendArtifactOptions {
     size_t target_manifest_length;
     const uint8_t *link_manifest;
     size_t link_manifest_length;
+    /* "OLD=NEW" pairs a test harness gives the LLVM backend: a call of the runtime or library
+       function OLD calls NEW instead, and the program's `main` is NEW where OLD is "main". */
+    const char *const *symbol_renames;
+    size_t symbol_rename_count;
+    /* The LLVM backend lowers the functions the entry reaches; with all_functions it lowers every
+       function of the program, as acceptance audits need for code no entry calls. */
+    bool all_functions;
 } RFrontendArtifactOptions;
 
 RFrontendOptions r_frontend_default_options(void);
@@ -117,6 +124,14 @@ void r_frontend_destroy(RFrontendContext *context);
  * hosted-native-async. An unknown name is rejected with R_FRONTEND_INVALID_ARGUMENT and a
  * selection after analysis has begun with R_FRONTEND_CONTEXT_SEALED; neither changes the context.
  */
+/* The code generation backend: the linked LLVM release as "MAJOR.MINOR.PATCH", the LLVM triple
+   and CPU of the target manifest, and a check that the linked LLVM is the manifest toolchain's and
+   that its target machine has the manifest data layout (false with a reason in `message`). */
+bool r_frontend_backend_version(char *buffer, size_t capacity);
+const char *r_frontend_backend_triple(void);
+const char *r_frontend_backend_cpu(void);
+bool r_frontend_backend_verify(char *message, size_t capacity);
+
 RFrontendStatus r_frontend_set_profile(RFrontendContext *context, const char *profile);
 
 /*
@@ -298,13 +313,20 @@ RFrontendStatus r_frontend_dump_bundle(const RFrontendContext *context,
                                        const RFrontendArtifactOptions *options,
                                        RFrontendWriteFn writer,
                                        void *user_data);
-/* Reachable async functions require a successful r_frontend_lower_mir call first. */
-RFrontendStatus
-r_frontend_emit_c17(const RFrontendContext *context, RFrontendWriteFn writer, void *user_data);
-RFrontendStatus r_frontend_emit_c17_with_options(const RFrontendContext *context,
-                                                 const RFrontendArtifactOptions *options,
-                                                 RFrontendWriteFn writer,
-                                                 void *user_data);
+/*
+ * The LLVM emitter (LLVM transition, B4): the program as one LLVM module for the manifest target,
+ * written as textual IR or as an object file of the target. Requires r_frontend_lower_mir;
+ * R_FRONTEND_NOT_LOWERABLE for a construct the emitter does not lower yet.
+ */
+typedef enum RFrontendLlvmOutput {
+    R_FRONTEND_LLVM_IR = 0,
+    R_FRONTEND_LLVM_OBJECT
+} RFrontendLlvmOutput;
+RFrontendStatus r_frontend_emit_llvm(const RFrontendContext *context,
+                                     const RFrontendArtifactOptions *options,
+                                     RFrontendLlvmOutput output,
+                                     RFrontendWriteFn writer,
+                                     void *user_data);
 
 /*
  * ABI verifier translation unit for every extern "C" import (R-FFI-0042): the providers'

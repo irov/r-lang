@@ -1,7 +1,9 @@
 module test.codegen.float_literals;
 
 /* Each literal is returned at run time: a call with constant arguments would be replaced by its
-   value during translation (R-EXPR-0032), and the wrapper calls the functions directly. */
+   value during translation (R-EXPR-0032). The wrapper reads every literal through the C exports
+   below, which convert it to the C type of the same IEC 60559 format (R-TYPE-0006, R-TYPE-0024),
+   and compares its exact encoding. */
 thread_local bool selected = true;
 
 protected f32 a_half_even(bool literal) {
@@ -80,6 +82,33 @@ protected f32 k_digit_separators(bool literal) {
         return 0.0f32;
     }
     return 1_2.5_0f32;
+}
+
+@safety("FLOAT-LITERAL-F32", "Called after runtime start with an index from 0 to 7")
+@export_name("floatLiteral32")
+extern "C" c_float float_literal_32(c_int index) {
+    switch (index as i32) {
+    case 0: return a_half_even(selected) as c_float;
+    case 1: return b_half_up(selected) as c_float;
+    case 2: return c_hex_successor(selected) as c_float;
+    case 3: return d_min_subnormal(selected) as c_float;
+    case 4: return e_positive_underflow(selected) as c_float;
+    case 5: return f_negative_underflow(selected) as c_float;
+    case 6: return g_max_f32(selected) as c_float;
+    case 7: return k_digit_separators(selected) as c_float;
+    default: return 0.0f32 as c_float;
+    }
+}
+
+@safety("FLOAT-LITERAL-F64", "Called after runtime start with an index from 0 to 2")
+@export_name("floatLiteral64")
+extern "C" c_double float_literal_64(c_int index) {
+    switch (index as i32) {
+    case 0: return h_hex_successor(selected) as c_double;
+    case 1: return i_max_f64(selected) as c_double;
+    case 2: return j_default_f64(selected) as c_double;
+    default: return 0.0f64 as c_double;
+    }
 }
 
 i32 main() {

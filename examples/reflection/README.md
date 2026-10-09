@@ -1,9 +1,9 @@
 # Static reflection
 
 Reflection in R is resolved at translation time: every form is a compiler-recognized
-`core::` item, nothing is looked up through run-time metadata, and the generated C17 contains
-only literals, `switch` statements and static tables. The example builds a small logging model
-(`src/model.r`) and inspects it from `src/main.r`.
+`core::` item, nothing is looked up through run-time metadata, and the generated code contains
+only constants, `switch` selections and comparisons of names. The example builds a small logging
+model (`src/model.r`) and inspects it from `src/main.r`.
 
 Constants over a type are folded by the compiler and are call-free, so they may be passed as
 arguments directly:
@@ -71,19 +71,18 @@ u32* retries = core::field_mut(&settings, 1usize);
 const bool* verbose = core::field(&settings, 2usize);  // a second field of the same place
 ```
 
-The generated C17 has no loop and no index: each repetition is the direct field access it
+The generated code has no loop and no index: each repetition is the direct field access it
 names. The forms are specified by Core R-REFL-0001..0006, R-STMT-0023 and R-TYPE-0043 and listed
 by Library R-LIB-0024; they are available in every profile, including `freestanding`.
 
 From the repository root, inspect the generated program with:
 
 ```sh
-build-debug/r-front --module-map examples/reflection/modules.map \
-    --entry example.reflection.main --emit=c17
-ctest --test-dir build-debug -R r_frontend_codegen_reflection_example --output-on-failure
+build/debug/r-front --module-map examples/reflection/modules.map \
+    --entry example.reflection.main --emit=llvm-ir
+ctest --test-dir build/debug -R r_frontend_codegen_reflection_example --output-on-failure
 ```
 
-In the output, every selection over `Level` is one static function such as
-`r_reflection_enum_name_a…` (a `switch` assigning program strings) or
-`r_reflection_enum_from_name_a…` (a `static const` table of the variant names searched by the
-generated `r_reflection_find_name` helper), and every call site is one assignment call of it.
+In the output, every selection over `Level` is written where it is used: `enum_name` is a
+`switch` on the enumerator that selects a program string, and `enum_from_name` compares the
+name with each variant name in turn.

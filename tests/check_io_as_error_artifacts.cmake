@@ -13,16 +13,9 @@ function(r_require_match_count variable pattern expected description)
     endif()
 endfunction()
 
-function(r_require_text variable expected description)
-    string(FIND "${${variable}}" "${expected}" offset)
-    if(offset EQUAL -1)
-        message(FATAL_ERROR "${description}: exact text not found:\n${${variable}}")
-    endif()
-endfunction()
-
 function(r_capture_artifact emit_kind output_variable)
     set(arguments --emit=${emit_kind})
-    if(emit_kind STREQUAL "c17" OR emit_kind STREQUAL "link-plan")
+    if(emit_kind STREQUAL "llvm-ir" OR emit_kind STREQUAL "link-plan")
         list(APPEND arguments
             --entry "test.codegen.io_as_error::main"
             --profile hosted-native-async
@@ -67,15 +60,11 @@ r_require_match_count(mir_output
     2
     "MIR exact conversion types")
 
-r_capture_artifact(c17 c17_output)
-r_capture_artifact(c17 c17_repeated)
-r_require_deterministic(c17_output c17_repeated "std.io::as_error C17 artifact")
-r_require_match_count(c17_output "#include \"r_std_io[.]h\"" 1
-    "generated std.io include")
-r_require_match_count(c17_output "r_std_io_as_error[(]" 2
-    "generated native conversion calls")
-r_require_text(c17_output "RStdIoError" "generated exact source ABI")
-r_require_text(c17_output "RStdError" "generated exact result ABI")
+r_capture_artifact(llvm-ir ir_output)
+r_capture_artifact(llvm-ir ir_repeated)
+r_require_deterministic(ir_output ir_repeated "std.io::as_error LLVM IR artifact")
+r_require_match_count(ir_output "call [^\n]*@r_std_io_as_error[(]" 2
+    "library conversion calls")
 
 r_capture_artifact(link-plan plan_output)
 r_capture_artifact(link-plan plan_repeated)

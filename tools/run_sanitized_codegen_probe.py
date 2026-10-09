@@ -48,7 +48,6 @@ def main() -> int:
     output = output_directory / source.stem
     replacements = {
         "-DSOURCE_1=": f"-DSOURCE_1={source}",
-        "-DOUTPUT_C=": f"-DOUTPUT_C={output}.c",
         "-DOUTPUT_EXE=": f"-DOUTPUT_EXE={output}",
     }
     command = list(template["command"])
@@ -80,8 +79,8 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    if Path(f"{output}.c").is_file():
-        print(f"generated C: {output}.c", file=sys.stderr)
+    if Path(f"{output}.o").is_file():
+        print(f"program object: {output}.o", file=sys.stderr)
     return completed.returncode
 
 

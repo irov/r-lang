@@ -3,7 +3,6 @@ if(NOT DEFINED R_FRONT_EXECUTABLE OR
    NOT DEFINED PYTHON_EXECUTABLE OR
    NOT DEFINED TARGET_TOOLCHAIN_CHECK OR
    NOT DEFINED TARGET_MANIFEST OR
-   NOT DEFINED OUTPUT_C OR
    NOT DEFINED OUTPUT_EXE OR
    NOT DEFINED RUNTIME_INCLUDE OR
    NOT DEFINED RUNTIME_DARWIN_INCLUDE OR
@@ -59,12 +58,9 @@ if(NOT DEFINED R_FRONT_EXECUTABLE OR
    NOT DEFINED RUNTIME_FS_SERVICE_SOURCE OR
    NOT DEFINED RUNTIME_STRING_SOURCE OR
    NOT DEFINED RUNTIME_UTF8_SOURCE OR
-   NOT DEFINED RUNTIME_PANIC_SOURCE)
+   NOT DEFINED RUNTIME_PANIC_SOURCE OR
+   NOT DEFINED R_RUNTIME_INLINE_SHIMS_LIBRARY)
     message(FATAL_ERROR "missing codegen program test input")
-endif()
-
-if(NOT DEFINED GENERATED_C_OPTIMIZATION)
-    set(GENERATED_C_OPTIMIZATION -O0)
 endif()
 
 execute_process(
@@ -98,13 +94,21 @@ if(APPLE)
     list(APPEND R_CODEGEN_PLATFORM_FLAGS -isysroot "${R_SDK_PATH}")
 endif()
 
+# The symbols of the program object answer what the generated C text answered before B6: which
+# native providers the program imports and which library entries it calls.
+get_filename_component(R_CODEGEN_TOOL_DIRECTORY "${C_COMPILER}" DIRECTORY)
+set(R_CODEGEN_NM "${R_CODEGEN_TOOL_DIRECTORY}/llvm-nm")
+if(NOT EXISTS "${R_CODEGEN_NM}")
+    message(FATAL_ERROR "llvm-nm of the pinned toolchain is not found next to ${C_COMPILER}")
+endif()
+
 if((NOT DEFINED SOURCE_1 OR SOURCE_1 STREQUAL "") AND
    (NOT DEFINED MODULE_MAP OR MODULE_MAP STREQUAL "" OR
     NOT DEFINED ENTRY OR ENTRY STREQUAL ""))
     message(FATAL_ERROR "codegen program test requires sources or a module-map entry")
 endif()
 
-set(R_FRONTEND_ARGUMENTS --emit=c17)
+set(R_FRONTEND_ARGUMENTS --emit=object)
 if(DEFINED MODULE_MAP AND NOT MODULE_MAP STREQUAL "")
     list(APPEND R_FRONTEND_ARGUMENTS --module-map "${MODULE_MAP}")
 endif()
@@ -148,15 +152,6 @@ elseif(DEFINED ENABLE_THREAD_SANITIZER AND ENABLE_THREAD_SANITIZER)
     )
 endif()
 
-set(R_CODEGEN_COMPILE_SOURCE "${OUTPUT_C}")
-set(R_CODEGEN_WRAPPER_FLAGS)
-if(DEFINED C_WRAPPER AND NOT C_WRAPPER STREQUAL "")
-    set(R_CODEGEN_COMPILE_SOURCE "${C_WRAPPER}")
-    list(APPEND R_CODEGEN_WRAPPER_FLAGS
-        "-DR_TEST_GENERATED_C=\"${OUTPUT_C}\"")
-endif()
-set(R_CODEGEN_LINK_INPUT "${R_CODEGEN_COMPILE_SOURCE}")
-set(R_CODEGEN_LINK_GENERATED_FLAGS ${R_CODEGEN_WRAPPER_FLAGS})
 set(R_CODEGEN_EXTRA_C_SOURCES)
 if(DEFINED EXTRA_C_SOURCES AND NOT EXTRA_C_SOURCES STREQUAL "")
     set(R_CODEGEN_EXTRA_C_SOURCES ${EXTRA_C_SOURCES})
@@ -176,27 +171,83 @@ if(DEFINED ABI_INVENTORY AND ABI_INVENTORY)
         PYTHON "${PYTHON_EXECUTABLE}"
         TOOL "${ABI_RECORD_TOOL}"
         CC "${C_COMPILER}"
-        OUTPUT_PREFIX "${OUTPUT_C}"
+        OUTPUT_PREFIX "${OUTPUT_EXE}"
         ARGUMENTS_VARIABLE R_FRONTEND_ARGUMENTS
         INCLUDE_FLAGS ${R_CODEGEN_HEADER_INCLUDE_FLAGS}
         SYSROOT "${R_SDK_PATH}")
 endif()
 
+# B5.4: a C wrapper hooks runtime and library entries with macros before it includes
+# R_TEST_PROGRAM_PRELUDE, the runtime and library headers the program is compiled against. The
+# object takes the same renames (--rename-symbol); the inline functions of the headers, which the
+# object calls through shims, are compiled here with the same macros.
+set(R_CODEGEN_OBJECT "${OUTPUT_EXE}.o")
+set(R_CODEGEN_WRAPPER_FLAGS)
+set(R_CODEGEN_SHIMS)
+if(DEFINED C_WRAPPER AND NOT C_WRAPPER STREQUAL "")
+    file(READ "${C_WRAPPER}" R_CODEGEN_WRAPPER_TEXT)
+    # A wrapper may be another wrapper with a different entry around it.
+    if(R_CODEGEN_WRAPPER_TEXT MATCHES "#include \"(codegen_[a-z0-9_]+_wrapper[.]c)\"")
+        get_filename_component(R_CODEGEN_WRAPPER_DIRECTORY "${C_WRAPPER}" DIRECTORY)
+        file(READ "${R_CODEGEN_WRAPPER_DIRECTORY}/${CMAKE_MATCH_1}" R_CODEGEN_WRAPPER_INCLUDED)
+        string(APPEND R_CODEGEN_WRAPPER_TEXT "${R_CODEGEN_WRAPPER_INCLUDED}")
+    endif()
+    string(FIND "${R_CODEGEN_WRAPPER_TEXT}" "#include R_TEST_PROGRAM_PRELUDE"
+           R_CODEGEN_WRAPPER_AT)
+    if(R_CODEGEN_WRAPPER_AT LESS 0)
+        message(FATAL_ERROR "the C wrapper does not include R_TEST_PROGRAM_PRELUDE")
+    endif()
+    string(SUBSTRING "${R_CODEGEN_WRAPPER_TEXT}" 0 ${R_CODEGEN_WRAPPER_AT} R_CODEGEN_WRAPPER_HEAD)
+    string(REGEX MATCHALL "#define[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]+[A-Za-z_][A-Za-z0-9_]*"
+           R_CODEGEN_WRAPPER_DEFINES "${R_CODEGEN_WRAPPER_HEAD}")
+    set(R_CODEGEN_SHIMS_TEXT "/* The runtime shims of a program with the renames of its wrapper. */\n")
+    foreach(R_CODEGEN_WRAPPER_DEFINE IN LISTS R_CODEGEN_WRAPPER_DEFINES)
+        string(REGEX REPLACE "#define[ \t]+([A-Za-z0-9_]+)[ \t]+([A-Za-z0-9_]+)" "\\1=\\2"
+               R_CODEGEN_RENAME "${R_CODEGEN_WRAPPER_DEFINE}")
+        list(APPEND R_FRONTEND_ARGUMENTS --rename-symbol "${R_CODEGEN_RENAME}")
+        if(NOT R_CODEGEN_RENAME MATCHES "^main=")
+            string(APPEND R_CODEGEN_SHIMS_TEXT "${R_CODEGEN_WRAPPER_DEFINE}\n")
+            set(R_CODEGEN_SHIMS "${OUTPUT_EXE}.shims.c")
+        endif()
+    endforeach()
+    if(R_CODEGEN_SHIMS)
+        string(APPEND R_CODEGEN_SHIMS_TEXT
+               "#include \"${RUNTIME_INCLUDE}/../llvm/inline_shims.generated.c\"\n")
+        file(WRITE "${R_CODEGEN_SHIMS}" "${R_CODEGEN_SHIMS_TEXT}")
+    endif()
+    list(APPEND R_CODEGEN_EXTRA_C_SOURCES "${C_WRAPPER}")
+    set(R_CODEGEN_WRAPPER_FLAGS
+        "-DR_TEST_PROGRAM_PRELUDE=\"${CMAKE_CURRENT_LIST_DIR}/codegen_program_prelude.h\""
+        "-I${R_LIBRARY_ROOT}/core/include")
+    file(GLOB R_CODEGEN_LIBRARY_INCLUDE_DIRS LIST_DIRECTORIES true
+         "${R_LIBRARY_ROOT}/std/*/include")
+    foreach(R_CODEGEN_LIBRARY_INCLUDE_DIR IN LISTS R_CODEGEN_LIBRARY_INCLUDE_DIRS)
+        list(APPEND R_CODEGEN_WRAPPER_FLAGS "-I${R_CODEGEN_LIBRARY_INCLUDE_DIR}")
+    endforeach()
+endif()
+
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}" ${R_FRONTEND_ARGUMENTS}
     RESULT_VARIABLE R_EMIT_RESULT
-    OUTPUT_FILE "${OUTPUT_C}"
+    OUTPUT_FILE "${R_CODEGEN_OBJECT}"
     ERROR_VARIABLE R_EMIT_ERROR
 )
 if(NOT R_EMIT_RESULT EQUAL 0)
-    message(FATAL_ERROR
-        "r-front --emit=c17 failed (${R_EMIT_RESULT}): ${R_EMIT_ERROR}")
+    message(FATAL_ERROR "r-front --emit=object failed (${R_EMIT_RESULT}): ${R_EMIT_ERROR}")
+endif()
+execute_process(
+    COMMAND "${R_CODEGEN_NM}" --undefined-only --format=just-symbols "${R_CODEGEN_OBJECT}"
+    RESULT_VARIABLE R_CODEGEN_NM_RESULT
+    OUTPUT_VARIABLE R_CODEGEN_IMPORTS
+    ERROR_VARIABLE R_CODEGEN_NM_ERROR
+)
+if(NOT R_CODEGEN_NM_RESULT EQUAL 0)
+    message(FATAL_ERROR "llvm-nm failed (${R_CODEGEN_NM_RESULT}): ${R_CODEGEN_NM_ERROR}")
 endif()
 
-file(READ "${OUTPUT_C}" R_GENERATED_C17)
 if(HASH_ONLY)
-    if(NOT R_GENERATED_C17 MATCHES "#include \"r_std_hash[.]h\"" OR
-       R_GENERATED_C17 MATCHES "r_std_bytes_[a-z_]+[(]|r_runtime_array_[a-z_]+[(]")
+    if(NOT R_CODEGEN_IMPORTS MATCHES "(^|\n)_r_std_hash_" OR
+       R_CODEGEN_IMPORTS MATCHES "(^|\n)_(r_std_bytes_|r_runtime_array_)")
         message(FATAL_ERROR "standalone hash program has incorrect module dependencies")
     endif()
     file(READ "${SOURCE_1}" R_HASH_SOURCE)
@@ -214,13 +265,50 @@ if(HASH_ONLY)
        R_HASH_PLAN MATCHES "std[.]bytes|r_std_bytes")
         message(FATAL_ERROR "standalone hash link plan: ${R_HASH_PLAN}${R_HASH_PLAN_ERROR}")
     endif()
-    # The generated executable must link successfully with no bytes library on the command line.
+    # The executable must link successfully with no bytes library on the command line.
     set(R_STD_BYTES_LIBRARY "")
 endif()
-if(R_GENERATED_C17 MATCHES "(^|[^A-Za-z0-9_])(setjmp|longjmp)[(]" OR
-   R_GENERATED_C17 MATCHES "#[ \t]*include[ \t]*[<\"]setjmp[.]h[>\"]")
-    message(FATAL_ERROR
-        "generated C17 uses a forbidden setjmp/longjmp checked-error primitive")
+if(R_CODEGEN_IMPORTS MATCHES "(^|\n)_+(sig)?(setjmp|longjmp)(\n|$)")
+    message(FATAL_ERROR "the program uses a forbidden setjmp/longjmp checked-error primitive")
+endif()
+
+# R-FUNC-0004: the emitter measures the frame of every function it defines and keeps the
+# measurement in the r.stack.frames metadata of the IR (function, frame, @recursion depth, bound
+# below a call into it). A fixture may bound every frame (STACK_FRAME_LIMIT); STACK_REPORT keeps
+# the IR next to the executable for a driver that reads the bounds.
+set(R_CODEGEN_STACK_IR "${OUTPUT_EXE}.ll")
+if((DEFINED STACK_FRAME_LIMIT AND NOT STACK_FRAME_LIMIT STREQUAL "") OR
+   (DEFINED STACK_REPORT AND STACK_REPORT))
+    set(R_CODEGEN_IR_ARGUMENTS ${R_FRONTEND_ARGUMENTS})
+    list(REMOVE_AT R_CODEGEN_IR_ARGUMENTS 0)
+    execute_process(
+        COMMAND "${R_FRONT_EXECUTABLE}" --emit=llvm-ir ${R_CODEGEN_IR_ARGUMENTS}
+        RESULT_VARIABLE R_CODEGEN_IR_RESULT
+        OUTPUT_FILE "${R_CODEGEN_STACK_IR}"
+        ERROR_VARIABLE R_CODEGEN_IR_ERROR
+    )
+    if(NOT R_CODEGEN_IR_RESULT EQUAL 0)
+        message(FATAL_ERROR
+            "r-front --emit=llvm-ir failed (${R_CODEGEN_IR_RESULT}): ${R_CODEGEN_IR_ERROR}")
+    endif()
+endif()
+if(DEFINED STACK_FRAME_LIMIT AND NOT STACK_FRAME_LIMIT STREQUAL "")
+    file(STRINGS "${R_CODEGEN_STACK_IR}" R_CODEGEN_FRAMES
+         REGEX "^![0-9]+ = !{!\"[^\"]*\", i64 [0-9]+, i64 [0-9]+, i64 [0-9]+}$")
+    if(NOT R_CODEGEN_FRAMES)
+        message(FATAL_ERROR "the IR carries no r.stack.frames measurement")
+    endif()
+    foreach(R_CODEGEN_FRAME IN LISTS R_CODEGEN_FRAMES)
+        string(REGEX REPLACE "^![0-9]+ = !{!\"([^\"]*)\", i64 ([0-9]+), .*$" "\\1"
+               R_CODEGEN_FRAME_NAME "${R_CODEGEN_FRAME}")
+        string(REGEX REPLACE "^![0-9]+ = !{!\"[^\"]*\", i64 ([0-9]+), .*$" "\\1"
+               R_CODEGEN_FRAME_SIZE "${R_CODEGEN_FRAME}")
+        if(R_CODEGEN_FRAME_SIZE GREATER STACK_FRAME_LIMIT)
+            message(FATAL_ERROR
+                "${R_CODEGEN_FRAME_NAME} has a stack frame of ${R_CODEGEN_FRAME_SIZE} bytes, "
+                "above the limit of ${STACK_FRAME_LIMIT}")
+        endif()
+    endforeach()
 endif()
 
 # Library R-SLIB-RSRC-0003 (M25): a standard module written in R that imports the C functions of
@@ -230,7 +318,7 @@ endif()
 # imports together with those of the program.
 set(R_CODEGEN_STD_NATIVE_ARCHIVES)
 set(R_CODEGEN_STD_NATIVE OFF)
-if(R_GENERATED_C17 MATCHES "r_bridge_r_std_[a-z]+_native_")
+if(R_CODEGEN_IMPORTS MATCHES "(^|\n)_r_bridge_r_std_[a-z]+_native_")
     if(NOT DEFINED STD_NATIVE_INCLUDE_DIRS OR STD_NATIVE_INCLUDE_DIRS STREQUAL "")
         message(FATAL_ERROR "the program imports a native provider of the library without "
                             "STD_NATIVE_INCLUDE_DIRS")
@@ -245,8 +333,8 @@ endif()
 if(R_CODEGEN_STD_NATIVE AND NOT (DEFINED ABI_VERIFY AND ABI_VERIFY))
     set(R_STD_NATIVE_ARGUMENTS ${R_FRONTEND_ARGUMENTS})
     list(REMOVE_AT R_STD_NATIVE_ARGUMENTS 0)
-    set(R_STD_NATIVE_VERIFIER_C "${OUTPUT_C}.native-verifier.c")
-    set(R_STD_NATIVE_BRIDGE_C "${OUTPUT_C}.native-bridge.c")
+    set(R_STD_NATIVE_VERIFIER_C "${OUTPUT_EXE}.native-verifier.c")
+    set(R_STD_NATIVE_BRIDGE_C "${OUTPUT_EXE}.native-bridge.c")
     execute_process(
         COMMAND "${R_FRONT_EXECUTABLE}" --emit=abi-verifier ${R_STD_NATIVE_ARGUMENTS}
         RESULT_VARIABLE R_STD_NATIVE_EMIT_RESULT
@@ -297,12 +385,12 @@ if(R_CODEGEN_STD_NATIVE AND NOT (DEFINED ABI_VERIFY AND ABI_VERIFY))
 endif()
 
 if(DEFINED ABI_VERIFY AND ABI_VERIFY)
-    # R-FFI-0042: the verifier translation unit is compiled for the target with the generated-C
-    # options and never executed; a failed compile is the R-DIAG-FFI-004 outcome.
+    # R-FFI-0042: the verifier translation unit is compiled for the target with the C options of
+    # the bridge and never executed; a failed compile is the R-DIAG-FFI-004 outcome.
     set(R_ABI_ARGUMENTS ${R_FRONTEND_ARGUMENTS})
     list(REMOVE_AT R_ABI_ARGUMENTS 0)
-    set(R_ABI_VERIFIER_C "${OUTPUT_C}.abi-verifier.c")
-    set(R_ABI_BRIDGE_C "${OUTPUT_C}.bridge.c")
+    set(R_ABI_VERIFIER_C "${OUTPUT_EXE}.abi-verifier.c")
+    set(R_ABI_BRIDGE_C "${OUTPUT_EXE}.bridge.c")
     execute_process(
         COMMAND "${R_FRONT_EXECUTABLE}" --emit=abi-verifier ${R_ABI_ARGUMENTS}
         RESULT_VARIABLE R_ABI_EMIT_RESULT
@@ -351,136 +439,24 @@ if(DEFINED ABI_VERIFY AND ABI_VERIFY)
     list(APPEND R_CODEGEN_EXTRA_C_SOURCES "${R_ABI_BRIDGE_C}")
 endif()
 
-if(DEFINED MEASURE_GENERATED_STACK_USAGE AND MEASURE_GENERATED_STACK_USAGE)
-    file(READ "${TARGET_MANIFEST}" R_TARGET_MANIFEST_JSON_FOR_STACK)
-    set(R_STACK_USAGE_OBJECT "${OUTPUT_C}.stack-usage.o")
-    set(R_STACK_USAGE_REPORT "${OUTPUT_C}.stack-usage.su")
-    set(R_STACK_USAGE_HEADER "${OUTPUT_C}.stack-usage.h")
-    set(R_FINAL_STACK_USAGE_OBJECT "${OUTPUT_C}.final.o")
-    set(R_FINAL_STACK_USAGE_REPORT "${OUTPUT_C}.final.su")
-    set(R_STACK_USAGE_NONCONFORMING_MARKER
-        "${OUTPUT_C}.stack-usage.nonconforming")
-    file(REMOVE
-        "${R_STACK_USAGE_OBJECT}"
-        "${R_STACK_USAGE_REPORT}"
-        "${R_STACK_USAGE_HEADER}"
-        "${R_FINAL_STACK_USAGE_OBJECT}"
-        "${R_FINAL_STACK_USAGE_REPORT}"
-        "${R_STACK_USAGE_NONCONFORMING_MARKER}"
-    )
-    execute_process(
-        COMMAND "${C_COMPILER}"
-            ${R_CODEGEN_PLATFORM_FLAGS}
-            -std=c17
-            -pedantic-errors
-            -Wall
-            -Wextra
-            -Werror
-            -Wconversion
-            -Wsign-conversion
-            -Wshadow
-            -Wstrict-prototypes
-            -Wmissing-prototypes
-            -O0
-            -c
-            -fstack-usage
-            -fno-inline-functions
-            -fno-lto
-            -DR_STACK_USAGE_MEASUREMENT=1
-            ${R_CODEGEN_WRAPPER_FLAGS}
-            "-I${RUNTIME_INCLUDE}"
-            "-I${RUNTIME_DARWIN_INCLUDE}"
-            "-I${R_LIBRARY_ROOT}/core/include"
-            "-I${R_STD_ALLOC_INCLUDE}"
-            "-I${R_LIBRARY_ROOT}/std/arc/include"
-            "-I${R_LIBRARY_ROOT}/std/array/include"
-            "-I${R_STD_ASYNC_INCLUDE}"
-            "-I${R_LIBRARY_ROOT}/std/bits/include"
-            "-I${R_LIBRARY_ROOT}/std/bytes/include"
-            "-I${R_LIBRARY_ROOT}/std/hash/include"
-            "-I${R_LIBRARY_ROOT}/std/secret/include"
-            "-I${R_LIBRARY_ROOT}/std/random/include"
-            "-I${R_LIBRARY_ROOT}/std/signal/include"
-            "-I${R_LIBRARY_ROOT}/std/test/include"
-            "-I${R_STD_C_INCLUDE}"
-            "-I${R_STD_CONVERT_INCLUDE}"
-            "-I${R_LIBRARY_ROOT}/std/dict/include"
-            "-I${R_LIBRARY_ROOT}/std/env/include"
-            "-I${R_STD_ERROR_INCLUDE}"
-            "-I${R_LIBRARY_ROOT}/std/format/include"
-            "-I${R_LIBRARY_ROOT}/std/json/include"
-            "-I${R_LIBRARY_ROOT}/std/fs/include"
-            "-I${R_LIBRARY_ROOT}/std/io/include"
-            "-I${R_LIBRARY_ROOT}/std/list/include"
-            "-I${R_LIBRARY_ROOT}/std/math/include"
-            "-I${R_LIBRARY_ROOT}/std/net/include"
-            "-I${R_LIBRARY_ROOT}/std/process/include"
-            "-I${R_LIBRARY_ROOT}/std/rc/include"
-            "-I${R_STD_STRING_INCLUDE}"
-            "-I${R_LIBRARY_ROOT}/std/sync/include"
-            "-I${R_LIBRARY_ROOT}/std/thread/include"
-            "-I${R_LIBRARY_ROOT}/std/time/include"
-            "-I${R_LIBRARY_ROOT}/std/utf8/include"
-            "${R_CODEGEN_COMPILE_SOURCE}"
-            -o "${R_STACK_USAGE_OBJECT}"
-        RESULT_VARIABLE R_STACK_USAGE_RESULT
-        OUTPUT_VARIABLE R_STACK_USAGE_OUTPUT
-        ERROR_VARIABLE R_STACK_USAGE_ERROR
-    )
-    if(NOT R_STACK_USAGE_RESULT EQUAL 0)
-        message(FATAL_ERROR
-            "generated C17 stack-usage compile failed "
-            "(${R_STACK_USAGE_RESULT}):\n"
-            "${R_STACK_USAGE_OUTPUT}${R_STACK_USAGE_ERROR}")
-    endif()
-    set(STACK_USAGE_OBJECT "${R_STACK_USAGE_OBJECT}")
-    set(STACK_USAGE_REPORT "${R_STACK_USAGE_REPORT}")
-    set(STACK_USAGE_SOURCE "${OUTPUT_C}")
-    set(STACK_USAGE_BASE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set(STACK_USAGE_HEADER "${R_STACK_USAGE_HEADER}")
-    set(STACK_USAGE_MODE "generate")
-    string(JSON R_STACK_USAGE_ENTRY_BUDGET
-        ERROR_VARIABLE R_STACK_USAGE_BUDGET_ERROR
-        GET "${R_TARGET_MANIFEST_JSON_FOR_STACK}"
-        core stack entry_budget_bytes)
-    if(NOT R_STACK_USAGE_BUDGET_ERROR STREQUAL "NOTFOUND" OR
-       NOT R_STACK_USAGE_ENTRY_BUDGET MATCHES "^[1-9][0-9]*$")
-        message(FATAL_ERROR
-            "target manifest has no valid entry stack budget: ${R_STACK_USAGE_BUDGET_ERROR}")
-    endif()
-    set(STACK_USAGE_PYTHON "${PYTHON_EXECUTABLE}")
-    set(STACK_USAGE_ENTRY_TOOL "${CMAKE_CURRENT_LIST_DIR}/../tools/compute_stack_entries.py")
-    set(STACK_USAGE_ENTRY_BUDGET "${R_STACK_USAGE_ENTRY_BUDGET}")
-    include("${CMAKE_CURRENT_LIST_DIR}/check_codegen_stack_usage.cmake")
+# The inline functions of the headers that the object calls by their shims.
+if(R_CODEGEN_SHIMS)
+    list(APPEND R_CODEGEN_EXTRA_C_SOURCES "${R_CODEGEN_SHIMS}")
+else()
+    list(APPEND R_CODEGEN_EXTRA_C_SOURCES "${R_RUNTIME_INLINE_SHIMS_LIBRARY}")
+endif()
 
-    set(R_STACK_USAGE_INSTRUMENTED FALSE)
-    if((DEFINED ENABLE_SANITIZERS AND ENABLE_SANITIZERS) OR
-       (DEFINED ENABLE_THREAD_SANITIZER AND ENABLE_THREAD_SANITIZER))
-        set(R_STACK_USAGE_INSTRUMENTED TRUE)
-    endif()
-
-    file(READ "${TARGET_MANIFEST}" R_TARGET_MANIFEST_JSON)
-    string(JSON R_STACK_USAGE_MAX_CANDIDATE_ITERATIONS
-        ERROR_VARIABLE R_STACK_USAGE_ITERATION_ERROR
-        GET "${R_TARGET_MANIFEST_JSON}"
-        core stack frame_measurement artifact_pipeline fixed_point
-        maximum_candidate_iterations)
-    if(NOT R_STACK_USAGE_ITERATION_ERROR STREQUAL "NOTFOUND" OR
-       NOT R_STACK_USAGE_MAX_CANDIDATE_ITERATIONS MATCHES "^[1-9][0-9]*$")
-        message(FATAL_ERROR
-            "target manifest has no valid stack fixed-point iteration limit: "
-            "${R_STACK_USAGE_ITERATION_ERROR}")
-    endif()
-
-    set(R_STACK_USAGE_CONVERGED FALSE)
-    set(R_STACK_USAGE_ITERATION 0)
-    while(NOT R_STACK_USAGE_CONVERGED)
-        math(EXPR R_STACK_USAGE_ITERATION "${R_STACK_USAGE_ITERATION} + 1")
-        if(R_STACK_USAGE_ITERATION GREATER R_STACK_USAGE_MAX_CANDIDATE_ITERATIONS)
-            message(FATAL_ERROR
-                "generated stack bounds did not reach a fixed point after "
-                "${R_STACK_USAGE_MAX_CANDIDATE_ITERATIONS} candidate compiles")
-        endif()
+if(DEFINED ENABLE_SANITIZERS AND ENABLE_SANITIZERS AND
+   DEFINED EXTRA_C_SOURCES AND NOT EXTRA_C_SOURCES STREQUAL "")
+    # The C libraries a fixture imports stand for foreign code that its own build compiles.
+    # The function sanitizer compares the C++ names of the caller's and the callee's function
+    # types, and across the FFI boundary those differ even where the C types are compatible (an
+    # enum and its integer type) or the layouts are proven equal (R-FFI-0021, R-FFI-0041). That
+    # boundary is defined by the C ABI, so the foreign objects carry no function-type signature
+    # and check no indirect calls; address and the other undefined-behaviour checks stay on.
+    set(R_CODEGEN_FOREIGN_INDEX 0)
+    foreach(R_CODEGEN_FOREIGN_SOURCE IN LISTS EXTRA_C_SOURCES)
+        set(R_CODEGEN_FOREIGN_OBJECT "${OUTPUT_EXE}.foreign${R_CODEGEN_FOREIGN_INDEX}.o")
         execute_process(
             COMMAND "${C_COMPILER}"
                 ${R_CODEGEN_PLATFORM_FLAGS}
@@ -489,132 +465,25 @@ if(DEFINED MEASURE_GENERATED_STACK_USAGE AND MEASURE_GENERATED_STACK_USAGE)
                 -Wall
                 -Wextra
                 -Werror
-                -Wconversion
-                -Wsign-conversion
-                -Wshadow
-                -Wstrict-prototypes
-                -Wmissing-prototypes
                 -O0
-                -c
-                -fstack-usage
-                -fno-inline-functions
-                -fno-lto
-                -include "${R_STACK_USAGE_HEADER}"
                 ${R_CODEGEN_SANITIZER_FLAGS}
-                ${R_CODEGEN_WRAPPER_FLAGS}
-                "-I${RUNTIME_INCLUDE}"
-                "-I${RUNTIME_DARWIN_INCLUDE}"
-                "-I${R_LIBRARY_ROOT}/core/include"
-                "-I${R_STD_ALLOC_INCLUDE}"
-                "-I${R_LIBRARY_ROOT}/std/arc/include"
-                "-I${R_LIBRARY_ROOT}/std/array/include"
-                "-I${R_STD_ASYNC_INCLUDE}"
-                "-I${R_LIBRARY_ROOT}/std/bits/include"
-                "-I${R_LIBRARY_ROOT}/std/bytes/include"
-                "-I${R_LIBRARY_ROOT}/std/hash/include"
-                "-I${R_LIBRARY_ROOT}/std/secret/include"
-                "-I${R_LIBRARY_ROOT}/std/random/include"
-                "-I${R_LIBRARY_ROOT}/std/signal/include"
-                "-I${R_LIBRARY_ROOT}/std/test/include"
-                "-I${R_STD_C_INCLUDE}"
-                "-I${R_STD_CONVERT_INCLUDE}"
-                "-I${R_LIBRARY_ROOT}/std/dict/include"
-                "-I${R_LIBRARY_ROOT}/std/env/include"
-                "-I${R_STD_ERROR_INCLUDE}"
-                "-I${R_LIBRARY_ROOT}/std/format/include"
-            "-I${R_LIBRARY_ROOT}/std/json/include"
-                "-I${R_LIBRARY_ROOT}/std/fs/include"
-                "-I${R_LIBRARY_ROOT}/std/io/include"
-                "-I${R_LIBRARY_ROOT}/std/list/include"
-                "-I${R_LIBRARY_ROOT}/std/math/include"
-                "-I${R_LIBRARY_ROOT}/std/net/include"
-                "-I${R_LIBRARY_ROOT}/std/process/include"
-                "-I${R_LIBRARY_ROOT}/std/rc/include"
-                "-I${R_STD_STRING_INCLUDE}"
-                "-I${R_LIBRARY_ROOT}/std/sync/include"
-                "-I${R_LIBRARY_ROOT}/std/thread/include"
-                "-I${R_LIBRARY_ROOT}/std/time/include"
-                "-I${R_LIBRARY_ROOT}/std/utf8/include"
-                "${R_CODEGEN_COMPILE_SOURCE}"
-                -o "${R_FINAL_STACK_USAGE_OBJECT}"
-            RESULT_VARIABLE R_FINAL_STACK_USAGE_RESULT
-            OUTPUT_VARIABLE R_FINAL_STACK_USAGE_OUTPUT
-            ERROR_VARIABLE R_FINAL_STACK_USAGE_ERROR
+                -fno-sanitize=function
+                ${R_CODEGEN_HEADER_INCLUDE_FLAGS}
+                -c "${R_CODEGEN_FOREIGN_SOURCE}"
+                -o "${R_CODEGEN_FOREIGN_OBJECT}"
+            RESULT_VARIABLE R_CODEGEN_FOREIGN_RESULT
+            ERROR_VARIABLE R_CODEGEN_FOREIGN_ERROR
         )
-        if(NOT R_FINAL_STACK_USAGE_RESULT EQUAL 0)
+        if(NOT R_CODEGEN_FOREIGN_RESULT EQUAL 0)
             message(FATAL_ERROR
-                "generated C17 stack candidate ${R_STACK_USAGE_ITERATION} failed "
-                "(${R_FINAL_STACK_USAGE_RESULT}):\n"
-                "${R_FINAL_STACK_USAGE_OUTPUT}${R_FINAL_STACK_USAGE_ERROR}")
+                "foreign C source failed to compile (${R_CODEGEN_FOREIGN_RESULT}): "
+                "${R_CODEGEN_FOREIGN_SOURCE}\n${R_CODEGEN_FOREIGN_ERROR}")
         endif()
-        if(NOT EXISTS "${R_FINAL_STACK_USAGE_OBJECT}" OR
-           IS_DIRECTORY "${R_FINAL_STACK_USAGE_OBJECT}")
-            message(FATAL_ERROR
-                "generated C17 stack candidate did not produce an object: "
-                "${R_FINAL_STACK_USAGE_OBJECT}")
-        endif()
-        file(SIZE "${R_FINAL_STACK_USAGE_OBJECT}" R_FINAL_STACK_USAGE_OBJECT_SIZE)
-        if(R_FINAL_STACK_USAGE_OBJECT_SIZE EQUAL 0)
-            message(FATAL_ERROR
-                "generated C17 stack candidate produced an empty object: "
-                "${R_FINAL_STACK_USAGE_OBJECT}")
-        endif()
-
-        if(R_STACK_USAGE_INSTRUMENTED)
-            set(R_STACK_USAGE_CONVERGED TRUE)
-        else()
-            file(READ "${R_STACK_USAGE_HEADER}" R_STACK_USAGE_HEADER_BEFORE_MERGE)
-            set(STACK_USAGE_OBJECT "${R_FINAL_STACK_USAGE_OBJECT}")
-            set(STACK_USAGE_REPORT "${R_FINAL_STACK_USAGE_REPORT}")
-            set(STACK_USAGE_MODE "merge")
-            include("${CMAKE_CURRENT_LIST_DIR}/check_codegen_stack_usage.cmake")
-            file(READ "${R_STACK_USAGE_HEADER}" R_STACK_USAGE_HEADER_AFTER_MERGE)
-            if(R_STACK_USAGE_HEADER_AFTER_MERGE STREQUAL R_STACK_USAGE_HEADER_BEFORE_MERGE)
-                set(R_STACK_USAGE_CONVERGED TRUE)
-            endif()
-        endif()
-    endwhile()
-
-    if(R_STACK_USAGE_INSTRUMENTED)
-        if(NOT EXISTS "${R_FINAL_STACK_USAGE_REPORT}" OR
-           IS_DIRECTORY "${R_FINAL_STACK_USAGE_REPORT}")
-            message(FATAL_ERROR
-                "sanitizer diagnostic compile did not produce a stack-usage report: "
-                "${R_FINAL_STACK_USAGE_REPORT}")
-        endif()
-        file(SIZE "${R_FINAL_STACK_USAGE_REPORT}" R_FINAL_STACK_USAGE_REPORT_SIZE)
-        if(R_FINAL_STACK_USAGE_REPORT_SIZE EQUAL 0)
-            message(FATAL_ERROR
-                "sanitizer diagnostic compile produced an empty stack-usage report: "
-                "${R_FINAL_STACK_USAGE_REPORT}")
-        endif()
-        file(WRITE "${R_STACK_USAGE_NONCONFORMING_MARKER}"
-            "diagnostic-only sanitizer build; stack conformance is not claimed\n")
-        message(STATUS
-            "sanitizer stack-usage is diagnostic-only and nonconforming; "
-            "dynamic instrumented frames are not validated; marker: "
-            "${R_STACK_USAGE_NONCONFORMING_MARKER}")
-    else()
-        set(STACK_USAGE_OBJECT "${R_FINAL_STACK_USAGE_OBJECT}")
-        set(STACK_USAGE_REPORT "${R_FINAL_STACK_USAGE_REPORT}")
-        set(STACK_USAGE_MODE "validate")
-        include("${CMAKE_CURRENT_LIST_DIR}/check_codegen_stack_usage.cmake")
-        message(STATUS
-            "stack bounds converged after ${R_STACK_USAGE_ITERATION} candidate compile(s); "
-            "linking exact object ${R_FINAL_STACK_USAGE_OBJECT}")
-    endif()
-
-    if(GENERATED_C_OPTIMIZATION STREQUAL "-O0")
-        set(R_CODEGEN_LINK_INPUT "${R_FINAL_STACK_USAGE_OBJECT}")
-        set(R_CODEGEN_LINK_GENERATED_FLAGS)
-    else()
-        set(R_CODEGEN_LINK_INPUT "${R_CODEGEN_COMPILE_SOURCE}")
-        set(R_CODEGEN_LINK_GENERATED_FLAGS
-            ${R_CODEGEN_WRAPPER_FLAGS} -include "${R_STACK_USAGE_HEADER}")
-        message(STATUS
-            "recompiling generated C17 with ${GENERATED_C_OPTIMIZATION}; "
-            "runtime stack requirements use the conservative O0 bounds")
-    endif()
+        list(FIND R_CODEGEN_EXTRA_C_SOURCES "${R_CODEGEN_FOREIGN_SOURCE}" R_CODEGEN_FOREIGN_AT)
+        list(REMOVE_AT R_CODEGEN_EXTRA_C_SOURCES ${R_CODEGEN_FOREIGN_AT})
+        list(INSERT R_CODEGEN_EXTRA_C_SOURCES ${R_CODEGEN_FOREIGN_AT} "${R_CODEGEN_FOREIGN_OBJECT}")
+        math(EXPR R_CODEGEN_FOREIGN_INDEX "${R_CODEGEN_FOREIGN_INDEX} + 1")
+    endforeach()
 endif()
 
 execute_process(
@@ -630,10 +499,9 @@ execute_process(
         -Wshadow
         -Wstrict-prototypes
         -Wmissing-prototypes
-        ${GENERATED_C_OPTIMIZATION}
-        ${GENERATED_C_EXTRA_FLAGS}
+        -O0
         ${R_CODEGEN_SANITIZER_FLAGS}
-        ${R_CODEGEN_LINK_GENERATED_FLAGS}
+        ${R_CODEGEN_WRAPPER_FLAGS}
         ${R_CODEGEN_HEADER_INCLUDE_FLAGS}
         "-I${RUNTIME_INCLUDE}"
         "-I${RUNTIME_DARWIN_INCLUDE}"
@@ -668,7 +536,7 @@ execute_process(
         "-I${R_LIBRARY_ROOT}/std/thread/include"
         "-I${R_LIBRARY_ROOT}/std/time/include"
         "-I${R_LIBRARY_ROOT}/std/utf8/include"
-        "${R_CODEGEN_LINK_INPUT}"
+        "${R_CODEGEN_OBJECT}"
         ${R_CODEGEN_EXTRA_C_SOURCES}
         ${R_CODEGEN_STD_NATIVE_ARCHIVES}
         "${R_STD_ALLOC_LIBRARY}"
@@ -734,20 +602,20 @@ execute_process(
 )
 if(NOT R_COMPILE_RESULT EQUAL 0)
     message(FATAL_ERROR
-        "generated C17 did not compile (${R_COMPILE_RESULT}):\n"
+        "the program did not link (${R_COMPILE_RESULT}):\n"
         "${R_COMPILE_OUTPUT}${R_COMPILE_ERROR}")
 endif()
 
 if(DEFINED COMPILE_ONLY AND COMPILE_ONLY)
     if(NOT EXISTS "${OUTPUT_EXE}" OR IS_DIRECTORY "${OUTPUT_EXE}")
         message(FATAL_ERROR
-            "generated C17 link reported success but produced no executable: "
+            "the link reported success but produced no executable: "
             "${OUTPUT_EXE}")
     endif()
     file(SIZE "${OUTPUT_EXE}" R_CODEGEN_EXECUTABLE_SIZE)
     if(R_CODEGEN_EXECUTABLE_SIZE EQUAL 0)
         message(FATAL_ERROR
-            "generated C17 link produced an empty executable: ${OUTPUT_EXE}")
+            "the link produced an empty executable: ${OUTPUT_EXE}")
     endif()
     return()
 endif()

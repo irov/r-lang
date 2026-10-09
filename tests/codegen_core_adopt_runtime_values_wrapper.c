@@ -1,191 +1,283 @@
+#include "r_runtime_0_1.h"
 #include "r_runtime_allocator.h"
 #include "r_runtime_arc.h"
 #include "r_runtime_array.h"
 #include "r_runtime_dict.h"
 #include "r_runtime_list.h"
+#include "r_runtime_own.h"
 #include "r_runtime_rc.h"
-#include "r_runtime_type.h"
 
-#include <stdatomic.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
+RRuntimeOwnStatus r_test_own_adopt(RRuntimeTypeInfo type, void *allocation, RRuntimeOwn *result);
+void r_test_own_release(RRuntimeOwn *owner);
+void r_test_array_destroy(RRuntimeArray *array);
+void r_test_list_destroy(RRuntimeList *list);
+void r_test_dict_destroy(RRuntimeDict *dict);
+void r_test_arc_release(RRuntimeArc *owner);
+void r_test_rc_release(RRuntimeRc *owner);
+void r_test_weak_arc_release(RRuntimeWeakArc *owner);
+void r_test_weak_rc_release(RRuntimeWeakRc *owner);
+
+#define r_runtime_arc_release r_test_arc_release
+#define r_runtime_array_destroy r_test_array_destroy
+#define r_runtime_dict_destroy r_test_dict_destroy
+#define r_runtime_list_destroy r_test_list_destroy
+#define r_runtime_own_adopt r_test_own_adopt
+#define r_runtime_own_release r_test_own_release
+#define r_runtime_rc_release r_test_rc_release
+#define r_runtime_weak_arc_release r_test_weak_arc_release
+#define r_runtime_weak_rc_release r_test_weak_rc_release
 #define main r_generated_main
 int main(int argc, char *argv[]);
-#include R_TEST_GENERATED_C
+/* The C exports of the fixture (@export_name). */
+void *makeValues(void);
+void dropValues(void *pointer);
+void *releaseValues(void *pointer);
+int checkValues(void *pointer);
+#include R_TEST_PROGRAM_PRELUDE
 #undef main
+#undef r_runtime_weak_rc_release
+#undef r_runtime_weak_arc_release
+#undef r_runtime_rc_release
+#undef r_runtime_own_release
+#undef r_runtime_own_adopt
+#undef r_runtime_list_destroy
+#undef r_runtime_dict_destroy
+#undef r_runtime_array_destroy
+#undef r_runtime_arc_release
 
-static int32_t r_test_drop_values[16];
-static size_t r_test_drop_count;
+/* The log of one scenario: core::adopt of the values, the release of their owner and the
+ * destruction of each member with what it held at that moment (the i32 element of the array and
+ * of the list, the key and value of the dict entry, the value and strong count of arc and rc).
+ * Destroying an empty member (one that was moved out) does nothing and is not logged. adopt
+ * receives the type glue of runtime_values, which the move scenario calls directly. */
+typedef enum RTestKind {
+    R_TEST_ADOPT,
+    R_TEST_OWNER,
+    R_TEST_ARRAY,
+    R_TEST_LIST,
+    R_TEST_DICT,
+    R_TEST_ARC,
+    R_TEST_RC,
+    R_TEST_WEAK_ARC,
+    R_TEST_WEAK_RC,
+    R_TEST_OTHER
+} RTestKind;
 
-static void r_test_record_drop(void *value_pointer) {
-    const int32_t *value = value_pointer;
+typedef struct RTestEvent {
+    RTestKind kind;
+    int64_t first;
+    int64_t second;
+} RTestEvent;
 
-    if (r_test_drop_count < (sizeof(r_test_drop_values) / sizeof(r_test_drop_values[0]))) {
-        r_test_drop_values[r_test_drop_count] = *value;
+static RTestEvent events[16];
+static size_t event_count;
+static bool event_overflow;
+static void *current_values;
+static RRuntimeTypeInfo values_type;
+
+static void r_test_record(RTestKind kind, int64_t first, int64_t second) {
+    if (event_count < (sizeof(events) / sizeof(events[0]))) {
+        events[event_count] = (RTestEvent){kind, first, second};
+        ++event_count;
+    } else {
+        event_overflow = true;
     }
-    ++r_test_drop_count;
 }
 
-static RRuntimeTypeInfo r_test_i32_type(void) {
-    return (RRuntimeTypeInfo){
-        sizeof(int32_t),
-        _Alignof(int32_t),
-        NULL,
-        r_test_record_drop,
-    };
+static void r_test_reset(void *values) {
+    current_values = values;
+    event_count = 0U;
+    event_overflow = false;
 }
 
-static uint64_t r_test_hash_i32(const void *value_pointer) {
-    const int32_t value = *(const int32_t *)value_pointer;
-
-    return (uint64_t)(uint32_t)value;
+RRuntimeOwnStatus r_test_own_adopt(RRuntimeTypeInfo type, void *allocation, RRuntimeOwn *result) {
+    if ((current_values != NULL) && (allocation == current_values)) {
+        values_type = type;
+        r_test_record(R_TEST_ADOPT, 0, 0);
+    } else {
+        r_test_record(R_TEST_OTHER, 0, 0);
+    }
+    return r_runtime_own_adopt(type, allocation, result);
 }
 
-static _Bool r_test_equal_i32(const void *left_pointer, const void *right_pointer) {
-    return *(const int32_t *)left_pointer == *(const int32_t *)right_pointer;
+void r_test_own_release(RRuntimeOwn *owner) {
+    if ((current_values != NULL) && (owner->allocation == current_values)) {
+        r_test_record(R_TEST_OWNER, 0, 0);
+    } else if (owner->allocation != NULL) {
+        r_test_record(R_TEST_OTHER, 0, 0);
+    }
+    r_runtime_own_release(owner);
 }
 
-static _Bool r_test_initialize_runtime_values(RRuntimeAllocator *allocator, r_a00000001 *value) {
-    const RRuntimeTypeInfo type = r_test_i32_type();
-    const RRuntimeDictKeyInfo key_info = {type, r_test_hash_i32, r_test_equal_i32};
-    int32_t element;
-    int32_t key;
-    int32_t mapped;
-    void *stored_value = NULL;
-    _Bool did_replace = 0;
-
-    *value = (r_a00000001){0};
-    r_runtime_array_initialize(&value->r_m00000001, allocator, type);
-    if (r_runtime_list_initialize(&value->r_m00000002, allocator, type) != R_RUNTIME_LIST_OK ||
-        r_runtime_dict_initialize(
-            &value->r_m00000003, allocator, key_info, type, UINT64_C(0x12345678)) !=
-            R_RUNTIME_DICT_OK) {
-        return 0;
+void r_test_array_destroy(RRuntimeArray *array) {
+    if (array->length == 1U) {
+        r_test_record(R_TEST_ARRAY, *(const int32_t *)r_runtime_array_get(array, 0U), 1);
+    } else if ((array->length != 0U) || (array->data != NULL)) {
+        r_test_record(R_TEST_OTHER, 0, 0);
     }
-    atomic_init(&value->r_m00000008, UINT32_C(60));
-
-    element = INT32_C(10);
-    if (r_runtime_array_push(&value->r_m00000001, &element) != R_RUNTIME_ARRAY_OK) {
-        return 0;
-    }
-    element = INT32_C(20);
-    if (r_runtime_list_push_back(&value->r_m00000002, &element, &stored_value) !=
-        R_RUNTIME_LIST_OK) {
-        return 0;
-    }
-    key = INT32_C(30);
-    mapped = INT32_C(31);
-    if (r_runtime_dict_insert(&value->r_m00000003, &key, &mapped, NULL, &did_replace) !=
-            R_RUNTIME_DICT_OK ||
-        did_replace) {
-        return 0;
-    }
-    element = INT32_C(40);
-    if (r_runtime_arc_create(allocator, type, &element, &value->r_m00000004) != R_RUNTIME_ARC_OK ||
-        r_runtime_arc_downgrade(&value->r_m00000004, &value->r_m00000006) != R_RUNTIME_ARC_OK) {
-        return 0;
-    }
-    element = INT32_C(50);
-    if (r_runtime_rc_create(allocator, type, &element, &value->r_m00000005) != R_RUNTIME_RC_OK ||
-        r_runtime_rc_downgrade(&value->r_m00000005, &value->r_m00000007) != R_RUNTIME_RC_OK) {
-        return 0;
-    }
-    return 1;
+    r_runtime_array_destroy(array);
 }
 
-static r_a00000001 *r_test_allocate_runtime_values(RRuntimeAllocator *allocator) {
-    void *allocation = NULL;
-    r_a00000001 *value;
-
-    if (r_runtime_allocator_allocate(
-            allocator, sizeof(r_a00000001), _Alignof(r_a00000001), &allocation) !=
-        R_RUNTIME_ALLOCATION_OK) {
-        return NULL;
+void r_test_list_destroy(RRuntimeList *list) {
+    if (list->length == 1U) {
+        r_test_record(R_TEST_LIST, *(const int32_t *)r_runtime_list_front(list), 1);
+    } else if ((list->length != 0U) || (list->first != NULL)) {
+        r_test_record(R_TEST_OTHER, 0, 0);
     }
-    value = allocation;
-    if (!r_test_initialize_runtime_values(allocator, value)) {
-        r_type_drop_a00000001(value);
-        r_runtime_allocator_deallocate(value, _Alignof(r_a00000001));
-        return NULL;
-    }
-    return value;
+    r_runtime_list_destroy(list);
 }
 
-static _Bool r_test_expected_drops(void) {
-    static const int32_t expected[] = {
-        INT32_C(50),
-        INT32_C(40),
-        INT32_C(31),
-        INT32_C(30),
-        INT32_C(20),
-        INT32_C(10),
+void r_test_dict_destroy(RRuntimeDict *dict) {
+    RRuntimeDictIterator iterator = r_runtime_dict_iter(dict);
+    RRuntimeDictEntryRef entry;
+
+    if ((dict->length == 1U) && r_runtime_dict_next(&iterator, &entry)) {
+        r_test_record(R_TEST_DICT, *(const int32_t *)entry.key, *(const int32_t *)entry.value);
+    } else if ((dict->length != 0U) || (dict->entries != NULL)) {
+        r_test_record(R_TEST_OTHER, 0, 0);
+    }
+    r_runtime_dict_destroy(dict);
+}
+
+void r_test_arc_release(RRuntimeArc *owner) {
+    if (owner->control != NULL) {
+        r_test_record(R_TEST_ARC,
+                      *(const int32_t *)r_runtime_arc_get(owner),
+                      (int64_t)r_runtime_arc_strong_count(owner));
+    }
+    r_runtime_arc_release(owner);
+}
+
+void r_test_rc_release(RRuntimeRc *owner) {
+    if (owner->control != NULL) {
+        r_test_record(R_TEST_RC,
+                      *(const int32_t *)r_runtime_rc_get(owner),
+                      (int64_t)r_runtime_rc_strong_count(owner));
+    }
+    r_runtime_rc_release(owner);
+}
+
+void r_test_weak_arc_release(RRuntimeWeakArc *owner) {
+    if (owner->control != NULL) {
+        r_test_record(R_TEST_WEAK_ARC, 0, 0);
+    }
+    r_runtime_weak_arc_release(owner);
+}
+
+void r_test_weak_rc_release(RRuntimeWeakRc *owner) {
+    if (owner->control != NULL) {
+        r_test_record(R_TEST_WEAK_RC, 0, 0);
+    }
+    r_runtime_weak_rc_release(owner);
+}
+
+/* R-INIT-0010: one drop of the adopted owner destroys every member once, in reverse declaration
+ * order: the weak handles first, then rc and arc with their last strong reference, the dict, the
+ * list and the array, each still holding its element. */
+static bool r_test_dropped_values(void) {
+    static const RTestEvent expected[] = {
+        {R_TEST_ADOPT, 0, 0},
+        {R_TEST_OWNER, 0, 0},
+        {R_TEST_WEAK_RC, 0, 0},
+        {R_TEST_WEAK_ARC, 0, 0},
+        {R_TEST_RC, 50, 1},
+        {R_TEST_ARC, 40, 1},
+        {R_TEST_DICT, 30, 31},
+        {R_TEST_LIST, 20, 1},
+        {R_TEST_ARRAY, 10, 1},
     };
     size_t index;
 
-    if (r_test_drop_count != (sizeof(expected) / sizeof(expected[0]))) {
-        return 0;
+    if (event_overflow || (event_count != (sizeof(expected) / sizeof(expected[0])))) {
+        return false;
     }
-    for (index = 0U; index < (sizeof(expected) / sizeof(expected[0])); ++index) {
-        if (r_test_drop_values[index] != expected[index]) {
-            return 0;
+    for (index = 0U; index < event_count; ++index) {
+        if ((events[index].kind != expected[index].kind) ||
+            (events[index].first != expected[index].first) ||
+            (events[index].second != expected[index].second)) {
+            return false;
         }
     }
-    return 1;
+    return true;
 }
 
-int main(void) {
-    RRuntimeAllocator allocator;
-    r_a00000001 *value;
-    r_a00000001 *released;
-    r_a00000001 moved = {0};
+static int r_test_scenarios(RRuntimeAllocator *allocator) {
+    void *values;
+    void *returned;
+    void *moved = NULL;
 
-    if (!r_runtime_stack_initialize_current_thread()) {
-        return __LINE__;
+    /* R-UNSAFE-0008: neither adopt nor the drop of the adopted owner allocates. */
+    values = makeValues();
+    if ((values == NULL) || (checkValues(values) != 0)) {
+        return 1;
     }
-    r_runtime_allocator_initialize(&allocator);
-    value = r_test_allocate_runtime_values(&allocator);
-    if (value == NULL) {
-        return __LINE__;
+    r_test_reset(values);
+    r_runtime_allocator_set_failure(allocator, UINT64_C(1));
+    dropValues(values);
+    if ((r_runtime_allocator_attempt_count(allocator) != UINT64_C(0)) || !r_test_dropped_values()) {
+        return 2;
     }
-    r_test_drop_count = 0U;
-    r_f00000001(value);
-    if (!r_test_expected_drops()) {
-        return __LINE__;
+    r_runtime_allocator_set_failure(allocator, UINT64_C(0));
+
+    /* core::release suppresses the drop and returns the same base pointer (R-FFI-0011). */
+    values = makeValues();
+    if (values == NULL) {
+        return 3;
+    }
+    r_test_reset(values);
+    returned = releaseValues(values);
+    if ((returned != values) || event_overflow || (event_count != 1U) ||
+        (events[0].kind != R_TEST_ADOPT)) {
+        return 4;
+    }
+    r_test_reset(returned);
+    dropValues(returned);
+    if (!r_test_dropped_values() || (values_type.move_initialize == NULL) ||
+        (values_type.drop == NULL)) {
+        return 5;
     }
 
-    value = r_test_allocate_runtime_values(&allocator);
-    if (value == NULL) {
-        return __LINE__;
+    /* The move glue leaves the source empty, so its drop destroys nothing; the destination holds
+     * every member, the atomic value included, and drops like the original. */
+    values = makeValues();
+    if ((values == NULL) ||
+        (r_runtime_allocator_allocate(allocator, values_type.size, values_type.alignment, &moved) !=
+         R_RUNTIME_ALLOCATION_OK)) {
+        return 6;
     }
-    r_test_drop_count = 0U;
-    released = r_f00000003(value);
-    if ((released != value) || (r_test_drop_count != 0U)) {
-        return __LINE__;
+    r_test_reset(NULL);
+    values_type.move_initialize(moved, values);
+    values_type.drop(values);
+    r_runtime_allocator_deallocate(values, values_type.alignment);
+    if (event_overflow || (event_count != 0U) || (checkValues(moved) != 0)) {
+        return 7;
     }
-    r_type_drop_a00000001(released);
-    r_runtime_allocator_deallocate(released, _Alignof(r_a00000001));
-    if (!r_test_expected_drops()) {
-        return __LINE__;
+    r_test_reset(moved);
+    dropValues(moved);
+    if (!r_test_dropped_values()) {
+        return 8;
     }
-
-    value = r_test_allocate_runtime_values(&allocator);
-    if (value == NULL) {
-        return __LINE__;
-    }
-    r_test_drop_count = 0U;
-    r_type_move_a00000001(&moved, value);
-    if (atomic_load_explicit(&moved.r_m00000008, memory_order_relaxed) != UINT32_C(60)) {
-        return __LINE__;
-    }
-    r_type_drop_a00000001(value);
-    r_runtime_allocator_deallocate(value, _Alignof(r_a00000001));
-    if (r_test_drop_count != 0U) {
-        return __LINE__;
-    }
-    r_type_drop_a00000001(&moved);
-    if (!r_test_expected_drops()) {
-        return __LINE__;
-    }
+    r_test_reset(NULL);
     return 0;
+}
+
+int main(int argc, char *argv[]) {
+    const RRuntimeStartResult start = r_runtime_hosted_start(argc, argv);
+    RRuntimeAllocator *allocator;
+    int status;
+
+    if (!start.started) {
+        return start.process_status;
+    }
+    allocator = r_runtime_hosted_allocator();
+    status = allocator == NULL ? 10 : r_test_scenarios(allocator);
+    if (allocator != NULL) {
+        r_runtime_allocator_set_failure(allocator, UINT64_C(0));
+    }
+    status = r_runtime_hosted_finish(status);
+    return status == 0 ? r_generated_main(argc, argv) : status;
 }

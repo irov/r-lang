@@ -89,18 +89,34 @@ def check_expressions(exe: str) -> None:
     assert invoke(exe, ['rpn', '1', '2'], 64) == 'usage: calculator rpn EXPRESSION'
 
 
-def check_stack_bound(header: Path) -> None:
-    """The measured stack header counts 16 frames of each parser function (R-FUNC-0004)."""
-    text = header.read_text(encoding='utf-8')
-    frames = {name: int(size) for name, size in
-              re.findall(r'#define R_STACK_FRAME_(\w+) \(\(size_t\)(\d+)\)', text)}
-    entries = [int(size) for size in re.findall(r'#define R_STACK_ENTRY_\w+ \(\(size_t\)(\d+)\)', text)]
-    sets = re.findall(r'#define R_STACK_RECURSION_\w+ \(\(size_t\)(\d+)\) /\* ([^*]+(?:\*\d+[^*]*)*) \*/', text)
-    assert len(sets) == 1, sets
-    bound, counted = int(sets[0][0]), sets[0][1].split()
-    members = [item.split('*') for item in counted]
-    assert len(members) == 3 and all(depth == '16' for _, depth in members), counted
-    sizes = [frames[name] for name, _ in members]
+def check_stack_bound(ir: Path) -> None:
+    """The emitter's measurement in the IR counts 16 frames of each parser function (R-FUNC-0004).
+
+    r.stack.frames holds each function with its frame, @recursion depth and the bound below a
+    call into it; r.stack.entries each entry with its bound.
+    """
+    text = ir.read_text(encoding='utf-8')
+    nodes = {number: fields for number, fields in
+             re.findall(r'^!(\d+) = !\{(!"[^"]*"(?:, i64 \d+)+)\}$', text, re.M)}
+
+    def listed(name: str) -> list[tuple[str, list[int]]]:
+        match = re.search(rf'^!{re.escape(name)} = !\{{([^}}]*)\}}$', text, re.M)
+        assert match is not None, name
+        rows = []
+        for reference in match.group(1).split(', '):
+            fields = nodes[reference.lstrip('!')]
+            label = re.match(r'!"([^"]*)"', fields).group(1)
+            rows.append((label, [int(value) for value in re.findall(r'i64 (\d+)', fields)]))
+        return rows
+
+    frames = listed('r.stack.frames')
+    entries = [values[0] for _, values in listed('r.stack.entries')]
+    recursive = [(name, values) for name, values in frames if values[1] != 0]
+    assert len(recursive) == 3 and all(values[1] == 16 for _, values in recursive), recursive
+    bounds = {values[2] for _, values in recursive}
+    assert len(bounds) == 1, recursive
+    bound = bounds.pop()
+    sizes = [values[0] for _, values in recursive]
     assert bound >= 16 * sum(sizes) + max(sizes), (bound, sizes)
     assert max(entries) >= bound, (max(entries), bound)
     print(f'Calculator: parser recursion bounded at {bound} stack bytes (3 functions x 16)')
@@ -109,7 +125,7 @@ def check_stack_bound(header: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--executable', required=True)
-    parser.add_argument('--stack-header', type=Path)
+    parser.add_argument('--stack-ir', type=Path)
     options = parser.parse_args()
     inventory = json.loads((ROOT / 'library/generated/api_inventory/implementation_inventory.json').read_text())
     count = 0
@@ -138,8 +154,8 @@ def main() -> None:
         assert invoke(options.executable,args,status), args
     assert 'calculator' in invoke(options.executable,[])
     check_expressions(options.executable)
-    if options.stack_header is not None:
-        check_stack_bound(options.stack_header)
+    if options.stack_ir is not None:
+        check_stack_bound(options.stack_ir)
     print(f'Calculator: {count} typed operations, six input/error paths, eval, rpn and help passed')
 
 

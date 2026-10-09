@@ -6,22 +6,22 @@
 
 /* R-TYPE-0054 (L28): the first start through an async function value after main's own start is
    rejected; the program recovers and calls through the same values again. */
-static RRuntimeTaskPrepareResult r_test_prepare(RRuntimeTypeInfo payload_type,
-                                                RRuntimeTypeInfo result_type,
-                                                RRuntimeTaskStepFn step);
+RRuntimeTaskPrepareResult r_test_prepare(RRuntimeTypeInfo payload_type,
+                                         RRuntimeTypeInfo result_type,
+                                         RRuntimeTaskStepFn step);
 #define r_runtime_task_resumable_start_prepare r_test_prepare
 #define main r_generated_main
 int main(int argc, char *argv[]);
-#include R_TEST_GENERATED_C
+#include R_TEST_PROGRAM_PRELUDE
 #undef main
 #undef r_runtime_task_resumable_start_prepare
 
 static unsigned task_starts;
 static bool task_rejected;
 
-static RRuntimeTaskPrepareResult r_test_prepare(RRuntimeTypeInfo payload_type,
-                                                RRuntimeTypeInfo result_type,
-                                                RRuntimeTaskStepFn step) {
+RRuntimeTaskPrepareResult r_test_prepare(RRuntimeTypeInfo payload_type,
+                                         RRuntimeTypeInfo result_type,
+                                         RRuntimeTaskStepFn step) {
     RRuntimeAllocator *allocator = r_runtime_hosted_allocator();
     const bool reject = ++task_starts == 2U;
     if (reject)

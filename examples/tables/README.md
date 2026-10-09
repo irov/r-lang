@@ -14,8 +14,8 @@ ctest --test-dir build-debug -R tables_example --output-on-failure
 const u32[256] CRC32_TABLE = crc32_table();
 ```
 
-The generated C holds the 256 values as one static initializer; `crc32_table` itself does
-not run in the program. `main` compares the table-driven `crc32` with the library
+The generated program holds the 256 values as the initializer of one global; `crc32_table`
+itself does not run in the program. `main` compares the table-driven `crc32` with the library
 `std.hash::crc32` at run time, so both implementations agree on every build.
 
 A translation-time value can size a type declared at module scope:

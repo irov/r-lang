@@ -1,134 +1,138 @@
+#include "r_runtime_0_1.h"
 #include "r_runtime_allocator.h"
 #include "r_runtime_own.h"
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
+RRuntimeOwnStatus r_test_own_adopt(RRuntimeTypeInfo type, void *allocation, RRuntimeOwn *result);
+void r_test_own_release(RRuntimeOwn *owner);
+
+#define r_runtime_own_adopt r_test_own_adopt
+#define r_runtime_own_release r_test_own_release
 #define main r_generated_main
 int main(int argc, char *argv[]);
-#include R_TEST_GENERATED_C
+/* The C exports of the fixture (@export_name). */
+void *makeBox(int first, int second);
+void dropBox(void *pointer, int early);
+void *releaseBox(void *pointer);
+#include R_TEST_PROGRAM_PRELUDE
 #undef main
+#undef r_runtime_own_release
+#undef r_runtime_own_adopt
 
-static int32_t r_test_drop_values[8];
-static size_t r_test_drop_count;
-static _Bool r_test_drop_overflow;
+/* The log of one scenario: core::adopt of the Box, the release of its owner and the release of
+ * each `own i32*` member by its value. Releases of empty owners do nothing and are not logged. */
+enum {
+    R_TEST_ADOPT = -1,
+    R_TEST_BOX = -2,
+    R_TEST_OTHER = -3
+};
 
-static void r_test_tracked_i32_drop(void *value_pointer) {
-    const int32_t *value = value_pointer;
+static int64_t events[8];
+static size_t event_count;
+static bool event_overflow;
+static void *current_box;
 
-    if (r_test_drop_count < (sizeof(r_test_drop_values) / sizeof(r_test_drop_values[0]))) {
-        r_test_drop_values[r_test_drop_count] = *value;
-        ++r_test_drop_count;
+static void r_test_record(int64_t event) {
+    if (event_count < (sizeof(events) / sizeof(events[0]))) {
+        events[event_count] = event;
+        ++event_count;
     } else {
-        r_test_drop_overflow = 1;
+        event_overflow = true;
     }
 }
 
-static RRuntimeTypeInfo r_test_tracked_i32_type(void) {
-    const RRuntimeTypeInfo type = {
-        sizeof(int32_t),
-        _Alignof(int32_t),
-        NULL,
-        r_test_tracked_i32_drop,
-    };
-
-    return type;
+static void r_test_reset(void *box) {
+    current_box = box;
+    event_count = 0U;
+    event_overflow = false;
 }
 
-static _Bool
-r_test_allocate_owned_i32(RRuntimeAllocator *allocator, int32_t value, RRuntimeOwn *owner) {
-    void *allocation = NULL;
-
-    if (r_runtime_allocator_allocate(allocator, sizeof(int32_t), _Alignof(int32_t), &allocation) !=
-        R_RUNTIME_ALLOCATION_OK) {
-        return 0;
-    }
-    *(int32_t *)allocation = value;
-    if (r_runtime_own_adopt(r_test_tracked_i32_type(), allocation, owner) != R_RUNTIME_OWN_OK) {
-        r_runtime_allocator_deallocate(allocation, _Alignof(int32_t));
-        return 0;
-    }
-    return 1;
+RRuntimeOwnStatus r_test_own_adopt(RRuntimeTypeInfo type, void *allocation, RRuntimeOwn *result) {
+    r_test_record(allocation == current_box ? R_TEST_ADOPT : R_TEST_OTHER);
+    return r_runtime_own_adopt(type, allocation, result);
 }
 
-static _Bool r_test_allocate_box(RRuntimeAllocator *allocator, r_a00000001 **box) {
-    void *allocation = NULL;
-    r_a00000001 *value;
-
-    *box = NULL;
-    if (r_runtime_allocator_allocate(
-            allocator, sizeof(r_a00000001), _Alignof(r_a00000001), &allocation) !=
-        R_RUNTIME_ALLOCATION_OK) {
-        return 0;
+void r_test_own_release(RRuntimeOwn *owner) {
+    if (owner->allocation == current_box) {
+        r_test_record(R_TEST_BOX);
+    } else if ((owner->allocation != NULL) && (owner->type.size == sizeof(int32_t))) {
+        r_test_record(*(const int32_t *)owner->allocation);
+    } else if (owner->allocation != NULL) {
+        r_test_record(R_TEST_OTHER);
     }
-    value = allocation;
-    *value = (r_a00000001){0};
-    if (!r_test_allocate_owned_i32(allocator, INT32_C(11), &value->r_m00000001)) {
-        r_runtime_allocator_deallocate(allocation, _Alignof(r_a00000001));
-        return 0;
-    }
-    if (!r_test_allocate_owned_i32(allocator, INT32_C(22), &value->r_m00000002)) {
-        r_runtime_own_release(&value->r_m00000001);
-        r_runtime_allocator_deallocate(allocation, _Alignof(r_a00000001));
-        return 0;
-    }
-    *box = value;
-    return 1;
+    r_runtime_own_release(owner);
 }
 
-static void r_test_reset_drops(void) {
-    r_test_drop_count = 0U;
-    r_test_drop_overflow = 0;
+/* R-INIT-0010: the adopted owner drops the Box once, members in reverse declaration order. */
+static bool r_test_dropped_box_once(void) {
+    return !event_overflow && (event_count == 4U) && (events[0] == R_TEST_ADOPT) &&
+           (events[1] == R_TEST_BOX) && (events[2] == INT64_C(22)) && (events[3] == INT64_C(11));
 }
 
-static _Bool r_test_dropped_box_once(void) {
-    return !r_test_drop_overflow && (r_test_drop_count == 2U) &&
-           (r_test_drop_values[0] == INT32_C(22)) && (r_test_drop_values[1] == INT32_C(11));
-}
+static int r_test_scenarios(RRuntimeAllocator *allocator) {
+    void *box;
+    void *returned;
 
-int main(void) {
-    RRuntimeAllocator allocator;
-    r_a00000001 *box = NULL;
-    r_a00000001 *returned;
-
-    if (!r_runtime_stack_initialize_current_thread()) {
-        return __LINE__;
+    /* R-UNSAFE-0008: neither adopt nor the drop of the adopted owner allocates. */
+    box = makeBox(11, 22);
+    if (box == NULL) {
+        return 1;
     }
-    r_runtime_allocator_initialize(&allocator);
-
-    r_test_reset_drops();
-    if (!r_test_allocate_box(&allocator, &box)) {
-        return __LINE__;
-    }
-    r_runtime_allocator_set_failure(&allocator, UINT64_C(1));
-    r_f00000001(box, 0);
-    if ((r_runtime_allocator_attempt_count(&allocator) != UINT64_C(0)) ||
+    r_test_reset(box);
+    r_runtime_allocator_set_failure(allocator, UINT64_C(1));
+    dropBox(box, 0);
+    if ((r_runtime_allocator_attempt_count(allocator) != UINT64_C(0)) ||
         !r_test_dropped_box_once()) {
-        return __LINE__;
+        return 2;
+    }
+    r_runtime_allocator_set_failure(allocator, UINT64_C(0));
+
+    /* An early return out of the unsafe block drops the owner as well. */
+    box = makeBox(11, 22);
+    if (box == NULL) {
+        return 3;
+    }
+    r_test_reset(box);
+    dropBox(box, 1);
+    if (!r_test_dropped_box_once()) {
+        return 4;
     }
 
-    r_runtime_allocator_set_failure(&allocator, UINT64_C(0));
-    r_test_reset_drops();
-    if (!r_test_allocate_box(&allocator, &box)) {
-        return __LINE__;
+    /* core::release suppresses the drop and returns the same base pointer (R-FFI-0011), which
+     * stays adoptable. */
+    box = makeBox(11, 22);
+    if (box == NULL) {
+        return 5;
     }
-    r_f00000001(box, 1);
+    r_test_reset(box);
+    returned = releaseBox(box);
+    if ((returned != box) || event_overflow || (event_count != 1U) || (events[0] != R_TEST_ADOPT)) {
+        return 6;
+    }
+    r_test_reset(returned);
+    dropBox(returned, 0);
     if (!r_test_dropped_box_once()) {
-        return __LINE__;
-    }
-
-    r_test_reset_drops();
-    if (!r_test_allocate_box(&allocator, &box)) {
-        return __LINE__;
-    }
-    returned = r_f00000003(box);
-    if ((returned != box) || (r_test_drop_count != 0U)) {
-        return __LINE__;
-    }
-    r_type_drop_a00000001(returned);
-    r_runtime_allocator_deallocate(returned, _Alignof(r_a00000001));
-    if (!r_test_dropped_box_once()) {
-        return __LINE__;
+        return 7;
     }
     return 0;
+}
+
+int main(int argc, char *argv[]) {
+    const RRuntimeStartResult start = r_runtime_hosted_start(argc, argv);
+    RRuntimeAllocator *allocator;
+    int status;
+
+    if (!start.started) {
+        return start.process_status;
+    }
+    allocator = r_runtime_hosted_allocator();
+    status = allocator == NULL ? 10 : r_test_scenarios(allocator);
+    if (allocator != NULL) {
+        r_runtime_allocator_set_failure(allocator, UINT64_C(0));
+    }
+    status = r_runtime_hosted_finish(status);
+    return status == 0 ? r_generated_main(argc, argv) : status;
 }

@@ -17,7 +17,7 @@ repository holds everything of its 0.1 implementation for one target, `arm64-app
 | Directory | Contents |
 | --- | --- |
 | `specification/` | The normative Core (`R_LANGUAGE_SPECIFICATION_0_1`) and Standard Library (`R_STANDARD_LIBRARY_SPECIFICATION_0_1`) specifications, English and Russian, AsciiDoc (Core also rendered to Markdown); `generated/` holds the rule inventories derived from them |
-| `compiler/` | `r-front`: re2c lexer, CST, AST, whole-program semantic analysis, typed HIR and MIR, strict ISO C17 emitter. Strict C17, no stable external ABI |
+| `compiler/` | `r-front`: re2c lexer, CST, AST, whole-program semantic analysis, typed HIR and MIR, LLVM emitter (IR and objects of the target, `compiler/llvm`), C ABI bridge of FFI imports. Strict C17, no stable external ABI |
 | `runtime/` | The hosted runtime (allocator, containers, strings, tasks) and `runtime/darwin` (executor, payload I/O, sockets, processes, timers, file-system lane) |
 | `library/` | The standard library: `core` and `std/*` in C (one public operation per `.c` file), `r/std/*.r` modules written in R and listed in `library/r/library.map`, `native/*` providers behind the checked FFI (TLS over Mbed TLS, crypto over libsodium and Mbed TLS, SQLite, mmap), `internal/` shared code, `generated/` inventories |
 | `targets/` | The pinned target manifests (toolchain, ABI, stack budgets, specification revisions) |
@@ -39,16 +39,14 @@ and comments, tests and documents cite those identifiers.
 2. **No third-party files in the repository.** External sources and data are downloaded at
    configuration by `r_third_party_archive` (`cmake/RThirdParty.cmake`) with a pinned URL and
    hash into `build/third_party`, which all build trees share. Our own generated tables and
-   extractions (Unicode tables, RFC examples) stay in the tree. The one derived file is
-   `compiler/codegen/layout.inc`, a C translation of parts of clang-format: it keeps its
-   SPDX header and the LLVM license text in `compiler/codegen/LICENSE-LLVM.txt`; code taken or
-   translated from elsewhere is declared the same way, never disguised.
+   extractions (Unicode tables, RFC examples) stay in the tree. Code taken or translated from
+   elsewhere keeps its license header and the license text next to it, never disguised.
 3. **Generated files are regenerated, never edited by hand.** Each has a generator in `tools/` or a
    `regenerate*` CMake target, and a `--verify`/`--check` mode or a test that fails when the
    committed file is stale.
 4. **Every warning is an error; no suppressions.** Project C is strict ISO C17 with the warning set
    of the CMake files. Third-party code (`r_sqlite3`) is the only documented exception.
-5. **No `assert` in production or generated C** (`production-assertion-check`). Contract
+5. **No `assert` in production C** (`production-assertion-check`). Contract
    violations panic through the runtime (`r_runtime_panic`) or abort; tests use their own
    `R_TEST_CHECK`/`require` helpers.
 6. **English and Russian specifications move together**, with the same rules, the same tables and
@@ -59,17 +57,23 @@ and comments, tests and documents cite those identifiers.
 
 ## Environment
 
-macOS on Apple silicon with the Xcode command-line tools pinned by `targets/*.json` (the build
-checks the compiler and SDK: `target-toolchain-check`), CMake ≥ 3.25, Python 3, and from
-Homebrew: `mbedtls@3` (std.tls, std.crypto), `libsodium` (std.crypto), optionally `postgresql@17` (the
-std.postgres tests and the `orders` example register only when `pg_ctl` is found). The build
-downloads the SQLite amalgamation and the COSE examples on first configuration; a machine
-without network needs the archives copied into `build/third_party` (the error message names the
-file and hash). Optional for their checks only: `clang-format 22.1.8` (`format-check`), `re2c
-4.5.1` (`verify_generated_lexer`), `asciidoctor 2.0.26` (`specification-render-check`); the
-exact versions are in `tools/toolchain.lock`. Homebrew's `llvm@22` carries clang-format 22.1.8;
-link only that binary into `PATH` (`ln -s /opt/homebrew/opt/llvm@22/bin/clang-format
-/opt/homebrew/bin/clang-format`), since the rest of that LLVM would shadow the pinned Apple clang.
+macOS on Apple silicon with the macOS SDK of `targets/*.json`, LLVM 22.1.8 from Homebrew's
+`llvm@22` (`brew install llvm@22`; another location is given with `-DR_LLVM_ROOT=DIR`), CMake ≥
+3.25, Python 3, and from Homebrew: `mbedtls@3` (std.tls, std.crypto), `libsodium` (std.crypto),
+optionally `postgresql@17` (the std.postgres tests and the `orders` example register only when
+`pg_ctl` is found). Every preset compiles all C with that clang (`cmake/RToolchainLLVM.cmake`)
+and `r-front` links its `libLLVM`; `target-toolchain-check` verifies the compiler by version and
+by the SHA-256 of its executable (`toolchain.c_compiler_build`), so a different build of the
+same release is rejected, and `r-front --version` verifies that the linked LLVM and its target
+machine match `toolchain.llvm_*` of the manifest. Apple clang is not used. The build downloads
+the SQLite amalgamation and the COSE examples on first configuration; a machine without network
+needs the archives copied into `build/third_party` (the error message names the file and hash).
+Optional for their checks only: `clang-format 22.1.8` (`format-check`), `re2c 4.5.1`
+(`verify_generated_lexer`), `asciidoctor 2.0.26` (`specification-render-check`); the exact
+versions are in `tools/toolchain.lock`. `llvm@22` carries clang-format 22.1.8; link that binary
+into `PATH` (`ln -s /opt/homebrew/opt/llvm@22/bin/clang-format /opt/homebrew/bin/clang-format`).
+A build tree configured with another compiler is reconfigured with `cmake --preset NAME --fresh`
+and rebuilt with `--clean-first`: make does not rebuild objects when only the compiler changes.
 
 ## Build and test
 
@@ -79,7 +83,7 @@ Four CMake presets, each with its own tree under `build/`:
 cmake --preset debug && cmake --build --preset debug -j8 && ctest --preset debug -j6
 cmake --preset sanitizers        # ASan + UBSan
 cmake --preset thread-sanitizer  # TSan
-cmake --preset fuzz              # libFuzzer if available, else a standalone driver; ASan/UBSan
+cmake --preset fuzz              # libFuzzer from LLVM's compiler-rt; ASan/UBSan
 ```
 
 - Run a subset with `ctest --test-dir build/debug -R 'pattern' --output-on-failure`. Test names:
@@ -95,8 +99,8 @@ cmake --preset fuzz              # libFuzzer if available, else a standalone dri
 - Never edit sources or fixtures while `ctest` runs in the same tree: fixtures and R modules are
   read at test time.
 - The complete verification of a stage ("the battery") is all four presets plus the audits below.
-  Four long command tests (`calculator`, `numbers`, `deflate`, `xml`) and `r_regex_differential`
-  are skipped under TSan for time; everything else runs everywhere.
+  Four long command tests (`calculator`, `numbers`, `deflate`, `xml`) and
+  `r_regex_differential` are skipped under TSan for time; everything else runs everywhere.
 - A failure that passes on rerun is not a flake until proven: of the last six "flakes" five were
   real races (lost bytes, use-after-free, cancellation windows). Loop the test under CPU load
   (`yes > /dev/null` hogs, 4–12 parallel copies of the binary) before calling it timing.
@@ -115,7 +119,7 @@ as finished. The matrix records their results per stage.
 | --- | --- |
 | `specification-check` | standard methods table, EN/RU parity, grammar manifest, rule inventories, target manifests, target ABI digests, Copy/Move ABI, type and operation registries — all against the committed files |
 | `c-style-check` | the invariants of `docs/C_CODE_STYLE.md` that clang-format cannot express |
-| `production-assertion-check` | no runtime assertions in production or generated C |
+| `production-assertion-check` | no runtime assertions in production C |
 | `library-source-surface-audit` | every concrete public library name compiles from R source |
 | `runtime-entry-stack-inventory-check` | the runtime entry stack inventory matches the measured entries |
 | `library-layout-check`, `library-coverage-check`, `verify_library_inventory` | library source ownership, inventory coverage and freshness (also run as tests) |
@@ -143,16 +147,20 @@ as finished. The matrix records their results per stage.
   reference, not a changelog.
 - clang-format sorts the `#include` lines of one block; fragments (`.inc`) that depend on the
   ones before them stand in their own blocks, separated by a blank line.
-- The generated C must be a fixed point of clang-format 22.1.8: with it installed, every codegen
-  test has a `_format` twin. Statements are laid out by `layout.inc`, file-scope initializers and
-  declarations by the measured rules of `layout_pass.inc` (described in `compiler/README.md`);
-  a comment line stays glued to the line after it in that pass, so put emitted comments before
-  a condition, not before a statement that may need breaking.
-- Optimizations that remove checks or tasks (`index_proofs.inc`, `loop_versions.inc`,
-  `direct_calls.inc`) are proven by marked fixtures (`/* proven */`, `/* versioned */`,
-  `/* direct */` and their opposites) checked by `tests/check_*.py` against the generated C,
-  plus a run of the same fixture; a test wrapper that hooks `r_runtime_task_execution_await`
-  sees no await of a body that runs as a direct call and must disable direct calls.
+- Programs are compiled only by the LLVM emitter (`compiler/llvm`, `--emit=llvm-ir`,
+  `--emit=object`); it lowers the functions the entry reaches, and `--all-functions` lowers every
+  function for checks of code no entry calls. A check that needs the emitted code reads the IR:
+  calls are `call ... @name(`, and the measured frames and stack bounds are the named metadata
+  `!r.stack.frames` and `!r.stack.entries`. The emitted module must not depend on the order of the
+  sources (`tests/check_*.py` compare the IR of both orders): name generated functions and
+  globals by the keys of `compiler/llvm/keys.c`, never by a semantic id.
+- A C wrapper of a codegen test (`tests/codegen_<x>_wrapper.c`) reaches the program only through
+  `main` (renamed with `#define main r_generated_main`), its `extern "C"` exports and the
+  runtime and library entries it renames: each `#define OLD NEW` before
+  `#include R_TEST_PROGRAM_PRELUDE` becomes `--rename-symbol OLD=NEW` of the object; declare
+  hooks with prototypes before the include and define them non-static after it.
+- The index proofs, loop versions and direct calls of the former C emitter return in stage B7
+  (roadmap); their fixtures run as programs until then.
 
 ### Specification (`specification/`)
 
@@ -275,8 +283,6 @@ these rules are the ones that most often reject otherwise reasonable code:
   values created inside).
 - A borrow local (`guard.get_mut()`) cannot live across `await` in a non-scoped async function;
   pass it inline.
-- `new arc T(v)` directly as the argument of an awaited call is outside the C17 lowering; bind it
-  to a local first.
 - Importing an R-source module requires `import std.x;` even for the R part of a C module.
 - `constexpr str` converts to `const u8[]` through a `str` local (one conversion per expression).
 - A `std.string::string` or `std.format::builder` place is viewed as `str` or `const u8[]`
@@ -318,13 +324,14 @@ these rules are the ones that most often reject otherwise reasonable code:
   `iterator = move rest;`) and how a refused `std.fs` write hands its data back.
 - `u8` and `u16` operands of arithmetic, bitwise operators and shifts promote to `i32`, as in C;
   narrow the result back with `as` (`(entry >> 4usize) as u16`).
-- Hot loops: the compiler leaves out a bounds check it can prove (compiler/README.md, *Index
-  and conversion proofs*). Index a local slice or `array<T>` (one the body never borrows
-  exclusively) with a local that a condition bounds (`i < len(b)`, or `n == len(b)` and
-  `i < n`); take a sub-slice `b[lo..hi]` once and index inside it (`b[a..a + 16]` holds 16);
-  mask by a constant, or by a local checked once (`if (mask >= len(t)) { return; }`, then
-  `t[x & mask]`). An index through a field (`this->table[i]`) or with an offset (`b[i + 1]`)
-  keeps its check. `tests/fixtures/codegen_index_proofs.r` lists proven and checked forms.
+- Hot loops: the proofs that leave out a bounds check return with stage B7; write loops in the
+  forms they prove so that they benefit then. Index a local slice or `array<T>` (one the body
+  never borrows exclusively) with a local that a condition bounds (`i < len(b)`, or
+  `n == len(b)` and `i < n`); take a sub-slice `b[lo..hi]` once and index inside it
+  (`b[a..a + 16]` holds 16); mask by a constant, or by a local checked once
+  (`if (mask >= len(t)) { return; }`, then `t[x & mask]`). An index through a field
+  (`this->table[i]`) or with an offset (`b[i + 1]`) keeps its check.
+  `tests/fixtures/codegen_index_proofs.r` lists the proven and checked forms.
 
 One rule is not a compile error but has cost real defects (P4.1-5): a member that a `select` did
 not choose, or a wait that lost to an until clause, may already have taken its value, and

@@ -341,8 +341,8 @@ def render_table(records: list[dict[str, Any]], layout_records: list[dict[str, A
     headers = sorted({record["header"] for record in records})
     layout_headers = sorted({record["header"] for record in layout_records})
     include_headers = sorted(set(headers) | set(layout_headers))
-    require(len(headers) <= 64, "fixed Copy header set exceeds the C17 emitter bitset")
-    require(len(layout_headers) <= 64, "adopt layout header set exceeds the C17 emitter bitset")
+    require(len(headers) <= 64, "fixed Copy header set exceeds the 64-bit header mask")
+    require(len(layout_headers) <= 64, "adopt layout header set exceeds the 64-bit header mask")
     require(headers[0] == "r_core.h", "r_core.h must be the first generated project header")
     header_indices = {header: index for index, header in enumerate(headers)}
     layout_header_indices = {header: index for index, header in enumerate(layout_headers)}

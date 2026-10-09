@@ -450,45 +450,55 @@ static int r_test_frontend_contract(void) {
     R_TEST_CHECK(strstr(interface.bytes, "test.link_available::query") != NULL);
     R_TEST_CHECK(strstr(interface.bytes, "constexpr_str") != NULL);
     R_TEST_CHECK(strstr(interface.bytes, "RStdCLinkManifest") == NULL);
-    R_TEST_CHECK(r_frontend_emit_c17_with_options(context, &options, r_test_write, &generated) ==
-                 R_FRONTEND_OK);
+    R_TEST_CHECK(
+        r_frontend_emit_llvm(context, &options, R_FRONTEND_LLVM_IR, r_test_write, &generated) ==
+        R_FRONTEND_OK);
     R_TEST_CHECK(generated.calls == 1U);
-    R_TEST_CHECK(strstr(generated.bytes, "r_std_c_link_available(") != NULL);
-    R_TEST_CHECK(strstr(generated.bytes, "static const RStdCLinkManifestView") != NULL);
-    alpha = strstr(generated.bytes, "\"\\141\\154\\160\\150\\141\"");
-    zeta = strstr(generated.bytes, "\"\\172\\145\\164\\141\"");
+    R_TEST_CHECK(strstr(generated.bytes, "@r_std_c_link_available(") != NULL);
+    /* R-SLIB-C-0005: the resolved facts are a table in the program, sorted by logical name so
+       that the order of the manifest does not change the output. */
+    R_TEST_CHECK(strstr(generated.bytes,
+                        "@r_link_manifest = private constant { ptr, i64 } "
+                        "{ ptr @r_link_manifest_entries, i64 2 }") != NULL);
+    alpha = strstr(generated.bytes, "c\"alpha\"");
+    zeta = strstr(generated.bytes, "c\"zeta\"");
     R_TEST_CHECK((alpha != NULL) && (zeta != NULL) && (alpha < zeta));
 
     options.link_manifest = reverse_manifest;
     options.link_manifest_length = sizeof(reverse_manifest) - 1U;
-    R_TEST_CHECK(r_frontend_emit_c17_with_options(
-                     context, &options, r_test_write, &reverse_generated) == R_FRONTEND_OK);
+    R_TEST_CHECK(r_frontend_emit_llvm(
+                     context, &options, R_FRONTEND_LLVM_IR, r_test_write, &reverse_generated) ==
+                 R_FRONTEND_OK);
     R_TEST_CHECK(reverse_generated.length == generated.length);
     R_TEST_CHECK((reverse_generated.length == generated.length) &&
                  (memcmp(reverse_generated.bytes, generated.bytes, generated.length) == 0));
 
     options.link_manifest = NULL;
     options.link_manifest_length = 0U;
-    R_TEST_CHECK(r_frontend_emit_c17_with_options(
-                     context, &options, r_test_write, &empty_generated) == R_FRONTEND_OK);
+    R_TEST_CHECK(r_frontend_emit_llvm(
+                     context, &options, R_FRONTEND_LLVM_IR, r_test_write, &empty_generated) ==
+                 R_FRONTEND_OK);
     R_TEST_CHECK(strstr(empty_generated.bytes,
-                        "static const RStdCLinkManifestView r_link_manifest = {NULL, 0U};") !=
+                        "@r_link_manifest = private constant { ptr, i64 } zeroinitializer") !=
                  NULL);
 
     options.link_manifest = duplicate_manifest;
     options.link_manifest_length = sizeof(duplicate_manifest) - 1U;
-    R_TEST_CHECK(r_frontend_emit_c17_with_options(context, &options, r_test_write, &rejected) ==
-                 R_FRONTEND_INVALID_ARGUMENT);
+    R_TEST_CHECK(
+        r_frontend_emit_llvm(context, &options, R_FRONTEND_LLVM_IR, r_test_write, &rejected) ==
+        R_FRONTEND_INVALID_ARGUMENT);
     R_TEST_CHECK(rejected.calls == 0U);
     options.link_manifest = malformed_manifest;
     options.link_manifest_length = sizeof(malformed_manifest) - 1U;
-    R_TEST_CHECK(r_frontend_emit_c17_with_options(context, &options, r_test_write, &rejected) ==
-                 R_FRONTEND_INVALID_ARGUMENT);
+    R_TEST_CHECK(
+        r_frontend_emit_llvm(context, &options, R_FRONTEND_LLVM_IR, r_test_write, &rejected) ==
+        R_FRONTEND_INVALID_ARGUMENT);
     R_TEST_CHECK(rejected.calls == 0U);
     options.link_manifest = NULL;
     options.link_manifest_length = 1U;
-    R_TEST_CHECK(r_frontend_emit_c17_with_options(context, &options, r_test_write, &rejected) ==
-                 R_FRONTEND_INVALID_ARGUMENT);
+    R_TEST_CHECK(
+        r_frontend_emit_llvm(context, &options, R_FRONTEND_LLVM_IR, r_test_write, &rejected) ==
+        R_FRONTEND_INVALID_ARGUMENT);
     R_TEST_CHECK(rejected.calls == 0U);
 
     r_test_buffer_destroy(&hir);
@@ -582,8 +592,9 @@ static int r_test_frontend_allocation_failures(void) {
     options.link_manifest_length = sizeof(manifest) - 1U;
     live_baseline = allocator.live;
     allocation_start = allocator.calls;
-    R_TEST_CHECK(r_frontend_emit_c17_with_options(context, &options, r_test_write, &baseline) ==
-                 R_FRONTEND_OK);
+    R_TEST_CHECK(
+        r_frontend_emit_llvm(context, &options, R_FRONTEND_LLVM_IR, r_test_write, &baseline) ==
+        R_FRONTEND_OK);
     emission_allocations = allocator.calls - allocation_start;
     R_TEST_CHECK(emission_allocations != 0U);
     R_TEST_CHECK(allocator.live == live_baseline);
@@ -592,8 +603,9 @@ static int r_test_frontend_allocation_failures(void) {
         RTestBuffer failed = {0};
 
         allocator.fail_at = allocator.calls + offset;
-        R_TEST_CHECK(r_frontend_emit_c17_with_options(context, &options, r_test_write, &failed) ==
-                     R_FRONTEND_OUT_OF_MEMORY);
+        R_TEST_CHECK(
+            r_frontend_emit_llvm(context, &options, R_FRONTEND_LLVM_IR, r_test_write, &failed) ==
+            R_FRONTEND_OUT_OF_MEMORY);
         R_TEST_CHECK(failed.calls == 0U);
         R_TEST_CHECK(allocator.live == live_baseline);
         r_test_buffer_destroy(&failed);
@@ -602,8 +614,9 @@ static int r_test_frontend_allocation_failures(void) {
     {
         RTestBuffer retry = {0};
 
-        R_TEST_CHECK(r_frontend_emit_c17_with_options(context, &options, r_test_write, &retry) ==
-                     R_FRONTEND_OK);
+        R_TEST_CHECK(
+            r_frontend_emit_llvm(context, &options, R_FRONTEND_LLVM_IR, r_test_write, &retry) ==
+            R_FRONTEND_OK);
         R_TEST_CHECK(retry.length == baseline.length);
         R_TEST_CHECK((retry.length == baseline.length) &&
                      (memcmp(retry.bytes, baseline.bytes, baseline.length) == 0));

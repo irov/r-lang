@@ -32,50 +32,53 @@ r_require_match_count(hir_output
     "type=[(]slice u16[)] source=std[.]array input=[(]borrow [(]array u16[)][)]"
     1 "mutable std.array slice HIR contract")
 
+# --all-functions: main calls neither conversion, and the IR shows each function's lowering.
+set(ir_arguments
+    --emit=llvm-ir
+    --all-functions
+    --entry test.codegen.array_slice::main
+    --profile hosted-native-async
+    --target-manifest "${TARGET_MANIFEST}"
+    "${SOURCE_FILE}")
 execute_process(
-    COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
-        --entry test.codegen.array_slice::main
-        --profile hosted-native-async
-        --target-manifest "${TARGET_MANIFEST}"
-        "${SOURCE_FILE}"
-    RESULT_VARIABLE c17_result
-    OUTPUT_VARIABLE c17_output
-    ERROR_VARIABLE c17_error
+    COMMAND "${R_FRONT_EXECUTABLE}" ${ir_arguments}
+    RESULT_VARIABLE ir_result
+    OUTPUT_VARIABLE ir_output
+    ERROR_VARIABLE ir_error
 )
-if(NOT c17_result EQUAL 0)
-    message(FATAL_ERROR "array slice C17 emit failed (${c17_result}): ${c17_error}")
+if(NOT ir_result EQUAL 0)
+    message(FATAL_ERROR "array slice LLVM IR emit failed (${ir_result}): ${ir_error}")
 endif()
-r_require_match_count(c17_output
-    "[.]r_data = [(]const uint8_t [*][)]r_t[0-9]+->data"
-    1 "const slice direct typed data view")
-r_require_match_count(c17_output
-    "[.]r_data = [(]uint16_t [*][)]r_t[0-9]+->data"
-    1 "mutable slice direct typed data view")
-r_require_match_count(c17_output "[.]r_len = r_t[0-9]+->length" 2
-    "slice lengths use runtime array length")
-r_require_match_count(c17_output "r_std_array_as_slice" 0
-    "std.array slice conversion has no runtime library call")
-r_require_match_count(c17_output "memcpy[(]" 0
-    "std.array slice conversion performs no copy")
-r_require_match_count(c17_output "r_runtime_allocate" 0
-    "std.array slice conversion performs no allocation")
+
+# A slice of a std.array is a view of its storage: no library call, no allocation and no copy
+# of the elements (a copy would have the run-time length).
+foreach(function_name IN ITEMS const_length mutable_length)
+    set(header "@\"test.codegen.array_slice::${function_name}\"(")
+    string(FIND "${ir_output}" "define internal i64 ${header}" body_start)
+    if(body_start EQUAL -1)
+        message(FATAL_ERROR "array slice LLVM IR lacks ${function_name}:\n${ir_output}")
+    endif()
+    string(SUBSTRING "${ir_output}" ${body_start} -1 body)
+    string(FIND "${body}" "\n}\n" body_end)
+    string(SUBSTRING "${body}" 0 ${body_end} body)
+    r_require_match_count(body "call [^\n]*@r_std_array_" 0
+        "${function_name} slice conversion has no runtime library call")
+    r_require_match_count(body "call [^\n]*@r_runtime_allocat" 0
+        "${function_name} slice conversion performs no allocation")
+    r_require_match_count(body "@llvm[.]mem(cpy|move)[^\n]*, i64 %[^\n]*[)]" 0
+        "${function_name} slice conversion copies no elements")
+endforeach()
 
 execute_process(
-    COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
-        --entry test.codegen.array_slice::main
-        --profile hosted-native-async
-        --target-manifest "${TARGET_MANIFEST}"
-        "${SOURCE_FILE}"
+    COMMAND "${R_FRONT_EXECUTABLE}" ${ir_arguments}
     RESULT_VARIABLE repeated_result
     OUTPUT_VARIABLE repeated_output
     ERROR_VARIABLE repeated_error
 )
 if(NOT repeated_result EQUAL 0)
     message(FATAL_ERROR
-        "repeated array slice C17 emit failed (${repeated_result}): ${repeated_error}")
+        "repeated array slice LLVM IR emit failed (${repeated_result}): ${repeated_error}")
 endif()
-if(NOT c17_output STREQUAL repeated_output)
-    message(FATAL_ERROR "array slice C17 output is not deterministic")
+if(NOT ir_output STREQUAL repeated_output)
+    message(FATAL_ERROR "array slice LLVM IR output is not deterministic")
 endif()

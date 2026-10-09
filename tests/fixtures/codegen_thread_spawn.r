@@ -63,6 +63,40 @@ async void spawn_async(array<u8> payload) throws std.thread::thread_error {
     std.thread::detach(move handle);
 }
 
-i32 main() {
-    return 0;
+/* R-LIB-0005: each payload is a one-byte array marked with the value the wrapper looks for in
+   its drops. The wrapper refuses the first thread creation, so the first payload comes back to
+   start_failure_preserves_move; the last two threads are detached and finish before the hosted
+   drain ends the program. */
+async i32 main() {
+    try {
+        array<u8> refused = std.alloc::bytes(1usize, 11u8);
+        start_failure_preserves_move(move refused);
+        array<u8> joined = std.alloc::bytes(1usize, 41u8);
+        spawn_and_join(move joined);
+        array<u8> failing = std.alloc::bytes(1usize, 73u8);
+        try {
+            spawn_error_and_join(move failing);
+            return 1;
+        } catch (worker_error error) {
+            if (error.code != -73) { return 2; }
+        }
+        array<u8> scoped = std.alloc::bytes(1usize, 42u8);
+        spawn_scoped_and_join(move scoped);
+        array<u8> detached = std.alloc::bytes(1usize, 91u8);
+        spawn_error_and_detach(move detached);
+        array<u8> started = std.alloc::bytes(1usize, 43u8);
+        await spawn_async(move started);
+        return 0;
+    } catch (std.alloc::alloc_error error) {
+        error as void;
+        return 3;
+    } catch (std.thread::thread_error error) {
+        error as void;
+        return 4;
+    } catch (worker_error error) {
+        return 5;
+    } catch (std.async::start_error error) {
+        error as void;
+        return 6;
+    }
 }

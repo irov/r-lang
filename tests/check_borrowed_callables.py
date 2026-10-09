@@ -48,6 +48,12 @@ i32 main() {
 '''
 
 
+def emit_options(mode):
+    """Options of one output; LLVM IR lowers every function, not only those main reaches, so
+    that code generation also accepts the functions main never calls."""
+    return ['--emit=' + mode, '--all-functions'] if mode == 'llvm-ir' else ['--emit=' + mode]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--front', required=True)
@@ -60,10 +66,10 @@ def main():
         client.write_text(CLIENT)
 
         def emit(mode, paths):
-            return subprocess.run([args.front, '--emit=' + mode, *map(str, paths)],
+            return subprocess.run([args.front, *emit_options(mode), *map(str, paths)],
                                   capture_output=True, text=True, timeout=30)
 
-        for mode in ('interface', 'c17'):
+        for mode in ('interface', 'llvm-ir'):
             normal = emit(mode, [provider, client])
             reversed_order = emit(mode, [client, provider])
             assert normal.returncode == 0, (mode, normal.stderr)

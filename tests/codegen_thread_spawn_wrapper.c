@@ -1,5 +1,3 @@
-#include "r_runtime_0_1.h"
-#include "r_runtime_allocator.h"
 #include "r_runtime_array.h"
 #include "r_std_thread.h"
 
@@ -9,16 +7,42 @@
 #include <stdint.h>
 #include <string.h>
 
-static void r_test_array_destroy(RRuntimeArray *array);
-static void r_test_thread_join_result_move(RStdThreadJoinResult *result, void *destination);
+/*
+ * R-LIB-0005, R-LIB-0010: the program spawns, joins and detaches threads whose payload is a
+ * one-byte array marked with the value the program gives it. The wrapper refuses the first
+ * thread creation and observes every array drop and every joined value, so each payload is shown
+ * to be dropped exactly once on every path: by the catch after a refused start, by the entry,
+ * with a thrown error by its catch, and by the library when it drops the result of a detached
+ * thread.
+ */
+void r_test_array_destroy(RRuntimeArray *array);
+void r_test_thread_join_result_move(RStdThreadJoinResult *result, void *destination);
+RStdThreadSpawnResult r_test_thread_spawn_checked(RRuntimeAllocator *allocator,
+                                                  RRuntimeTypeInfo payload_type,
+                                                  RStdThreadCompletionTypeInfo completion_type,
+                                                  RStdThreadEntryFn entry,
+                                                  void *staged_payload);
+RStdThreadScopedSpawnResult
+r_test_thread_spawn_scoped_checked(RRuntimeAllocator *allocator,
+                                   RRuntimeTypeInfo payload_type,
+                                   RStdThreadCompletionTypeInfo completion_type,
+                                   RStdThreadEntryFn entry,
+                                   void *staged_payload);
+void r_test_thread_detach(RStdThreadJoinHandle *handle);
 
 #define r_library_internal_thread_join_result_move r_test_thread_join_result_move
+#define r_library_internal_thread_spawn_checked r_test_thread_spawn_checked
+#define r_library_internal_thread_spawn_scoped_checked r_test_thread_spawn_scoped_checked
 #define r_runtime_array_destroy r_test_array_destroy
+#define r_std_thread_detach r_test_thread_detach
 #define main r_generated_main
 int main(int argc, char *argv[]);
-#include R_TEST_GENERATED_C
+#include R_TEST_PROGRAM_PRELUDE
 #undef main
+#undef r_std_thread_detach
 #undef r_runtime_array_destroy
+#undef r_library_internal_thread_spawn_scoped_checked
+#undef r_library_internal_thread_spawn_checked
 #undef r_library_internal_thread_join_result_move
 
 void r_library_internal_thread_testing_fail_create(int native_error_value);
@@ -26,11 +50,16 @@ void r_library_internal_thread_testing_fail_create(int native_error_value);
 static _Atomic unsigned int r_test_drop_11;
 static _Atomic unsigned int r_test_drop_41;
 static _Atomic unsigned int r_test_drop_42;
+static _Atomic unsigned int r_test_drop_43;
 static _Atomic unsigned int r_test_drop_73;
 static _Atomic unsigned int r_test_drop_91;
 static _Atomic unsigned int r_test_join_41;
 static _Atomic unsigned int r_test_join_42;
 static _Atomic unsigned int r_test_join_error_73;
+static unsigned int r_test_spawns;
+static unsigned int r_test_scoped_spawns;
+static unsigned int r_test_refused_spawns;
+static unsigned int r_test_detaches;
 
 static void r_test_record_drop(uint8_t marker) {
     switch (marker) {
@@ -43,6 +72,9 @@ static void r_test_record_drop(uint8_t marker) {
     case UINT8_C(42):
         (void)atomic_fetch_add_explicit(&r_test_drop_42, 1U, memory_order_relaxed);
         break;
+    case UINT8_C(43):
+        (void)atomic_fetch_add_explicit(&r_test_drop_43, 1U, memory_order_relaxed);
+        break;
     case UINT8_C(73):
         (void)atomic_fetch_add_explicit(&r_test_drop_73, 1U, memory_order_relaxed);
         break;
@@ -54,14 +86,14 @@ static void r_test_record_drop(uint8_t marker) {
     }
 }
 
-static void r_test_array_destroy(RRuntimeArray *array) {
+void r_test_array_destroy(RRuntimeArray *array) {
     if ((array != NULL) && (array->data != NULL) && (array->length == 1U)) {
         r_test_record_drop(*(const uint8_t *)array->data);
     }
     r_runtime_array_destroy(array);
 }
 
-static void r_test_thread_join_result_move(RStdThreadJoinResult *result, void *destination) {
+void r_test_thread_join_result_move(RStdThreadJoinResult *result, void *destination) {
     RStdThreadCompletionTypeInfo completion_type;
 
     if ((result == NULL) || (destination == NULL)) {
@@ -93,128 +125,70 @@ static void r_test_thread_join_result_move(RStdThreadJoinResult *result, void *d
     }
 }
 
-static RRuntimeTypeInfo r_test_u8_type(void) {
-    const RRuntimeTypeInfo type = {
-        sizeof(uint8_t),
-        _Alignof(uint8_t),
-        NULL,
-        NULL,
-    };
+/* The first creation fails in the native call, after the library has reserved its descriptor:
+   the refused start shall release that state and leave the staged payload to the caller. */
+RStdThreadSpawnResult r_test_thread_spawn_checked(RRuntimeAllocator *allocator,
+                                                  RRuntimeTypeInfo payload_type,
+                                                  RStdThreadCompletionTypeInfo completion_type,
+                                                  RStdThreadEntryFn entry,
+                                                  void *staged_payload) {
+    const _Bool refuse = r_test_spawns == 0U;
+    RStdThreadSpawnResult result;
 
-    return type;
+    r_test_spawns += 1U;
+    if (refuse) {
+        r_library_internal_thread_testing_fail_create(EAGAIN);
+    }
+    result = r_library_internal_thread_spawn_checked(
+        allocator, payload_type, completion_type, entry, staged_payload);
+    if (refuse && !result.is_ok && (result.error == R_STD_THREAD_ERROR_RESOURCE_EXHAUSTED)) {
+        r_test_refused_spawns += 1U;
+    }
+    return result;
 }
 
-static _Bool r_test_array(uint8_t marker, RRuntimeArray *array) {
-    RRuntimeAllocator *const allocator = r_runtime_hosted_allocator();
-
-    return (allocator != NULL) &&
-           (r_runtime_array_with_capacity(array, allocator, r_test_u8_type(), 1U) ==
-            R_RUNTIME_ARRAY_OK) &&
-           (r_runtime_array_push(array, &marker) == R_RUNTIME_ARRAY_OK);
+RStdThreadScopedSpawnResult
+r_test_thread_spawn_scoped_checked(RRuntimeAllocator *allocator,
+                                   RRuntimeTypeInfo payload_type,
+                                   RStdThreadCompletionTypeInfo completion_type,
+                                   RStdThreadEntryFn entry,
+                                   void *staged_payload) {
+    r_test_scoped_spawns += 1U;
+    return r_library_internal_thread_spawn_scoped_checked(
+        allocator, payload_type, completion_type, entry, staged_payload);
 }
 
-static _Bool r_test_wait_for(_Atomic unsigned int *counter) {
-    unsigned int attempt;
-
-    for (attempt = 0U; attempt < 1000U; ++attempt) {
-        if (atomic_load_explicit(counter, memory_order_acquire) == 1U) {
-            return 1;
-        }
-        r_std_thread_sleep_nanoseconds(UINT64_C(1000000));
-    }
-    return 0;
+void r_test_thread_detach(RStdThreadJoinHandle *handle) {
+    r_test_detaches += 1U;
+    r_std_thread_detach(handle);
 }
 
-static void r_test_effect_drop(r_d00000004 *effect) {
-    if ((effect != NULL) && (effect->r_tag == UINT32_C(1))) {
-        r_type_drop_a00000001_gate(&effect->r_payload.r_error_00000001);
-        effect->r_tag = UINT32_C(0);
-    }
-}
-
-static int r_test_thread_spawn(void) {
-    RRuntimeArray payload = {0};
-    r_d00000004 effect = {0};
-
-    if (!r_test_array(UINT8_C(11), &payload)) {
-        return 71;
-    }
-    r_library_internal_thread_testing_fail_create(EAGAIN);
-    r_f00000008(payload);
-    if (atomic_load_explicit(&r_test_drop_11, memory_order_relaxed) != 1U) {
-        return 72;
-    }
-
-    payload = (RRuntimeArray){0};
-    if (!r_test_array(UINT8_C(41), &payload)) {
-        return 73;
-    }
-    r_f00000003(&effect, payload);
-    if ((effect.r_tag != UINT32_C(0)) ||
-        (atomic_load_explicit(&r_test_join_41, memory_order_relaxed) != 1U) ||
-        (atomic_load_explicit(&r_test_drop_41, memory_order_relaxed) != 1U)) {
-        return 74;
-    }
-
-    effect = (r_d00000004){0};
-    payload = (RRuntimeArray){0};
-    if (!r_test_array(UINT8_C(73), &payload)) {
-        return 75;
-    }
-    r_f00000006(&effect, payload);
-    if ((effect.r_tag != UINT32_C(1)) ||
-        (effect.r_payload.r_error_00000001.r_m00000001 != INT32_C(-73)) ||
-        (atomic_load_explicit(&r_test_join_error_73, memory_order_relaxed) != 1U)) {
-        r_test_effect_drop(&effect);
-        return 76;
-    }
-    r_test_effect_drop(&effect);
-    if (atomic_load_explicit(&r_test_drop_73, memory_order_relaxed) != 1U) {
-        return 77;
-    }
-
-    effect = (r_d00000004){0};
-    payload = (RRuntimeArray){0};
-    if (!r_test_array(UINT8_C(42), &payload)) {
-        return 78;
-    }
-    r_f00000007(&effect, payload);
-    if ((effect.r_tag != UINT32_C(0)) ||
-        (atomic_load_explicit(&r_test_join_42, memory_order_relaxed) != 1U) ||
-        (atomic_load_explicit(&r_test_drop_42, memory_order_relaxed) != 1U)) {
-        return 79;
-    }
-
-    effect = (r_d00000004){0};
-    payload = (RRuntimeArray){0};
-    if (!r_test_array(UINT8_C(91), &payload)) {
-        return 80;
-    }
-    r_f00000005((r_d00000005 *)&effect, payload);
-    if ((effect.r_tag != UINT32_C(0)) || !r_test_wait_for(&r_test_drop_91)) {
-        return 81;
-    }
-    r_std_thread_sleep_nanoseconds(UINT64_C(10000000));
-    if ((atomic_load_explicit(&r_test_drop_11, memory_order_relaxed) != 1U) ||
-        (atomic_load_explicit(&r_test_drop_41, memory_order_relaxed) != 1U) ||
-        (atomic_load_explicit(&r_test_drop_42, memory_order_relaxed) != 1U) ||
-        (atomic_load_explicit(&r_test_drop_73, memory_order_relaxed) != 1U) ||
-        (atomic_load_explicit(&r_test_drop_91, memory_order_relaxed) != 1U)) {
-        return 82;
-    }
-    return 0;
+static _Bool r_test_once(_Atomic unsigned int *counter) {
+    return atomic_load_explicit(counter, memory_order_relaxed) == 1U;
 }
 
 int main(int argc, char *argv[]) {
-    const RRuntimeStartResult started = r_runtime_hosted_start(argc, argv);
-    int result;
+    const int status = r_generated_main(argc, argv);
 
-    if (!r_runtime_stack_initialize_current_thread()) {
-        return 70;
+    if (status != 0) {
+        return status;
     }
-    if (!started.started) {
-        return started.process_status;
+    /* The program spawns five unscoped threads (one refused) and one scoped thread, and
+       detaches the two unscoped threads it does not join. */
+    if ((r_test_spawns != 5U) || (r_test_refused_spawns != 1U) || (r_test_scoped_spawns != 1U) ||
+        (r_test_detaches != 2U)) {
+        return 71;
     }
-    result = r_test_thread_spawn();
-    return r_runtime_hosted_finish((int32_t)result);
+    if (!r_test_once(&r_test_join_41) || !r_test_once(&r_test_join_42) ||
+        !r_test_once(&r_test_join_error_73)) {
+        return 72;
+    }
+    /* The program ends after the hosted drain, which waits for the detached threads, so every
+       drop has happened by now. */
+    if (!r_test_once(&r_test_drop_11) || !r_test_once(&r_test_drop_41) ||
+        !r_test_once(&r_test_drop_42) || !r_test_once(&r_test_drop_43) ||
+        !r_test_once(&r_test_drop_73) || !r_test_once(&r_test_drop_91)) {
+        return 73;
+    }
+    return 0;
 }

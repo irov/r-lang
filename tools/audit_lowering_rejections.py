@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Inventory every branch of MIR and C17 lowering that rejects a program as not lowerable.
+"""Inventory every branch of MIR and LLVM lowering that rejects a program as not lowerable.
 
-MIR lowering, the C17 emitter and the C ABI bridge report ``R_FRONTEND_NOT_LOWERABLE`` when
-a program reaches a form they do not lower; the command line reports it as ``R-DIAG-SLICE-001``.
+MIR lowering, the LLVM emitter (``r_llvm_unsupported``) and the C ABI bridge report
+``R_FRONTEND_NOT_LOWERABLE`` when a program reaches a form they do not lower; the command line
+reports it as ``R-DIAG-SLICE-001``.
 Semantic analysis rejects every valid-R form outside the implemented slice before these phases
 run, so each listed branch is a guard: reaching it with a program that semantic analysis
 accepted is a defect (L14.2). The audit enumerates the branches of each translation unit,
@@ -22,7 +23,7 @@ from typing import Any
 
 
 REJECTION = re.compile(
-    r"r_c17_fail\(\s*emitter,\s*R_FRONTEND_NOT_LOWERABLE\s*\)"
+    r"\br_llvm_unsupported(?:_detail)?\("
     r"|(?:return|=)\s+R_FRONTEND_NOT_LOWERABLE\s*;"
     r"|:\s*R_FRONTEND_NOT_LOWERABLE\s*[);]"
 )
@@ -33,7 +34,7 @@ FUNCTION = re.compile(
 INCLUDE = re.compile(r'^#include "([^"]+\.inc)"$', re.MULTILINE)
 UNITS = (
     "compiler/mir/mir.c",
-    "compiler/codegen/c17.c",
+    "compiler/llvm",
     "compiler/codegen/c_abi_bridge.c",
 )
 
@@ -64,43 +65,34 @@ def function_at(source: str, offset: int) -> str:
     return function
 
 
-def category(unit: str, function: str) -> str:
+def category(unit: str, path: Path, function: str) -> str:
     if unit.endswith("mir.c"):
         if function == "r_frontend_lower_mir":
             return "mir-lowering"
         return "mir-artifact-selection"
     if unit.endswith("c_abi_bridge.c"):
         return "c-abi-bridge"
-    if "json" in function:
-        return "c17-json-schema"
-    if function.startswith("r_c17_preflight_async") or "_async_" in function:
-        return "c17-async-frame-shape"
-    if function.endswith("_call") or "_call_" in function:
-        return "c17-standard-operation-shape"
-    if any(word in function for word in ("type", "glue", "closure", "helper")):
-        return "c17-type-support"
-    if function in (
-        "r_c17_preflight_expression",
-        "r_c17_preflight_statement",
-        "r_c17_preflight_place",
-        "r_c17_preflight_aggregate",
-        "r_c17_preflight_sync_initializer",
-    ):
-        return "c17-tree-shape"
-    return "c17-program-structure"
+    # The LLVM emitter: one category per file, which holds one family of lowerings.
+    return "llvm-" + path.stem.replace("_", "-")
 
 
 def inventory(path: Path, unit: str, root: Path) -> list[dict[str, Any]]:
     source = path.read_text(encoding="utf-8")
     records: list[dict[str, Any]] = []
     for match in REJECTION.finditer(source):
+        line_start = source.rfind("\n", 0, match.start()) + 1
         function = function_at(source, match.start())
+        if source.startswith("bool r_llvm_unsupported", line_start) or function in (
+            "r_llvm_unsupported",
+            "r_llvm_unsupported_detail",
+        ):
+            continue  # the reporting functions themselves
         records.append(
             {
                 "file": path.relative_to(root).as_posix(),
                 "line": source.count("\n", 0, match.start()) + 1,
                 "function": function,
-                "category": category(unit, function),
+                "category": category(unit, path, function),
             }
         )
     return records
@@ -119,9 +111,16 @@ def main() -> int:
     file_count = 0
     for unit in UNITS:
         source = root / unit
-        if not source.is_file():
+        if source.is_dir():
+            sources = sorted(source.glob("*.c"))
+        elif source.is_file():
+            sources = [source]
+        else:
             parser.error(f"lowering source does not exist: {source}")
-        for path in translation_unit(source):
+        paths: list[Path] = []
+        for unit_source in sources:
+            paths.extend(path for path in translation_unit(unit_source) if path not in paths)
+        for path in paths:
             file_count += 1
             digest.update(path.read_bytes())
             records.extend(inventory(path, unit, root))
@@ -129,7 +128,7 @@ def main() -> int:
     categories = Counter(record["category"] for record in records)
     functions = {record["function"] for record in records}
     report = {
-        "scope": "every R_FRONTEND_NOT_LOWERABLE branch of MIR and C17 lowering",
+        "scope": "every R_FRONTEND_NOT_LOWERABLE branch of MIR and LLVM lowering",
         "files": file_count,
         "source_sha256": digest.hexdigest(),
         "branches": len(records),

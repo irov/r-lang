@@ -1,42 +1,42 @@
 #include "r_runtime_allocator.h"
-#include "r_runtime_list.h"
+#include "r_std_list.h"
 
 #include <stdbool.h>
 #include <stdint.h>
 
-static RRuntimeAllocationStatus r_test_allocator_allocate(RRuntimeAllocator *allocator,
-                                                          size_t size,
-                                                          size_t alignment,
-                                                          void **result);
+RStdListInsertResult r_test_list_push_back(RStdList *target, void *staged_value);
 
-#define r_runtime_allocator_allocate r_test_allocator_allocate
+#define r_std_list_push_back r_test_list_push_back
 #define main r_generated_main
 int main(int argc, char *argv[]);
-#include R_TEST_GENERATED_C
+#include R_TEST_PROGRAM_PRELUDE
 #undef main
-#undef r_runtime_allocator_allocate
+#undef r_std_list_push_back
 
 static bool borrow_failed;
 static bool value_failed;
 
-/* The generated list helper allocates one node with the element inline. The first node for a
- * `const Point*` and the first node for an `i32` fail, so that each R catch clause receives its
- * staged element back and checks it. */
-static RRuntimeAllocationStatus r_test_allocator_allocate(RRuntimeAllocator *allocator,
-                                                          size_t size,
-                                                          size_t alignment,
-                                                          void **result) {
-    if (!borrow_failed && (size == sizeof(RRuntimeListNode) + sizeof(void *))) {
-        borrow_failed = true;
-        *result = NULL;
-        return R_RUNTIME_ALLOCATION_EXHAUSTED;
+/* The push allocates one node with the element inline. The first push of a `const Point*` and
+ * the first push of an `i32` fail, so that each R catch clause receives its staged element back
+ * and checks it. */
+RStdListInsertResult r_test_list_push_back(RStdList *target, void *staged_value) {
+    bool *failed = NULL;
+    RStdListInsertResult result;
+
+    if (!borrow_failed && (target->element.size == sizeof(void *))) {
+        failed = &borrow_failed;
+    } else if (!value_failed && (target->element.size == sizeof(int32_t))) {
+        failed = &value_failed;
     }
-    if (!value_failed && (size == sizeof(RRuntimeListNode) + sizeof(int32_t))) {
-        value_failed = true;
-        *result = NULL;
-        return R_RUNTIME_ALLOCATION_EXHAUSTED;
+    if (failed == NULL) {
+        return r_std_list_push_back(target, staged_value);
     }
-    return r_runtime_allocator_allocate(allocator, size, alignment, result);
+    r_runtime_allocator_set_failure(target->allocator, UINT64_C(1));
+    result = r_std_list_push_back(target, staged_value);
+    *failed = (result.status == R_STD_LIST_CALL_ERROR) &&
+              (result.reason == R_STD_ALLOC_ERROR_OUT_OF_MEMORY) && (target->length == 0U);
+    r_runtime_allocator_set_failure(target->allocator, UINT64_C(0));
+    return result;
 }
 
 int main(int argc, char *argv[]) {

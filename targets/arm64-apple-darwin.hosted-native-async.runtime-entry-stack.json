@@ -1,13 +1,13 @@
 {
   "schema": "r-runtime-entry-stack-inventory-0.1",
-  "inventory_revision": 21,
+  "inventory_revision": 22,
   "target": {
     "name": "arm64-apple-darwin-hosted-native-async",
     "manifest": "targets/arm64-apple-darwin.hosted-native-async.json",
-    "manifest_revision": 10,
-    "compiler": "Apple clang",
-    "compiler_version": "21.0.0",
-    "compiler_build": "clang-2100.3.34.2"
+    "manifest_revision": 11,
+    "compiler": "Homebrew clang",
+    "compiler_version": "22.1.8",
+    "compiler_build": "sha256:68bb87f784f09da01b7aea0f70952fb23f606242cdc4f6ff3cc26c372af0706f"
   },
   "conformance_claim": false,
   "coverage": {
@@ -41,92 +41,65 @@
     "header_without_stack_usage_inputs": "hard-fail"
   },
   "closed_source_surfaces": {
-    "generated_c_emitter": "compiler/codegen/c17.c",
-    "generated_c_fragments": [
-      "compiler/codegen/clone.inc",
-      "compiler/codegen/core_bits.inc",
-      "compiler/codegen/direct_calls.inc",
-      "compiler/codegen/format.inc",
-      "compiler/codegen/format_glue.inc",
-      "compiler/codegen/fs_async_emit.inc",
-      "compiler/codegen/fs_async_preflight.inc",
-      "compiler/codegen/hosted_main.inc",
-      "compiler/codegen/index_proofs.inc",
-      "compiler/codegen/json.inc",
-      "compiler/codegen/json_decode.inc",
-      "compiler/codegen/json_defaults.inc",
-      "compiler/codegen/json_embedded.inc",
-      "compiler/codegen/json_encode.inc",
-      "compiler/codegen/json_hooks.inc",
-      "compiler/codegen/json_ordinary_default.inc",
-      "compiler/codegen/json_reader.inc",
-      "compiler/codegen/json_stream.inc",
-      "compiler/codegen/json_stream_dict.inc",
-      "compiler/codegen/json_stream_enum.inc",
-      "compiler/codegen/json_stream_hook.inc",
-      "compiler/codegen/json_stream_struct.inc",
-      "compiler/codegen/json_tree.inc",
-      "compiler/codegen/layout.inc",
-      "compiler/codegen/layout_pass.inc",
-      "compiler/codegen/loop_versions.inc",
-      "compiler/codegen/net_async_emit.inc",
-      "compiler/codegen/net_async_preflight.inc",
-      "compiler/codegen/recursion.inc",
-      "compiler/codegen/scoped_async_emit.inc",
-      "compiler/codegen/scoped_async_preflight.inc",
-      "compiler/codegen/standard_async_sync.inc",
-      "compiler/codegen/standard_sync_async_channels.inc",
-      "compiler/codegen/standard_sync_async_values.inc",
-      "compiler/codegen/standard_sync_locks.inc",
-      "compiler/codegen/standard_sync_values.inc",
-      "compiler/codegen/target_c_abi_spelling.generated.inc",
-      "compiler/codegen/target_checked_storage.generated.inc",
-      "compiler/codegen/target_manifest_digests.generated.inc",
-      "compiler/codegen/task_scope.inc",
+    "program_emitter": "compiler/llvm",
+    "program_emitter_sources": [
+      "compiler/llvm/abi.c",
+      "compiler/llvm/async.c",
+      "compiler/llvm/atomics.c",
+      "compiler/llvm/clone.c",
+      "compiler/llvm/containers.c",
+      "compiler/llvm/dispatch.c",
+      "compiler/llvm/emit.c",
+      "compiler/llvm/ffi.c",
+      "compiler/llvm/format.c",
+      "compiler/llvm/glue.c",
+      "compiler/llvm/hosted_main.c",
+      "compiler/llvm/json.c",
+      "compiler/llvm/json_decode.c",
+      "compiler/llvm/json_encode.c",
+      "compiler/llvm/json_stream.c",
+      "compiler/llvm/keys.c",
+      "compiler/llvm/library.c",
+      "compiler/llvm/outcome.c",
+      "compiler/llvm/reflection.c",
+      "compiler/llvm/runtime.c",
+      "compiler/llvm/stack.c",
+      "compiler/llvm/standard.c",
+      "compiler/llvm/statics.c",
+      "compiler/llvm/surface.c",
+      "compiler/llvm/sync.c",
+      "compiler/llvm/tagged.c",
+      "compiler/llvm/target.c",
+      "compiler/llvm/text.c",
+      "compiler/llvm/threads.c",
+      "compiler/llvm/types.c",
+      "compiler/llvm/values.c",
+      "compiler/llvm/abi.h",
+      "compiler/llvm/emit_internal.h",
+      "compiler/llvm/json_internal.h",
+      "compiler/llvm/standard_internal.h",
+      "compiler/llvm/surface.h",
+      "compiler/llvm/runtime_surface.generated.inc",
+      "compiler/llvm/target_llvm.generated.inc",
       "compiler/source/standard_async_sync.h",
       "compiler/source/standard_fs_async.h",
       "compiler/source/standard_scoped_operations.h",
       "compiler/source/standard_sync.h",
       "compiler/source/standard_math_operations.generated.inc"
     ],
-    "generated_c_non_call_identifiers": [
-      "r_runtime_0_1",
-      "r_runtime_arc",
-      "r_runtime_array",
-      "r_runtime_core",
-      "r_runtime_dict",
-      "r_runtime_drop",
-      "r_runtime_freestanding",
-      "r_runtime_list",
-      "r_runtime_own",
-      "r_runtime_rc",
-      "r_runtime_target_abi",
-      "r_std_alloc",
-      "r_std_arc",
-      "r_std_array",
-      "r_std_async",
-      "r_std_bits",
-      "r_std_bytes",
-      "r_std_c",
-      "r_std_convert",
-      "r_std_dict",
-      "r_std_error",
-      "r_std_format",
-      "r_std_fs",
-      "r_std_hash",
-      "r_std_io",
-      "r_std_json",
-      "r_std_list",
-      "r_std_math",
-      "r_std_process",
-      "r_std_random",
-      "r_std_rc",
-      "r_std_secret",
-      "r_std_signal",
-      "r_std_sync",
-      "r_std_test",
-      "r_std_thread",
-      "r_std_utf8"
+    "program_emitter_non_call_identifiers": [
+      "r_json_decode",
+      "r_json_default",
+      "r_json_encode",
+      "r_json_reader_complete",
+      "r_json_reader_deadline",
+      "r_json_reader_start",
+      "r_json_reader_take",
+      "r_json_stream",
+      "r_json_stream_drop",
+      "r_json_stream_step",
+      "r_json_zero",
+      "r_runtime_unwinding_threads"
     ],
     "named_standard_move_registry": "compiler/source/named_standard_move_abi.generated.inc",
     "named_standard_move_registry_non_call_identifiers": [
@@ -197,6 +170,13 @@
       "c_symbol": "r_json_cursor_default_string",
       "source": "library/internal/json/source/cursor.c",
       "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_json_cursor_destroy",
+      "source": "library/internal/json/source/cursor.c",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
@@ -327,9 +307,16 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_json_decoder_abort",
+      "source": "library/internal/json/source/decoder.c",
+      "category": "type-glue-direct",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_json_decoder_destroy",
       "source": "library/internal/json/source/decoder.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
@@ -348,6 +335,13 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_json_decoder_rebind",
+      "source": "library/internal/json/source/decoder.c",
+      "category": "type-glue-direct",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_json_decoder_take",
       "source": "library/internal/json/source/decoder.c",
       "category": "stdlib-operation",
@@ -357,7 +351,7 @@
     {
       "c_symbol": "r_json_detached_destroy",
       "source": "library/internal/json/source/reader.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
@@ -399,14 +393,14 @@
     {
       "c_symbol": "r_json_error_destroy",
       "source": "library/internal/json/source/common.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_json_number_destroy",
       "source": "library/internal/json/source/common.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
@@ -427,7 +421,7 @@
     {
       "c_symbol": "r_json_reader_destroy",
       "source": "library/internal/json/source/reader.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
@@ -453,6 +447,34 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_json_scanner_destroy",
+      "source": "library/internal/json/source/scanner.c",
+      "category": "type-glue-direct",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_json_scanner_failure",
+      "source": "library/internal/json/source/scanner.c",
+      "category": "type-glue-direct",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_json_scanner_feed",
+      "source": "library/internal/json/source/scanner.c",
+      "category": "type-glue-direct",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_json_scanner_initialize",
+      "source": "library/internal/json/source/scanner.c",
+      "category": "type-glue-direct",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_json_scanner_take_text",
       "source": "library/internal/json/source/scanner.c",
       "category": "stdlib-operation",
@@ -460,9 +482,30 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_json_tree_builder_destroy",
+      "source": "library/internal/json/source/tree.c",
+      "category": "type-glue-direct",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_json_tree_builder_initialize",
+      "source": "library/internal/json/source/tree.c",
+      "category": "type-glue-direct",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_json_tree_builder_token",
+      "source": "library/internal/json/source/tree.c",
+      "category": "type-glue-direct",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_json_value_destroy",
       "source": "library/internal/json/source/tree.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
@@ -476,70 +519,70 @@
     {
       "c_symbol": "r_library_internal_async_broadcast_release",
       "source": "library/internal/async_sync/source/broadcast.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_async_broadcast_unsubscribe",
       "source": "library/internal/async_sync/source/broadcast.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_async_mutex_release",
       "source": "library/internal/async_sync/source/mutex.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_async_mutex_unlock",
       "source": "library/internal/async_sync/source/mutex.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_async_notify_release",
       "source": "library/internal/async_sync/source/notify.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_async_rwlock_read_unlock",
       "source": "library/internal/async_sync/source/rwlock.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_async_rwlock_release",
       "source": "library/internal/async_sync/source/rwlock.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_async_rwlock_write_unlock",
       "source": "library/internal/async_sync/source/rwlock.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_async_semaphore_release",
       "source": "library/internal/async_sync/source/semaphore.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_async_semaphore_return",
       "source": "library/internal/async_sync/source/semaphore.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
@@ -581,140 +624,140 @@
     {
       "c_symbol": "r_library_internal_fs_directory_drop",
       "source": "library/internal/filesystem/source/handle.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_fs_directory_entry_drop",
       "source": "library/internal/filesystem/source/handle.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_fs_directory_entry_move",
       "source": "library/internal/filesystem/source/handle.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_fs_directory_iter_drop",
       "source": "library/internal/filesystem/source/handle.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_fs_directory_iter_move",
       "source": "library/internal/filesystem/source/handle.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_fs_directory_move",
       "source": "library/internal/filesystem/source/handle.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_fs_directory_next_result_drop",
       "source": "library/internal/filesystem/source/handle.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_fs_directory_next_result_move",
       "source": "library/internal/filesystem/source/handle.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_fs_file_drop",
       "source": "library/internal/filesystem/source/handle.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_fs_file_move",
       "source": "library/internal/filesystem/source/handle.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_fs_write_file_result_drop",
       "source": "library/internal/filesystem/source/async_atomic_write.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_fs_write_file_result_move",
       "source": "library/internal/filesystem/source/async_atomic_write.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_io_read_result_drop",
       "source": "library/internal/io/source/async_stream.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_io_read_result_move",
       "source": "library/internal/io/source/async_stream.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_io_shared_write_result_drop",
       "source": "library/internal/io/source/async_stream.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_io_shared_write_result_move",
       "source": "library/internal/io/source/async_stream.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_io_write_all_result_drop",
       "source": "library/internal/io/source/async_stream.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_io_write_all_result_move",
       "source": "library/internal/io/source/async_stream.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_io_write_result_drop",
       "source": "library/internal/io/source/async_stream.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_io_write_result_move",
       "source": "library/internal/io/source/async_stream.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
@@ -735,182 +778,182 @@
     {
       "c_symbol": "r_library_internal_net_tcp_listener_drop",
       "source": "library/internal/networking/source/handle.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_net_tcp_listener_move",
       "source": "library/internal/networking/source/handle.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_net_tcp_stream_drop",
       "source": "library/internal/networking/source/handle.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_net_tcp_stream_move",
       "source": "library/internal/networking/source/handle.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_net_udp_socket_drop",
       "source": "library/internal/networking/source/handle.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_net_udp_socket_move",
       "source": "library/internal/networking/source/handle.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_net_unix_datagram_drop",
       "source": "library/internal/networking/source/unix.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_net_unix_datagram_move",
       "source": "library/internal/networking/source/unix.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_net_unix_listener_drop",
       "source": "library/internal/networking/source/unix.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_net_unix_listener_move",
       "source": "library/internal/networking/source/unix.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_net_unix_stream_drop",
       "source": "library/internal/networking/source/unix.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_net_unix_stream_move",
       "source": "library/internal/networking/source/unix.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_process_child_destroy",
       "source": "library/internal/process/source/child.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_process_child_move",
       "source": "library/internal/process/source/child.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_process_command_destroy",
       "source": "library/internal/process/source/command.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_process_command_move",
       "source": "library/internal/process/source/command.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_signal_listener_destroy",
       "source": "library/internal/signal/source/listener.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_signal_listener_move",
       "source": "library/internal/signal/source/listener.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_sync_barrier_destroy",
       "source": "library/internal/synchronization/source/barrier.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_sync_barrier_move",
       "source": "library/internal/synchronization/source/barrier.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_sync_channel_destroy",
       "source": "library/internal/synchronization/source/channel.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_sync_channel_move",
       "source": "library/internal/synchronization/source/channel.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_sync_condvar_destroy",
       "source": "library/internal/synchronization/source/condvar.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_sync_condvar_move",
       "source": "library/internal/synchronization/source/condvar.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_sync_mutex_destroy",
       "source": "library/internal/synchronization/source/mutex.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_sync_mutex_guard_destroy",
       "source": "library/internal/synchronization/source/mutex.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
@@ -931,14 +974,14 @@
     {
       "c_symbol": "r_library_internal_sync_once_destroy",
       "source": "library/internal/synchronization/source/once.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_sync_once_lock_destroy",
       "source": "library/internal/synchronization/source/once_lock.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
@@ -952,42 +995,42 @@
     {
       "c_symbol": "r_library_internal_sync_once_move",
       "source": "library/internal/synchronization/source/once.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_sync_permit_destroy",
       "source": "library/internal/synchronization/source/channel.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_sync_permit_move",
       "source": "library/internal/synchronization/source/channel.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_sync_receiver_destroy",
       "source": "library/internal/synchronization/source/channel.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_sync_receiver_move",
       "source": "library/internal/synchronization/source/channel.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_sync_rw_lock_destroy",
       "source": "library/internal/synchronization/source/rwlock.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
@@ -1001,7 +1044,7 @@
     {
       "c_symbol": "r_library_internal_sync_rw_read_guard_destroy",
       "source": "library/internal/synchronization/source/rwlock.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
@@ -1015,7 +1058,7 @@
     {
       "c_symbol": "r_library_internal_sync_rw_write_guard_destroy",
       "source": "library/internal/synchronization/source/rwlock.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
@@ -1029,42 +1072,42 @@
     {
       "c_symbol": "r_library_internal_sync_sender_destroy",
       "source": "library/internal/synchronization/source/channel.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_sync_sender_move",
       "source": "library/internal/synchronization/source/channel.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_sync_sync_channel_destroy",
       "source": "library/internal/synchronization/source/channel.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_sync_sync_channel_move",
       "source": "library/internal/synchronization/source/channel.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_sync_sync_sender_destroy",
       "source": "library/internal/synchronization/source/channel.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_sync_sync_sender_move",
       "source": "library/internal/synchronization/source/channel.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
@@ -1078,14 +1121,14 @@
     {
       "c_symbol": "r_library_internal_thread_identity_destroy",
       "source": "library/internal/thread/source/thread.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_library_internal_thread_join_result_destroy",
       "source": "library/internal/thread/source/thread.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
@@ -1099,7 +1142,21 @@
     {
       "c_symbol": "r_library_internal_thread_panic_report_destroy",
       "source": "library/internal/thread/source/thread.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_library_internal_thread_panic_report_from",
+      "source": "library/internal/thread/source/thread.c",
+      "category": "type-glue-direct",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_library_internal_thread_panic_report_take",
+      "source": "library/internal/thread/source/thread.c",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
@@ -1132,7 +1189,35 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_runtime_allocator_attempt_count",
+      "source": "runtime/source/allocator.c",
+      "category": "runtime-allocator",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_runtime_allocator_deallocate",
+      "source": "runtime/source/allocator.c",
+      "category": "runtime-allocator",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_allocator_initialize",
+      "source": "runtime/source/allocator.c",
+      "category": "runtime-allocator",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_allocator_reallocate",
+      "source": "runtime/source/allocator.c",
+      "category": "runtime-allocator",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_allocator_set_failure",
       "source": "runtime/source/allocator.c",
       "category": "runtime-allocator",
       "linkage": "external",
@@ -1153,7 +1238,70 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_runtime_arc_destroy_begin",
+      "source": "runtime/source/arc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_arc_destroy_finish",
+      "source": "runtime/source/arc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_arc_destroy_scratch",
+      "source": "runtime/source/arc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_arc_destroy_value",
+      "source": "runtime/source/arc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_arc_downgrade",
+      "source": "runtime/source/arc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_arc_from_raw",
+      "source": "runtime/source/arc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_runtime_arc_get",
+      "source": "runtime/source/arc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_arc_get_mut",
+      "source": "runtime/source/arc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_arc_into_raw",
+      "source": "runtime/source/arc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_arc_ptr_eq",
       "source": "runtime/source/arc.c",
       "category": "runtime-owner",
       "linkage": "external",
@@ -1167,7 +1315,84 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_runtime_arc_strong_count",
+      "source": "runtime/source/arc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_arc_try_unwrap",
+      "source": "runtime/source/arc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_arc_weak_count",
+      "source": "runtime/source/arc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_array_clear",
+      "source": "runtime/source/array.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_runtime_array_destroy",
+      "source": "runtime/source/array.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_array_destroy_count",
+      "source": "runtime/source/array.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_array_destroy_element",
+      "source": "runtime/source/array.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_array_destroy_finish",
+      "source": "runtime/source/array.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_array_destroy_locate",
+      "source": "runtime/source/array.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_array_destroy_scratch",
+      "source": "runtime/source/array.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_array_get",
+      "source": "runtime/source/array.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_array_get_mut",
       "source": "runtime/source/array.c",
       "category": "runtime-container",
       "linkage": "external",
@@ -1181,9 +1406,177 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_runtime_array_pop",
+      "source": "runtime/source/array.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_array_push",
+      "source": "runtime/source/array.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_array_remove",
+      "source": "runtime/source/array.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_array_reserve",
+      "source": "runtime/source/array.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_runtime_array_with_capacity",
       "source": "runtime/source/array.c",
       "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_blocking_reserve",
+      "source": "runtime/darwin/source/blocking_pool.inc",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_blocking_start",
+      "source": "runtime/darwin/source/blocking_pool.inc",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_blocking_stop",
+      "source": "runtime/darwin/source/blocking_pool.inc",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_blocking_submit",
+      "source": "runtime/darwin/source/blocking_pool.inc",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_blocking_unreserve",
+      "source": "runtime/darwin/source/blocking_pool.inc",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_blocking_withdraw",
+      "source": "runtime/darwin/source/blocking_pool.inc",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_budget_bytes_available",
+      "source": "runtime/source/allocator.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_budget_bytes_limit",
+      "source": "runtime/source/allocator.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_budget_bytes_used",
+      "source": "runtime/source/allocator.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_budget_charge_task",
+      "source": "runtime/source/allocator.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_budget_create",
+      "source": "runtime/source/allocator.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_budget_current",
+      "source": "runtime/source/allocator.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_budget_note_refusal",
+      "source": "runtime/source/allocator.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_budget_refusing",
+      "source": "runtime/source/allocator.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_budget_release",
+      "source": "runtime/source/allocator.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_budget_retain",
+      "source": "runtime/source/allocator.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_budget_return_task",
+      "source": "runtime/source/allocator.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_budget_swap_current",
+      "source": "runtime/source/allocator.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_budget_tasks_limit",
+      "source": "runtime/source/allocator.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_budget_tasks_used",
+      "source": "runtime/source/allocator.c",
+      "category": "runtime-task",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
@@ -1216,14 +1609,399 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_runtime_darwin_io_buffer_allocate",
+      "source": "runtime/darwin/source/io_buffer.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_buffer_release",
+      "source": "runtime/darwin/source/io_buffer.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_handle_create",
+      "source": "runtime/darwin/source/io_handle.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_handle_create_file",
+      "source": "runtime/darwin/source/io_handle.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_handle_create_socket",
+      "source": "runtime/darwin/source/io_handle.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_runtime_darwin_io_handle_release",
       "source": "runtime/darwin/source/io_handle.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_handle_release_with_cleanup",
+      "source": "runtime/darwin/source/io_handle.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_handle_retain_view",
+      "source": "runtime/darwin/source/io_handle.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_handle_terminal_close_failure",
+      "source": "runtime/darwin/source/io_handle.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_prepare_borrowed_random_shared_write",
+      "source": "runtime/darwin/source/io_write.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_prepare_close",
+      "source": "runtime/darwin/source/io_close.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_prepare_flush",
+      "source": "runtime/darwin/source/io_flush.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_prepare_read",
+      "source": "runtime/darwin/source/io_read.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_prepare_read_some",
+      "source": "runtime/darwin/source/io_read.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_prepare_shared_write",
+      "source": "runtime/darwin/source/io_write.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_prepare_shutdown",
+      "source": "runtime/darwin/source/io_shutdown.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_prepare_write",
+      "source": "runtime/darwin/source/io_write.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_prepare_write_some",
+      "source": "runtime/darwin/source/io_write.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_prepared_abort",
+      "source": "runtime/darwin/source/io_prepare.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_prepared_activate",
+      "source": "runtime/darwin/source/io_prepare.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_prepared_activate_close",
+      "source": "runtime/darwin/source/io_close.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_prepared_bind_activate_borrowed_random_shared_write",
+      "source": "runtime/darwin/source/io_write.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_prepared_set_offset",
+      "source": "runtime/darwin/source/io_prepare.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_prepared_set_shutdown_entry",
+      "source": "runtime/darwin/source/io_shutdown.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_prepared_set_stream_position",
+      "source": "runtime/darwin/source/io_prepare.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_process_console_start",
+      "source": "runtime/darwin/source/io_console.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_process_console_stop",
+      "source": "runtime/darwin/source/io_console.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_process_stderr_retain",
+      "source": "runtime/darwin/source/io_console.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_process_stdin_retain",
+      "source": "runtime/darwin/source/io_console.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_process_stdout_retain",
+      "source": "runtime/darwin/source/io_console.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_request_cancel",
+      "source": "runtime/darwin/source/io_request.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_request_deadline_expired",
+      "source": "runtime/darwin/source/io_request.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_request_progress",
+      "source": "runtime/darwin/source/io_request.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_request_release",
+      "source": "runtime/darwin/source/io_request.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_request_set_completion",
+      "source": "runtime/darwin/source/io_request.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_request_set_completion_inline",
+      "source": "runtime/darwin/source/io_request.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_request_state",
+      "source": "runtime/darwin/source/io_request.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_request_take_buffer",
+      "source": "runtime/darwin/source/io_request.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_request_wait",
+      "source": "runtime/darwin/source/io_request.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_submit_close",
+      "source": "runtime/darwin/source/io_close.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_submit_flush",
+      "source": "runtime/darwin/source/io_flush.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_submit_read",
+      "source": "runtime/darwin/source/io_read.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_submit_read_some",
+      "source": "runtime/darwin/source/io_read.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_submit_write",
+      "source": "runtime/darwin/source/io_write.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_darwin_io_submit_write_some",
+      "source": "runtime/darwin/source/io_write.c",
+      "category": "runtime-io",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_dict_clear",
+      "source": "runtime/source/dict.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_dict_contains",
+      "source": "runtime/source/dict.c",
+      "category": "runtime-container",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_runtime_dict_destroy",
+      "source": "runtime/source/dict.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_dict_destroy_count",
+      "source": "runtime/source/dict.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_dict_destroy_finish",
+      "source": "runtime/source/dict.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_dict_destroy_key",
+      "source": "runtime/source/dict.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_dict_destroy_locate",
+      "source": "runtime/source/dict.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_dict_destroy_scratch",
+      "source": "runtime/source/dict.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_dict_destroy_value",
+      "source": "runtime/source/dict.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_dict_get",
+      "source": "runtime/source/dict.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_dict_get_mut",
+      "source": "runtime/source/dict.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_dict_initialize",
       "source": "runtime/source/dict.c",
       "category": "runtime-container",
       "linkage": "external",
@@ -1251,6 +2029,20 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_runtime_dict_remove",
+      "source": "runtime/source/dict.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_dict_reserve",
+      "source": "runtime/source/dict.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_runtime_dict_with_capacity",
       "source": "runtime/source/dict.c",
       "category": "runtime-container",
@@ -1268,6 +2060,55 @@
       "c_symbol": "r_runtime_emergency_write",
       "source": "runtime/source/hosted_entry.c",
       "category": "runtime-hosted",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_executor_cancel_pending",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_executor_join_begin",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_executor_join_end",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_executor_lifecycle_start",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_executor_lifecycle_stop",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_executor_on_worker",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_executor_quiesce_for_exit",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
@@ -1307,6 +2148,13 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_runtime_hosted_exit",
+      "source": "runtime/source/hosted_entry.c",
+      "category": "runtime-hosted",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_runtime_hosted_finish",
       "source": "runtime/source/hosted_entry.c",
       "category": "runtime-hosted",
@@ -1321,6 +2169,48 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_runtime_hosted_work_begin",
+      "source": "runtime/source/thread_attachment.c",
+      "category": "runtime-hosted",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_hosted_work_drain",
+      "source": "runtime/source/thread_attachment.c",
+      "category": "runtime-hosted",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_hosted_work_end",
+      "source": "runtime/source/thread_attachment.c",
+      "category": "runtime-hosted",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_list_back",
+      "source": "runtime/source/list.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_list_back_mut",
+      "source": "runtime/source/list.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_list_clear",
+      "source": "runtime/source/list.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_runtime_list_destroy",
       "source": "runtime/source/list.c",
       "category": "runtime-container",
@@ -1328,7 +2218,84 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_runtime_list_destroy_finish",
+      "source": "runtime/source/list.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_list_destroy_is_last",
+      "source": "runtime/source/list.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_list_destroy_last",
+      "source": "runtime/source/list.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_list_destroy_release_last",
+      "source": "runtime/source/list.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_list_destroy_scratch",
+      "source": "runtime/source/list.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_list_front",
+      "source": "runtime/source/list.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_list_front_mut",
+      "source": "runtime/source/list.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_list_get",
+      "source": "runtime/source/list.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_list_get_mut",
+      "source": "runtime/source/list.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_runtime_list_initialize",
+      "source": "runtime/source/list.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_list_insert_after",
+      "source": "runtime/source/list.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_list_insert_before",
       "source": "runtime/source/list.c",
       "category": "runtime-container",
       "linkage": "external",
@@ -1349,7 +2316,35 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_runtime_list_pop_back",
+      "source": "runtime/source/list.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_list_pop_front",
+      "source": "runtime/source/list.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_runtime_list_push_back",
+      "source": "runtime/source/list.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_list_push_front",
+      "source": "runtime/source/list.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_list_remove",
       "source": "runtime/source/list.c",
       "category": "runtime-container",
       "linkage": "external",
@@ -1398,6 +2393,13 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_runtime_own_into_value",
+      "source": "runtime/source/own.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_runtime_own_release",
       "source": "runtime/source/own.c",
       "category": "runtime-owner",
@@ -1412,9 +2414,58 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_runtime_panic_category_name",
+      "source": "runtime/source/panic_abort.c",
+      "category": "runtime-panic",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_panic_deliver",
+      "source": "runtime/source/panic_abort.c",
+      "category": "runtime-panic",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_panic_resume",
+      "source": "runtime/source/panic_abort.c",
+      "category": "runtime-panic",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_panic_second",
+      "source": "runtime/source/panic_abort.c",
+      "category": "runtime-panic",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_panic_set_sink",
+      "source": "runtime/source/panic_abort.c",
+      "category": "runtime-panic",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_panic_take",
+      "source": "runtime/source/panic_abort.c",
+      "category": "runtime-panic",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_panic_terminate",
+      "source": "runtime/source/panic_abort.c",
+      "category": "runtime-panic",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_runtime_panicking",
       "source": "runtime/source/panic_abort.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
@@ -1447,7 +2498,70 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_runtime_rc_destroy_begin",
+      "source": "runtime/source/rc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_rc_destroy_finish",
+      "source": "runtime/source/rc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_rc_destroy_scratch",
+      "source": "runtime/source/rc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_rc_destroy_value",
+      "source": "runtime/source/rc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_rc_downgrade",
+      "source": "runtime/source/rc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_rc_from_raw",
+      "source": "runtime/source/rc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_runtime_rc_get",
+      "source": "runtime/source/rc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_rc_get_mut",
+      "source": "runtime/source/rc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_rc_into_raw",
+      "source": "runtime/source/rc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_rc_ptr_eq",
       "source": "runtime/source/rc.c",
       "category": "runtime-owner",
       "linkage": "external",
@@ -1461,9 +2575,37 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_runtime_rc_strong_count",
+      "source": "runtime/source/rc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_rc_try_unwrap",
+      "source": "runtime/source/rc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_rc_weak_count",
+      "source": "runtime/source/rc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_runtime_report_main_error",
       "source": "runtime/source/hosted_entry.c",
       "category": "runtime-hosted",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_stack_can_require",
+      "source": "runtime/darwin/source/stack.c",
+      "category": "runtime-stack",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
@@ -1482,14 +2624,112 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_runtime_string_append",
+      "source": "runtime/source/string.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_string_append_utf8",
+      "source": "runtime/source/string.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_string_bytes",
+      "source": "runtime/source/string.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_string_capacity",
+      "source": "runtime/source/string.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_string_clear",
+      "source": "runtime/source/string.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_runtime_string_destroy",
       "source": "runtime/source/string.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_string_from_bytes",
+      "source": "runtime/source/string.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_string_from_utf8",
+      "source": "runtime/source/string.c",
+      "category": "runtime-container",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
     {
       "c_symbol": "r_runtime_string_from_valid_utf8",
+      "source": "runtime/source/string.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_string_initialize",
+      "source": "runtime/source/string.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_string_into_bytes",
+      "source": "runtime/source/string.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_string_length",
+      "source": "runtime/source/string.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_string_push_scalar",
+      "source": "runtime/source/string.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_string_reserve",
+      "source": "runtime/source/string.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_string_truncate",
+      "source": "runtime/source/string.c",
+      "category": "runtime-container",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_string_with_capacity",
       "source": "runtime/source/string.c",
       "category": "runtime-container",
       "linkage": "external",
@@ -1511,6 +2751,20 @@
     },
     {
       "c_symbol": "r_runtime_task_budget_leave",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_task_cancel",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_task_current_id",
       "source": "runtime/darwin/source/task.c",
       "category": "runtime-task",
       "linkage": "external",
@@ -1545,6 +2799,13 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_runtime_task_detach",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_runtime_task_direct_begin",
       "source": "runtime/darwin/source/task.c",
       "category": "runtime-task",
@@ -1567,6 +2828,69 @@
     },
     {
       "c_symbol": "r_runtime_task_execution_cancel_requested",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_task_external_acknowledge",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_task_external_acknowledge_panic",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_task_external_cancel_requested",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_task_external_cancellation_sequence",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_task_external_select_terminal_completion",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_task_external_start_prepare",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_task_external_start_ready",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_task_external_try_select_completion",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_task_external_try_select_completion_at",
       "source": "runtime/darwin/source/task.c",
       "category": "runtime-task",
       "linkage": "external",
@@ -1685,6 +3009,27 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_runtime_task_start_abort",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_task_start_allocator",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_task_start_commit",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_runtime_task_start_commit_initialize",
       "source": "runtime/darwin/source/task.c",
       "category": "runtime-task",
@@ -1706,9 +3051,51 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_runtime_task_start_prepare",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_task_state",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_thread_attach",
+      "source": "runtime/source/thread_attachment.c",
+      "category": "runtime-thread",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_runtime_thread_detach",
       "source": "runtime/source/thread_attachment.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_thread_lifecycle_start",
+      "source": "runtime/source/thread_attachment.c",
+      "category": "runtime-thread",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_thread_lifecycle_stop",
+      "source": "runtime/source/thread_attachment.c",
+      "category": "runtime-thread",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_thread_local_cleanup_current",
+      "source": "runtime/source/thread_attachment.c",
+      "category": "runtime-thread",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
@@ -1743,7 +3130,7 @@
     {
       "c_symbol": "r_runtime_unwinding_current_thread",
       "source": "runtime/source/panic_abort.c",
-      "category": "type-glue-downstream",
+      "category": "type-glue-direct",
       "linkage": "external",
       "direct_frame_measurement_available": true
     },
@@ -1762,6 +3149,13 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_runtime_weak_arc_upgrade",
+      "source": "runtime/source/arc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_runtime_weak_rc_clone",
       "source": "runtime/source/rc.c",
       "category": "runtime-owner",
@@ -1770,6 +3164,13 @@
     },
     {
       "c_symbol": "r_runtime_weak_rc_release",
+      "source": "runtime/source/rc.c",
+      "category": "runtime-owner",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_runtime_weak_rc_upgrade",
       "source": "runtime/source/rc.c",
       "category": "runtime-owner",
       "linkage": "external",
@@ -1874,6 +3275,20 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_std_array_as_slice",
+      "source": "library/std/array/source/as_slice.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_array_as_slice_mut",
+      "source": "library/std/array/source/as_slice_mut.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_std_array_capacity",
       "source": "library/std/array/source/capacity.c",
       "category": "stdlib-operation",
@@ -1897,6 +3312,27 @@
     {
       "c_symbol": "r_std_array_filled",
       "source": "library/std/array/source/filled.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_array_get",
+      "source": "library/std/array/source/get.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_array_get_mut",
+      "source": "library/std/array/source/get_mut.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_array_pop",
+      "source": "library/std/array/source/pop.c",
       "category": "stdlib-operation",
       "linkage": "external",
       "direct_frame_measurement_available": true
@@ -2371,6 +3807,20 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_std_c_runtime_as_error",
+      "source": "library/std/c/source/runtime_as_error.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_c_string_as_error",
+      "source": "library/std/c/source/string_as_error.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_std_c_string_as_ptr",
       "source": "library/std/c/source/string_as_ptr.c",
       "category": "stdlib-operation",
@@ -2462,8 +3912,29 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_std_dict_contains",
+      "source": "library/std/dict/source/contains.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_std_dict_create",
       "source": "library/std/dict/source/create.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_dict_get",
+      "source": "library/std/dict/source/get.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_dict_get_mut",
+      "source": "library/std/dict/source/get_mut.c",
       "category": "stdlib-operation",
       "linkage": "external",
       "direct_frame_measurement_available": true
@@ -2518,6 +3989,13 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_std_env_as_error",
+      "source": "library/std/env/source/as_error.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_std_env_get",
       "source": "library/std/env/source/get.c",
       "category": "stdlib-operation",
@@ -2548,6 +4026,97 @@
     {
       "c_symbol": "r_std_error_diagnostic",
       "source": "library/std/error/source/diagnostic.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_error_from_address",
+      "source": "library/std/error/source/from_address.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_error_from_alloc",
+      "source": "library/std/error/source/from_alloc.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_error_from_async",
+      "source": "library/std/error/source/from_async.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_error_from_barrier",
+      "source": "library/std/error/source/from_barrier.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_error_from_boundary",
+      "source": "library/std/error/source/from_boundary.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_error_from_bytes",
+      "source": "library/std/error/source/from_bytes.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_error_from_duration",
+      "source": "library/std/error/source/from_duration.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_error_from_format",
+      "source": "library/std/error/source/from_format.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_error_from_parse",
+      "source": "library/std/error/source/from_parse.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_error_from_path",
+      "source": "library/std/error/source/from_path.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_error_from_range",
+      "source": "library/std/error/source/from_range.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_error_from_string",
+      "source": "library/std/error/source/from_string.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_error_from_thread",
+      "source": "library/std/error/source/from_thread.c",
       "category": "stdlib-operation",
       "linkage": "external",
       "direct_frame_measurement_available": true
@@ -3260,6 +4829,20 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_std_list_back",
+      "source": "library/std/list/source/back.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_list_back_mut",
+      "source": "library/std/list/source/back_mut.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_std_list_clear",
       "source": "library/std/list/source/clear.c",
       "category": "stdlib-operation",
@@ -3274,6 +4857,48 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_std_list_front",
+      "source": "library/std/list/source/front.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_list_front_mut",
+      "source": "library/std/list/source/front_mut.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_list_get",
+      "source": "library/std/list/source/get.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_list_get_mut",
+      "source": "library/std/list/source/get_mut.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_list_insert_after",
+      "source": "library/std/list/source/insert_after.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_list_insert_before",
+      "source": "library/std/list/source/insert_before.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_std_list_iter",
       "source": "library/std/list/source/iter.c",
       "category": "stdlib-operation",
@@ -3283,6 +4908,41 @@
     {
       "c_symbol": "r_std_list_next",
       "source": "library/std/list/source/next.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_list_pop_back",
+      "source": "library/std/list/source/pop_back.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_list_pop_front",
+      "source": "library/std/list/source/pop_front.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_list_push_back",
+      "source": "library/std/list/source/push_back.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_list_push_front",
+      "source": "library/std/list/source/push_front.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_list_remove",
+      "source": "library/std/list/source/remove.c",
       "category": "stdlib-operation",
       "linkage": "external",
       "direct_frame_measurement_available": true
@@ -5143,6 +6803,13 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_std_net_as_error",
+      "source": "library/std/net/source/as_error.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_std_net_format_ip",
       "source": "library/std/net/source/format_ip.c",
       "category": "stdlib-operation",
@@ -5479,6 +7146,13 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_std_process_as_error",
+      "source": "library/std/process/source/as_error.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_std_process_clear_environment",
       "source": "library/std/process/source/clear_environment.c",
       "category": "stdlib-operation",
@@ -5745,8 +7419,22 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_std_string_as_bytes",
+      "source": "library/std/string/source/as_bytes.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_std_string_as_str",
       "source": "library/std/string/source/as_str.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_string_capacity",
+      "source": "library/std/string/source/capacity.c",
       "category": "stdlib-operation",
       "linkage": "external",
       "direct_frame_measurement_available": true
@@ -5789,6 +7477,13 @@
     {
       "c_symbol": "r_std_string_into_bytes",
       "source": "library/std/string/source/into_bytes.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_string_len",
+      "source": "library/std/string/source/len.c",
       "category": "stdlib-operation",
       "linkage": "external",
       "direct_frame_measurement_available": true
@@ -6200,6 +7895,20 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_std_thread_spawn",
+      "source": "library/std/thread/source/spawn.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
+      "c_symbol": "r_std_thread_spawn_scoped",
+      "source": "library/std/thread/source/spawn_scoped.c",
+      "category": "stdlib-operation",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_std_thread_unpark",
       "source": "library/std/thread/source/unpark.c",
       "category": "stdlib-operation",
@@ -6355,13 +8064,6 @@
     }
   ],
   "header_static_inline_helpers": [
-    {
-      "c_symbol": "r_runtime_unwinding",
-      "source": "runtime/include/r_runtime_0_1.h",
-      "category": "runtime-panic-header-helper",
-      "linkage": "header-static-inline",
-      "direct_frame_measurement_available": true
-    },
     {
       "c_symbol": "r_std_async_broadcast_destroy",
       "source": "library/std/async/include/r_std_async.h",

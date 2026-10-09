@@ -14,16 +14,6 @@ function(r_require_match_count variable pattern expected description)
     endif()
 endfunction()
 
-function(r_require_replacement_count variable pattern expected description)
-    string(REGEX REPLACE "${pattern}" "@R_MATCH@" replaced "${${variable}}")
-    string(REGEX MATCHALL "@R_MATCH@" matches "${replaced}")
-    list(LENGTH matches count)
-    if(NOT count EQUAL expected)
-        message(FATAL_ERROR
-            "${description}: expected ${expected} matches, found ${count}:\n${${variable}}")
-    endif()
-endfunction()
-
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}" --emit=mir "${SOURCE_FILE}"
     RESULT_VARIABLE mir_result
@@ -39,26 +29,23 @@ r_require_match_count(mir_output "= phi incoming=" 8
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
+        --emit=llvm-ir
         --entry test.codegen.async_short_circuit::main
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"
         "${SOURCE_FILE}"
-    RESULT_VARIABLE c17_result
-    OUTPUT_VARIABLE c17_output
-    ERROR_VARIABLE c17_error
+    RESULT_VARIABLE ir_result
+    OUTPUT_VARIABLE ir_output
+    ERROR_VARIABLE ir_error
 )
-if(NOT c17_result EQUAL 0)
+if(NOT ir_result EQUAL 0)
     message(FATAL_ERROR
-        "async short-circuit C17 emit failed (${c17_result}): ${c17_error}")
+        "async short-circuit LLVM IR emit failed (${ir_result}): ${ir_error}")
 endif()
-r_require_replacement_count(c17_output
-    "frame->r_v[0-9]+ = frame->r_v[0-9]+;[\n ]+frame->r_state = UINT32_C[(][0-9]+[)];"
-    16 "PHI edge assignments before state transitions")
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
+        --emit=llvm-ir
         --entry test.codegen.async_short_circuit::main
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"
@@ -69,8 +56,8 @@ execute_process(
 )
 if(NOT repeated_result EQUAL 0)
     message(FATAL_ERROR
-        "repeated async short-circuit C17 emit failed (${repeated_result}): ${repeated_error}")
+        "repeated async short-circuit LLVM IR emit failed (${repeated_result}): ${repeated_error}")
 endif()
-if(NOT c17_output STREQUAL repeated_output)
-    message(FATAL_ERROR "async short-circuit C17 output is not deterministic")
+if(NOT ir_output STREQUAL repeated_output)
+    message(FATAL_ERROR "async short-circuit LLVM IR output is not deterministic")
 endif()

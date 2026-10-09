@@ -475,8 +475,8 @@ def build_expected_c_abi_numeric_types() -> dict[str, Any]:
         "schema": "r-c-abi-numeric-types-0.1",
         "derived_from": {
             "target": "arm64-apple-macos26.5",
-            "compiler": "Apple clang 21.0.0",
-            "compiler_build": "clang-2100.3.34.2",
+            "compiler": "Homebrew clang 22.1.8",
+            "compiler_build": "sha256:68bb87f784f09da01b7aea0f70952fb23f606242cdc4f6ff3cc26c372af0706f",
             "sdk": "macOS 27.0",
             "language": "ISO C17",
         },
@@ -1057,14 +1057,18 @@ ATOMIC_NO_REPLACE_CONTRACT = {
     ),
 }
 DARWIN_TOOLCHAIN_CONTRACT = {
-    "c_compiler": "Apple clang",
-    "c_compiler_version": "21.0.0",
-    "c_compiler_build": "clang-2100.3.34.2",
+    "c_compiler": "Homebrew clang",
+    "c_compiler_version": "22.1.8",
+    "c_compiler_build": "sha256:68bb87f784f09da01b7aea0f70952fb23f606242cdc4f6ff3cc26c372af0706f",
     "sdk": "macOS 27.0",
     "generated_application_language": "ISO C17",
     "generated_application_extensions": False,
     "darwin_adapter_language": "Clang C17 with Blocks",
     "warnings_as_errors": True,
+    "llvm_version": "22.1.8",
+    "llvm_triple": "arm64-apple-macosx26.5.0",
+    "llvm_cpu": "apple-m1",
+    "llvm_data_layout": "e-m:o-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-n32:64-S128-Fn32",
 }
 DARWIN_STACK_CONTRACT = {
     "architecture": "arm64",
@@ -1085,7 +1089,7 @@ DARWIN_STACK_CONTRACT = {
     "call_transition_bytes": 16384,
     "generated_frame_ceiling_bytes": 262144,
     "frame_measurement": {
-        "compiler": "Apple clang 21.0.0",
+        "compiler": "Homebrew clang 22.1.8",
         "compile_flags": [
             "-std=c17",
             "-O0",
@@ -2554,7 +2558,7 @@ def validate_freestanding_manifest(
             "freestanding minimum OS version must match the hosted target",
         )
     errors.require(manifest.get("schema") == "r-target-manifest-0.1", "wrong manifest schema")
-    errors.require(manifest.get("manifest_revision") == 10, "target manifest revision must be 10")
+    errors.require(manifest.get("manifest_revision") == 11, "target manifest revision must be 11")
     errors.require(
         manifest.get("status") == "draft-implementation-contract",
         "freestanding target must remain a draft implementation contract",
@@ -2638,6 +2642,36 @@ def validate_freestanding_manifest(
     return 0
 
 
+def validate_llvm_data_layout(errors: Any, toolchain: dict[str, Any], core: Any) -> None:
+    """The LLVM data layout r-front verifies against its target machine agrees with the
+    manifest's own ABI facts: byte order, pointer width and the alignment of 64-bit integers."""
+    layout = toolchain.get("llvm_data_layout")
+    if not isinstance(layout, str) or not isinstance(core, dict):
+        errors.require(False, "toolchain llvm_data_layout must be a string")
+        return
+    components = layout.split("-")
+    errors.require(
+        components[0] == ("e" if core.get("byte_order") == "little" else "E"),
+        "llvm_data_layout byte order disagrees with core.byte_order",
+    )
+    pointer_bits = 64
+    for component in components:
+        if component.startswith("p:") or component.startswith("p0:"):
+            pointer_bits = int(component.split(":")[1])
+    errors.require(
+        pointer_bits == core.get("usize_width"),
+        "llvm_data_layout pointer width disagrees with core.usize_width",
+    )
+    numeric = core.get("c_abi_numeric_types")
+    types = numeric.get("types") if isinstance(numeric, dict) else None
+    long_long = types.get("c_llong") if isinstance(types, dict) else None
+    if isinstance(long_long, dict):
+        errors.require(
+            f"i64:{long_long.get('alignment_bytes', 0) * 8}" in components,
+            "llvm_data_layout i64 alignment disagrees with c_llong",
+        )
+
+
 def main() -> int:
     arguments = parse_arguments()
     root = arguments.root.resolve()
@@ -2695,8 +2729,8 @@ def main() -> int:
             )
         errors.require(manifest.get("schema") == "r-target-manifest-0.1", "wrong manifest schema")
         errors.require(
-            manifest.get("manifest_revision") == 10,
-            "target manifest revision must be 10",
+            manifest.get("manifest_revision") == 11,
+            "target manifest revision must be 11",
         )
         errors.require(
             manifest.get("status") == "draft-implementation-contract",
@@ -2709,11 +2743,12 @@ def main() -> int:
         toolchain = manifest.get("toolchain")
         errors.require(isinstance(toolchain, dict), "toolchain must be an object")
         if isinstance(toolchain, dict):
-            errors.require(toolchain.get("c_compiler") == "Apple clang", "wrong C compiler")
-            errors.require(toolchain.get("c_compiler_version") == "21.0.0", "wrong Apple Clang version")
+            validate_llvm_data_layout(errors, toolchain, manifest.get("core"))
+            errors.require(toolchain.get("c_compiler") == "Homebrew clang", "wrong C compiler")
+            errors.require(toolchain.get("c_compiler_version") == "22.1.8", "wrong clang version")
             errors.require(
-                toolchain.get("c_compiler_build") == "clang-2100.3.34.2",
-                "wrong Apple Clang build",
+                toolchain.get("c_compiler_build") == "sha256:68bb87f784f09da01b7aea0f70952fb23f606242cdc4f6ff3cc26c372af0706f",
+                "wrong clang build",
             )
             errors.require(toolchain.get("sdk") == "macOS 27.0", "wrong macOS SDK")
             errors.require(

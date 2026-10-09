@@ -7,6 +7,12 @@ import subprocess
 import tempfile
 
 
+def emit_options(mode):
+    """Options of one output; LLVM IR lowers every function, not only those main reaches, so
+    that code generation also accepts the functions main never calls."""
+    return ['--emit=' + mode, '--all-functions'] if mode == 'llvm-ir' else ['--emit=' + mode]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--front', required=True)
@@ -34,7 +40,7 @@ i32 main() {
 ''')
 
         def emit(mode, paths, valid=True, extra=()):
-            result = subprocess.run([args.front, '--emit=' + mode, *extra, *map(str, paths)],
+            result = subprocess.run([args.front, *emit_options(mode), *extra, *map(str, paths)],
                                     text=True, capture_output=True, timeout=30)
             if valid and result.returncode != 0:
                 raise AssertionError(result.stderr or f'frontend failed: {result.returncode}')
@@ -47,7 +53,7 @@ i32 main() {
         assert '(interface version=34 ' in interface
         assert interface.count('noalloc=true nonblocking=true') >= 3
         assert '(function-schema ' in interface
-        assert emit('c17', [provider, consumer]) == emit('c17', [consumer, provider])
+        assert emit('llvm-ir', [provider, consumer]) == emit('llvm-ir', [consumer, provider])
 
         # Removing a declared promise changes metadata even when body behavior is identical.
         provider.write_text(provider_text.replace('@noalloc @nonblocking', ''))
@@ -96,7 +102,7 @@ i32 main() {
         assert qualified == emit('interface', [consumer, provider])
         assert '(callable mode=shared parameters=(i32) return=i32 noalloc=true nonblocking=true)' in qualified
         assert '(raw_fn parameters=() return=void noalloc=true)' in qualified
-        assert emit('c17', [provider, consumer]) == emit('c17', [consumer, provider])
+        assert emit('llvm-ir', [provider, consumer]) == emit('llvm-ir', [consumer, provider])
         consumer.write_text(consumer.read_text().replace('fn @nonblocking @noalloc', 'fn'))
         assert 'R-DIAG-TYPE-001' in emit('hir', [provider, consumer], valid=False)
     print('resource contracts: module order, body proof, FFI and interface metadata passed')

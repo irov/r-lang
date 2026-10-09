@@ -4,12 +4,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
-static void r_test_own_release(RRuntimeOwn *owner);
+void r_test_own_release(RRuntimeOwn *owner);
 
 #define r_runtime_own_release r_test_own_release
 #define main r_generated_main
 int main(int argc, char *argv[]);
-#include R_TEST_GENERATED_C
+#include R_TEST_PROGRAM_PRELUDE
 #undef main
 #undef r_runtime_own_release
 
@@ -17,7 +17,7 @@ static size_t r_test_own_release_count;
 static bool r_test_drop_order;
 static const int32_t expected[] = {9, 9, 17};
 
-static void r_test_own_release(RRuntimeOwn *owner) {
+void r_test_own_release(RRuntimeOwn *owner) {
     if ((owner->allocation == NULL) ||
         (r_test_own_release_count >= sizeof(expected) / sizeof(expected[0])) ||
         (*(const int32_t *)owner->allocation != expected[r_test_own_release_count])) {

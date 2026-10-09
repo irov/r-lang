@@ -7,6 +7,12 @@ import subprocess
 import tempfile
 
 
+def emit_options(mode):
+    """Options of one output; LLVM IR lowers every function, not only those main reaches, so
+    that code generation also accepts the functions main never calls."""
+    return ['--emit=' + mode, '--all-functions'] if mode == 'llvm-ir' else ['--emit=' + mode]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--front', required=True)
@@ -66,7 +72,7 @@ async i32 main() {
 ''')
 
         def emit(mode, paths):
-            result = subprocess.run([args.front, '--emit=' + mode, *map(str, paths)],
+            result = subprocess.run([args.front, *emit_options(mode), *map(str, paths)],
                                     capture_output=True, text=True, timeout=30)
             assert result.returncode == 0, (result.returncode, result.stderr)
             return result.stdout
@@ -80,7 +86,7 @@ async i32 main() {
         assert 'async=true' in interface
         assert 'noalloc=true' in interface and ' throws=' in interface
         assert '$callable' not in interface
-        assert emit('c17', [provider, consumer]) == emit('c17', [consumer, provider])
+        assert emit('llvm-ir', [provider, consumer]) == emit('llvm-ir', [consumer, provider])
         # The explicit shared spelling and omitted shared mode have the same type contract.
         provider.write_text(provider.read_text().replace('fn shared()', 'fn()'))
         omitted = emit('interface', [provider, consumer])

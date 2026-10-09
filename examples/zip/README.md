@@ -42,8 +42,8 @@ Limits are defined in `src/model.r`:
 
 ## CLI
 
-The current compiler milestone does not yet lower directory iteration to C17, so
-the reference CLI accepts an explicit list of relative entries:
+The reference CLI does not walk directories itself; it accepts an explicit list of
+relative entries:
 
 ```text
 zip <existing-output-directory> <archive-name> <entry>...
@@ -65,9 +65,9 @@ For each regular file, the `read_file` task is started and immediately resolved 
 native async I/O without promising parallel reads of multiple files: sequential
 execution preserves deterministic output and makes each task's ownership statically clear.
 
-Once the frontend supports C17 lowering for `std.fs::iterate`, the same writer can
-be wrapped in a recursive directory walker without changing the archive format.
-For now, tree traversal is deliberately handled by the caller and randomized test harness.
+The same writer can be wrapped in a recursive directory walker without changing the
+archive format. For now, tree traversal is deliberately handled by the caller and
+randomized test harness.
 
 ## Structure
 
@@ -88,21 +88,22 @@ tests/
 
 ## Building and testing
 
-Run the frontend and strict-C17 backend as follows:
+Compile the program with the frontend and its LLVM backend as follows (the object goes to
+standard output):
 
 ```sh
-build/r-front --emit=c17 \
+build/debug/r-front --emit=object \
   --module-map examples/zip/modules.map \
   --entry example.zip.main::main \
   --profile hosted-native-async \
   --target-manifest targets/arm64-apple-darwin.hosted-native-async.json \
-  > zip.c
+  > zip.o
 ```
 
 CTest builds and tests both programs:
 
 ```sh
-ctest --test-dir build -R \
+ctest --test-dir build/debug -R \
   'r_frontend_codegen_zip_(pure|full)|r_frontend_zip_unzip_roundtrip' \
   --output-on-failure
 ```
@@ -118,8 +119,8 @@ For five fixed seeds, `r_frontend_zip_unzip_roundtrip`:
 7. separately checks no-replace behavior, unsafe names, and path collisions.
 
 On failure, the harness prints the seed and a ready-to-use replay command. After
-the test, generated artifacts are available at `build/tests/codegen_zip_full.c` and
-`build/tests/codegen_zip_full`.
+the test, generated artifacts are available at `build/debug/tests/codegen_zip_full.o` and
+`build/debug/tests/codegen_zip_full`.
 
 An immediate start followed by an await needs no intermediate task variable.
 Examples of individual calls from `src/main.r`:

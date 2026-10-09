@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Check selected specified features through R-to-C17 acceptance.
+"""Check selected specified features through acceptance by the LLVM emitter (R to LLVM IR).
+
+Every function of a probe is lowered (--all-functions), not only those main reaches.
 
 Every probe is expected to compile. Unsupported features remain failures, rather
 than passing negative tests. This bounded audit neither executes generated code
@@ -576,7 +578,8 @@ def main() -> int:
                     [
                         str(compiler),
                         "--profile=hosted-native-async",
-                        "--emit=c17",
+                        "--emit=llvm-ir",
+                        "--all-functions",
                         "--diagnostics=json",
                         str(path),
                     ],
@@ -610,10 +613,10 @@ def main() -> int:
     print(
         json.dumps(
             {
-                "scope": "selected specified features, R-to-C17 acceptance only",
+                "scope": "selected specified features, R-to-LLVM-IR acceptance only",
                 "compiler": str(compiler),
                 "compiler_sha256": compiler_hash,
-                "compiled_generated_c": False,
+                "compiled_objects": False,
                 "executed_generated_programs": False,
                 "probes": len(results),
                 "accepted": len(results) - failed,

@@ -2,17 +2,17 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-static void r_test_own_release(RRuntimeOwn *owner);
+void r_test_own_release(RRuntimeOwn *owner);
 #define r_runtime_own_release r_test_own_release
 #define main r_generated_main
 int main(int argc, char *argv[]);
-#include R_TEST_GENERATED_C
+#include R_TEST_PROGRAM_PRELUDE
 #undef main
 #undef r_runtime_own_release
 
 static unsigned released;
 static bool valid = true;
-static void r_test_own_release(RRuntimeOwn *owner) {
+void r_test_own_release(RRuntimeOwn *owner) {
     unsigned bit = 0;
     if (owner->allocation != NULL) {
         switch (*(const int32_t *)owner->allocation) {

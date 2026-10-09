@@ -72,48 +72,27 @@ r_require_match_count(plan_output
     "\\(library module=\"std\\.rc\" target=\"r_std_rc\"\\)" 1
     "std.rc link-plan record")
 
-execute_process(
-    COMMAND "${R_FRONT_EXECUTABLE}" --emit=c17 "${SOURCE_FILE}"
-    RESULT_VARIABLE async_c17_result
-    OUTPUT_VARIABLE async_c17_output
-    ERROR_VARIABLE async_c17_error
-)
-if(NOT async_c17_result EQUAL 0)
-    message(FATAL_ERROR
-        "async C17 emit failed (${async_c17_result}): ${async_c17_error}")
-endif()
-r_require_match_count(async_c17_output "#include \"r_std_arc\\.h\"" 1
-    "async generated std.arc include")
-r_require_match_count(async_c17_output "#include \"r_std_rc\\.h\"" 1
-    "async generated std.rc include")
-r_require_match_count(async_c17_output "r_std_arc_clone\\(" 1
-    "async generated std.arc clone bridge")
-r_require_match_count(async_c17_output "r_std_rc_clone\\(" 1
-    "async generated std.rc clone bridge")
-r_require_match_count(async_c17_output "r_clone_arc\\(" 2
-    "async generated arc bridge definition and call site")
-r_require_match_count(async_c17_output "r_clone_rc\\(" 2
-    "async generated rc bridge definition and call site")
-
-execute_process(
-    COMMAND "${R_FRONT_EXECUTABLE}" --emit=c17 "${SYNC_SOURCE_FILE}"
-    RESULT_VARIABLE sync_c17_result
-    OUTPUT_VARIABLE sync_c17_output
-    ERROR_VARIABLE sync_c17_error
-)
-if(NOT sync_c17_result EQUAL 0)
-    message(FATAL_ERROR
-        "sync C17 emit failed (${sync_c17_result}): ${sync_c17_error}")
-endif()
-r_require_match_count(sync_c17_output "#include \"r_std_arc\\.h\"" 1
-    "sync generated std.arc include")
-r_require_match_count(sync_c17_output "#include \"r_std_rc\\.h\"" 1
-    "sync generated std.rc include")
-r_require_match_count(sync_c17_output "r_std_arc_clone\\(" 1
-    "sync generated std.arc clone bridge")
-r_require_match_count(sync_c17_output "r_std_rc_clone\\(" 1
-    "sync generated std.rc clone bridge")
-r_require_match_count(sync_c17_output "r_clone_arc\\(" 2
-    "sync generated arc bridge definition and call site")
-r_require_match_count(sync_c17_output "r_clone_rc\\(" 2
-    "sync generated rc bridge definition and call site")
+# Every clone operation is one call of its library entry. --all-functions lowers clone_sync,
+# which main of the async program never calls.
+foreach(mode IN ITEMS async sync)
+    if(mode STREQUAL "async")
+        set(source_file "${SOURCE_FILE}")
+        set(clone_count 2)
+    else()
+        set(source_file "${SYNC_SOURCE_FILE}")
+        set(clone_count 1)
+    endif()
+    execute_process(
+        COMMAND "${R_FRONT_EXECUTABLE}" --emit=llvm-ir --all-functions "${source_file}"
+        RESULT_VARIABLE ir_result
+        OUTPUT_VARIABLE ir_output
+        ERROR_VARIABLE ir_error
+    )
+    if(NOT ir_result EQUAL 0)
+        message(FATAL_ERROR "${mode} LLVM IR emit failed (${ir_result}): ${ir_error}")
+    endif()
+    r_require_match_count(ir_output "call [^\n]*@r_std_arc_clone\\(" ${clone_count}
+        "${mode} std.arc clone calls")
+    r_require_match_count(ir_output "call [^\n]*@r_std_rc_clone\\(" ${clone_count}
+        "${mode} std.rc clone calls")
+endforeach()

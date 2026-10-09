@@ -37,8 +37,8 @@ and a dynamic `error` message. ZIP/unzip diagnostics also use an f-literal;
 the `ZipError.message` field retains its `constexpr str` type.
 
 ```sh
-build-debug/r-front --emit=c17 examples/format/main.r > /tmp/r-format.c
-ctest --test-dir build-debug -R 'r_frontend_codegen_((async_)?format_literals|format_example)' --output-on-failure
+build/debug/r-front --emit=llvm-ir examples/format/main.r > /tmp/r-format.ll
+ctest --test-dir build/debug -R 'r_frontend_codegen_((async_)?format_literals|format_example)' --output-on-failure
 ```
 
 Runtime tests cover both execution models and inject failure at each allocation

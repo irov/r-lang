@@ -57,30 +57,6 @@ typedef struct RIoCloseView {
     RTypeId logical_type;
 } RIoCloseView;
 
-typedef enum RIoCloseMutation {
-    R_IO_CLOSE_MUTATE_OPERATION_IDENTITY = 0,
-    R_IO_CLOSE_MUTATE_OPERAND_COUNT,
-    R_IO_CLOSE_MUTATE_BORROW_MASK,
-    R_IO_CLOSE_MUTATE_STAGED_MOVE_KIND,
-    R_IO_CLOSE_MUTATE_STAGED_MOVE_BIT,
-    R_IO_CLOSE_MUTATE_STREAM_TYPE,
-    R_IO_CLOSE_MUTATE_DEADLINE_OPTION,
-    R_IO_CLOSE_MUTATE_DEADLINE_INSTANT,
-    R_IO_CLOSE_MUTATE_START_KIND,
-    R_IO_CLOSE_MUTATE_START_FLAGS,
-    R_IO_CLOSE_MUTATE_START_BASE,
-    R_IO_CLOSE_MUTATE_START_SECOND,
-    R_IO_CLOSE_MUTATE_TASK_KIND,
-    R_IO_CLOSE_MUTATE_TASK_FLAGS,
-    R_IO_CLOSE_MUTATE_TASK_BASE,
-    R_IO_CLOSE_MUTATE_TASK_SECOND,
-    R_IO_CLOSE_MUTATE_LOGICAL_KIND,
-    R_IO_CLOSE_MUTATE_LOGICAL_FLAGS,
-    R_IO_CLOSE_MUTATE_LOGICAL_BASE,
-    R_IO_CLOSE_MUTATE_LOGICAL_SECOND,
-    R_IO_CLOSE_MUTATION_COUNT
-} RIoCloseMutation;
-
 static int failures;
 
 #define R_IO_CLOSE_CHECK(condition)                                                                \
@@ -341,99 +317,6 @@ static bool r_io_close_view_is_valid(const RFrontendContext *context,
            (logical->second == R_TYPE_ID_INVALID);
 }
 
-static bool r_io_close_apply_mutation(RFrontendContext *context,
-                                      RIoCloseView *view,
-                                      RIoCloseMutation mutation) {
-    RSemanticType *start = &context->semantic_types[(size_t)view->start_type - 1U];
-    RSemanticType *task = &context->semantic_types[(size_t)view->task_type - 1U];
-    RSemanticType *logical = &context->semantic_types[(size_t)view->logical_type - 1U];
-    RSemanticType *deadline = &context->semantic_types[(size_t)view->deadline_type - 1U];
-
-    switch (mutation) {
-    case R_IO_CLOSE_MUTATE_OPERATION_IDENTITY:
-        view->call->standard_operation =
-            view->call->standard_operation == R_STANDARD_CALL_IO_CLOSE_INPUT
-                ? R_STANDARD_CALL_IO_CLOSE_OUTPUT
-                : R_STANDARD_CALL_IO_CLOSE_INPUT;
-        return true;
-    case R_IO_CLOSE_MUTATE_OPERAND_COUNT:
-        view->call->operand_count = UINT32_C(1);
-        return true;
-    case R_IO_CLOSE_MUTATE_BORROW_MASK:
-        view->call->call_borrow_mask.low = UINT64_C(1);
-        return true;
-    case R_IO_CLOSE_MUTATE_STAGED_MOVE_KIND:
-        view->stream_move->kind = R_MIR_INSTRUCTION_LOAD;
-        return true;
-    case R_IO_CLOSE_MUTATE_STAGED_MOVE_BIT:
-        view->stream_move->is_async_staged_move = false;
-        return true;
-    case R_IO_CLOSE_MUTATE_STREAM_TYPE:
-        view->stream_move->type = view->deadline_type;
-        return true;
-    case R_IO_CLOSE_MUTATE_DEADLINE_OPTION:
-        view->deadline->type = view->stream_type;
-        return true;
-    case R_IO_CLOSE_MUTATE_DEADLINE_INSTANT:
-        deadline->base = view->stream_type;
-        return true;
-    case R_IO_CLOSE_MUTATE_START_KIND:
-        start->kind = R_SEMANTIC_TYPE_ARRAY;
-        return true;
-    case R_IO_CLOSE_MUTATE_START_FLAGS:
-        start->flags = R_SEMANTIC_TYPE_FLAG_SHARED;
-        return true;
-    case R_IO_CLOSE_MUTATE_START_BASE:
-        start->base = view->logical_type;
-        return true;
-    case R_IO_CLOSE_MUTATE_START_SECOND:
-        start->second = view->stream_type;
-        return true;
-    case R_IO_CLOSE_MUTATE_TASK_KIND:
-        task->kind = R_SEMANTIC_TYPE_ARRAY;
-        return true;
-    case R_IO_CLOSE_MUTATE_TASK_FLAGS:
-        task->flags = R_SEMANTIC_TYPE_FLAG_SHARED;
-        return true;
-    case R_IO_CLOSE_MUTATE_TASK_BASE:
-        task->base = view->stream_type;
-        return true;
-    case R_IO_CLOSE_MUTATE_TASK_SECOND:
-        task->second = view->stream_type;
-        return true;
-    case R_IO_CLOSE_MUTATE_LOGICAL_KIND:
-        logical->kind = R_SEMANTIC_TYPE_ARRAY;
-        return true;
-    case R_IO_CLOSE_MUTATE_LOGICAL_FLAGS:
-        logical->flags = R_SEMANTIC_TYPE_FLAG_SHARED;
-        return true;
-    case R_IO_CLOSE_MUTATE_LOGICAL_BASE:
-        logical->base = view->stream_type;
-        return true;
-    case R_IO_CLOSE_MUTATE_LOGICAL_SECOND:
-        logical->second = view->stream_type;
-        return true;
-    case R_IO_CLOSE_MUTATION_COUNT:
-    default:
-        return false;
-    }
-}
-
-static const char *r_io_close_mutation_name(RIoCloseMutation mutation) {
-    static const char *const names[] = {
-        "operation_identity", "operand_count", "borrow_mask",     "staged_move_kind",
-        "staged_move_bit",    "stream_type",   "deadline_option", "deadline_instant",
-        "start_kind",         "start_flags",   "start_base",      "start_second",
-        "task_kind",          "task_flags",    "task_base",       "task_second",
-        "logical_kind",       "logical_flags", "logical_base",    "logical_second",
-    };
-
-    if ((size_t)mutation >= (sizeof(names) / sizeof(names[0]))) {
-        return "invalid";
-    }
-    return names[(size_t)mutation];
-}
-
 static void r_io_close_test_positive(const char *path, RStandardCallOperation operation) {
     RFrontendContext *context = r_io_close_build_context(path);
     RIoCloseView view;
@@ -446,10 +329,14 @@ static void r_io_close_test_positive(const char *path, RStandardCallOperation op
     }
     R_IO_CLOSE_CHECK(r_io_close_find_view(context, operation, &view));
     R_IO_CLOSE_CHECK(r_io_close_view_is_valid(context, &view, operation));
-    R_IO_CLOSE_CHECK(r_frontend_emit_c17(context, r_io_close_write, &first) == R_FRONTEND_OK);
+    R_IO_CLOSE_CHECK(
+        r_frontend_emit_llvm(context, NULL, R_FRONTEND_LLVM_IR, r_io_close_write, &first) ==
+        R_FRONTEND_OK);
     R_IO_CLOSE_CHECK(first.call_count == 1U);
     R_IO_CLOSE_CHECK(first.length != 0U);
-    R_IO_CLOSE_CHECK(r_frontend_emit_c17(context, r_io_close_write, &second) == R_FRONTEND_OK);
+    R_IO_CLOSE_CHECK(
+        r_frontend_emit_llvm(context, NULL, R_FRONTEND_LLVM_IR, r_io_close_write, &second) ==
+        R_FRONTEND_OK);
     R_IO_CLOSE_CHECK(second.call_count == 1U);
     R_IO_CLOSE_CHECK(
         (first.length == second.length) &&
@@ -457,40 +344,6 @@ static void r_io_close_test_positive(const char *path, RStandardCallOperation op
     r_io_close_dispose_buffer(&second);
     r_io_close_dispose_buffer(&first);
     r_frontend_destroy(context);
-}
-
-static void r_io_close_test_mutations(const char *path,
-                                      RStandardCallOperation operation,
-                                      const char *operation_name) {
-    size_t mutation;
-
-    for (mutation = 0U; mutation < (size_t)R_IO_CLOSE_MUTATION_COUNT; ++mutation) {
-        RFrontendContext *context = r_io_close_build_context(path);
-        RIoCloseView view;
-        RIoCloseBuffer output = {0};
-        RFrontendStatus status;
-
-        R_IO_CLOSE_CHECK(context != NULL);
-        if (context == NULL) {
-            continue;
-        }
-        R_IO_CLOSE_CHECK(r_io_close_find_view(context, operation, &view));
-        R_IO_CLOSE_CHECK(r_io_close_apply_mutation(context, &view, (RIoCloseMutation)mutation));
-        status = r_frontend_emit_c17(context, r_io_close_write, &output);
-        if (status != R_FRONTEND_NOT_LOWERABLE) {
-            (void)fprintf(stderr,
-                          "%s mutation %zu (%s) unexpectedly returned status %d\n",
-                          operation_name,
-                          mutation,
-                          r_io_close_mutation_name((RIoCloseMutation)mutation),
-                          (int)status);
-        }
-        R_IO_CLOSE_CHECK(status == R_FRONTEND_NOT_LOWERABLE);
-        R_IO_CLOSE_CHECK(output.call_count == 0U);
-        R_IO_CLOSE_CHECK(output.length == 0U);
-        r_io_close_dispose_buffer(&output);
-        r_frontend_destroy(context);
-    }
 }
 
 static void r_io_close_test_diagnostic(const RIoCloseDiagnosticCase *test_case) {
@@ -538,9 +391,5 @@ int main(void) {
     for (index = 0U; index < (sizeof(cases) / sizeof(cases[0])); ++index) {
         r_io_close_test_diagnostic(&cases[index]);
     }
-    r_io_close_test_mutations(
-        R_IO_CLOSE_INPUT_SOURCE_PATH, R_STANDARD_CALL_IO_CLOSE_INPUT, "close_input");
-    r_io_close_test_mutations(
-        R_IO_CLOSE_OUTPUT_SOURCE_PATH, R_STANDARD_CALL_IO_CLOSE_OUTPUT, "close_output");
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

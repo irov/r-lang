@@ -6,13 +6,14 @@
 #include <unistd.h>
 
 static RRuntimeAllocator r_json_test_allocator;
-static RRuntimeAllocator *r_json_test_hosted_allocator(void) {
+RRuntimeAllocator *r_json_test_hosted_allocator(void);
+RRuntimeAllocator *r_json_test_hosted_allocator(void) {
     return &r_json_test_allocator;
 }
 int r_json_generated_main(int argc, char *argv[]);
 #define r_runtime_hosted_allocator r_json_test_hosted_allocator
 #define main r_json_generated_main
-#include R_TEST_GENERATED_C
+#include R_TEST_PROGRAM_PRELUDE
 #undef main
 #undef r_runtime_hosted_allocator
 

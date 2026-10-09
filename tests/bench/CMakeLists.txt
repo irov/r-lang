@@ -1,5 +1,7 @@
-# M5 benchmark pairs: each R program is compiled through r-front and the codegen program
-# pipeline at -O2 (COMPILE_ONLY), each C mirror with the same compiler and flags.
+# M5 benchmark pairs: each R program is an object of r-front linked by the codegen program
+# pipeline (COMPILE_ONLY), each C mirror is compiled by the same compiler at -O2. The LLVM objects
+# are not optimized before B7; docs/benchmarks.md keeps the last measurement of the C17 emitter,
+# which B7.3 compares against.
 
 set(R_BENCH_CHECK_SCRIPT "${PROJECT_SOURCE_DIR}/tests/check_codegen_program.cmake")
 set(R_BENCH_TARGET_MANIFEST
@@ -40,14 +42,9 @@ set(R_BENCH_LIBRARY_TARGETS
     r_std_string r_std_utf8 r_std_async r_std_c r_std_convert r_std_env r_std_error r_std_fs
     r_std_io r_std_rc r_std_sync r_std_thread r_std_time r_runtime_darwin_socket
     r_runtime_darwin_dns r_runtime_darwin_io r_runtime_darwin_process r_runtime_darwin_event
-    r_runtime_darwin_timer)
+    r_runtime_darwin_timer r_runtime_inline_shims)
 
-# Experiment hook: one extra flag for the final compile+link of each generated program
-# (for example -flto together with archives built with -flto). Empty in normal builds.
-set(R_BENCH_GENERATED_C_EXTRA_FLAG "" CACHE STRING
-    "Extra flag appended to the generated-program compile/link of the benchmark pairs")
 set(R_BENCH_CODEGEN_ARGUMENTS
-    -DGENERATED_C_EXTRA_FLAGS=${R_BENCH_GENERATED_C_EXTRA_FLAG}
     -DR_FRONT_EXECUTABLE=$<TARGET_FILE:r-front>
     -DC_COMPILER=${CMAKE_C_COMPILER}
     -DPYTHON_EXECUTABLE=${Python3_EXECUTABLE}
@@ -140,12 +137,9 @@ set(R_BENCH_CODEGEN_ARGUMENTS
     -DATOMIC_WRITE_SOURCE=
     -DATOMIC_WRITE_REPLACEMENT_SOURCE=
     -DATOMIC_WRITE_RELATIVE=
-    -DMEASURE_GENERATED_STACK_USAGE=TRUE
-    -DSTACK_USAGE_MAX_FRAME_SIZE=262144
-    -DSTACK_USAGE_EXPECT_FRAME_GREATER_THAN=
     -DENABLE_SANITIZERS=${R_FRONTEND_ENABLE_SANITIZERS}
     -DENABLE_THREAD_SANITIZER=${R_FRONTEND_ENABLE_THREAD_SANITIZER}
-    -DGENERATED_C_OPTIMIZATION=-O2
+    -DR_RUNTIME_INLINE_SHIMS_LIBRARY=$<TARGET_FILE:r_runtime_inline_shims>
     -DCOMPILE_ONLY=ON)
 
 set(R_BENCH_PROGRAM_OUTPUTS)
@@ -162,7 +156,6 @@ foreach(R_BENCH_NAME IN LISTS R_BENCH_PAIRS)
         OUTPUT "${R_BENCH_R_EXECUTABLE}"
         COMMAND "${CMAKE_COMMAND}"
             -DSOURCE_1=${CMAKE_CURRENT_SOURCE_DIR}/${R_BENCH_NAME}.r
-            -DOUTPUT_C=${CMAKE_CURRENT_BINARY_DIR}/bench_${R_BENCH_NAME}_r.c
             -DOUTPUT_EXE=${R_BENCH_R_EXECUTABLE}
             ${R_BENCH_CODEGEN_ARGUMENTS}
             -P "${R_BENCH_CHECK_SCRIPT}"
@@ -171,8 +164,7 @@ foreach(R_BENCH_NAME IN LISTS R_BENCH_PAIRS)
             ${R_BENCH_LIBRARY_TARGETS}
             "${CMAKE_CURRENT_SOURCE_DIR}/${R_BENCH_NAME}.r"
             "${R_BENCH_CHECK_SCRIPT}"
-            "${PROJECT_SOURCE_DIR}/tests/check_codegen_stack_usage.cmake"
-        COMMENT "Compiling benchmark ${R_BENCH_NAME}.r through r-front at -O2"
+        COMMENT "Compiling benchmark ${R_BENCH_NAME}.r through r-front"
         VERBATIM
     )
     list(APPEND R_BENCH_PROGRAM_OUTPUTS "${R_BENCH_R_EXECUTABLE}")

@@ -218,6 +218,12 @@ CASES = [
 ]
 
 
+def emit_options(mode):
+    """Options of one output; LLVM IR lowers every function, not only those main reaches, so
+    that code generation also accepts the functions main never calls."""
+    return ['--emit=' + mode, '--all-functions'] if mode == 'llvm-ir' else ['--emit=' + mode]
+
+
 def check_modules(frontend, directory):
     library = directory / 'library.r'
     main = directory / 'main.r'
@@ -232,10 +238,10 @@ def check_modules(frontend, directory):
                     'i32 a = check.library::inspect(&x); const i32* view = &x; '
                     'i32 b = check.library::inspect(view); i32 c = check.library::pick(null); '
                     'return x + a + b + c - 45; }\n')
-    for emit in ('c17', 'interface'):
+    for emit in ('llvm-ir', 'interface'):
         outputs = []
         for sources in ((main, library), (library, main)):
-            result = subprocess.run([str(frontend), '--emit=' + emit, *map(str, sources)],
+            result = subprocess.run([str(frontend), *emit_options(emit), *map(str, sources)],
                                     capture_output=True, text=True, timeout=30)
             if result.returncode != 0:
                 raise ValueError(f'module {emit}: {result.stderr}')
@@ -259,7 +265,8 @@ def main():
         for name, declarations, body, diagnostic in CASES:
             source = Path(directory) / (name + '.r')
             source.write_text('module check.overloads;\n' + declarations + '\ni32 main() { ' + body + ' }\n')
-            result = subprocess.run([str(args.frontend.resolve()), '--emit=c17', str(source)],
+            result = subprocess.run([str(args.frontend.resolve()), *emit_options('llvm-ir'),
+                                     str(source)],
                                     capture_output=True, text=True, timeout=30)
             if diagnostic is None:
                 valid = result.returncode == 0

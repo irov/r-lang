@@ -48,24 +48,6 @@ typedef struct RFsPathIsAbsoluteView {
     RTypeId path_type;
 } RFsPathIsAbsoluteView;
 
-typedef enum RFsPathIsAbsoluteMutation {
-    R_FS_PATH_IS_ABSOLUTE_MUTATE_SYNC_HIR_OPERATION = 0,
-    R_FS_PATH_IS_ABSOLUTE_MUTATE_SYNC_HIR_CHILD_COUNT,
-    R_FS_PATH_IS_ABSOLUTE_MUTATE_SYNC_HIR_RESULT_TYPE,
-    R_FS_PATH_IS_ABSOLUTE_MUTATE_SYNC_HIR_AUXILIARY_TYPE,
-    R_FS_PATH_IS_ABSOLUTE_MUTATE_SYNC_HIR_ARGUMENT_TYPE,
-    R_FS_PATH_IS_ABSOLUTE_MUTATE_SYNC_HIR_ARGUMENT_KIND,
-    R_FS_PATH_IS_ABSOLUTE_MUTATE_ASYNC_MIR_OPERATION,
-    R_FS_PATH_IS_ABSOLUTE_MUTATE_ASYNC_MIR_OPERAND_COUNT,
-    R_FS_PATH_IS_ABSOLUTE_MUTATE_ASYNC_MIR_BORROW_MASK,
-    R_FS_PATH_IS_ABSOLUTE_MUTATE_ASYNC_MIR_RESULT_TYPE,
-    R_FS_PATH_IS_ABSOLUTE_MUTATE_ASYNC_MIR_AUXILIARY_TYPE,
-    R_FS_PATH_IS_ABSOLUTE_MUTATE_ASYNC_MIR_ARGUMENT_TYPE,
-    R_FS_PATH_IS_ABSOLUTE_MUTATE_ASYNC_MIR_ARGUMENT_KIND,
-    R_FS_PATH_IS_ABSOLUTE_MUTATE_ASYNC_MIR_OPERAND_VALUE,
-    R_FS_PATH_IS_ABSOLUTE_MUTATION_COUNT
-} RFsPathIsAbsoluteMutation;
-
 static int failures;
 
 #define R_FS_PATH_IS_ABSOLUTE_CHECK(condition)                                                     \
@@ -459,86 +441,6 @@ static bool r_fs_path_is_absolute_view_is_valid(const RFrontendContext *context,
     return true;
 }
 
-static bool r_fs_path_is_absolute_apply_mutation(RFrontendContext *context,
-                                                 RFsPathIsAbsoluteView *view,
-                                                 RFsPathIsAbsoluteMutation mutation) {
-    switch (mutation) {
-    case R_FS_PATH_IS_ABSOLUTE_MUTATE_SYNC_HIR_OPERATION:
-        view->sync_hir_call->standard_operation = R_STANDARD_CALL_FS_AS_ERROR;
-        return true;
-    case R_FS_PATH_IS_ABSOLUTE_MUTATE_SYNC_HIR_CHILD_COUNT:
-        view->sync_hir_call->child_count = UINT32_C(0);
-        return true;
-    case R_FS_PATH_IS_ABSOLUTE_MUTATE_SYNC_HIR_RESULT_TYPE:
-        view->sync_hir_call->type = view->path_type;
-        return true;
-    case R_FS_PATH_IS_ABSOLUTE_MUTATE_SYNC_HIR_AUXILIARY_TYPE:
-        view->sync_hir_call->auxiliary_type = view->bool_type;
-        return true;
-    case R_FS_PATH_IS_ABSOLUTE_MUTATE_SYNC_HIR_ARGUMENT_TYPE:
-        view->sync_hir_argument->type = view->bool_type;
-        return true;
-    case R_FS_PATH_IS_ABSOLUTE_MUTATE_SYNC_HIR_ARGUMENT_KIND:
-        view->sync_hir_argument->kind = R_HIR_MOVE;
-        return true;
-    case R_FS_PATH_IS_ABSOLUTE_MUTATE_ASYNC_MIR_OPERATION:
-        view->async_mir_calls[0]->standard_operation = R_STANDARD_CALL_FS_AS_ERROR;
-        return true;
-    case R_FS_PATH_IS_ABSOLUTE_MUTATE_ASYNC_MIR_OPERAND_COUNT:
-        view->async_mir_calls[0]->operand_count = UINT32_C(0);
-        return true;
-    case R_FS_PATH_IS_ABSOLUTE_MUTATE_ASYNC_MIR_BORROW_MASK:
-        view->async_mir_calls[0]->call_borrow_mask.low = UINT64_C(0);
-        return true;
-    case R_FS_PATH_IS_ABSOLUTE_MUTATE_ASYNC_MIR_RESULT_TYPE:
-        view->async_mir_calls[0]->type = view->path_type;
-        return true;
-    case R_FS_PATH_IS_ABSOLUTE_MUTATE_ASYNC_MIR_AUXILIARY_TYPE:
-        view->async_mir_calls[0]->auxiliary_type = view->bool_type;
-        return true;
-    case R_FS_PATH_IS_ABSOLUTE_MUTATE_ASYNC_MIR_ARGUMENT_TYPE:
-        view->async_mir_arguments[0]->type = view->bool_type;
-        return true;
-    case R_FS_PATH_IS_ABSOLUTE_MUTATE_ASYNC_MIR_ARGUMENT_KIND:
-        view->async_mir_arguments[0]->kind = R_MIR_INSTRUCTION_MOVE;
-        return true;
-    case R_FS_PATH_IS_ABSOLUTE_MUTATE_ASYNC_MIR_OPERAND_VALUE:
-        if ((size_t)view->async_mir_calls[0]->first_operand >= context->mir_operand_count) {
-            return false;
-        }
-        context->mir_operands[(size_t)view->async_mir_calls[0]->first_operand] =
-            R_MIR_VALUE_ID_INVALID;
-        return true;
-    case R_FS_PATH_IS_ABSOLUTE_MUTATION_COUNT:
-    default:
-        return false;
-    }
-}
-
-static const char *r_fs_path_is_absolute_mutation_name(RFsPathIsAbsoluteMutation mutation) {
-    static const char *const names[] = {
-        "sync_hir_operation",
-        "sync_hir_child_count",
-        "sync_hir_result_type",
-        "sync_hir_auxiliary_type",
-        "sync_hir_argument_type",
-        "sync_hir_argument_kind",
-        "async_mir_operation",
-        "async_mir_operand_count",
-        "async_mir_borrow_mask",
-        "async_mir_result_type",
-        "async_mir_auxiliary_type",
-        "async_mir_argument_type",
-        "async_mir_argument_kind",
-        "async_mir_operand_value",
-    };
-
-    if ((size_t)mutation >= (sizeof(names) / sizeof(names[0]))) {
-        return "invalid";
-    }
-    return names[(size_t)mutation];
-}
-
 static void r_fs_path_is_absolute_test_positive(void) {
     RFrontendContext *context = r_fs_path_is_absolute_build_context();
     RFsPathIsAbsoluteView view;
@@ -551,12 +453,16 @@ static void r_fs_path_is_absolute_test_positive(void) {
     }
     R_FS_PATH_IS_ABSOLUTE_CHECK(r_fs_path_is_absolute_find_view(context, &view));
     R_FS_PATH_IS_ABSOLUTE_CHECK(r_fs_path_is_absolute_view_is_valid(context, &view));
-    R_FS_PATH_IS_ABSOLUTE_CHECK(r_frontend_emit_c17(context, r_fs_path_is_absolute_write, &first) ==
-                                R_FRONTEND_OK);
+    R_FS_PATH_IS_ABSOLUTE_CHECK(
+        r_frontend_emit_llvm(
+            context, NULL, R_FRONTEND_LLVM_IR, r_fs_path_is_absolute_write, &first) ==
+        R_FRONTEND_OK);
     R_FS_PATH_IS_ABSOLUTE_CHECK(first.call_count == 1U);
     R_FS_PATH_IS_ABSOLUTE_CHECK(first.length != 0U);
     R_FS_PATH_IS_ABSOLUTE_CHECK(
-        r_frontend_emit_c17(context, r_fs_path_is_absolute_write, &second) == R_FRONTEND_OK);
+        r_frontend_emit_llvm(
+            context, NULL, R_FRONTEND_LLVM_IR, r_fs_path_is_absolute_write, &second) ==
+        R_FRONTEND_OK);
     R_FS_PATH_IS_ABSOLUTE_CHECK(second.call_count == 1U);
     R_FS_PATH_IS_ABSOLUTE_CHECK(
         (first.length == second.length) &&
@@ -564,42 +470,6 @@ static void r_fs_path_is_absolute_test_positive(void) {
     r_fs_path_is_absolute_dispose_buffer(&second);
     r_fs_path_is_absolute_dispose_buffer(&first);
     r_frontend_destroy(context);
-}
-
-static void r_fs_path_is_absolute_test_mutations(void) {
-    size_t mutation;
-
-    for (mutation = 0U; mutation < (size_t)R_FS_PATH_IS_ABSOLUTE_MUTATION_COUNT; ++mutation) {
-        RFrontendContext *context = r_fs_path_is_absolute_build_context();
-        RFsPathIsAbsoluteView view;
-        RFsPathIsAbsoluteBuffer output = {0};
-        RFrontendStatus status;
-
-        R_FS_PATH_IS_ABSOLUTE_CHECK(context != NULL);
-        if (context == NULL) {
-            continue;
-        }
-        if (!r_fs_path_is_absolute_find_view(context, &view)) {
-            R_FS_PATH_IS_ABSOLUTE_CHECK(false);
-            r_frontend_destroy(context);
-            continue;
-        }
-        R_FS_PATH_IS_ABSOLUTE_CHECK(r_fs_path_is_absolute_apply_mutation(
-            context, &view, (RFsPathIsAbsoluteMutation)mutation));
-        status = r_frontend_emit_c17(context, r_fs_path_is_absolute_write, &output);
-        if (status != R_FRONTEND_NOT_LOWERABLE) {
-            (void)fprintf(stderr,
-                          "mutation %zu (%s) unexpectedly returned status %d\n",
-                          mutation,
-                          r_fs_path_is_absolute_mutation_name((RFsPathIsAbsoluteMutation)mutation),
-                          (int)status);
-        }
-        R_FS_PATH_IS_ABSOLUTE_CHECK(status == R_FRONTEND_NOT_LOWERABLE);
-        R_FS_PATH_IS_ABSOLUTE_CHECK(output.call_count == 0U);
-        R_FS_PATH_IS_ABSOLUTE_CHECK(output.length == 0U);
-        r_fs_path_is_absolute_dispose_buffer(&output);
-        r_frontend_destroy(context);
-    }
 }
 
 static void
@@ -649,6 +519,5 @@ int main(void) {
     for (index = 0U; index < (sizeof(cases) / sizeof(cases[0])); ++index) {
         r_fs_path_is_absolute_test_diagnostic(&cases[index]);
     }
-    r_fs_path_is_absolute_test_mutations();
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

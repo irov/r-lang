@@ -49,68 +49,48 @@ r_require_match_count(mir_output
     "call callee=\"test[.]codegen[.]async_sync_call::consume\" arguments=[(]%v[0-9]+[)] type=void"
     1 "MIR void-result call")
 
+set(ir_arguments
+    --emit=llvm-ir
+    --entry test.codegen.async_sync_call::main
+    --profile hosted-native-async
+    --target-manifest "${TARGET_MANIFEST}"
+    "${SOURCE_FILE}")
 execute_process(
-    COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
-        --entry test.codegen.async_sync_call::main
-        --profile hosted-native-async
-        --target-manifest "${TARGET_MANIFEST}"
-        "${SOURCE_FILE}"
-    RESULT_VARIABLE c17_result
-    OUTPUT_VARIABLE c17_output
-    ERROR_VARIABLE c17_error
+    COMMAND "${R_FRONT_EXECUTABLE}" ${ir_arguments}
+    RESULT_VARIABLE ir_result
+    OUTPUT_VARIABLE ir_output
+    ERROR_VARIABLE ir_error
 )
-if(NOT c17_result EQUAL 0)
-    message(FATAL_ERROR "async sync-call C17 emit failed (${c17_result}): ${c17_error}")
+if(NOT ir_result EQUAL 0)
+    message(FATAL_ERROR "async sync-call LLVM IR emit failed (${ir_result}): ${ir_error}")
 endif()
-r_require_match_count(c17_output "static int32_t r_f00000001[(]" 2
-    "reachable protected Copy-result callee")
-r_require_match_count(c17_output "static void r_f00000002[(]RRuntimeOwn" 2
-    "reachable protected void callee")
-r_require_match_count(c17_output "static RRuntimeOwn r_f00000003[(]RRuntimeOwn" 2
-    "reachable protected Move-result callee")
-r_require_match_count(c17_output "r_d[0-9]+ r_stack_r_v[0-9]+ = [{]0[}]" 2
-    "transient call-bounded borrow storage")
-r_require_match_count(c17_output
-    "frame->r_v00000003 = r_f00000001[(]r_stack_r_v00000001, frame->r_v00000002[)]"
-    1 "Copy result before suspension")
-r_require_match_count(c17_output
-    "frame->r_v00000017 = r_f00000001[(]r_stack_r_v00000015, frame->r_v00000016[)]"
-    1 "Copy result after suspension")
-r_require_match_count(c17_output
-    "R_INTERNAL_ASSERT[(]" 0
-    "generated C omits assertions")
-r_require_match_count(c17_output "if [(]!frame->r_v00000006_initialized[)]" 0
-    "Move argument runtime guards")
-r_require_match_count(c17_output "frame->r_v00000006_initialized = 0" 3
-    "Move argument initialization-state clears")
-r_require_match_count(c17_output
-    "frame->r_v00000007 = r_f00000003[(]frame->r_v00000006[)]" 1
-    "Move-result C call")
-r_require_match_count(c17_output "frame->r_v00000007_initialized = 1" 1
-    "Move-result initialization")
-r_require_match_count(c17_output "if [(]!frame->r_v00000034_initialized[)]" 0
-    "void-call Move argument runtime guards")
-r_require_match_count(c17_output "frame->r_v00000034_initialized = 0" 3
-    "void-call Move argument initialization-state clears")
-r_require_match_count(c17_output "r_f00000002[(]frame->r_v00000034[)]" 1
-    "void-result C call")
+# The protected synchronous callees stay ordinary functions that the async body calls directly:
+# add before and after the suspension, forward with the Move result, consume with the Move
+# argument.
+foreach(callee IN ITEMS add forward consume)
+    r_require_match_count(ir_output
+        "define internal [a-z0-9]+ @\"test[.]codegen[.]async_sync_call::${callee}\"[(]" 1
+        "reachable protected callee ${callee}")
+endforeach()
+r_require_match_count(ir_output "call [^\n]*@\"test[.]codegen[.]async_sync_call::add\"[(]" 2
+    "Copy-result calls before and after suspension")
+r_require_match_count(ir_output
+    "call [^\n]*@\"test[.]codegen[.]async_sync_call::forward\"[(]" 1
+    "Move-result call")
+r_require_match_count(ir_output
+    "call [^\n]*@\"test[.]codegen[.]async_sync_call::consume\"[(]" 1
+    "void-result call")
 
 execute_process(
-    COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
-        --entry test.codegen.async_sync_call::main
-        --profile hosted-native-async
-        --target-manifest "${TARGET_MANIFEST}"
-        "${SOURCE_FILE}"
+    COMMAND "${R_FRONT_EXECUTABLE}" ${ir_arguments}
     RESULT_VARIABLE repeated_result
     OUTPUT_VARIABLE repeated_output
     ERROR_VARIABLE repeated_error
 )
 if(NOT repeated_result EQUAL 0)
     message(FATAL_ERROR
-        "repeated async sync-call C17 emit failed (${repeated_result}): ${repeated_error}")
+        "repeated async sync-call LLVM IR emit failed (${repeated_result}): ${repeated_error}")
 endif()
-if(NOT c17_output STREQUAL repeated_output)
-    message(FATAL_ERROR "async sync-call C17 output is not deterministic")
+if(NOT ir_output STREQUAL repeated_output)
+    message(FATAL_ERROR "async sync-call LLVM IR output is not deterministic")
 endif()

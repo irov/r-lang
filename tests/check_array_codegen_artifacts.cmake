@@ -79,71 +79,37 @@ r_require_match_count(async_mir_output
     "operation=std[.]array::push arguments=[(]%v[0-9]+ %v[0-9]+[)] call_bounded_borrows=[(]target[)]"
     1 "async MIR push target call-bounded borrow")
 
-execute_process(
-    COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
-        --entry test.codegen.array_operations::main
-        --profile hosted-native-async
-        --target-manifest "${TARGET_MANIFEST}"
-        "${SYNC_SOURCE_FILE}"
-    RESULT_VARIABLE sync_c17_result
-    OUTPUT_VARIABLE sync_c17_output
-    ERROR_VARIABLE sync_c17_error
-)
-if(NOT sync_c17_result EQUAL 0)
-    message(FATAL_ERROR "sync C17 emit failed (${sync_c17_result}): ${sync_c17_error}")
-endif()
-r_require_match_count(sync_c17_output "#include \"r_std_array[.]h\"" 1
-    "sync generated std.array include")
-r_require_match_count(sync_c17_output "r_std_array_with_capacity[(]" 2
-    "sync generated with_capacity calls")
-r_require_match_count(sync_c17_output "r_ap_[0-9]+_[0-9]+[(]" 3
-    "sync generated push calls")
-r_require_match_count(sync_c17_output "RStdAllocError r_reason" 1
-    "sync generic push_error reason field")
-r_require_match_count(sync_c17_output "r_a[0-9]+ r_value" 1
-    "sync generic push_error pair value field")
-r_require_match_count(sync_c17_output
-    "r_payload[.]r_allocation_failed[.]r_value =" 2
-    "sync failure returns staged pair values")
-r_require_match_count(sync_c17_output "r_type_drop_d00000006" 0
-    "sync move-only result glue omits unused drop helper")
-r_require_match_count(sync_c17_output "R_INTERNAL_ASSERT[(]" 0
-    "sync generated C omits assertion infrastructure")
-r_require_match_count(sync_c17_output "R_RUNTIME_PANIC_CONTRACT_VIOLATION" 4
-    "sync fallthrough and main carrier integrity traps remain")
-
-execute_process(
-    COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
-        --entry test.codegen.async_array_operations::main
-        --profile hosted-native-async
-        --target-manifest "${TARGET_MANIFEST}"
-        "${ASYNC_SOURCE_FILE}"
-    RESULT_VARIABLE async_c17_result
-    OUTPUT_VARIABLE async_c17_output
-    ERROR_VARIABLE async_c17_error
-)
-if(NOT async_c17_result EQUAL 0)
-    message(FATAL_ERROR "async C17 emit failed (${async_c17_result}): ${async_c17_error}")
-endif()
-r_require_match_count(async_c17_output "#include \"r_std_array[.]h\"" 1
-    "async generated std.array include")
-r_require_match_count(async_c17_output "r_std_array_with_capacity[(]" 1
-    "async generated with_capacity call")
-r_require_match_count(async_c17_output "r_ap_[0-9]+_[0-9]+[(]" 2
-    "async generated push call")
-r_require_match_count(async_c17_output "RStdAllocError r_reason" 1
-    "async generic push_error reason field")
-r_require_match_count(async_c17_output "r_a[0-9]+ r_value" 1
-    "async generic push_error pair value field")
-r_require_match_count(async_c17_output
-    "r_payload[.]r_allocation_failed[.]r_value =" 1
-    "async failure returns staged pair value")
-r_require_match_count(async_c17_output "R_INTERNAL_ASSERT[(]" 0
-    "async generated C omits assertion infrastructure")
-r_require_match_count(async_c17_output "R_RUNTIME_PANIC_CONTRACT_VIOLATION" 7
-    "async state, await and root traps remain")
+# Each with_capacity and push operation is one call of its std.array entry, and the pushed value
+# is handed to the entry so that a failed push can return it (Library R-LIB-0019).
+foreach(mode IN ITEMS sync async)
+    if(mode STREQUAL "sync")
+        set(source_file "${SYNC_SOURCE_FILE}")
+        set(entry "test.codegen.array_operations::main")
+        set(operation_count 2)
+    else()
+        set(source_file "${ASYNC_SOURCE_FILE}")
+        set(entry "test.codegen.async_array_operations::main")
+        set(operation_count 1)
+    endif()
+    execute_process(
+        COMMAND "${R_FRONT_EXECUTABLE}"
+            --emit=llvm-ir
+            --entry "${entry}"
+            --profile hosted-native-async
+            --target-manifest "${TARGET_MANIFEST}"
+            "${source_file}"
+        RESULT_VARIABLE ir_result
+        OUTPUT_VARIABLE ir_output
+        ERROR_VARIABLE ir_error
+    )
+    if(NOT ir_result EQUAL 0)
+        message(FATAL_ERROR "${mode} LLVM IR emit failed (${ir_result}): ${ir_error}")
+    endif()
+    r_require_match_count(ir_output "call [^\n]*@r_std_array_with_capacity[(]" ${operation_count}
+        "${mode} with_capacity calls")
+    r_require_match_count(ir_output "call [^\n]*@r_std_array_push[(]ptr [^,]+, ptr [^)]+[)]"
+        ${operation_count} "${mode} push calls with the staged value")
+endforeach()
 
 foreach(mode IN ITEMS sync async)
     if(mode STREQUAL "sync")

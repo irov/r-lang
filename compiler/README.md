@@ -13,7 +13,8 @@ UTF-8 source
   -> whole-program semantic analysis
   -> typed HIR
   -> typed control-flow MIR
-  -> strict ISO C17
+  -> LLVM module for the target machine
+  -> object file
 ```
 
 The implementation is ISO C17. `r_frontend` is an internal static library and
@@ -21,40 +22,42 @@ The implementation is ISO C17. `r_frontend` is an internal static library and
 The current implementation covers whole-program module, name, visibility, and
 function-signature analysis; canonical scalar, atomic, aggregate, pointer, owner,
 container, option, checked-error, and task types; deterministic typed HIR; typed basic-block
-MIR; reproducible compiler-interface artifacts; and an executable C17 backend. The
-synchronous backend supports the declarations, expressions, statements, checked
-operations, aggregate initialization, ownership transfers, and Standard Library calls
-used by the complete `examples/unzip` program.
+MIR; reproducible compiler-interface artifacts; and an executable LLVM backend
+(`compiler/llvm/`, *LLVM emitter*). Stage B6 removed the C17 program emitter; `compiler/codegen/`
+keeps only the C ABI bridge of C imports (*C imports*). The backend supports the declarations,
+expressions, statements, checked operations, aggregate initialization, ownership transfers,
+and Standard Library calls used by the complete `examples/unzip` program.
 
 HIR/MIR keep fixed-array and container operations, checked indexing and slicing,
 typed throws, handler dispatch, rethrow, pending completion, LIFO `finally` routing,
 Move places, async suspension, and cleanup state explicit. Automatic propagation is
-resolved before C generation; each normalized checked-effect set has one deterministic
+resolved before code generation; each normalized checked-effect set has one deterministic
 tagged carrier rather than nested source-level result values. Generated slices are
-pointer/length pairs, every index and range is checked before access unless the check is
-proven unable to fail (see *Index and conversion proofs*), and an invalid access reports
-`R_RUNTIME_PANIC_BOUNDS`. Call-bounded borrow metadata covers the full
+pointer/length pairs, every index and range is checked before access (the proofs that leave
+out a check that cannot fail return in stage B7, see *Index and conversion proofs*), and an
+invalid access reports `R_RUNTIME_PANIC_BOUNDS`. Call-bounded borrow metadata covers the full
 normative limit of 127 arguments.
 
 The backend preserves left-to-right evaluation, implements checked signed arithmetic
-without C undefined behavior, and uses the small hosted runtime under `runtime/`.
+without undefined behavior, and uses the small hosted runtime under `runtime/`.
 For the Darwin target the stack is bounded statically (R-FUNC-0004): the semantic pass rejects
 any recursive call chain as `R-DIAG-STACK-001`, so every entry into R code has a worst-case
 bound. An aggregate may reach itself through owned storage along `own`, `rc` and `arc`
 owners, `o<...>`, fixed arrays, `array`/`list` elements, `dict` values and by-value struct or
 enum members, nested in any order; such a group is destroyed by the runtime destroyer
-`r_runtime_drop_iterative` with generated cursors (`r_type_cursor_a<id>` for aggregates,
-`r_type_cursor_t<type id>` for the wrappers on the way, descriptors `r_type_node_*`, hook
-wrappers `r_type_hook_a<id>`) that walk the object graph iteratively in the R-INIT-0010 order,
+`r_runtime_drop_iterative` with generated cursors (`r_drop_cursor.N` with the member count
+`r_drop_count.N` for each aggregate and wrapper on the way, descriptors `r_drop_node.N`, hook
+wrappers `r_drop_hook.N`) that walk the object graph iteratively in the R-INIT-0010 order,
 so the drop depth never follows the data. Self-nesting through a `dict` key, a standard type,
 a `task` or an atomic is rejected as `R-DIAG-STACK-001`, and so is a derived JSON encoder or
-decoder of a self-nesting aggregate (its generated glue would recurse with the data). Generated C
-checks that bound once per entry through `r_runtime_stack_require(R_STACK_ENTRY(<entry>), ...)`:
-the hosted `main` body, each spawned thread entry, each async step and helper gate, each
-`call_once` initializer wrapper and each C callback wrapper. Calls between R functions and the
-type-glue gates carry no check. A `raw fn` call is analysed as a call to every `@callback`
-function whose exported signature matches the pointer type and marked in the generated C as
-`/* R_STACK_INDIRECT: ... */`. Drop hooks join the graph only through storage the function
+decoder of a self-nesting aggregate (its generated glue would recurse with the data). Generated
+code checks that bound once per entry through `r_runtime_stack_require` with the bound the
+emitter computed for the entry, a constant `r_stack_entry.N` of the module (*LLVM emitter*,
+Stack bounds): the hosted `main` body, each spawned thread entry, each async step, each
+`call_once` initializer wrapper and each C export wrapper. Calls between R functions and the
+type glue carry no check. A `raw fn` call is analysed as a call to every `@callback`
+function whose exported signature matches the pointer type and marked in the generated code
+with the metadata `r.stack.indirect`. Drop hooks join the graph only through storage the function
 owns (declarations, by-value parameters, temporaries, moved values, replaced assignment
 destinations); place expressions and borrows add no callee. Every participating
 runtime thread still initializes immutable thread-local stack bounds before executing R code.
@@ -63,7 +66,7 @@ An async declaration `async T operation(...) throws E` is invoked as
 `task<T throws E>`, with immediate checked effect `std.async::start_error`.
 Generated functions reserve an owned stackless frame in runtime-managed heap storage
 through the two-phase start protocol; the complete frame is never first materialized
-as an automatic C object. A success-only initializer commits Copy and staged Move
+on the machine stack. A success-only initializer commits Copy and staged Move
 arguments only after the last recoverable start check. `await move` consumes the named
 task and exposes only its completion effects. `await operation(args)` first calls the
 function into a hidden task slot, then consumes it using the same await lowering. The
@@ -73,116 +76,285 @@ lowering and preserve the receiver on startup failure. Await composes in async e
 including nested arguments, return operands, conditions and loops. Static initializers,
 synchronous functions and finally bodies cannot await. Await lowers to a non-blocking
 resumable-task suspension edge, including projected task places. Only the
-generated hosted C `main` blocks while observing the root task. Frame cleanup cancels
+generated hosted `main` blocks while observing the root task. Frame cleanup cancels
 every still-owned task. Native async filesystem and I/O operations, owned values,
 fixed-array and `std.array` slices, and the complete async `examples/unzip` entry path
 are executable in the Darwin profile.
 
+### Backend toolchain
+
+The backend of the project is LLVM (stages B0–B15 of `docs/language-completeness-roadmap.ru.md`;
+B6 removed the C17 program emitter, while Annex F and G of the Core specification and the target
+manifests describe compilation through C until B15). From B0 the whole project is compiled by
+clang 22.1.8 of the pinned LLVM (`cmake/RToolchainLLVM.cmake`), and `r_frontend` links that LLVM
+through its C interface (`compiler/llvm/`). The `toolchain` section of each target manifest
+names the compiler (`c_compiler`, `c_compiler_version`, and `c_compiler_build`, the SHA-256 of
+the compiler executable, because a clang release prints no build identifier) and the LLVM target
+of code generation: `llvm_version`, `llvm_triple` (the manifest triple with the minimum OS
+version, `arm64-apple-macosx26.5.0`), `llvm_cpu` and `llvm_data_layout`.
+`tools/generate_target_abi.py` writes them to `compiler/llvm/target_llvm.generated.inc`;
+`r_frontend_backend_verify` creates the target machine and requires the linked LLVM release and
+the machine's data layout to equal the manifest's, and `r-front --version` reports both or fails.
+`tools/check_target_manifest.py` ties the layout to the manifest's byte order, pointer width and
+64-bit integer alignment. ABI records name the compiler build through that digest (R-FFI-0044).
+
+### Runtime surface and C ABI of the backend
+
+The LLVM backend calls the runtime and library C without a C compiler, so it carries what a C
+compiler knows about them. `tools/generate_runtime_surface.py` compiles probes of the runtime and
+library headers a program may reach with the pinned clang for the manifest triple and writes
+`compiler/llvm/runtime_surface.generated.inc`: every type those headers name or reach (size,
+alignment, members with offsets, the compatible integer of an enumeration), every function with
+external linkage (its C type and the declaration clang lowers it to) and every enumerator. A
+function the headers define `static inline` has no symbol; the tool also writes
+`runtime/llvm/inline_shims.generated.c`, one external `r_shim_<name>` of the same type per such
+function, compiled into `r_runtime_inline_shims`, and the surface lists the shim. Both files have
+`--verify`, run by `specification-check`; `regenerate-runtime-surface` rewrites them.
+
+`compiler/llvm/abi.c` classifies an argument or result of a surface type for AAPCS64: integers
+and pointers direct (types below 32 bits extended by their signedness), homogeneous aggregates
+of one to four floats or doubles in registers, other aggregates of up to 16 bytes as one or two
+64-bit registers (a 16-byte aligned one as `i128`), larger ones through a pointer to a copy, an
+aggregate result of up to 8 bytes as an integer of its size and a larger one in memory the
+caller passes (`sret`). `r_llvm_abi` checks the classification of every surface function
+against the declaration clang lowered it to.
+
+### LLVM emitter
+
+`r_frontend_emit_llvm` (`--emit=llvm-ir`, `--emit=object`) generates the code of a program. After
+`r_frontend_lower_mir` it lowers the MIR of the functions the entry reaches, through calls,
+function addresses and the drop functions of aggregates, together with every `extern "C"`
+definition (an export C code may call, R-FFI-0012) and the drop, hash, equality, clone and format
+functions of aggregates that the glue calls, into one module for the target machine of the
+manifest. The module is written as textual IR or compiled by the target machine into an object
+file; the CLI writes either to standard output. `hosted_main.c` writes the process `main` (stack
+bootstrap, `r_runtime_hosted_start`, the entry, the projection of its error to the exit status,
+drain and finish), and for the freestanding profile the `r_freestanding_main` the environment
+calls (R-CONF-0005). A construct the emitter does not lower makes the program
+`R_FRONTEND_NOT_LOWERABLE`, and the first one is named on stderr.
+
+`--all-functions` (`RFrontendArtifactOptions.all_functions`) lowers every function of the
+program, not only those the entry reaches. The acceptance audits use it
+(`tools/audit_compiler_implementation.py`, `tools/audit_language_safety.py`,
+`tools/audit_library_source_surface.py`), and so do the checks of code that no entry calls
+(`tests/check_*.py`).
+
+Representation. A value has the representation the runtime and the library C expect, so both
+sides see the same bytes: a scalar is an SSA value (a `bool` is `i1`, a byte in memory), an enum
+without payloads is its integer, and every other value lives in memory laid out by the C rules of
+the target (`types.c`: structs in field order, `u32` tag plus payload union for tagged enums,
+options, results and effect carriers, `{data, length}` views, runtime and library types from the
+surface). Each MIR value of a type in memory has an alloca of its own, unless it is built at its
+destination (below), and is never changed after its instruction; a place is a slot, a
+projection chain (`FIELD`, `INDEX`, `DEREF`) an address. A function of the program is named
+`module::name` (an async one has `$step`, `$initialize` and `$drop` functions and a
+`$frame_size` constant). Functions of the program pass a scalar in its own type and a value in
+memory as the address of a copy the callee owns; a carrier or a result in memory goes to memory
+the caller passes first.
+
+Ownership. A place or value whose type requires drop has an initialization flag: a move out of a
+whole place runs the move glue only while the source is initialized and moves the flag with it,
+a value passed to a call, stored into an aggregate or a variant, returned or thrown leaves its
+flag cleared, `DROP` and `DISCARD` drop what is still initialized, and a `panic` terminator drops
+every initialized place and value in the reverse order of the MIR between
+`r_runtime_unwind_cleanup_enter` and `_leave` before the frame leaves with its panic pending.
+`glue.c` writes the drop and move glue of a type the program uses (runtime owners, the move
+registry of the library, structs with their user drop, tagged enums, fixed arrays, options,
+results, carriers and the errors that hand an element back) after its functions, and
+`r_llvm_type_info` gives the runtime an `RRuntimeTypeInfo` with that glue for `new own`,
+`new arc` and `new rc`.
+
+Checks and panics. Signed `+ - *` use the overflow intrinsics, division checks zero and
+`MIN / -1`, shifts check the count and the signed left shift its result, conversions check
+their range, indexes and slices check their bounds; a failed check raises the panic
+(`r_runtime_raise`) and continues at the instruction's panic block, while a contract violation,
+or a check without a panic block (the arithmetic of the allocation and freestanding profiles),
+calls `r_runtime_panic`, which does not return. A call that may run R code is followed by the
+inline test of `r_runtime_unwinding` (*Panic unwind*).
+
+Static objects (`statics.c`) are globals `r_static.N` initialized by the translation-time value of
+their initializer, laid out as bytes of their type with addresses as relocations; an operator in
+an initializer is folded with the C rules of its operand types. An owner computed during
+translation (L22.4) is frozen into the image: the elements of an array, the bytes of a string,
+the linked nodes of a list and the dense entries and probed slots of a dictionary (the hashes
+the key functions compute, mixed as the runtime mixes them) are globals of their own
+(`r_frozen_<kind>.<source>.<offset>`), the owner is a descriptor over them without an allocator,
+and the static object that holds one is never dropped. Static objects that own resources are
+dropped at the end of a hosted program in the reverse of their order; a thread-local object
+that owns resources has a per-thread state, an accessor that registers its drop at the first use
+on a thread, and a drop stack emptied at the exit of the thread and of the program. A program
+string is a private constant, one per interned text, and an empty one still has an address that
+is not null.
+
+Standard operations (`standard.c`, `library.c`, `containers.c`, `text.c`, `atomics.c`,
+`outcome.c`, `reflection.c`, `threads.c`, `sync.c`, `tagged.c`). A standard call is the call of
+the library or runtime entry the operation stands for: a library result lands in a temporary,
+its status selects the tag of the R carrier or option and its members move into the payload,
+and a status the library reports only for a broken contract panics. The emitter calls the
+entries; inline fast paths per element type return when the runtime and the library are linked
+with the program as bitcode (B7). Families with many members are tables: the flat outcomes the
+library stores as `{kind, members}` (`outcome.c`; a borrowed outcome binds the owner member or a
+bitwise shadow of the payload), the task starts of std.fs, std.net, std.process and the scoped
+transfers (`{is_ok, task, error}` with the deadline narrowed to the starting task's,
+R-SLIB-ASYNC-0008), the std.sync storages, guards and outcomes, the tagged results
+`broadcast_result` and `try_unwrap_result`. Reflection over an enum or a struct is an inline
+switch per selection. A thread start packs its arguments into a payload the trampoline
+(`r_thread_entry.N`, with `r_thread_move.N` and `r_thread_drop.N`) moves into the entry;
+`std.async::blocking` uses the same payloads. `@recursion(depth = N)` counts the activations of
+a function in a thread-local counter `r_activations.N` (R-FUNC-0026). The bit and wide integer
+operations of core use the LLVM intrinsics; an atomic operation is written once per admitted
+memory order behind a switch on the order value.
+
+Glue the backend synthesizes. Besides drop and move, `glue.c` writes the hash and equality
+functions of `std.dict` keys and the iterative drop of self-nesting aggregates (the drop glue of
+an aggregate of a recursive group calls `r_runtime_drop_iterative` with the `RRuntimeDropNode` of
+its type). `clone.c` writes the clone glue of core::clone (R-OWN-0020), one function `r_clone.N`
+per type that answers zero or the `alloc_error` plus one and leaves the destination unowned after
+a failure. `format.c` writes the bodies of format recipes (R-EXPR-0028) and the format glue of
+core::Format (R-TYPE-0046), one function `r_format.N` per formatted type that appends its text
+and writes an `RStdFormatAllocResult`: a nominal type calls its implementation, standard
+formatting composes `some(v)`, `[a, b]` and `(a, b)` from the glue of the components.
+`dispatch.c` writes the dispatchers of interfaces and function values: a switch on the tag of the
+interface borrow, or on the symbol number of the function value (R-TYPE-0054), with a direct call
+per target; a member with standard formatting is formatted by its glue. The JSON operations of
+`std.json` whose bodies the semantic pass leaves as placeholders are written from their operation
+(`json.c`) over glue per type: `json_encode.c` writes the encoder and the zero predicate of a
+type, `json_decode.c` its decoder and the ordinary default of an excluded field, and
+`json_stream.c` its stream converter, a create function that pushes a frame of the runtime's
+decoder (`r_json_decode_push`) with a step and, where a member may be live, a drop. A reader
+adapts its transport with start, take and deadline callbacks and completes a read into the
+checked carrier of its task. Functions the library calls back keep the C ABI of their function
+pointer type: a structure over 16 bytes by address, such a result through `sret`. Every glue
+body is written after the functions of the program, and writing one may request more.
+
+The C side of a program (`ffi.c`). A C signature, of an import, of an `extern "C"` definition
+or of a `raw fn` type, is classified by the C ABI of `abi.c` over a table of the program's C
+types in the runtime surface format: the C ABI numerics, raw object and function pointers,
+fieldless `@repr(C)` enums by their integer, and `@repr(C)` structs, unions and fixed arrays by
+their members, whose natural layout the ABI record of a C-declared aggregate proves. A call of
+an import or of a `raw fn` value sets the floating-point environment aside around the C code
+(`r_runtime_c_call_begin`/`end`, R-FFI-0058), checks a nullable callee and every value that
+comes back (R-FFI-0056: a null non-null pointer, an enum value naming no variant, through
+`@repr(C)` fields and array elements), ends the process when a `never` import returns, and runs
+no unwind test, since a panic cannot cross back from C. An import with a reserved or typedef C
+spelling is reached through `r_bridge_<c>` and one that passes an R-declared struct through
+`r_bridge_<c>_<symbol>`, both written by `--emit=c17-bridge`; where such a bridge takes the
+struct by address, calls pass its memory and a raw fn value is a thunk with the import's own
+prototype. Every `extern "C"` definition is an R function plus an export wrapper under its C
+name that attaches the thread (`r_runtime_c_entry_begin`), checks its arguments, requires the
+stack bound of its body, calls it and ends the process on a panic that reaches the boundary
+(`r_runtime_unwind_terminate`). A call through a `raw fn` value is marked `r.stack.indirect`
+and names the callbacks it may reach as stack edges (R-FUNC-0007). An imported object is its
+extern global (thread-local where declared) or the address its bridge accessor returns, and
+reads through it are checked like call results. `std.c::link_available` reads a constant table
+of the link manifest sorted by logical name.
+
+Async functions (`async.c`, frame mode of `emit.c`). An async function is a step
+`RRuntimeTaskStepStatus (execution, payload, result)` over its frame in the task payload
+(`module::name$step`), with a frame initializer (`$initialize`), a frame drop (`$drop`) and the
+frame size (`$frame_size`). While a step is written, every slot the function would allocate is
+reserved in the frame and addressed from the payload parameter, and a scalar value is written to
+and read from its slot, since a use may follow a suspension. The step dispatches on the state to
+the block it names; an await stores its own block there before it calls
+`r_runtime_task_execution_await`. A return or an uncaught throw writes the task's result and
+completes, a cancel block returns `CANCELLED`, and a panic parks in the task and the `panic`
+terminator returns `PANICKED`. A start commits the resumable task of the step with an
+initializer and a context of (address, flag) pairs per argument; a staged move of a place into a
+start, a library task or a thread is done by the consumer, which takes the place and clears its
+flag once it owns the value. A task scope (R-STMT-0016..0018) keeps its storage and entries in
+the frame: a start in the scope reserves an entry, starts with the scope's group and binds the
+task to it, `first`, `all`, `select` and their deadline forms wait on the group, and the scope's
+finally discards and cancels what is left. A start of a dispatcher selects the target its tag
+names, with the stack bound of that target. An async main is the root task the hosted `main`
+awaits, with the startup arguments in its start context.
+
+Names (`keys.c`). Semantic ids of types and symbols follow the order in which the sources were
+given, so a name or a report built from an id would make the module depend on that order.
+`keys.c` gives each type, symbol and source the one-based rank of a text that names it whatever
+the order: a type its MIR spelling, a symbol its module, name, kind, type, result type and the
+position of its name, a source its module name. Internal names numbered by a type or a symbol
+carry that rank: `r_drop.N`, `r_move.N`, `r_clone.N`, `r_format.N`, the JSON glue
+(`r_json_encode.N`, `r_json_decode.N`, ...), `r_static.N`, `r_thread_entry.N` and the other
+thread and thread-local functions, `r_stack_entry.N`, `r_sync_initializer.N`, `r_activations.N`,
+and `r_dyn_narrow.N.M` of a wide and a narrow interface; a frozen owner's storage is
+`r_frozen_<kind>.<source>.<offset>`. The module number of a panic report is the rank of its source
+by module name. The emitted module and the panic reports therefore do not depend on the order in
+which the sources are given; `tests/check_*.py` assert that the IR of two orders is equal (for
+example `check_const_generics.py` and `check_function_items.py`).
+
+Destinations (`values.c`). MIR builds a value in memory and moves it by a separate instruction,
+and a slot for each would hold the value two or three times on the stack, which R-FUNC-0004
+bounds for every entry. A value built in memory (an aggregate, an array literal, a call result)
+whose single use moves it whole into an uninitialized place by an initializing store, or into a
+member of an aggregate or array of the same block, is therefore built there directly. A local
+declared just before a checked call and initialized only by the success payload of that call
+lives inside the call's carrier, where the callee writes the payload
+(`r_llvm_local_in_carrier`). A `new own T{}` whose payload is all zero bytes and has no drop
+glue (array literals without elements, zero integers and booleans, aggregates of those) is not
+built at all: `r_runtime_own_create_initialize` allocates the storage and the initializer
+`r_own_zero` fills it with zeros. These rules keep the frames within the R-FUNC-0004 budgets.
+
+Stack bounds (`stack.c`, R-FUNC-0004). A stack check before an entry requires its own frame plus
+the deepest path of calls below it through the functions of the module, including the callbacks
+library code makes (the key functions of a dictionary, the cursors of an iterative drop), which
+are recorded as edges from the function whose call leads to them; the runtime and library
+functions an entry reaches keep their own budget. Frames are measured on the code the target
+machine generates: `stack.c` compiles a copy of the finished module once while the
+prologue-epilogue inserter reports each frame (`-pass-remarks-analysis=prologepilog`), finds the
+strongly connected components of what the entries reach, and computes the bound below a call into
+each component: a function needs its frame plus its deepest callee, and a cycle is admitted only
+when each member counts its activations with `@recursion(depth = N)` and needs the sum of
+`N * frame` over its members plus the larger of its largest frame and its deepest callee outside
+(the rule of `tools/compute_stack_entries.py`, which the target manifests name until B15). The
+bounds are written into the constants `r_stack_entry.N` the checks read, the module itself is
+then compiled for output, and a bound above the entry budget of the manifest
+(`core.stack.entry_budget_bytes`) is refused. The measurement also stays in the module as named
+metadata, which tests read from `--emit=llvm-ir`: `!r.stack.frames` holds each defined function
+with its frame, its `@recursion` depth and the bound below a call into it, `!r.stack.entries`
+each entry with its bound.
+
+Tests. `tests/check_codegen_program.cmake` builds every codegen fixture, example and library test
+program through `r-front --emit=object` and links the object with the runtime, the inline shims
+and the libraries; every case runs once, under its plain name `r_frontend_codegen_<case>`. A C
+wrapper hooks runtime and library entries with `#define OLD NEW` lines before
+`#include R_TEST_PROGRAM_PRELUDE` (`tests/codegen_program_prelude.h`, the runtime and library
+headers the program is compiled against). The driver passes the same renames to
+`r-front --rename-symbol OLD=NEW` (repeatable: the program calls the runtime or library function
+NEW in place of OLD, and names its `main` NEW where OLD is `main`) and compiles the inline shims
+with them; the functions a wrapper renames to have external linkage, since the object calls
+them. The wrapper reaches the program only through `main`, its C exports and the entries it
+renames. Facts about the program come from the symbols of the object (`llvm-nm`): the bridges
+of native providers of the library (`r_bridge_r_std_*_native_*`), the absence of `setjmp` and
+`longjmp`, and the library dependencies of a `HASH_ONLY` program. `STACK_FRAME_LIMIT` bounds
+every frame through `!r.stack.frames`, and `STACK_REPORT` keeps the IR next to the executable as
+`<exe>.ll` for drivers that read the bounds (the calculator example checks its `@recursion`
+bound there).
+
 ### Index and conversion proofs
 
-`compiler/codegen/index_proofs.inc` leaves out bounds checks (R-EXPR-0021) and explicit integer
-conversion checks (R-EXPR-0015) that cannot fail; R-AM-0003 admits it because the observable
-behavior is unchanged. Before a synchronous body is emitted, one forward walk over its HIR keeps
-facts about local and parameter objects: a range of an unsigned integer, `i < len(b)`,
-`i <= len(b)`, `n == len(b)` and `len(b) >= k` for a local slice or `array<T>` b. Facts come from
-initializers and plain assignments (a slice `b[a..a + K]` holds K elements), the conditions of
-`if`, `while` and `for`, the operands of `&&`, `||` and `?:`, and an `if` whose only branch always
-leaves the block. A statement first forgets every fact about an object it may change; a loop,
-`switch` or `try` forgets the facts about everything it changes before its first part is walked;
-the deaths in one branch of an `if` do not reach the other branch, nor the rest of the block when
-the branch always leaves it. An object whose storage is borrowed exclusively or by raw address,
-that receives an output argument, or that is named where the walk cannot see a change, carries
-no facts in that body.
-
-An index is proven when its value range lies below a fixed-array bound; when it is no larger
-than a subject known below the length of its local slice or `array<T>` base (the subject, an AND
-with it, a right shift, quotient or unsigned narrowing of it); when it is a remainder by that
-length or by a subject that does not exceed it; or when its range lies below a known minimum
-length. Ranges come from literals, unsigned types, casts, masks, shifts, quotients and
-remainders, and arithmetic that cannot wrap. A conversion is proven when its operand range fits
-the target. Ranges never depend on a fact outside the walk, so the same evaluation without facts
-proves constant, masked and narrow-typed indices and conversions anywhere: in the synchronous
-parts of async bodies and, over MIR values (each defined once), in async frames. The proofs
-mark HIR nodes with the generation of the walk; only the body being emitted reads them.
-`tests/check_index_proofs.py` compares marked fixture lines with the checks left in generated C.
-A static local carries no facts: a call, such as a recursive one, may change it.
-
-### Loop versioning
-
-`compiler/codegen/loop_versions.inc` handles affine indices that no fact bounds. When the walk of
-`index_proofs.inc` enters an innermost `for (...; k < B; k += 1)` whose unsigned induction
-variable only the step changes, it records each index `base[A + k * S]` (also `k`, `k * S`,
-`S * k`, with the offset on either side) whose base length, `A`, `S` and `B` keep their value
-through the loop: literals, loads of unsigned locals and parameters the loop does not change
-(the stamps of the walk tell), lengths of such slices and `array<T>` values, and their wrapping
-sums, differences and products, which evaluate without a check or a side effect. The emitter then
-writes, before the loop, one test that the largest index `A + (B - 1) * S` is computed without
-wrapping and lies below `len(base)`, and two copies of the loop: one without the checks of those
-indices, run when the test holds, and the loop as written. Unsigned arithmetic wraps in R, so the
-absence of wrapping at the largest value also shows that every iteration computes the exact
-affine value. The body is copied only when the emitter writes it the same way twice (no nested
-loop, return, throw, try, switch or task operation, no local with a drop obligation, calls only
-of synchronous functions without checked errors). Each versioned index is named in a comment
-before its loop; `tests/check_loop_versions.py` compares them with marked fixture lines.
-
-### Direct calls of async bodies
-
-`compiler/codegen/direct_calls.inc` runs `await f(args)` as an ordinary C call of a twin of `f`
-when nothing can tell the difference from a started task (R-AM-0003). The MIR of `f` must have no
-start, await, task scope, cancel, deadline or budget block, so its first step is its whole body;
-`f` is not `@scoped`; neither its parameters nor its result (or outcome carrier, when it has
-checked errors) carry a drop obligation; and the start must be consumed by the await that
-directly follows it in the MIR (the block of the start only selects on its outcome, the success
-path stores the task in the hidden local of the await and jumps to it, and neither await target
-begins with a phi). The twin `r_fN_direct` is emitted by the synchronous emitter from the HIR of
-`f`, so the preflight of such a start preflights that body as an ordinary function. At the call
-site, `r_runtime_task_direct_begin(R_STACK_ENTRY(r_fN_direct))` refuses under a budget, while the
-executor drains or stops, and when the stack cannot hold the measured bound of the twin; the start
-then proceeds as before. Otherwise it takes the next task identifier (R-SLIB-ASYNC-0018), which
-`std.async::task_id` reports inside the twin until `r_runtime_task_direct_end`, and the code after
-the call reads the cancellation request of the awaiting task as the await of a completed task
-does. The call is marked `R_STACK_GUARDED`: `tools/compute_stack_entries.py` gives the twin an
-entry bound of its own instead of nesting it below the step.
-
-The same immediate-await shape lets an awaited `std.sync` receive whose channel holds a value, or
-has lost every sender, complete at once (`r_c17_emit_receive_now`): `r_std_sync_try_recv` moves the
-value as the started receive would, and an empty channel takes the ordinary path. It runs only
-while `r_runtime_task_inline_completion_allowed()` holds, because a budget would charge the frame
-of the receive task. Each path is named in a comment; `tests/check_direct_calls.py` compares
-them with marked fixture lines.
-
-### Layout of generated C
-
-The generated C17 is a fixed point of clang-format 22.1.8 under the repository style; with that
-clang-format found, every codegen test has a `_format` twin that checks it. The emitter writes
-with local wrapping heuristics, and `layout_pass.inc` lays out the finished program once:
-statements inside functions go through the port of clang-format's line breaker in
-`layout.inc`. File-scope declarations are laid out by rules measured against clang-format over
-thousands of generated declarations (P4.4-4):
-
-- an initializer that does not fit in 100 columns is written with one element per line and a
-  comma after every element, a designated list value on the lines after its designator; a list
-  of 19 or more elements without nested lists takes clang-format's column layout (the fewest
-  columns that still give the fewest lines, within the remaining width, at most 10 columns of
-  spread per column); an initializer without braces moves after its `=`;
-- a function declaration keeps its parameters on one line or puts one per line, and takes the
-  cheapest of: the return type on its own line (80; not after a type shorter than six columns),
-  a break after the parenthesis (140) and a break per parameter (41). A declaration whose
-  parameters name no type (no `const`, pointer, parameter name or standard type word such as
-  `size_t`) is read by clang-format as an object initialized by a call: the name moves to the
-  next line indented by four (74), 155 after the parenthesis, 51 per argument. A typedef of a
-  pointer to a function costs 140 after the parenthesis and 41 per parameter;
-- a `case MACRO(value): {` label past the limit breaks inside the parentheses.
-
-Glue functions keep their parameter names short so that their signatures fit on one line.
+The LLVM emitter checks every index, slice and explicit integer conversion and starts every
+awaited call as a task. Three optimizations of the removed C17 emitter return in stage B7, where
+index proofs become facts for the LLVM optimizer: proofs that leave out a bounds check
+(R-EXPR-0021) or an explicit integer conversion check (R-EXPR-0015) that cannot fail, versions of
+loops with affine indices that run a copy without their checks after one test before the loop,
+and direct calls of async bodies (and the immediate completion of an awaited receive) where
+nothing can tell the difference from a started task (R-AM-0003). Their fixtures
+(`codegen_index_proofs.r`, `codegen_async_index_proofs.r`, `codegen_index_proofs_static_bounds.r`,
+`codegen_loop_versions.r`, `codegen_async_loop_versions.r`, `codegen_async_direct_calls.r`)
+still run as programs. `tests/check_index_proofs.py`, `tests/check_loop_versions.py` and
+`tests/check_direct_calls.py` lower each of them with `--all-functions` and require the marks of
+its lines (`/* proven */`, `/* checked */`, `/* proven conversion */`, `/* checked conversion */`,
+`/* versioned */`, `/* direct */`, `/* started */`); the comparison of each mark with the
+generated code returns with B7.
 
 ### Hosted main error boundary
 
 Core draft.50 gives all four existing `i32 main` forms the closed Copy-only error set
 in R-FUNC-0008. Explicit `throws` stays forbidden. User-defined errors, JSON errors and
 owner-bearing allocation/container errors still require a local catch.
-The generated C17 entry dispatches exact carrier tags, forms the portable error without
-allocation and calls `std.error::name` through its C ABI. Emergency output includes domain,
+The generated entry (`compiler/llvm/hosted_main.c`) dispatches exact carrier tags, forms the
+portable error without allocation and calls `std.error::name` through its C ABI. Emergency
+output includes domain,
 name, code and native code. It precedes cancellation, a complete work drain, and static /
 initial-thread TLS destruction; work created by each destructor drains before the next.
 The executor remains available until destruction completes. Impossible tags are internal
@@ -213,7 +385,7 @@ or one that calls an initializer), after a drop and after `move value as void` o
 destruction may run R code: one relaxed load of `r_runtime_unwinding_threads`, the number of threads
 with a pending panic, and the phase of the thread only when that number is not zero. A panic that
 begins during cleanup, or while one is pending, is a second panic: both reports are written and
-the process aborts (R-ERR-0008). Panics inside runtime and library C abort as before (R-ERR-0006);
+the process aborts (R-ERR-0008). Panics inside runtime and library C abort (R-ERR-0006);
 apart from internal contract violations they are stack exhaustion, reference-count overflow and
 allocation failures inside the runtime.
 
@@ -232,22 +404,23 @@ ends its task with it and drops the result it wrote; a step that suspends with i
 the task until it runs again (`panic_stray` in `task_execute`), so that the worker thread runs
 other tasks without it.
 
-The synchronous emitter writes `if (r_runtime_unwinding()) { ... }` after such a node: the frame
-enters cleanup, runs its pending aggregate drops, routes through its finally blocks with the
-pending completion `panic` (which replaces any other pending completion, R-ERR-0005), drops the
-live objects, leaves cleanup and returns a zero value that the caller never reads because it tests
-first. A user drop that runs while a panic is pending, as for the rest of a value whose earlier
-drop panicked, runs inside cleanup (`r_c17_emit_user_drop_call`). A function compiled for an
-unwinding profile is never `_Noreturn`: a `never` function returns with its panic pending.
-
-In an async function MIR requests a panic block for each instruction that can panic and builds
-the blocks after the body, so that the numbers of the other blocks stay as they were (C wrapper
-tests name states). A panic block runs the active finally blocks with a pending panic and ends in
-the terminator `panic`; the step returns `R_RUNTIME_TASK_STEP_PANICKED`, and the frame destructor
-drops what is still initialized, as after a cancellation. A finally block may suspend, so the step
-parks the panic in its task (`r_runtime_task_panic_park`) before it jumps to the panic block
-through the `r_async_dispatch` label of its loop and takes it back (`r_runtime_task_panic_unpark`)
-before it returns. The MIR dump writes the block as ` panic=bbN` (interface schema 34).
+In every function of an unwinding profile, synchronous or async, MIR requests a panic block for
+each instruction that can panic and builds the blocks after the body, so that the numbers of the
+other blocks stay as they were. A failed check raises the panic and branches to the panic block
+of its instruction; after a call or operation that may run R code the emitter tests
+`r_runtime_unwinding()` and branches there when it holds. On that edge a synchronous frame
+enters cleanup (`r_runtime_unwind_cleanup_enter`), and a step parks the panic in its task
+(`r_runtime_task_panic_park`), because a finally block may suspend. A panic block runs the active
+finally blocks with the pending completion `panic` (which replaces any other pending completion,
+R-ERR-0005) and ends in the terminator `panic`. There a synchronous function drops what is still
+initialized, in the reverse order of the MIR, leaves cleanup and returns with its panic pending
+and a zero result that the caller never reads, because it tests first; a step takes the panic back
+(`r_runtime_task_panic_unpark`) and returns `R_RUNTIME_TASK_STEP_PANICKED`, and the frame
+destructor drops what is still initialized, as after a cancellation. A user drop that runs while a
+panic is pending, as for the rest of a value whose earlier drop panicked, runs inside cleanup
+(`r_llvm_user_drop` in `glue.c`). A function compiled for an unwinding profile is never
+`noreturn`: a `never` function returns with its panic pending. The MIR dump writes the block as
+` panic=bbN` (interface schema 34).
 
 At the boundaries the task runtime completes a panicked task with its report. An `await` makes the
 panic pending again in the awaiting task (`R_RUNTIME_TASK_EXECUTION_AWAIT_PANICKED`); a report that
@@ -339,7 +512,7 @@ generic constraint vocabulary, so `@generic<T: Name & copy>` admits method calls
 and default method bodies. Definitions are checked even without an instantiation, and
 inherited defaults preserve their checked errors and resource contracts. Closing a trait
 application substitutes `Self`, its arguments and associated bindings, then selects one
-coherent implementation. Generated C17 uses direct calls and keeps the static call graph
+coherent implementation. Generated code uses direct calls and keeps the static call graph
 of R-FUNC-0004 exact. Dynamic dispatch exists only through dyn interfaces and function
 values, below.
 
@@ -394,14 +567,14 @@ dispatcher to the implementation for each member, instantiating default or gener
 it repeats with the closing loop until nothing changes. `r_dyn_assign_tags` numbers the members
 of an interface in the order of their canonical type names, so generated code does not depend
 on source order. The stack graph and `@noalloc`/`@nonblocking` proofs follow a dispatcher to
-every target. C17 represents every interface borrow as `r_dyn { void *r_pointer; uint32_t
-r_tag; }`; a synchronous dispatcher is a function with the prototype's signature whose body
-switches on the tag and forwards every argument to the member's implementation, and an async
-start of a dispatcher in an async body is expanded in place: one launch and call initializer
-(`_m<tag>`) per member under a switch. Async methods take borrowed receivers only as
-`@scoped async` methods inside task groups (R-BORROW-0024, R-STMT-0017). The
-[keystore example](../examples/keystore/README.md) keeps the backend selected from its first
-argument as `own dyn(Store)*` in a `Session` and runs every command through a borrow of it.
+every target. The backend represents every interface borrow as `{pointer, u32 tag}`; a
+synchronous dispatcher is a function with the prototype's signature whose body switches on the
+tag and forwards every argument to the member's implementation (`dispatch.c`), and an async
+start of a dispatcher in an async body switches on the tag in place and starts the selected
+member with the stack bound of its first step (`async.c`). Async methods take borrowed receivers
+only as `@scoped async` methods inside task groups (R-BORROW-0024, R-STMT-0017). The [keystore
+example](../examples/keystore/README.md) keeps the backend selected from its first argument as `own
+dyn(Store)*` in a `Session` and runs every command through a borrow of it.
 
 ### Owners of interfaces
 
@@ -420,15 +593,15 @@ receiver's access, casts that borrow to an interface borrow and dispatches like 
 has no nameable type. `r_dyn_resolve_targets` takes the members of an interface from owner
 conversions too, and a narrowed interface receives every member of the wider one.
 
-C17 represents an owner of an interface as the runtime owner of its member and the member's tag
-(`r_own_dyn`, `r_arc_dyn`, `r_rc_dyn`, `r_weak_arc_dyn`, `r_weak_rc_dyn`, each
-`{ <runtime owner> r_owner; uint32_t r_tag; }`). The member's type information is recorded in the
-runtime owner when it is allocated, so release, clone, downgrade, upgrade and the counts reuse the
-runtime operations on `r_owner`, and the last release destroys the member exactly once. A
-conversion from a member owner adds the tag (`r_c17_emit_dyn_cast`); narrowing indexes a static
-table `r_dyn_narrow_<wide>_<narrow>[]` with the wide tag (`r_c17_emit_dyn_narrowing_tables`); and a
-borrow of an owner becomes the `r_dyn` of the member's storage and tag. Glue for a class of
-owners is emitted once per class, with a representative that needs destruction. The keystore
+The backend represents an owner of an interface as the runtime owner of its member and the
+member's tag (`{ <runtime owner>, u32 tag }` for `own`, `arc`, `rc` and both weak owners). The
+member's type information is recorded in the runtime owner when it is allocated, so release,
+clone, downgrade, upgrade and the counts reuse the runtime operations on the owner, and the last
+release destroys the member exactly once; the drop glue of an owner of an interface releases its
+owner member. A conversion from a member owner adds the tag (`r_llvm_emit_dyn_cast` in
+`values.c`); narrowing indexes a constant table `r_dyn_narrow.N.M` of the wide and the narrow
+interface with the wide tag; and a borrow of an owner becomes the interface borrow of the
+member's storage and tag. The keystore
 example and the fixtures `codegen_dyn_owners`, `codegen_async_dyn_owners` and
 `codegen_dyn_owners_modules` exercise locals, fields, containers, options, generic arguments,
 narrowing, tasks, a thread and interfaces declared by another module.
@@ -494,15 +667,16 @@ start requires a Send, unborrowed result, and `get`/`get_mut` return a borrow bo
 borrow of the guard. `std.async::broadcast::<T>(capacity)` is a standard type call (Annex A)
 whose element type comes from `::<T>` or from the expected type; the element shall be Send,
 unborrowed and cloned structurally without a clone hook, so the library may clone it on any
-thread. `compiler/codegen/standard_async_sync.inc` emits the synchronous calls and the task
-starts, and passes the element's layout and clone glue to `r_std_async_broadcast`.
+thread. The emitter (`compiler/llvm/sync.c`) writes the synchronous calls and the task starts
+from the same table, and passes the element's layout and clone glue (`r_broadcast_clone.N`) to
+`r_std_async_broadcast`.
 
 Guards and permits hold a reference to their lock, so they are unborrowed and may stay live
 across `await`. The MIR await-liveness pass reports a `std.sync` guard, or a `std.sync` lock
 outcome that carries one, as R-DIAG-ASYNC-001 [R-FUNC-0011] with the `std.async` lock that
 replaces it. `std.async::broadcast_result<T>` is a compiler-generated outcome with the layout
-`{ uint32_t r_tag; union { T r_received; uint64_t r_lagged; } r_payload; }` and its own move and
-drop glue (`r_type_move_b*`, `r_type_drop_b*`); `std.sync::reserve_result<T>` and
+`{ u32 tag; union { T received; u64 lagged; } payload; }` and its own move and drop glue;
+`std.sync::reserve_result<T>` and
 `try_reserve_result<T>` reuse the tagged `std.sync` outcomes with a permit payload. The fixtures
 `codegen_async_locks`, `codegen_async_broadcast`, `codegen_async_reserve` and the zero-capacity
 panics `codegen_async_broadcast_zero` and `codegen_async_reserve_zero` run in every build, and
@@ -518,10 +692,11 @@ direct `move place` form of staged Move arguments, and reports them under R-SLIB
 result is `task<R throws E...>` of the entry's return type and checked errors, which shall be
 inhabited and hold no borrow (R-TYPE-0029), and the start carrier adds
 `std.async::start_error`; the call is a transactional start, so a failed start leaves the staged
-sources initialized. C17 reuses the thread entry supports (`r_thread_payload_*`,
-`r_thread_stage_*`, `r_thread_entry_*`) and calls `r_std_async_blocking` with the payload type,
-the type of the entry's completion storage, the entry trampoline and the stage, in the HIR path
-of synchronous functions and the MIR path of async frames.
+sources initialized. The emitter reuses the thread entry supports (`compiler/llvm/threads.c`:
+the payload, its move and drop functions `r_thread_move.N` and `r_thread_drop.N`, the trampoline
+`r_thread_entry.N`) and calls `r_std_async_blocking` with the payload's type information, the
+type information of the entry's result, the entry trampoline and the stage, in synchronous
+functions and async frames alike.
 
 The pool (`runtime/darwin/source/blocking_pool.inc`, included by the task runtime) starts a
 thread only while every existing one is busy, up to `R_RUNTIME_BLOCKING_THREAD_COUNT`, and takes
@@ -553,9 +728,9 @@ methods through `r_format_visit_hooks`. A slot width now pads every value to a n
 scalar values (`r_library_internal_format_text` and `_char` in
 `library/internal/text/source/format_spec.c`); the numeric specifications stay numeric.
 
-C17 emits one glue function per formatted type (`compiler/codegen/format_glue.inc`,
-`r_type_format_<id>(const void *, RStdFormatBuilder *)`), spliced after the function prototypes
-like the clone glue: a nominal type calls its method through its effect carrier, standard
+The emitter writes one glue function per formatted type (`compiler/llvm/format.c`,
+`r_format.N`, over the value and an `RStdFormatBuilder`): a nominal type calls its method
+through its effect carrier, standard
 formatting composes the glue of the components with `some(...)`, `[..., ...]` and `(..., ...)`,
 and addresses use `r_library_internal_net_ip_text`/`_socket_text` of std.net. RENDER creates a
 builder and finishes it into the result string, destroying it on failure; APPEND writes to the
@@ -586,7 +761,7 @@ with `RBodyContext.source` switched to the aggregate's module, `symbol_floor` hi
 of the initializing function, `module_context` hiding lambda captures and `use_site` moving the
 diagnostics of that use, such as an undeclared checked error, to the initialization. Structs of
 defaults, `@default` variants and fixed arrays build ordinary `aggregate_init`, `variant` and
-`array_init` nodes, so MIR and C17 need nothing new; omitted array elements and `core::take`
+`array_init` nodes, so MIR and the backend need nothing new; omitted array elements and `core::take`
 (lowered as a replacement with the evaluated default) use the same builder. An optional JSON
 field without `default` maps a literal or `factory()` initializer to the existing JSON default
 (`r_json_default_from_initializer`). Interface schema 34 writes `initializer=true` on such fields
@@ -623,15 +798,14 @@ given the type an aggregate (M18-9). An interface proves the capabilities its tr
 borrows cross `@scoped` calls. The portable error structs, `std.error::error` and
 `std.bits::read_error` build by braced initialization
 (`r_body_prepare_standard_error_constructor`, M18-2). The remaining defects found on the way:
-`std.io::flush` through a borrowed stream is the two-operand MIR form that C17 passes as the
-borrow itself (M18-3); a `@scoped async` method called as `value.method()` receives the borrow
+`std.io::flush` through a borrowed stream is the two-operand MIR form that the backend passes as
+the borrow itself (M18-3); a `@scoped async` method called as `value.method()` receives the borrow
 that the call forms instead of a staged move (M18-4); a view formed by `owner.as_slice_mut()`
 exposes the place it came from to the argument-conflict check, so views of different fields are
 disjoint (M18-5); the task that an await in a loop condition materializes lives in the
 condition's value scope (M18-6); the loop replay ignores stores of values without views
 (M18-7); a call-formed view argument of a non-dependent slice parameter of a generic call is
-lowered with that slice as its destination (M18-8); a move gate without a drop gate names a
-keeper that names it back, so the generated C has no unused function (M18-1). See
+lowered with that slice as its destination (M18-8). See
 `tests/fixtures/codegen_std_stream.r`, `codegen_std_bufio.r`, `codegen_std_console.r`,
 `tests/m18_regression_tests.inc` and `examples/relay`.
 
@@ -689,7 +863,7 @@ part of `std.hash` (`sha256_state`/`sha512_state` over data in pieces and `hmac_
 (RFC 9562 versions 4 and 7, `core::Format`, derived equal and ordered, `hash`/`equal` methods
 for dictionary keys). A digest struct of `std.hash` has its byte field wherever its type is
 named, not only after a digest operation was checked (`r_semantic_prepare_hash_schema`, defect
-M20-1), and C17 copies the whole native array of a digest field with `memcpy` in synchronous and
+M20-1), and the backend copies the whole native array of a digest field in synchronous and
 asynchronous code. See `tests/library_random_tests.c`, the fixtures `codegen_library_random.r`,
 `codegen_library_uuid.r`, `codegen_library_hmac.r`, `codegen_async_library_tokens.r`,
 `codegen_hash_digest_values.r` and `codegen_hash_driver.r` with `tests/hash_differential.py`
@@ -726,7 +900,7 @@ kind that listeners share, installs `SIG_IGN` only after the source is registere
 the previous disposition with the last listener; a wait is cancelled by its slot, because a
 completion may win over an earlier cancellation. The socket options of `std.net`
 (R-SLIB-NET-0012..0013) and `unix_peer_credentials` (R-SLIB-NET-0016) are descriptor-driven
-synchronous calls on a borrowed handle (`r_c17_net_is_option`); `o<std.time::duration>` maps to
+synchronous calls on a borrowed handle (`r_llvm_library_net`); `o<std.time::duration>` maps to
 the library's canonical `RStdTimeDurationOption` like `o<std.time::system_time>`. The
 Unix-domain operations (R-SLIB-NET-0014, 0015, 0017) are descriptor entries: the asynchronous
 ones in `standard_net_operations.h`, whose emitter now passes any `str` first argument as a
@@ -762,10 +936,9 @@ of the executor, or the task of the blocking call on a pool thread
 (`r_runtime_task_current_id`); the executor numbers tasks from one when it commits their start.
 The parser admits `task_id` after the keyword module `std.async`, and the resource checker
 proves it `@noalloc` and `@nonblocking`. One defect was fixed. M23-1: `std.convert::checked_D`
-and `std.c::checked_D` in an asynchronous function were rejected by the C17 lowering, because
-the MIR path of the step had no emitter for them; `r_c17_preflight_async_checked_call` and
-`r_c17_emit_async_checked_call` now store the kernel result as the single-error carrier of
-`std.convert::range_error` that the MIR dispatches. See `tests/m23_regression_tests.inc`, the
+and `std.c::checked_D` in an asynchronous function were not lowered on the MIR path of the step;
+the call now stores the kernel result as the single-error carrier of `std.convert::range_error`
+that the MIR dispatches (`r_llvm_library_checked_number`). See `tests/m23_regression_tests.inc`, the
 fixtures `codegen_library_log.r`, `codegen_library_args.r`, `codegen_library_config.r`,
 `codegen_library_async_task_id.r`, `codegen_library_task_id_outside.r` and
 `regression_async_checked_conversion.r`, and the examples `service` and `offload`.
@@ -799,7 +972,7 @@ the hosted allocator. The tests of the library found ten defects, six of them in
 M24-1: the link plan of a synchronous program that called an operation of that table named no
 library for it, because only asynchronous programs brought in `r_std_async`; the plan now names
 the library of each table operation by module. M24-2: an owned `std.string::string` key (Library
-R-LIB-0020) failed the core key preflight and had no C17 key helpers, and the dictionaries of
+R-LIB-0020) was not accepted as a core key and had no key functions, and the dictionaries of
 `std.env` hashed with SipHash; the key now has the contract of `str` (FNV-1a over the UTF-8
 bytes, mixed with the seed) everywhere. M24-5: the overload `append` asked
 `r_standard_query_call` for the type of its value, which knew only standard operations; the
@@ -879,7 +1052,7 @@ symbol with the first reason against it; any static or thread-local variable, al
 async, `unsafe`, FFI, checked error or float keeps a run-time function. The call graph is
 acyclic, so the interpreter addresses locals by symbol and keeps values in an arena.
 
-Evaluation mirrors the run-time checks of the generated C (overflow, division, shifts,
+Evaluation mirrors the run-time checks of the generated code (overflow, division, shifts,
 checked conversions, bounds) and the target layout of `r_generic_layout`. Results become
 literal, string, enumerator, array and aggregate HIR. Where a constant is required (array
 bounds, constant generic arguments, enumerator values, case labels, module, `static` and
@@ -896,7 +1069,7 @@ available and injects them by AST node, repeating while new values appear. Docum
 (R-IDB-010): 4000000 steps and 64 MiB of values per evaluation, at most 32 discovery passes
 (a program whose module-scope values still grow after them gets `R-DIAG-LIMIT-001`),
 and at most 256 scalar elements substituted inside a function body (a module constant holds a
-larger value as one static initializer, wrapped before column 100). Interface schema 34 marks
+larger value as one static initializer). Interface schema 34 marks
 evaluable exported functions `consteval=true` and records source dependencies whenever a
 translation-time value was computed. The [tables example](../examples/tables/README.md)
 builds a CRC-32 table, a frame size used by a module-scope struct, enumerator values and a
@@ -949,16 +1122,15 @@ exchanged by `std.slice::swap`, which uses one-element raw slices internally for
 
 `core::clone(&value)` of a Copy value lowers to a read of the place (views keep their content
 provenance). Any other cloneable type (`clone` capability, `r_clone_capability` in
-`compiler/semantic/clone.inc`) is unborrowed and lowers to `STANDARD_CALL core::clone`, which C17
-turns into generated per-type glue `r_type_clone_<type>` (`compiler/codegen/clone.inc`): strings,
+`compiler/semantic/clone.inc`) is unborrowed and lowers to `STANDARD_CALL core::clone`, which the
+emitter turns into generated per-type glue `r_clone.N` (`compiler/llvm/clone.c`): strings,
 paths, `array`, `list`, `dict`, `o`, `own`, fixed arrays, tuples, shared owners and nominal types
 with an associated `T T::clone(const T* value)` hook. The glue builds the copy in uninitialized
 storage, destroys every built component on failure and reports `std.alloc::alloc_error` through
 the call's carrier; a clone that cannot fail (Copy, shared owners, hooks without errors) has no
-checked effect. The glue is spliced in after the function prototypes because it calls hooks. The
-static call graph adds an edge to every hook the copied structure reaches, so a hook that clones
-its own type through an owner is a recursive call chain. Interface schema 34 records the `clone`
-hook and the `clone` constraint. See `tests/fixtures/codegen_swap_clone.r`,
+checked effect. The static call graph adds an edge to every hook the copied structure reaches, so a
+hook that clones its own type through an owner is a recursive call chain. Interface schema 34
+records the `clone` hook and the `clone` constraint. See `tests/fixtures/codegen_swap_clone.r`,
 `codegen_async_swap_clone.r`, the failure sweep `codegen_clone_failures.r` and
 `examples/tournament`.
 
@@ -991,10 +1163,10 @@ struct names an instance that is not complete yet. The same pass checks every fu
 with its concrete type (`r_function_value_concrete`), so a conversion to the type of an instance,
 also in the clone of a generic body, is refused when that instance breaks them.
 `r_function_value_build_dispatcher` gives each dispatcher a HIR declaration with its receiver and
-parameters. C17 represents a function value as the `uint32_t` symbol number of its target
-(`r_c17_type` maps the kind to `u32`); a synchronous dispatcher switches on it with a direct call
-of each target, and an async start selects the target's frame initializer and launch like a dyn
-dispatcher, with the arguments after the receiver. Interface schema 34 writes the type as
+parameters. The backend represents a function value as the `u32` symbol number of its target
+(`types.c`); a synchronous dispatcher switches on it with a direct call of each target
+(`dispatch.c`), and an async start selects and starts the target like a dyn dispatcher, with the
+arguments after the receiver. Interface schema 34 writes the type as
 `(fn parameters=(...) return=R throws=(...))` with `async=true`, `noalloc=true` and
 `nonblocking=true` when they apply.
 
@@ -1012,7 +1184,7 @@ name and keeps one per region, and positions inside a region resolve to that nam
 dumps omit the regions, so example syntax coverage counts only authored nodes. Generated names use
 a prefix that no identifier of the source starts with, and a module deriving equal or ordered gets
 an implicit `import std.cmp;` during the interface scan. `clone` generates nothing: it sets
-`clone_derived`, which makes the structural clone glue of `compiler/codegen/clone.inc` apply.
+`clone_derived`, which makes the structural clone glue of `compiler/llvm/clone.c` apply.
 `compiler/semantic/derive.inc` records the capabilities, rejects unknown, repeated and misplaced
 derivations and errors with descendants, and checks that every field or payload proves the
 capability, naming the first that does not and silencing its region. Interface schema 34 writes
@@ -1152,11 +1324,10 @@ counter and bound, the borrowed sequence or slice, or the iterator; the loop bod
 loop variable in a prologue and then lowers the user's block, so the object-state fixed
 point, `break`, `continue` and drops of R-STMT-0004 apply unchanged. An iterator loop reads
 the tag of the hidden `o<Item>` through a shared borrow (`R_HIR_VARIANT_TAG`), breaks on
-`o::none` and transfers the payload (`R_HIR_VARIANT_PAYLOAD`) into the loop variable; the C17
-back end emits `.r_tag` and `.r_payload.r_some` accesses and direct calls only. A projection
-is a synthetic generic parameter (`RGenericParameter.projection_base`) that
-`r_generic_substitute_type` resolves through the implementation of the substituted base.
-Hidden locals are named by symbol in the generated C (`r_hNNNNNNNN_MMMMMMMM`). The new
+`o::none` and transfers the payload (`R_HIR_VARIANT_PAYLOAD`) into the loop variable; the
+generated code reads the tag and the payload member of the option and makes direct calls only.
+A projection is a synthetic generic parameter (`RGenericParameter.projection_base`) that
+`r_generic_substitute_type` resolves through the implementation of the substituted base. The new
 semantic layer lives in `compiler/semantic/iteration.inc`.
 
 ### Collection expressions and variadic parameters
@@ -1223,9 +1394,9 @@ text)` grows the array the element borrows. A value read through a borrow a call
 (`*pick(words)`) carries what the designated storage holds. A Move `switch` or `match` moves an
 exclusive borrow or a mutable slice out of a variant payload with the payload's origins
 (`r_semantic_type_is_exclusive_view_payload`); a slice payload carries origins like a borrow.
-Since L14 MIR and C17 accept any proven Move payload that holds views, such as a struct with an
-exclusive borrow or a container iterator.
-A caught error that holds a container of borrows is rethrown or dropped like any Move error.
+Since L14 MIR and the backend accept any proven Move payload that holds views, such as a struct with
+an exclusive borrow or a container iterator. A caught error that holds a container of borrows is
+rethrown or dropped like any Move error.
 
 Core draft.66 (L14) makes an associated type independent of the region of a call (R-TYPE-0045).
 A method implementing a prototype with a borrowed receiver whose result mentions an associated
@@ -1298,7 +1469,7 @@ call: `r_body_lower_standard_array_filled` takes the element from an expected `a
 the value and requires a Copy element without views, so the copies need neither clone glue nor
 regions. The node `R_STANDARD_CALL_ARRAY_FILLED` keeps the length and the value as its two
 children and the array and `std.alloc::alloc_error` carrier as `auxiliary_type`, like
-`with_capacity`. Both C17 paths stage the value once and pass its address to
+`with_capacity`. The emitter stages the value once and passes its address to
 `r_std_array_filled` with the element type information; the library allocates once and fills by
 `memset` or by doubling `memcpy`. Translation-time evaluation builds the container cell by cell.
 
@@ -1337,14 +1508,14 @@ Core draft.72 (L20) changes selection. A switch or select clause without a termi
 with an implicit break: the parser no longer requires the clause terminator and
 `r_body_lower_switch_clause` treats a missing one as `break`. A match arm may be a `throw`
 statement, lowered as a value scope of the throw and a `never` placeholder
-(`R_HIR_DEFAULT_VALUE` of type never, which C17 emits as no value). String labels of a `str`
-scrutinee and labels of a `core::CaseMatcher` scrutinee (a fourth synthesized core trait with
+(`R_HIR_DEFAULT_VALUE` of type never, which the emitter lowers to no value). String labels of a
+`str` scrutinee and labels of a `core::CaseMatcher` scrutinee (a fourth synthesized core trait with
 associated type `Label` and `bool matches(const Self* this, Self::Label label)`) become match
 patterns `R_MATCH_STRING`/`R_MATCH_MATCHER`, tested through `std.bytes::equal` or a call of
 `matches`; a switch over them (`compiler/semantic/labels.inc`) computes the number of the first
-matching clause and lowers the clauses as an integer switch with precomputed tags, as select
-does. `std.text::ignore_ascii_case` returns `std.text::ascii_caseless`, the matcher of labels
-without ASCII case.
+matching clause and lowers the clauses as an integer switch with precomputed tags, as select does.
+`std.text::ignore_ascii_case` returns `std.text::ascii_caseless`, the matcher of labels without
+ASCII case.
 
 Core draft.73 (L21) adds single inheritance between errors (R-AGG-0011). The parser reads
 `error Name : Parent { fields }` when a name follows the colon; a primitive type there still
@@ -1359,15 +1530,15 @@ descendant widens through a match-like chain over its variants
 (`compiler/semantic/error_families.inc`). A throws entry expands to the exact members, and
 `r_semantic_error_catch_distance` selects in the innermost try with a matching clause the clause
 of the nearest ancestor: in semantic analysis (`active_catch_groups`), in generic instances
-(conditional exits carry their try in `catch_group`), in MIR and in C17, where a clause of a
-family receives an exact error as its variant. `throw` of a family value moves the exact error
+(conditional exits carry their try in `catch_group`) and in MIR, where a clause of a family
+receives an exact error as its variant. `throw` of a family value moves the exact error
 out of its variant like a match arm and throws it, so a rethrow keeps the concrete type; the
 fields of the error are read through a shared borrow of the payload of variant zero, whose
 common initial sequence every member shares. `std.error::fault` names the family of the
 standard errors of the main boundary (`r_semantic_standard_fault_family`, built on first use),
-and `std.error::from_fault` is an erasure without a runtime symbol that C17 expands from the
-main-boundary table (`r_c17_emit_fault_portable`). Interface schema 34 writes `parent=` and
-`(error_family T)`.
+and `std.error::from_fault` is an erasure without a runtime symbol that the emitter expands from
+the main-boundary table (`r_llvm_fault_portable` in `hosted_main.c`). Interface schema 34 writes
+`parent=` and `(error_family T)`.
 
 Core draft.74 (L22) widens translation-time evaluation (`compiler/semantic/consteval.inc`,
 `consteval_containers.inc`). A throw sets the failure `R_CONST_FAILURE_THROW` with the error in
@@ -1385,11 +1556,11 @@ its entries in insertion order, a list as references to node storage) with curso
 iteration; capacity is not observed. Outside a required constant a call that throws is still
 replaced by its value when it completes, but a call that allocates is not. A `const` object that
 is not `thread_local` receives owners frozen as array initializers of the owner type
-(`consteval_freeze`); C17 emits their storage before the object (`r_c17_emit_frozen_data`) with
-descriptors that allocate nothing, lays out a dictionary's index by the runtime's probe and
-hash (`r_c17_frozen_key_hash`) and never drops such an object. Module objects of tagged types
-now have static initializers, and module objects of an error type with descendants hold its
-family (`r_semantic_remap_module_object_families`).
+(`consteval_freeze`); the emitter writes their storage as globals of their own
+(`r_frozen_<kind>.<source>.<offset>`, *LLVM emitter*) with descriptors that allocate nothing, lays
+out a dictionary's index by the runtime's probe and hash and never drops such an object. Module
+objects of tagged types now have static initializers, and module objects of an error type with
+descendants hold its family (`r_semantic_remap_module_object_families`).
 
 Core draft.75 (L23) adds deadline blocks (R-STMT-0019). The parser reads the contextual
 `deadline (value) block` like `select` (`r_deadline_ahead`), and `semantic/deadline.inc` lowers
@@ -1399,9 +1570,10 @@ it into a hidden local `$deadline`, initialized by the internal standard call
 wrapped in `o::some`. The runtime keeps a deadline in every task (`RRuntimeTaskDeadline`), copies
 the deadline of the executing task into each task it prepares, ends a bounded scope wait no
 later than it (`r_runtime_task_scope_wait_until`) and gives generated code
-`r_runtime_task_deadline_enter`, `_leave` and `_narrow`. C17 narrows the deadline structure of
-every standard asynchronous operation before its start (`r_c17_emit_deadline_narrow`) in the
-synchronous and async paths, the scoped operations and the JSON reader. A call may omit the
+`r_runtime_task_deadline_enter`, `_leave` and `_narrow`. The emitter narrows the deadline
+structure of every standard asynchronous operation before its start (`r_llvm_library_deadline`
+in `library.c`), in synchronous functions and async frames, the scoped operations and the JSON
+reader. A call may omit the
 trailing deadline argument of the operations in `standard_deadline_operations.generated.inc`,
 which `tools/generate_standard_operation_registry.py` derives from the library inventory:
 `r_standard_complete_deadline` appends a synthesized `o::none` to the argument list before the
@@ -1413,14 +1585,14 @@ Core draft.90 (L34) adds budget blocks (R-STMT-0020). The parser reads the conte
 the value is the struct `std.alloc::limits` of the R part of `std.alloc`
 (`r_semantic_budget_limits_fields`) and lowers the block into a hidden local `$budget`, a usize
 that the internal call `std.async::budget_enter` returns, and a try statement whose
-compiler-owned finally calls `std.async::budget_leave`. C17 reads the fields `bytes` and `tasks`
-of the limits value and passes them to `r_runtime_task_budget_enter`, which returns the previous
-budget of the task. The runtime keeps the budgets next to the allocator (`r_runtime_budget.h`):
-each budget counts bytes and tasks against its limits and those of its parents. The task runtime
-installs the budget of each task for its steps, copies it into each task it prepares and counts
-an R task until it is destroyed. The allocator charges each allocation made under a budget and
-records it in a sharded table, so a release returns its bytes on any thread and after the block.
-A refusal sets a per-thread flag, through which `R_STD_ALLOC_REFUSAL()`,
+compiler-owned finally calls `std.async::budget_leave`. The emitter reads the fields `bytes` and
+`tasks` of the limits value and passes them to `r_runtime_task_budget_enter`, which returns the
+previous budget of the task. The runtime keeps the budgets next to the allocator
+(`r_runtime_budget.h`): each budget counts bytes and tasks against its limits and those of its
+parents. The task runtime installs the budget of each task for its steps, copies it into each task
+it prepares and counts an R task until it is destroyed. The allocator charges each allocation made
+under a budget and records it in a sharded table, so a release returns its bytes on any thread and
+after the block. A refusal sets a per-thread flag, through which `R_STD_ALLOC_REFUSAL()`,
 `R_STD_ASYNC_START_REFUSAL()` and the generated start and list code report `budget_exhausted`.
 `std.alloc::alloc_error` and `std.async::start_error` gain that variant.
 
@@ -1434,12 +1606,11 @@ try statement over the function body whose compiler-owned finally calls
 and lowers its block as the function body. The stack graph check finds strongly connected sets
 of functions (`r_stack_graph_components`): calls inside a set whose members all have the
 attribute are skipped, and a set with a member without it is reported through a cycle that
-names such a member. C17 (`codegen/recursion.inc`) gives each instance a thread-local counter
-`r_activations_<ordinal>`, throws `RCoreRecursionError {.depth = N}` when the counter is at N
-and marks the entry `/* R_STACK_RECURSION: N */`. `tools/compute_stack_entries.py` reads the
-marks, accepts the cycles of marked functions, counts N frames of each member of a set and
-records each set as `R_STACK_RECURSION_<first member>` in the stack header. A definition
-without a frame of its own, one the C compiler inlined, keeps its calls in the graph. The proof
+names such a member. The emitter (`r_llvm_library_recursion` in `library.c`) gives each
+instance a thread-local counter `r_activations.N`, throws `core::recursion_error {depth = N}` when
+the counter is at N and records the depth of the function for the stack bounds, which accept
+the cycles whose members all carry it, count N frames of each member of such a cycle and write
+the depth into `!r.stack.frames` (*LLVM emitter*, Stack bounds). The proof
 of `@noalloc` and `@nonblocking` accepts a call back into a function with `@recursion` whose
 body it is proving (L35-1).
 
@@ -1471,17 +1642,16 @@ base. A labeled jump (R-STMT-0004, `semantic/loop_labels.inc`) whose label names
 ordinary jump would take is that jump; any other is lowered by `r_body_lower_targeted_jump`:
 the drops and finally routes of every scope up to the target loop, the object states recorded
 into that loop's break or continue states, and an `R_HIR_BREAK` or `R_HIR_CONTINUE` whose
-`loop_target` counts the target among the enclosing loops. MIR keeps a stack of loop targets,
-C17 jumps to the loop's break or continue label, translation-time evaluation and the result-use
+`loop_target` counts the target among the enclosing loops. MIR keeps a stack of loop targets and
+jumps to the target loop's break or continue block, translation-time evaluation and the result-use
 check count the loops left, and the startup check treats such a jump as reaching every enclosing
 loop. A pattern condition (R-STMT-0002, `semantic/pattern_conditions.inc`) reuses the `match`
 machinery: the tested value is a place or a hidden `$match` object, `if` tests it once and
 `while` lowers to a loop whose body tests it, leaves the loop on a mismatch, binds and runs the
 block. A switch on a place of a closed standard outcome without outer `move` borrows it like an
-`o` (R-STMT-0010, L37.5): C17 copies the outcome bitwise and builds each binding's payload in a
-shadow `r_view` value with the code of the moving switch, which is never dropped; in an async
-function the payload borrow of MIR gets a companion `_view` field in the frame or the resume
-stack.
+`o` (R-STMT-0010, L37.5): a payload binding borrows the owner member of the outcome itself, or a
+shadow of the payload aggregate built bitwise from the members (`outcome.c`); neither the shadow
+nor the outcome changes owner, and the shadow is never dropped.
 
 Core draft.102 (L40) adds the field form `auto {.field = name, .other, .0 = first} = value;` of
 the same declaration. The parser writes each item as a `destructuring_field` (a field name or a
@@ -1501,9 +1671,9 @@ consuming cancel, and the runtime already frees the slot of an unobserved member
 published. `std.sync::receive` (Library R-LIB-0016) is lowered by
 `r_body_lower_standard_sync_receive_call` into the standard call `R_STANDARD_CALL_SYNC_RECEIVE`,
 which the profile gate keeps to hosted-native-async (the element type is read before new types are
-interned, which may move the type table: L24-2); C17 passes the receiver borrow and a layout
-of `o<T>` (`RStdSyncReceiveLayout`: tag and payload offsets) to `r_std_sync_receive`, which starts
-an external task that waits in the FIFO of the channel (`channel_receive.c`) and writes the
+interned, which may move the type table: L24-2); the emitter passes the receiver borrow and a
+layout of `o<T>` (`RStdSyncReceiveLayout`: tag and payload offsets) to `r_std_sync_receive`, which
+starts an external task that waits in the FIFO of the channel (`channel_receive.c`) and writes the
 option itself. A string label compared with a `constexpr str` subject, such as the name of a
 portable error, now becomes a byte view through `str` as a call-bounded operand (L24-1,
 `r_label_string_test`). `std.service`, the TCP service of Library R-SLIB-SERVICE-0001..0003, is an
@@ -1524,11 +1694,10 @@ task; `std.service` uses the barrier for its `overflow::wait` policy. Error exit
 `r_mir_dispatch_effect_carrier` groups the members of a carrier that the function does not catch,
 or that the same catch receives as a family value, when their cleanup blocks are the same tree
 (`r_hir_same_tree`). Such a group leaves through one `throw` whose `runtime_type` names the
-callee carrier; the carrier itself is the pending payload across finally bodies, and C17 moves
-its error with one relay per carrier pair (`r_effect_relay_<n>`, spliced before the container
-helpers) into the completion carrier or the catch binding. Synchronous calls
-(`r_c17_group_effect_exits`) group the same way when no finally lies between the call and the
-destination. An await of a call that throws all of `std.error::fault` therefore adds one path,
+callee carrier; the carrier itself is the pending payload across finally bodies, and the
+emitter moves its error, whichever member it is, in one step into the outcome of the function or
+the catch binding, with the tag the destination gives it (`r_llvm_emit_relay_throw` in `emit.c`).
+An await of a call that throws all of `std.error::fault` therefore adds one path,
 not 24.
 
 ### Other forms completed by L13
@@ -1544,19 +1713,18 @@ that clause binds no payload (R-STMT-0007).
 
 `never` is a complete object type (R-TYPE-0007): a local, parameter, struct field or variant
 payload may have it, only an expression that does not complete initializes it, and its
-declaration ends the reachable path. C17 stores it as a placeholder byte (`uint8_t`) that only
-unreachable code names; a read produces no value, and a call, variant or aggregate with a never
-operand becomes a zero placeholder of its own type (`r_c17_emit_never_placeholder`,
-`r_mir_lower_never_operand_completion`). `r_semantic_type_is_inhabited` treats `never`, a struct
-with an uninhabited field and a tagged enum whose every variant carries one as uninhabited;
-containers (R-TYPE-0012), checked errors, `arc`/`rc` (R-TYPE-0025), `task` (R-TYPE-0029) and
-generic arguments (R-TYPE-0031) require inhabited types. An async never function is awaited only
-by the call form; its C step writes no result. C imports, callbacks and raw C function pointers
-with a never result are C `void` functions; a return from one reaches a
-`contract_violation` panic at the call.
+declaration ends the reachable path. The backend stores it as a placeholder byte (`types.c`) that
+only unreachable code names; a read produces no value, and a call, variant or aggregate with a
+never operand becomes a zero placeholder of its own type (`r_mir_lower_never_operand_completion`).
+`r_semantic_type_is_inhabited` treats `never`, a struct with an uninhabited field and a tagged enum
+whose every variant carries one as uninhabited; containers (R-TYPE-0012), checked errors, `arc`/`rc`
+(R-TYPE-0025), `task` (R-TYPE-0029) and generic arguments (R-TYPE-0031) require inhabited types. An
+async never function is awaited only by the call form; its step writes no result. C imports,
+callbacks and raw C function pointers with a never result are C `void` functions; a return from one
+reaches a `contract_violation` panic at the call.
 
-`atomic raw T*?` and `atomic raw const T*?` hold a nullable raw object pointer as
-`_Atomic(r_dN)` with load, store, exchange and compare-exchange (fetch operations stay
+`atomic raw T*?` and `atomic raw const T*?` hold a nullable raw object pointer in an atomic
+pointer cell with load, store, exchange and compare-exchange (fetch operations stay
 integer-only). The object operand of a core atomic operation may name a mutable module object
 without `unsafe` (R-OBJ-0009) when it projects only fields and fixed-array elements of that
 static to its atomic object; the exemption is recorded while the operand is lowered and dropped
@@ -1577,9 +1745,8 @@ R-TYPE-0040: the standard type and operation registries name compiler-recognized
 only, a registry miss for a loaded library module falls through to ordinary aggregate
 resolution, and `std.name::Type<arguments>` parses as a generic type when `std.name` is a
 loaded library module that declares the generic aggregate. Such a module has no C symbol of
-its own: its items reach C17 only through the translation of the program that uses them.
-The tests pass `-DLIBRARY_MAP=library/r/library.map` to the codegen, format and normative
-drivers.
+its own: its items reach generated code only through the translation of the program that uses
+them. The tests pass `-DLIBRARY_MAP=library/r/library.map` to the codegen and normative drivers.
 
 The shipped modules are `std.cmp` (the `ordering` enum, the `Equal`/`Ordered` traits with
 `eq`/`cmp` implemented for `bool`, `char`, every integer type and `f32`/`f64` with a total
@@ -1605,7 +1772,8 @@ buffered reader and writer over any stream, and printing and line input on the c
 UTF-8 scalar matching, byte spans, leftmost-longest search, full matching, literal replacement
 and splitting. Its checked errors distinguish syntax, unsupported constructs, compile limits,
 execution budgets and allocation failures. It shares the existing module, ownership, async
-and C17 paths and adds no native dependency. See [the executable example](../examples/regex/README.md).
+and code-generation paths and adds no native dependency. See [the executable
+example](../examples/regex/README.md).
 
 Every item keeps the ordinary Core rules:
 an item that grows a container declares that container's checked error, a returned borrow
@@ -1649,21 +1817,17 @@ span (R-REFL-0004); a call in a generic body folds where it is written, so every
 the same place. The five runtime
 selections `core::enum_name(value)`, `core::enum_ordinal(value)`, `core::enum_at::<T>(index)`,
 `core::enum_from_name::<T>(name)` and `core::variant_name(const T* value)` stay
-`R_HIR_STANDARD_CALL` nodes; preflight records one helper per selection and enumeration,
-and the emitter prints each once as a translation-unit-local static function
-(`r_reflection_<selection>_a<aggregate>`) holding the `switch` over the enumeration value,
-the index or the active tag that assigns the program string, the ordinal or the `o::some`
-payload; `enum_from_name` holds a `static const` table of the variant names searched by the
-shared `r_reflection_find_name` helper. Every call site, in the synchronous and in the async
-path, is one assignment call of that helper. No runtime symbol, library symbol or run-time
-metadata is involved, so the forms work in the freestanding profile (`str` operands
-excepted). A form
-over a generic parameter becomes a dependent standard call that the generic clone folds or
-proves once the parameter is substituted (`r_reflection_fold_clone`), so `type_name(T)`
-inside a generic body spells the instantiated type; `enum_variants` requires a concrete
-enumeration. Wrong operand kinds are `R-DIAG-TYPE-001`, a field index beyond the field
-count is `R-DIAG-CONST-001`. `examples/reflection` is the executable walk-through of every
-form (CTest case `reflection_example`).
+`R_HIR_STANDARD_CALL` nodes; the emitter (`compiler/llvm/reflection.c`) writes at each call
+site, in synchronous functions and async frames alike, a `switch` over the enumeration value,
+the index or the active tag that produces the program string, the ordinal or the `o::some`
+payload; `enum_from_name` compares the name with each variant name in turn. No runtime symbol,
+library symbol or run-time metadata is involved, so the forms work in the freestanding profile
+(`str` operands excepted). A form over a generic parameter becomes a dependent standard call that
+the generic clone folds or proves once the parameter is substituted (`r_reflection_fold_clone`), so
+`type_name(T)` inside a generic body spells the instantiated type; `enum_variants` requires a
+concrete enumeration. Wrong operand kinds are `R-DIAG-TYPE-001`, a field index beyond the field
+count is `R-DIAG-CONST-001`. `examples/reflection` is the executable walk-through of every form
+(CTest case `reflection_example`).
 
 ### Attributes of the program
 
@@ -1684,9 +1848,9 @@ accepts one silently. `core::type_attribute::<A, T>()`, `core::field_attribute::
 `core::variant_attribute::<A, T>(v)` (R-REFL-0005) and `core::field_name::<T>(i)` with an index
 that is not a constant stay `R_HIR_STANDARD_CALL` selections with one operand
 (`type_attribute` takes the index 0), proven at instantiation by `r_reflection_fold_clone`; the
-C17 emitter prints one helper per (form, subject, attribute),
-`r_reflection_<form>_a<subject>_a<attribute>`, whose `switch` assigns the `o::some` payload
-field by field from the constants, and gives none or the empty string to any other operand.
+emitter writes at the call site a `switch` over the field index or the enumerator that
+assigns the `o::some` payload field by field from the constants, and gives none or the empty
+string to any other operand.
 Interface schema 34 writes `attribute_targets=(...)` on an attribute type and
 `attributes=((type=A values=(...)) ...)` on each marked type, field and enumerator.
 `examples/arena` reads the table and key of its rows and the help of its commands this way.
@@ -1758,33 +1922,24 @@ also types both forms for overload queries. A wide result is the tuple of R-TYPE
 `r_core_bits_evaluate` computes every operation at translation (R-FUNC-0023), where a narrowing
 division outside its domain is the panic of `R-DIAG-CONST-003`.
 
-The C17 emitter (`codegen/core_bits.inc`) prints one static helper per used (operation, type)
-pair, `r_core_<operation>_<suffix>`. A wide helper returns the first part and writes the second
-through a pointer to the second member of the tuple temporary or frame slot; a narrowing division
-first tests its divisor and high half at the call site and panics there with `division_by_zero`
-or `integer_overflow`. The helpers are portable C17 whose shapes the pinned Apple clang 21 turns
-into single instructions at `-O2` (measured on the generated helpers):
+The emitter lowers each call in place (`r_llvm_std_core_bits` in `compiler/llvm/standard.c`);
+a wide operation writes both parts into the tuple temporary or frame slot of its result, and a
+narrowing division first tests its divisor and high half at the call site and panics there with
+`division_by_zero` or `integer_overflow`:
 
-| Operation | C17 idiom | arm64 |
-| --- | --- | --- |
-| `leading_zeros`, 32 and 64 bits | shift loop counting down | `clz` |
-| `leading_zeros`, 8 and 16 bits | fill below the highest bit, then count ones | `orr` ×3, `cnt` (the loop stays a loop) |
-| `trailing_zeros` | count ones of `(x & -x) - 1` | `rbit`, `clz` |
-| `count_ones` | Hacker's Delight 5-2 | `cnt`, `addv` |
-| `swap_bytes` | shifts and masks | `rev`, `rev16` |
-| `rotate_left`, `rotate_right` | `(x << s) \| (x >> (-s & (N - 1)))` | `ror` |
-| `widening_mul`, up to 32 bits | one 64-bit product | `umull` |
-| `widening_mul`, 64 bits | four 32-bit products | 17 instructions, not `mul` and `umulh` |
-| `carrying_add` chain | compare with an operand | `adds`, `adc` |
-| `borrowing_sub` chain | compare with an operand | `subs`, `cset`, `sub` (no `sbc`) |
-| `narrowing_div`, 64 bits | Knuth D over 32-bit digits after normalization | two `udiv` |
+| Operation | LLVM IR |
+| --- | --- |
+| `leading_zeros`, `trailing_zeros`, `count_ones` | `llvm.ctlz`, `llvm.cttz` (defined for zero), `llvm.ctpop`, the count as `u32` |
+| `swap_bytes` | `llvm.bswap`; the value itself for 8 bits |
+| `rotate_left`, `rotate_right` | `llvm.fshl`, `llvm.fshr` of the value with itself, the count modulo the width |
+| `widening_mul` | one product in the integer of twice the width, split into its halves |
+| `carrying_add`, `borrowing_sub` | the sum or difference with two unsigned comparisons for the carry or borrow |
+| `narrowing_div` | `udiv` and `urem` in the integer of twice the width |
 
-The helpers never run R code, so no panic test follows their calls
+The operations never run R code, so no panic test follows them
 (`r_semantic_standard_call_runs_code`), and the suffix-free form selects by the type of a value
 read through a shared view (`const T`) as by `T`.
 
-The 64-bit widening multiplication and the borrow chain are the measured cost of strict C17: a
-128-bit type or compiler builtins would give `umulh` and `sbcs`, and the generated C uses neither.
 `codegen_core_bits` checks every operation at its boundaries and compares a value computed at
 translation with the same computation at run time; `examples/numbers` runs every operation of
 every type against Python and `examples/binary` prints them for one value.
@@ -1806,23 +1961,18 @@ next loop around (`r_dispatch_lower_plain_continue`). The switch reads the selec
 `body->dispatch_operand` instead of its operand expression, and reports in
 `body->switch_reaches_end` whether a clause can complete, since a switch counts only `return`
 and `throw` as leaving it, not a clause that selects again; the hidden break follows the switch
-only then, so a state machine whose clauses all return or select again never ends. MIR and C17
-see a plain loop around a switch; the C is `for (;;) { switch (r_t) { ... continue; } break; }`.
+only then, so a state machine whose clauses all return or select again never ends. MIR and the
+emitter see a plain loop around a switch: a loop block that switches on the selector, whose
+clauses branch back to it or leave the loop.
 The checks that ask whether a change inside a loop reaches a later use treat the hidden loop
 apart (`r_dispatch_selects_after`): its back edge is a `continue name (value);` in the clause
 of the change or a later one, not the end of the switch, which leaves it, and the operand,
 read once before the loop, is no later use. An unlabeled `continue;` in such a switch inside a
 translation-time loop would leave the repetitions and is refused as there.
 
-A dispatch replicated after every clause (`switch (next) { case A: goto clause_A; ... }`), the
-strict-C17 counterpart of computed goto, was measured on a 16-opcode stack machine with Apple
-clang 21 at `-O2`: 0.88 to 0.96 of the speed of the plain loop, with or without a range check of
-the opcode, while GNU computed goto ran 1.43 to 1.49 times faster. The emitter therefore prints
-the plain loop; computed goto is outside strict C17.
-
 Valid constructs outside the implemented semantic or code-generation slices receive
-`R-DIAG-SLICE-001` or make `r_frontend_emit_c17` return
-`R_FRONTEND_NOT_LOWERABLE` before its writer is called. The M6 review classified every
+`R-DIAG-SLICE-001` or make `r_frontend_emit_llvm` return
+`R_FRONTEND_NOT_LOWERABLE`. The M6 review classified every
 such site: `panic(message)` (R-ERR-0004, category `explicit`, sync and async frames),
 `never`-typed expression statements that end their path (R-TYPE-0029, R-FUNC-0003), open
 ranges `a[lo..]`, `a[..hi]` and `a[..]` (R-EXPR-0021), module constant expressions over
@@ -1834,14 +1984,14 @@ R-EXPR-0018) are lowered; ill-formed programs that used to receive a slice notic
 the normative diagnostic (unknown type names, `void` fields, aggregate attributes, calls on
 non-functions, non-numeric `as` operands, `await` into borrows, `drop` of views). Since Core
 draft.65 (L13) specification section 25.1 lists no valid form that the compiler rejects; the
-remaining slice sites (`tools/audit_semantic_slices.py`) and the not-lowerable branches of MIR
-and C17 (`tools/audit_lowering_rejections.py`, L14.2) are guards, and a valid program that
-reaches one is an implementation defect rather than a documented boundary. Direct users of the internal
-C API lower MIR before requesting C17 whenever a reachable function is async; the
-CLI performs this phase automatically. A successful `unzip` build is an integration
-milestone, not yet a complete Core 0.1 conformance claim: remaining language/library
-operations, full borrow/drop proofs, and the complete diagnostic coverage gates are still
-tracked as unfinished work.
+remaining slice sites (`tools/audit_semantic_slices.py`) and the not-lowerable branches of MIR,
+the LLVM emitter and the C ABI bridge (`tools/audit_lowering_rejections.py`, L14.2) are guards,
+and a valid program that reaches one is an implementation defect rather than a documented
+boundary. Direct users of the internal C API call `r_frontend_lower_mir` before
+`r_frontend_emit_llvm`, which requires it; the CLI performs this phase automatically. A successful
+`unzip` build is an integration milestone, not yet a complete Core 0.1 conformance claim: remaining
+language/library operations, full borrow/drop proofs, and the complete diagnostic coverage gates are
+still tracked as unfinished work.
 
 ### Hosted bootstrap mapping
 
@@ -1881,13 +2031,13 @@ exercised by the `r_frontend_profile_*` CTest cases; `examples/generics` builds 
 ### Freestanding profile
 
 `--profile freestanding --target-manifest targets/arm64-apple-darwin.freestanding.json` compiles
-a program against the language and `core` only (Core R-CONF-0005, Annex G.3). The generated C
-includes `r_runtime_core.h`, `r_runtime_freestanding.h` and the freestanding
-`r_runtime_target_abi.h` (generated from that manifest without `<wchar.h>` or the allocator
-constant), defines no hosted `main`, and wraps neither its `@callback` entries nor its calls into
-C in floating-environment guards. It links only the freestanding runtime
-(`runtime/freestanding`, built with `-ffreestanding`: panic forwarding, environment-adopted stack
-bounds, the thread-local destruction hook) and the environment that embeds it:
+a program against the language and `core` only (Core R-CONF-0005, Annex G.3). The generated
+object defines no hosted `main` and wraps neither its `@callback` entries nor its calls into C in
+floating-environment guards. It links only the freestanding runtime
+(`runtime/freestanding`, built with `-ffreestanding` against the freestanding
+`r_runtime_target_abi.h`, generated from that manifest without `<wchar.h>` or the allocator
+constant: panic forwarding, environment-adopted stack bounds, the thread-local destruction hook)
+and the environment that embeds it:
 
 | Symbol | Defined by | Role |
 | --- | --- | --- |
@@ -1895,17 +2045,18 @@ bounds, the thread-local destruction hook) and the environment that embeds it:
 | `r_runtime_freestanding_stack_adopt(low, high)` | runtime | adopts the calling thread's stack before its first entry into R; `R_RUNTIME_STACK_PROTECTED_LOW_BYTES` above `low` stay unused |
 | `r_runtime_freestanding_stack_release()` | runtime | forgets the bounds; later entries panic with `stack_exhaustion` |
 | `r_runtime_freestanding_thread_exit()` | runtime | runs the program's thread-local destruction entry for the current thread |
-| `r_freestanding_main()` | generated C | when the program defines `i32 main()`: stack preflight, static initialization, `main`, static drops, status |
+| `r_freestanding_main()` | generated code | when the program defines `i32 main()`: stack preflight, static initialization, `main`, static drops, status |
 
 Every `@callback` function is a further entry from C with its own stack preflight. Without an
 allocator the profile also rejects `own` pointers and `core::adopt` (`R-DIAG-PROFILE-001`). The
-emitter binds each compilation to the manifest of the selected profile: the digest table
-`compiler/codegen/target_manifest_digests.generated.inc` lists the committed manifests, and every
+compiler binds each compilation to the manifest of the selected profile: the digest table
+`compiler/source/target_manifest_digests.generated.inc` lists the committed manifests, and every
 hosted profile compiles against the hosted-native-async manifest. On Darwin a freestanding object
-additionally needs the loader's `__tlv_bootstrap` for `_Thread_local` objects and the compiler's
-`memcpy`/`memset`; `tests/check_freestanding_program.cmake` proves that no other symbol is needed
-(`nm -u` against `tests/freestanding/allowed_undefined_symbols.txt`) and runs the program under a
-hosted environment stub that captures panics.
+additionally needs the loader's `__tlv_bootstrap` for thread-local objects and the
+`memcpy`/`memset` that code generation calls for aggregate copies;
+`tests/check_freestanding_program.cmake` proves that no other symbol is needed (`nm -u` against
+`tests/freestanding/allowed_undefined_symbols.txt`) and runs the program under a hosted environment
+stub that captures panics.
 
 ### C imports
 
@@ -1932,7 +2083,7 @@ The other declaration forms of a block are:
   only behind `raw` pointers and raw function types; by-value use in a local, parameter,
   return type, field, `new` or dereference is `R-DIAG-FFI-003 [R-FFI-0015]`. `@c_type(name =
   "CName", kind = "struct" | "union" | "typedef")` (R-FFI-0016) selects the C spelling;
-  without it the R name is the struct tag. A `kind = "enum"` opaque is rejected because C17
+  without it the R name is the struct tag. A `kind = "enum"` opaque is rejected because C
   has no incomplete enumerations.
 - `@c_constant(name = "C_NAME") const CTYPE NAME = literal as CTYPE;` (R-FFI-0018) mirrors
   an integer macro or enumerator: CTYPE is a C ABI integer type, the initializer is one
@@ -1942,11 +2093,12 @@ The other declaration forms of a block are:
 - `TYPE name;` and `thread_local TYPE name;` (R-FFI-0022) import a C object with an exact
   C ABI type (`R-DIAG-FFI-001 [R-FFI-0022]` otherwise); `const TYPE` imports a read-only
   object. Every read or write needs an `unsafe` context (`R-DIAG-UNSAFE-001 [R-FFI-0023]`).
-  Generated C declares `extern [_Thread_local] TYPE identifier;` and names the object
-  directly; there is no mirrored storage. An object whose C name is reserved (R-FFI-0057) or
-  whose type names an R-declared struct is reached through the accessor bridge instead:
-  the bridge defines `TYPE *r_bridge_<identifier>(void) { return &identifier; }` (with a
-  cast to the main unit's private tag) and the program accesses `(*r_bridge_<identifier>())`,
+  The program declares the object as an external global of its C identifier (thread-local
+  for `thread_local`) and names it directly; there is no mirrored storage. An object whose C
+  name is reserved (R-FFI-0057) or whose type names an R-declared struct is reached through
+  the accessor bridge instead: the bridge defines
+  `TYPE *r_bridge_<identifier>(void) { return &identifier; }` (with a cast to the bridge's
+  private spelling) and the program reads and writes through the address it returns,
   so every access still reaches the actual object, and the calling thread's instance of a
   `thread_local` one; its block needs `@header` (`R-DIAG-FFI-003 [R-FFI-0057]`). The
   manifest inventory must list the object as `data`, or `tls` for `thread_local`
@@ -1956,7 +2108,7 @@ The other declaration forms of a block are:
   additional argument must already have a promoted C ABI type: `c_int`, `c_uint`, `c_long`,
   `c_ulong`, `c_llong`, `c_ullong`, `c_double` or a raw pointer (`R-DIAG-FFI-002
   [R-FFI-0005]`). The raw function type of a variadic import carries an internal variadic
-  flag (`variadic` in HIR and MIR dumps), so generated C calls through `R (*)(P, ...)`.
+  flag (`variadic` in HIR and MIR dumps), so the program calls it as a variadic C function.
 - `@repr(C) @c_type(name = "CName", kind = "struct" | "enum" | "typedef") struct/enum ...`
   (R-FFI-0017) declares a complete C aggregate whose member or enumerator inventory is proven
   one-for-one against an ABI record (R-FFI-0040/0041). The block must name the record with
@@ -1983,28 +2135,26 @@ The other declaration forms of a block are:
   `r_bridge_<identifier>_<symbol>`, which never defines the R struct: a struct passed by
   value travels by address and is copied into the header's type with `memcpy` after the
   layouts were proven identical, a result returns through a leading out-pointer, and a
-  pointer or C function pointer is cast to the header's spelling. The main unit reaches such
+  pointer or C function pointer is cast to the header's spelling. The program reaches such
   a bridge through a private thunk `r_thunk_<identifier>_<symbol>` with the import's own
   prototype, so calls and `raw fn` values of the import stay unchanged. A variadic import
   cannot pass an R-declared struct (`R-DIAG-FFI-003 [R-FFI-0057]`).
 
-Generated C uses the direct declaration path of R-CMAP-0017 for an ordinary identifier:
-one `extern` prototype with the actual C identifier and no definition. An opaque type with
-a struct or union tag becomes `typedef struct CName r_aNNNNNNNN;` so the pointer types
-agree with the header's own declaration, and a complete struct with a struct tag is emitted
-as the complete normalized declaration `struct CName { ... };` from its verified members
-(R-CMAP-0018); a complete enum is its compatible integer type, which C17 6.7.2.2 makes
-compatible with the header's `enum CName`. An identifier in the C library or implementation
-reserved classes (`abs`, `strlen`, `mem*`, `r_runtime_*`, ...) is never redeclared by
-generated code (R-FFI-0057); its block needs at least one `@header`, and the program calls
-the private `r_bridge_<identifier>` forwarding function of the bridge translation unit
-instead. The same bridge carries every import whose signature mentions an opaque type
-spelled by a header-owned `typedef` or by a reserved tag (R-CMAP-0018): the main unit keeps
-a private incomplete tag `struct r_aNNNNNNNN`, and the bridge converts each such pointer to
-the header spelling and back. A typedef-spelled complete struct keeps a private definition
-`struct r_aNNNNNNNN { ... }` in both units, and the bridge copies a by-value argument or
-result between the private and the header type with `memcpy` after the layouts were proven
-identical. A variadic import cannot use the bridge.
+The program uses the direct declaration path of R-CMAP-0017 for an ordinary identifier: an
+external function of the actual C identifier, classified by the C ABI of `compiler/llvm/abi.c`,
+and no definition. Pointers to opaque and complete C types are plain pointers there, a complete
+struct is classified by its verified members (R-CMAP-0018), and a complete enum is its compatible
+integer type, which ISO C makes compatible with the header's `enum CName`. An identifier in the
+C library or implementation reserved classes (`abs`, `strlen`, `mem*`, `r_runtime_*`, ...) is
+never declared by the program (R-FFI-0057); its block needs at least one `@header`, and the
+program calls the private `r_bridge_<identifier>` forwarding function of the bridge translation
+unit instead. The same bridge carries every import whose signature mentions an opaque type
+spelled by a header-owned `typedef` or by a reserved tag (R-CMAP-0018): the bridge declares it
+with a private incomplete tag `struct r_aNNNNNNNN` and converts each such pointer to the header
+spelling and back. A typedef-spelled complete struct has a private definition
+`struct r_aNNNNNNNN { ... }` in the bridge, which copies a by-value argument or result between
+the private and the header type with `memcpy` after the layouts were proven identical. A
+variadic import cannot use the bridge.
 
 ABI records are produced outside the compiler by `tools/generate_c_abi_record.py`:
 `--emit=abi-inventory` writes the request (schema `r-abi-inventory-request-0.1`) listing,
@@ -2028,15 +2178,14 @@ enums, rejecting aliased enumerators. Any disagreement, a missing record or a mi
 is `R-DIAG-FFI-004 [R-FFI-0017]`/`[R-FFI-0041]`. Layout alone is never accepted: a C member
 omitted by the R declaration fails the count even when it hides in padding. A used record
 must also name the block's link provider, the target manifest's `target_triple` (when a
-manifest is given) and C17 compiler options (`R-DIAG-FFI-004 [R-FFI-0040]`). Its compiler
-identity shall name the manifest toolchain's `c_compiler_build`, and every header digest it
-carries is re-hashed against the header found under the roots given with
-`--abi-header-dir DIR` (repeatable, the same roots the record generator received as `-I`);
-a stale digest, a header no root provides or a record without compiler identity is
-`R-DIAG-FFI-004 [R-FFI-0044]`. The record document digest and every header digest enter
-`--emit=interface` and `--emit=link-plan` as `(abi-record present=true sha256="...")` and
-`(abi-header record="..." spelling="..." sha256="...")`, so a regenerated record changes the
-module interface and build fingerprints (R-FFI-0044).
+manifest is given) and C17 compiler options (`-std=c17`, `R-DIAG-FFI-004 [R-FFI-0040]`). Its
+compiler identity shall name the manifest toolchain's `c_compiler_build`, and every header digest it
+carries is re-hashed against the header found under the roots given with `--abi-header-dir DIR`
+(repeatable, the same roots the record generator received as `-I`); a stale digest, a header no root
+provides or a record without compiler identity is `R-DIAG-FFI-004 [R-FFI-0044]`. The record document
+digest and every header digest enter `--emit=interface` and `--emit=link-plan` as `(abi-record
+present=true sha256="...")` and `(abi-header record="..." spelling="..." sha256="...")`, so a
+regenerated record changes the module interface and build fingerprints (R-FFI-0044).
 
 Managed-token adapters (R-FFI-0060, R-CMAP-0037) are ordinary exported `extern "C"` R
 functions: create allocates an owner and applies `std.arc::into_raw`, converting the
@@ -2050,7 +2199,7 @@ abort with `contract_violation` (R-CMAP-0020). One C spelling imported from two 
 (`R-DIAG-FFI-003 [R-FFI-0007]`). The R-CONF-G009 matrix over the probe library is recorded
 in `docs/ffi-conformance-g009.md`.
 
-Two more artifacts accompany `--emit=c17` for a program with imports:
+Two more artifacts accompany the object of `--emit=object` for a program with imports:
 
 - `--emit=abi-verifier` writes the R-FFI-0042 verifier translation unit: the providers'
   `feature_test_definitions` as `#define` lines, every block's `@header` spellings as
@@ -2067,7 +2216,8 @@ Two more artifacts accompany `--emit=c17` for a program with imports:
   names, and the prototype spells that C struct at the position, so a record that names the
   wrong C type fails there. Opaque and complete types are spelled as
   `struct CName`, `enum CName` or the typedef name. The build compiles
-  the unit for the target with the generated-C options and `-fsyntax-only`; a prototype,
+  the unit for the target with the options of the project's C (`-std=c17 -pedantic-errors`
+  and the warnings as errors) and `-fsyntax-only`; a prototype,
   object type, tag kind or constant that disagrees with the header fails to compile, which
   is the `R-DIAG-FFI-004` outcome. The unit is never executed.
 - `--emit=c17-bridge` writes the R-CMAP-0026 bridge translation unit: the same macros and
@@ -2082,7 +2232,8 @@ passes `-I` for the provider's `header_roots`. Providers that are used together 
 disagree on one feature-test macro (`R-DIAG-FFI-004 [R-FFI-0043]`).
 
 Linking is resolved before emission by `r_frontend_resolve_links`, which the CLI runs for
-`c17`, `link-plan`, `bundle` and `interface`. The link manifest names each provider with
+`llvm-ir`, `object`, `link-plan`, `bundle`, `interface`, `abi-verifier`, `c17-bridge` and
+`abi-inventory`. The link manifest names each provider with
 `logical_name`, `kind`, `available`, an optional `implicit_c_runtime` flag for blocks
 without `@link`, and a `symbols` inventory of `{c_identifier, kind, binding}` objects.
 Unknown providers, unavailable artifacts, kind disagreement and symbols missing from the
@@ -2149,7 +2300,8 @@ build/debug/r-front --emit=link-plan \
   --target-manifest target.json --link-manifest links.json source.r
 build/debug/r-front --emit=bundle \
   --entry application.main::main --profile hosted source.r
-build/debug/r-front --emit=c17 source.r > generated.c
+build/debug/r-front --emit=llvm-ir source.r > program.ll
+build/debug/r-front --emit=object source.r > program.o
 ```
 
 `--target-manifest` accepts only the committed manifest of the selected profile's target, byte
@@ -2157,39 +2309,16 @@ for byte, in every emit mode; any other manifest is refused before an artifact i
 `--module-map` and `--entry`, an import that no map entry declares is reported at the import as
 `R-DIAG-MOD-001` (R-MOD-0007), and a cycle of imports as `R-DIAG-MOD-001` (R-MOD-0004).
 
-The Darwin C17 object build uses a deterministic fixed-point measurement pipeline. A bootstrap
-compile uses the pinned Apple Clang with
-`-O0 -fstack-usage -fno-inline-functions -fno-lto` and
-`R_STACK_USAGE_MEASUREMENT=1`. The build rejects missing or empty reports, malformed,
-duplicate, or dynamic generated-source records, and any generated frame above the
-target-manifest ceiling. It creates an ordered `R_STACK_FRAME_<function>` bounds header from
-that report, pre-includes the header in a candidate compile, remeasures the candidate, and
-updates each bound to the maximum of its previous value and the candidate frame. Candidate
-compilation repeats until the header no longer changes, with the target-manifest iteration cap
-enforced as a hard failure. Every iteration must retain the exact bootstrap generated-function
-name set and static frame kinds. The linker consumes the exact candidate object compiled
-against the converged header instead of recompiling generated C.
-Once the frames are stable, `tools/compute_stack_entries.py` derives `R_STACK_ENTRY_<entry>` for
-every entry as its frame plus the longest acyclic callee path through the generated call graph
-(direct calls, type-glue callbacks and the indirect-call markers; another entry's own gate is
-never nested), appends those defines to the same header and fails the build when a bound exceeds
-the target manifest's `core.stack.entry_budget_bytes`.
-`tests/check_codegen_program.cmake` is the current reference driver for this process.
-Sanitizer and TSan builds keep the bootstrap and instrumented object phases but are explicitly
-diagnostic-only:
-instrumentation may create dynamic or larger frames, so those builds emit a nonconformance
-marker and make no stack-conformance claim. Therefore `--emit=c17` alone is useful for
-deterministic source inspection, but its output is not a standalone conforming object-build
-command without the measured header.
-
-The C17 emitter collects `constexpr str` literals from every declaration selected for the
-application emission before writing function bodies. Exact post-escape byte sequences are
-deduplicated across modules and across synchronous and asynchronous lowering, sorted by bytes and
-length, and emitted once as file-scope `r_program_string_*` arrays. Descriptors retain their
-explicit byte lengths; an empty value uses the single program-image sentinel.
+`--emit=object` writes the object of the program, with its entry stack bounds already computed
+(*LLVM emitter*, Stack bounds); `r-front` does not call the linker itself yet (B10). The object
+is linked as `tests/check_codegen_program.cmake` links it: with the runtime, the inline shims
+(`r_runtime_inline_shims`), the `r_core` and `r_std_*` archives, the archives of the native
+providers it imports and, for a program whose C imports need it, the bridge unit of
+`--emit=c17-bridge`. `--emit=llvm-ir` writes the same module as text for inspection and for the
+checks that read its `!r.stack.*` metadata.
 
 Conditional expressions (`condition ? a : b`) lower to a typed HIR value and MIR
-branches with a typed `phi`. Both C17 paths evaluate the condition once and execute
+branches with a typed `phi`. The generated code evaluates the condition once and executes
 only the selected arm, including its calls and ownership transfers. Copy places are
 read; named Move arms require `move`. Reachable ownership states join as for `if`.
 Numeric widening, string views and shared-borrow conversions follow the existing
@@ -2222,7 +2351,8 @@ manifests; host paths are not embedded. Required library targets are emitted in 
 Standard Library dependency order. `bundle` contains the interface, MIR, and link plan as named
 deterministic sections.
 
-MIR and link-plan remain schema version 1; the interface is schema version 21. Version 21
+MIR and link-plan remain schema version 1; the interface is schema version 34, and the sections
+above name the version that introduced each of its later fields. Version 21
 adds `held=(...)` to a borrow bound: the inputs an output takes only what their designated
 storage holds from (R-BORROW-0009). Version 20 writes the value of an exported aggregate object
 as the canonical term of its initializer. Version 19
@@ -2279,14 +2409,14 @@ schemas; type aliases preserve identity. Generic records include normalized cons
 definition fingerprints and sorted source dependencies. For an open schema, `copy=true`
 means its constraints prove Copy; otherwise Copy is determined from the closed fields
 and drop hook. Each instance has concrete HIR/MIR
-and C17 code. Definition sources are required for imported generic bodies. These outputs
+and generated code. Definition sources are required for imported generic bodies. These outputs
 are compiler-interface foundation artifacts, not the final
 release-package format. The driver records target/link-manifest SHA-256 identity.
-Before C17 emission, a supplied target manifest must match the pinned target identity exactly.
+Before code generation, a supplied target manifest must match the pinned target identity exactly.
 The C spellings, checked-conversion carrier classes, runtime range descriptors, and host ABI
 assertions are generated from that manifest by `tools/generate_target_abi.py`; the normal build
 uses the committed generated files and does not run Python.
-For `std.c::link_available`, C17 emission additionally reads the link manifest's
+For `std.c::link_available`, program emission additionally reads the link manifest's
 `links[].logical_name` and optional `links[].available` resolved facts, validates logical
 names, rejects duplicates, sorts them deterministically and emits an immutable lookup
 view. Target capability validation, complete R-FFI manifest identity verification and
@@ -2297,8 +2427,9 @@ physical library resolution remain work for the target/link resolver.
 `async_fs_read_into`, `array_push`, `format_int`, `own_alloc`, `array_get`, `string_append`,
 `dict_lookup`, `json_parse`, `deflate_roundtrip`, `tcp_echo`).
 The CMake target
-`benchmarks` compiles each R program through the codegen pipeline at `-O2`, compiles the C
-mirror with the same compiler and flags, times both and writes `docs/benchmarks.md`; the
+`benchmarks` compiles each R program with `r-front --emit=object` and links it as
+`tests/check_codegen_program.cmake` does, compiles the C mirror with the pinned clang at `-O2`,
+times both and writes `docs/benchmarks.md`; the
 ctest `r_bench_pairs_agree` only verifies that each pair returns the same checksum. The R
 programs link the runtime and standard libraries of the configuration the target runs in,
 so measurements are only accepted from an optimized configuration (`cmake -S . -B
@@ -2336,9 +2467,9 @@ listed source as a library source, transitively, with the listed least profile; 
 module under a reserved root remains a driver error.
 
 Exit status `0` means a clean requested emission. Status `1` means source
-diagnostics, unresolved CST ambiguity, or a requested HIR/MIR/C17 emission that is
-outside the implemented lowering slice. Status `2` means I/O, internal, or
-resource failure.
+diagnostics, unresolved CST ambiguity, or a requested HIR, MIR or LLVM emission that is
+outside the implemented lowering slice. Status `2` means a usage error (an unknown option, such
+as `--emit=c17`, whose emitter stage B6 removed), I/O, internal, or resource failure.
 
 ## Generated inputs
 
@@ -2367,13 +2498,13 @@ or reparses substituted source text. Names use canonical type arguments and sour
 module identities. See [the executable Vector example](../examples/generics/README.md).
 Dependent array bounds retain checked constant expression DAGs until their type
 arguments are closed. Native layout facts come from pinned scalar target metadata
-and the same standard/runtime ABI headers used by generated C17. Layout and bound
-arithmetic are checked before executable array types are emitted.
+and the standard and runtime ABI headers that the runtime and the library are compiled against.
+Layout and bound arithmetic are checked before executable array types are emitted.
 
-The generated predefined core key helpers use the `r-core-key-v1` mapping: integers,
-booleans, characters and enum values convert to `u64`; strings use FNV-1a-64 over
-exact UTF-8 bytes; floating values use binary64 bits after canonicalizing zero and
+The key functions the backend generates for `std.dict` (`glue.c`) use the `r-core-key-v1`
+mapping: integers, booleans, characters and enum values convert to `u64`; strings use FNV-1a-64
+over exact UTF-8 bytes; floating values use binary64 bits after canonicalizing zero and
 NaN; pointer families use their allocation identity and offset (native pointers,
 owner allocations, or shared-owner control blocks). Non-pointer mappings are stable
 across executions on the pinned target. Pointer hashes are execution-local.
-Dictionary seed mixing is separate. These helpers do not read object padding.
+Dictionary seed mixing is separate. These functions do not read object padding.

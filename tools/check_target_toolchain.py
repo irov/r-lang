@@ -4,8 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -34,6 +37,13 @@ def run(command: list[str]) -> str:
         f"{completed.stdout}{completed.stderr}",
     )
     return completed.stdout.strip()
+
+
+def compiler_digest(compiler: str) -> str:
+    located = shutil.which(compiler)
+    require(located is not None, f"could not locate C compiler {compiler}")
+    executable = Path(os.path.realpath(located))
+    return "sha256:" + hashlib.sha256(executable.read_bytes()).hexdigest()
 
 
 def require_object(value: Any, name: str) -> dict[str, Any]:
@@ -65,10 +75,17 @@ def check(arguments: argparse.Namespace) -> None:
 
     version_output = run([arguments.cc, "--version"])
     version_line = version_output.splitlines()[0] if version_output else ""
-    expected_version_line = f"{compiler_name} version {compiler_version} ({compiler_build})"
+    expected_version_line = f"{compiler_name} version {compiler_version}"
     require(
         version_line == expected_version_line,
         f"C compiler identity mismatch: expected '{expected_version_line}', got '{version_line}'",
+    )
+    # A clang release does not print a build identifier, so the build is the digest of the
+    # resolved compiler executable: a rebuilt or patched clang of the same version is rejected.
+    actual_build = compiler_digest(arguments.cc)
+    require(
+        actual_build == compiler_build,
+        f"C compiler build mismatch: expected '{compiler_build}', got '{actual_build}'",
     )
 
     actual_triple = run([arguments.cc, "-dumpmachine"])

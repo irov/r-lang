@@ -3,6 +3,7 @@
 source-dependency fingerprints (Core R-FUNC-0023, R-EXPR-0032, R-MOD-0006)."""
 import argparse
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 
@@ -32,6 +33,18 @@ i32 main() {
 '''
 
 
+def emit_options(mode):
+    """Options of one output; LLVM IR lowers every function, not only those main reaches, so
+    that code generation also accepts the functions main never calls."""
+    return ['--emit=' + mode, '--all-functions'] if mode == 'llvm-ir' else ['--emit=' + mode]
+
+
+def main_body(program):
+    """The LLVM IR definition of consteval.app::main."""
+    start = re.search(r'^define [^\n]*@"consteval\.app::main"\(', program, re.M).start()
+    return program[start:program.index('\n}\n', start)]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--front', required=True)
@@ -44,7 +57,7 @@ def main():
         app.write_text(APP)
 
         def emit(mode, paths):
-            result = subprocess.run([args.front, '--emit=' + mode, *map(str, paths)],
+            result = subprocess.run([args.front, *emit_options(mode), *map(str, paths)],
                                     capture_output=True, text=True, timeout=60)
             assert result.returncode == 0, (mode, result.returncode, result.stderr)
             return result.stdout
@@ -70,18 +83,22 @@ def main():
         api.write_text(API.replace('.high = 250u32', '.high = 251u32'))
         assert emit('interface', [api, app]) != interface
         api.write_text(API)
-        generated = emit('c17', [api, app])
-        assert generated == emit('c17', [app, api])
-        assert 'r_data[28]' in generated, 'the module-scope bound was not computed'
+        generated = emit('llvm-ir', [api, app])
+        assert generated == emit('llvm-ir', [app, api])
+        # The local `frame` of main is stored as the computed number of bytes.
+        assert 'alloca [28 x i8], align 1' in main_body(generated), \
+            'the module-scope bound was not computed'
 
         api.write_text(API.replace('+ 4usize', '+ 8usize'))
         changed = emit('interface', [api, app])
         assert changed != interface
-        assert 'r_data[32]' in emit('c17', [api, app])
+        changed_body = main_body(emit('llvm-ir', [api, app]))
+        assert 'alloca [32 x i8], align 1' in changed_body
+        assert 'alloca [28 x i8]' not in changed_body
 
         api.write_text(API.replace('return sizeof(Header) + payload + 4usize;',
                                    'return sizeof(Header) + payload + adjustment;'))
-        result = subprocess.run([args.front, '--emit=c17', str(api), str(app)],
+        result = subprocess.run([args.front, *emit_options('llvm-ir'), str(api), str(app)],
                                 capture_output=True, text=True, timeout=60)
         assert result.returncode != 0 and 'R-DIAG-CONST-002' in result.stderr, result.stderr
         assert 'accesses an object with static or thread storage duration' in result.stderr

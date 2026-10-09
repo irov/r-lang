@@ -85,72 +85,21 @@ r_require_match_count(plan_output
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
+        --emit=llvm-ir
         --entry test.codegen.async_fs_create_directory_beneath::main
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"
         "${SOURCE_FILE}"
-    RESULT_VARIABLE c17_status
-    OUTPUT_VARIABLE c17_output
-    ERROR_VARIABLE c17_error
+    RESULT_VARIABLE ir_status
+    OUTPUT_VARIABLE ir_output
+    ERROR_VARIABLE ir_error
 )
-if(NOT c17_status EQUAL 0)
-    message(FATAL_ERROR "C17 emit failed (${c17_status}): ${c17_error}")
+if(NOT ir_status EQUAL 0)
+    message(FATAL_ERROR "LLVM IR emit failed (${ir_status}): ${ir_error}")
 endif()
-r_require_match_count(c17_output
-    "#include \"r_std_fs[.]h\"" 1
-    "C17 std.fs include")
-r_require_match_count(c17_output
-    "RStdFsVoidResult canonical result ABI" 1
-    "C17 void-result await ABI assertion")
-r_require_match_count(c17_output
-    "r_d00000006 r_v00000052" 1
-    "C17 checked void-completion carrier")
-r_require_match_count(c17_output
-    "RStdAsyncStartError r_v00000050" 1
-    "C17 start error value")
-r_require_match_count(c17_output
-    "RStdFsError r_v00000056" 1
-    "C17 completion error value")
-r_require_match_count(c17_output
-    "r_d00000003 r_stack_r_l00000008 = [{]0[}]" 1
-    "C17 transient named root borrow storage")
-r_require_match_count(c17_output
-    "r_d00000003 r_stack_r_v0000004[12] = [{]0[}]" 2
-    "C17 transient root borrow values")
-r_require_match_count(c17_output
-    "r_d00000002 r_stack_r_v00000043 = [{]0[}]" 1
-    "C17 transient path borrow value")
-r_require_match_count(c17_output
-    "frame->r_l00000008" 0
-    "C17 frame root borrow storage")
-r_require_match_count(c17_output
-    "frame->r_v0000004[123]" 0
-    "C17 frame call-bounded borrow values")
-r_require_match_count(c17_output
-    "r_std_fs_create_directory_beneath[(]r_stack_r_v00000042,[\n ]+r_stack_r_v00000043,[\n ]+frame->r_v00000044,[\n ]+r_fs_deadline_00000047[)]" 1
-    "C17 exact create_directory_beneath native call")
-r_require_match_count(c17_output
-    "R_INTERNAL_ASSERT[(]" 0
-    "C17 omits assertion infrastructure")
-r_require_match_count(c17_output
-    "if [(]frame->r_v00000045[.]r_tag > UINT32_C[(]1[)][)]" 0
-    "C17 deadline option runtime guards")
-r_require_match_count(c17_output
-    "if [(]frame->r_v00000045[.]r_tag == UINT32_C[(]1[)][)]" 1
-    "C17 deadline option mapping")
-r_require_match_count(c17_output
-    "RStdFsTaskStartResult r_fs_start_00000047 =" 1
-    "C17 native task start result")
-r_require_match_count(c17_output
-    "r_runtime_assert[.]h" 0
-    "C17 omits assertion headers")
-r_require_match_count(c17_output
-    "r_fs_start_00000047[.]error == R_STD_ASYNC_START_ALLOCATION_FAILED" 0
-    "C17 omits allocation start-error assertions")
-r_require_match_count(c17_output
-    "r_fs_start_00000047[.]error == R_STD_ASYNC_START_RUNTIME_STOPPING" 0
-    "C17 omits runtime-stopping start-error assertions")
+r_require_match_count(ir_output
+    "call [^\n]*@r_std_fs_create_directory_beneath[(]" 1
+    "create_directory_beneath library calls")
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}" --emit=hir "${NEGATIVE_SOURCE_FILE}"

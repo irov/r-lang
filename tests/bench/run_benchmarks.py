@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Time the R/C benchmark pairs of tests/bench and write docs/benchmarks.md.
 
-Every pair consists of an R program compiled through r-front and Apple clang at -O2 and a C
-mirror compiled with the same compiler and flags. Both return the same checksum modulo 109 as their exit
+Every pair consists of an R program, an object of r-front linked with the runtime and the library,
+and a C mirror compiled by the pinned clang at -O2. Both return the same checksum modulo 109 as their exit
 status (within the application range 0..111), which --check verifies without timing. The measurement mode runs each executable several
 times, takes the median wall-clock time, subtracts the median of the empty ``baseline`` pair and
 reports the per-iteration cost and the R/C ratio.
@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 
-GENERATED_C_FLAGS = (
+C_MIRROR_FLAGS = (
     "-std=c17 -pedantic-errors -Wall -Wextra -Werror -Wconversion -Wsign-conversion "
     "-Wshadow -Wstrict-prototypes -Wmissing-prototypes -O2"
 )
@@ -31,9 +31,9 @@ GENERATED_C_FLAGS = (
 KERNEL_NOTES = {
     "baseline": "пустой `i32 main()`; медиана вычитается из остальных метрик",
     "call_overhead": (
-        "200 000 000 вызовов `protected u32 step(u32, u32)`; в сгенерированном C вызовы между "
-        "функциями R не несут проверок стека: статическая дисциплина R-FUNC-0004 выполняет одну "
-        "проверку `r_runtime_stack_require(R_STACK_ENTRY(main))` на входе в код R"
+        "200 000 000 вызовов `protected u32 step(u32, u32)`; вызовы между функциями R не несут "
+        "проверок стека: статическая дисциплина R-FUNC-0004 выполняет одну проверку "
+        "`r_runtime_stack_require` с границей входа `main` на входе в код R"
     ),
     "index_fixed": (
         "50 000 проходов по `u32[4096]` с индексированием `data[index]`; в R каждый доступ "
@@ -208,11 +208,10 @@ def render_markdown(report: dict[str, Any]) -> str:
         "- Каждая метрика — пара программ `tests/bench/<имя>.r` и `tests/bench/<имя>.c` с одним и",
         "  тем же алгоритмом; обе возвращают одинаковую контрольную сумму кодом завершения, что",
         "  проверяет ctest `r_bench_pairs_agree` и каждый запуск измерения.",
-        "- Программа R: `r-front --emit=c17`, затем компилятор C с флагами",
-        f"  `{GENERATED_C_FLAGS}`; статическая граница стека входа (`R_STACK_ENTRY`) вычислена",
-        "  из кадров `-O0` (fixed point `tests/check_codegen_stack_usage.cmake`), линковка с runtime и",
-        "  std-библиотеками как в `tests/check_codegen_program.cmake` (`COMPILE_ONLY`).",
-        "- Программа C: тот же компилятор и те же флаги, `-O2`.",
+        "- Программа R: объект `r-front --emit=object` (эмиттер LLVM считает границы стека входов",
+        "  по кадрам, которые генерирует сам), линковка с runtime и std-библиотеками как в",
+        "  `tests/check_codegen_program.cmake` (`COMPILE_ONLY`).",
+        f"- Программа C: тот же компилятор с флагами `{C_MIRROR_FLAGS}`.",
         "- Runtime и std-библиотеки берутся из той конфигурации CMake, где запущена цель;",
         "  измерение допускается только из оптимизированной сборки (`Release`, `RelWithDebInfo`,",
         "  `MinSizeRel`), иначе скрипт останавливается — Debug-архивы (`-O0`) искажают все ядра,",
@@ -266,12 +265,12 @@ def render_markdown(report: dict[str, Any]) -> str:
             "",
             "## Замечания к накладным расходам",
             "",
-            "- Вызов R→R компилируется в прямой вызов C без проверок стека: статическая дисциплина",
-            "  R-FUNC-0004 проверяет границу `R_STACK_ENTRY` один раз на входе в код R. Колонка Δ",
-            "  даёт оставшуюся абсолютную надбавку на итерацию (соглашение о вызовах, отсутствие",
-            "  инлайна между единицами трансляции без LTO).",
+            "- Вызов R→R компилируется в прямой вызов без проверок стека: статическая дисциплина",
+            "  R-FUNC-0004 проверяет границу входа один раз на входе в код R. Колонка Δ даёт",
+            "  оставшуюся абсолютную надбавку на итерацию (соглашение о вызовах, отсутствие инлайна",
+            "  между программой и runtime без LTO).",
             "- Проверки границ и переполнения компилируются в предсказуемые ветки; отношение R/C",
-            "  выше показывает, сколько из них clang смог убрать на конкретном ядре.",
+            "  выше показывает, сколько из них оптимизатор смог убрать на конкретном ядре.",
             "- Решение остаётся за владельцем: строки таблицы с оценкой «существенная надбавка»",
             "  указывают, где горячие пути стоит держать в C через `extern \"C\"` (M2) либо",
             "  снижать число входов в функции R на итерацию.",
@@ -388,7 +387,7 @@ def main() -> int:
     }
     report = {
         "schema": "r-benchmarks-0.1",
-        "generated_c_flags": GENERATED_C_FLAGS,
+        "c_mirror_flags": C_MIRROR_FLAGS,
         "runs": runs,
         "baseline": arguments.baseline,
         "environment": environment,

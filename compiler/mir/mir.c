@@ -5339,6 +5339,9 @@ r_mir_lower_tagged_switch(RMirBuildContext *build, const RHirNode *node, uint32_
     size_t tag2_block = SIZE_MAX;
     size_t tag3_block = SIZE_MAX;
     size_t default_block = SIZE_MAX;
+    size_t previous_break_target;
+    size_t previous_break_finally_count;
+    bool lowered = true;
     uint32_t child_index;
     RMirInstruction instruction;
 
@@ -5555,15 +5558,19 @@ r_mir_lower_tagged_switch(RMirBuildContext *build, const RHirNode *node, uint32_
             return false;
         }
     }
+    /* R-STMT-0004: a break nested in a clause leaves the switch, not an enclosing loop. */
+    previous_break_target = build->break_target;
+    previous_break_finally_count = build->break_finally_count;
+    build->break_target = merge_block;
+    build->break_finally_count = build->finally_count;
     for (child_index = 0U; child_index < (uint32_t)case_count; ++child_index) {
         const RHirNode *case_node = r_mir_hir_node(build->frontend, cases[child_index]);
         const RHirNode *block_node;
         build->current_block = case_blocks[child_index];
-        if ((case_node == NULL) || (case_node->child_count != UINT32_C(1))) {
-            return false;
-        }
-        if (!r_mir_lower_switch_binding(build, case_node, tagged.value)) {
-            return false;
+        if ((case_node == NULL) || (case_node->child_count != UINT32_C(1)) ||
+            !r_mir_lower_switch_binding(build, case_node, tagged.value)) {
+            lowered = false;
+            break;
         }
         block_node = r_mir_hir_node(build->frontend,
                                     r_mir_hir_child(build->frontend, case_node, UINT32_C(0)));
@@ -5579,11 +5586,14 @@ r_mir_lower_tagged_switch(RMirBuildContext *build, const RHirNode *node, uint32_
                                 case_node->operation == R_TOKEN_KW_FALLTHROUGH
                                     ? case_blocks[child_index + 1U]
                                     : merge_block))) {
-            return false;
+            lowered = false;
+            break;
         }
     }
+    build->break_target = previous_break_target;
+    build->break_finally_count = previous_break_finally_count;
     build->current_block = merge_block;
-    return true;
+    return lowered;
 }
 
 static bool r_mir_lower_switch(RMirBuildContext *build, const RHirNode *node, uint32_t depth) {
@@ -6600,7 +6610,9 @@ static bool r_mir_lower_function(RFrontendContext *context, RHirNodeId node_id) 
     symbol = &context->semantic_symbols[(size_t)node->symbol - 1U];
     (void)memset(&build, 0, sizeof(build));
     build.frontend = context;
-    build.unwind = symbol->is_async && (context->profile != R_FRONTEND_PROFILE_FREESTANDING);
+    /* L39 (R-ERR-0005): every function of a profile that unwinds carries panic edges, so the
+       backend lowers a synchronous function from MIR as it lowers an async step (B1). */
+    build.unwind = context->profile != R_FRONTEND_PROFILE_FREESTANDING;
     build.break_target = SIZE_MAX;
     build.continue_target = SIZE_MAX;
     build.break_finally_count = 0U;
@@ -11902,4 +11914,11 @@ RFrontendStatus r_frontend_dump_bundle(const RFrontendContext *context,
         return R_FRONTEND_IO_ERROR;
     }
     return R_FRONTEND_OK;
+}
+
+bool r_mir_write_type_text(const RFrontendContext *context,
+                           RTypeId type_id,
+                           RFrontendWriteFn writer,
+                           void *user_data) {
+    return r_mir_write_type(context, type_id, writer, user_data);
 }

@@ -3,7 +3,8 @@
 This example shows nullable borrows and owners, `null`, flow-sensitive dereference checks, nullable borrow returns, generic borrows into caller-owned storage, and default initialization of nullable pointer fields.
 
 ```sh
-r-front --emit=c17 examples/pointers/main.r
+build/debug/r-front --emit=llvm-ir examples/pointers/main.r > pointers.ll
+ctest --test-dir build/debug --output-on-failure -R '^r_frontend_codegen_nullable_pointers_example$'
 ```
 
 A safe nullable borrow or owner can be dereferenced only on a path where comparison with `null` proves that it is present. Returning `null` from a nullable borrow function does not attach the result to an input lifetime. An omitted nullable pointer field is initialized to `null`.

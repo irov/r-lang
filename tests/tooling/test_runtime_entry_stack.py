@@ -19,7 +19,7 @@ INVENTORY = (
     REPOSITORY_ROOT
     / "targets/arm64-apple-darwin.hosted-native-async.runtime-entry-stack.json"
 )
-COMPILER_BUILD = "clang-2100.3.34.2"
+COMPILER_BUILD = "sha256:68bb87f784f09da01b7aea0f70952fb23f606242cdc4f6ff3cc26c372af0706f"
 FRAME_CEILING_BYTES = 262144
 
 
@@ -83,8 +83,8 @@ class RuntimeEntryStackTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.inventory["schema"], "r-runtime-entry-stack-inventory-0.1")
         self.assertFalse(self.inventory["conformance_claim"])
-        self.assertEqual(len(self.inventory["external_entries"]), 884)
-        self.assertEqual(len(self.inventory["header_static_inline_helpers"]), 136)
+        self.assertEqual(len(self.inventory["external_entries"]), 1132)
+        self.assertEqual(len(self.inventory["header_static_inline_helpers"]), 135)
         self.assertEqual(
             self.inventory["coverage"]["scope"], "direct-project-entry-frame-only"
         )
@@ -98,7 +98,7 @@ class RuntimeEntryStackTests(unittest.TestCase):
             self.inventory["coverage"]["native_system_library_frames"], "not-measured"
         )
         surfaces = self.inventory["closed_source_surfaces"]
-        self.assertEqual(surfaces["generated_c_emitter"], "compiler/codegen/c17.c")
+        self.assertEqual(surfaces["program_emitter"], "compiler/llvm")
         self.assertEqual(
             surfaces["named_standard_move_registry"],
             "compiler/source/named_standard_move_abi.generated.inc",
@@ -121,10 +121,9 @@ class RuntimeEntryStackTests(unittest.TestCase):
 
     def test_source_surfaces_reject_new_emitted_call_and_move_registry_helper(self) -> None:
         surface_paths = (
-            "compiler/codegen/c17.c",
             *(str(path.relative_to(REPOSITORY_ROOT)) for path in sorted(
-                (REPOSITORY_ROOT / "compiler/codegen").glob("*.inc")
-            )),
+                (REPOSITORY_ROOT / "compiler/llvm").iterdir()
+            ) if path.suffix in {".c", ".h", ".inc"}),
             "compiler/source/named_standard_move_abi.generated.inc",
             "compiler/source/standard_async_sync.h",
             "compiler/source/standard_fs_async.h",
@@ -164,7 +163,7 @@ class RuntimeEntryStackTests(unittest.TestCase):
             )
             self.assertEqual(baseline.returncode, 0, baseline.stderr)
 
-            emitter = temporary_root / "compiler/codegen/c17.c"
+            emitter = temporary_root / "compiler/llvm/runtime.c"
             emitter.write_text(
                 emitter.read_text(encoding="utf-8")
                 + '\nstatic const char *const r_test_prefix = "r_runtime_formatted_";\n',
@@ -195,7 +194,7 @@ class RuntimeEntryStackTests(unittest.TestCase):
             self.assertIn("generated project entry surface is not closed", new_call.stderr)
             self.assertIn("new=r_runtime_new_direct_entry", new_call.stderr)
 
-            shutil.copy2(REPOSITORY_ROOT / "compiler/codegen/c17.c", emitter)
+            shutil.copy2(REPOSITORY_ROOT / "compiler/llvm/runtime.c", emitter)
             registry = (
                 temporary_root / "compiler/source/named_standard_move_abi.generated.inc"
             )

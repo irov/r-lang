@@ -12,8 +12,9 @@ cannot turn an unimplemented operation green.
 
 Closed suffix families are expanded here because their inventory record names
 are schemas rather than concrete source spellings.  Public types are carried to
-C17 through a nullable raw pointer so the check also detects names that HIR
-accepts as arbitrary opaque standard types but the backend cannot represent.
+LLVM IR through a nullable raw pointer (every function lowered, --all-functions)
+so the check also detects names that HIR accepts as arbitrary opaque standard
+types but the backend cannot represent.
 This audit does not prove that a resolved operation accepts its valid signature
 or that a valid call has working runtime behavior.  Those contracts require the
 module runtime tests and code-generation fixtures.
@@ -605,7 +606,8 @@ def probe_type(
             [
                 str(compiler),
                 "--profile=hosted-native-async",
-                "--emit=c17",
+                "--emit=llvm-ir",
+                "--all-functions",
                 "--diagnostics=json",
                 *EXTRA_COMPILER_ARGUMENTS,
                 str(path),
@@ -655,7 +657,8 @@ def probe_ambiguous_operation(
             [
                 str(compiler),
                 "--profile=hosted-native-async",
-                "--emit=c17",
+                "--emit=llvm-ir",
+                "--all-functions",
                 "--diagnostics=json",
                 *EXTRA_COMPILER_ARGUMENTS,
                 str(path),
@@ -847,7 +850,7 @@ def main() -> int:
         )
         target.setdefault(module, []).append(result["name"])
     report = {
-        "scope": "all concrete public operation and constant names plus concrete public type C17 representation",
+        "scope": "all concrete public operation and constant names plus concrete public type LLVM representation",
         "compiler": str(compiler),
         "compiler_sha256": hashlib.sha256(compiler.read_bytes()).hexdigest(),
         "inventory": str(inventory_path),

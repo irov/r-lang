@@ -7,6 +7,12 @@ import subprocess
 import tempfile
 
 
+def emit_options(mode):
+    """Options of one output; LLVM IR lowers every function, not only those main reaches, so
+    that code generation also accepts the functions main never calls."""
+    return ['--emit=' + mode, '--all-functions'] if mode == 'llvm-ir' else ['--emit=' + mode]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--front', required=True)
@@ -46,12 +52,13 @@ i32 main() {
 
         def emit(mode, paths, extra=()):
             entry = ['--entry', 'selection.consumer' if len(paths) == 2 else 'selection.hash_only'] if mode == 'link-plan' else []
-            result = subprocess.run([args.front, '--emit=' + mode, *entry, *extra, *map(str, paths)],
+            result = subprocess.run([args.front, *emit_options(mode), *entry, *extra,
+                                     *map(str, paths)],
                                     capture_output=True, text=True, timeout=30)
             assert result.returncode == 0, result.stderr or f'frontend status {result.returncode}'
             return result.stdout
 
-        for mode in ('interface', 'c17', 'link-plan'):
+        for mode in ('interface', 'llvm-ir', 'link-plan'):
             assert emit(mode, [provider, consumer]) == emit(mode, [consumer, provider]), mode
         for profile, literal in [('freestanding', 7), ('allocation', 7), ('hosted', 7),
                                  ('hosted-thread', 7), ('hosted-native-async', 42)]:
@@ -79,7 +86,7 @@ i32 main() {
         assert 'r_std_hash' in link and 'r_std_bytes' not in link and 'absent_external' not in link
         interface = emit('interface', [provider])
         assert 'Hidden' not in interface and 'duplicate' not in interface
-        assert 'absent_external' not in emit('c17', [provider])
+        assert 'absent_external' not in emit('llvm-ir', [provider])
 
         # An inactive generic local must not close a constrained type with a rejected argument.
         provider.write_text('''module selection.closed_storage;
@@ -96,7 +103,7 @@ i32 main() {
     return *result - 42;
 }
 ''')
-        emit('c17', [provider])
+        emit('llvm-ir', [provider])
 
         # R-META-0002: constant conditions select declarations of one module from the values
         # of another, independently of source order and together with profile predicates.
@@ -126,12 +133,13 @@ i32 main() {
 
         def emit_values(mode, paths, extra=()):
             entry = ['--entry', 'selection.app'] if mode == 'link-plan' else []
-            result = subprocess.run([args.front, '--emit=' + mode, *entry, *extra, *map(str, paths)],
+            result = subprocess.run([args.front, *emit_options(mode), *entry, *extra,
+                                     *map(str, paths)],
                                     capture_output=True, text=True, timeout=60)
             assert result.returncode == 0, result.stderr or f'frontend status {result.returncode}'
             return result.stdout
 
-        for mode in ('interface', 'c17', 'link-plan'):
+        for mode in ('interface', 'llvm-ir', 'link-plan'):
             assert (emit_values(mode, [config, queue, app]) ==
                     emit_values(mode, [app, queue, config])), mode
         # The selection depends on function bodies of another module: the interface records it.

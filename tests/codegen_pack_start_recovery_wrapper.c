@@ -5,16 +5,16 @@
 #include <stdatomic.h>
 #include <stdint.h>
 
-static RRuntimeTaskPrepareResult r_test_prepare(RRuntimeTypeInfo payload_type,
-                                                RRuntimeTypeInfo result_type,
-                                                RRuntimeTaskStepFn step);
-static void r_test_release(RRuntimeOwn *owner);
+RRuntimeTaskPrepareResult r_test_prepare(RRuntimeTypeInfo payload_type,
+                                         RRuntimeTypeInfo result_type,
+                                         RRuntimeTaskStepFn step);
+void r_test_release(RRuntimeOwn *owner);
 
 #define r_runtime_task_resumable_start_prepare r_test_prepare
 #define r_runtime_own_release r_test_release
 #define main r_generated_main
 int main(int argc, char *argv[]);
-#include R_TEST_GENERATED_C
+#include R_TEST_PROGRAM_PRELUDE
 #undef main
 #undef r_runtime_own_release
 #undef r_runtime_task_resumable_start_prepare
@@ -24,9 +24,9 @@ static _Atomic unsigned rejections;
 static _Atomic unsigned releases;
 static _Atomic _Bool valid = 1;
 
-static RRuntimeTaskPrepareResult r_test_prepare(RRuntimeTypeInfo payload_type,
-                                                RRuntimeTypeInfo result_type,
-                                                RRuntimeTaskStepFn step) {
+RRuntimeTaskPrepareResult r_test_prepare(RRuntimeTypeInfo payload_type,
+                                         RRuntimeTypeInfo result_type,
+                                         RRuntimeTaskStepFn step) {
     const unsigned attempt = atomic_fetch_add(&starts, 1U) + 1U;
     const _Bool reject = attempt == 2U || attempt == 5U || attempt == 7U;
     RRuntimeAllocator *allocator = r_runtime_hosted_allocator();
@@ -44,7 +44,7 @@ static RRuntimeTaskPrepareResult r_test_prepare(RRuntimeTypeInfo payload_type,
     return result;
 }
 
-static void r_test_release(RRuntimeOwn *owner) {
+void r_test_release(RRuntimeOwn *owner) {
     if (owner->allocation == NULL || *(const int32_t *)owner->allocation != INT32_C(9))
         atomic_store(&valid, 0);
     atomic_fetch_add(&releases, 1U);

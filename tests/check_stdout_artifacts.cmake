@@ -15,9 +15,16 @@ function(r_require_match_count variable pattern expected description)
     endif()
 endfunction()
 
+function(r_require_present variable pattern description)
+    string(REGEX MATCH "${pattern}" match "${${variable}}")
+    if(match STREQUAL "")
+        message(FATAL_ERROR "${description}: '${pattern}' is absent:\n${${variable}}")
+    endif()
+endfunction()
+
 function(r_capture_artifact source_file entry_name emit_kind output_variable)
     set(arguments --emit=${emit_kind})
-    if(emit_kind STREQUAL "c17" OR emit_kind STREQUAL "link-plan")
+    if(emit_kind STREQUAL "llvm-ir" OR emit_kind STREQUAL "link-plan")
         list(APPEND arguments
             --entry "${entry_name}"
             --profile hosted-native-async
@@ -52,27 +59,26 @@ function(r_check_stdout_source source_file entry_name is_async)
         "move source=[^\n]*type=[(]standard \"std[.]io::output\"[)]" 1
         "MIR output moves")
 
-    r_capture_artifact("${source_file}" "${entry_name}" c17 c17_output)
-    r_require_match_count(c17_output "#include \"r_std_io[.]h\"" 1
-        "generated std.io includes")
-    r_require_match_count(c17_output "r_std_io_stdout[(]" 1
-        "generated stdout calls")
-    r_require_match_count(c17_output "r_std_io_output_move_initialize[(]" 1
-        "generated output moves")
-    r_require_match_count(c17_output "r_std_io_output_destroy[(]" 1
-        "generated output drops")
+    r_capture_artifact("${source_file}" "${entry_name}" llvm-ir ir_output)
+    r_require_match_count(ir_output "call [^\n]*@r_std_io_stdout[(]" 1
+        "stdout calls")
+    # The move and drop glue of std.io::output reach the library's own entries.
+    r_require_present(ir_output "call [^\n]*@(r_shim_)?r_std_io_output_move_initialize[(]"
+        "output move glue")
+    r_require_present(ir_output "call [^\n]*@(r_shim_)?r_std_io_output_destroy[(]"
+        "output drop glue")
 
     if(is_async)
-        r_require_match_count(c17_output "r_std_io_write_all[(]" 1
-            "generated async stdout writes")
-        r_require_match_count(c17_output "r_std_array_push[(]" 1
-            "generated stdout payload pushes")
-        string(FIND "${c17_output}" "r_std_io_stdout(" stdout_offset)
-        string(FIND "${c17_output}" "r_std_io_write_all(" write_offset)
+        r_require_match_count(ir_output "call [^\n]*@r_std_io_write_all[(]" 1
+            "async stdout writes")
+        r_require_match_count(ir_output "call [^\n]*@r_std_array_push[(]" 1
+            "stdout payload pushes")
+        string(FIND "${ir_output}" "@r_std_io_stdout(" stdout_offset)
+        string(FIND "${ir_output}" "@r_std_io_write_all(" write_offset)
         if(stdout_offset EQUAL -1 OR write_offset EQUAL -1 OR
            NOT stdout_offset LESS write_offset)
             message(FATAL_ERROR
-                "generated async stdout acquisition must precede its write:\n${c17_output}")
+                "async stdout acquisition must precede its write:\n${ir_output}")
         endif()
     endif()
 

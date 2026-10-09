@@ -69,9 +69,11 @@ members like `Celsius`.
 `status probe ADDRESS PORT` formats a socket address built from its arguments. Invalid input
 reports the error and exits with 70; a wrong command line prints the usage and exits with 64.
 
-To emit the program manually:
+To compile the program manually (the object goes to standard output; the CTest case
+`r_frontend_codegen_example_status` links it with the runtime and the library into
+`build/debug/tests/codegen_example_status`):
 
 ```sh
-build-debug/r-front --module-map examples/status/modules.map \
-  --entry example.status.main --library-map library/r/library.map --emit=c17 > /tmp/status.c
+build/debug/r-front --module-map examples/status/modules.map \
+  --entry example.status.main --library-map library/r/library.map --emit=object > /tmp/status.o
 ```

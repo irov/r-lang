@@ -135,9 +135,9 @@ static size_t r_aggregate_diagnostic_count(const RFrontendContext *context, cons
 static bool r_aggregate_build(bool reverse,
                               RAggregateTestBuffer *mir,
                               RAggregateTestBuffer *interface_output,
-                              RAggregateTestBuffer *c17) {
+                              RAggregateTestBuffer *program) {
     static const RFrontendArtifactOptions artifact_options = {
-        "test.aggregate.consumer::main", "hosted", NULL, 0U, NULL, 0U};
+        "test.aggregate.consumer::main", "hosted", NULL, 0U, NULL, 0U, NULL, 0U, false};
     RFrontendContext *context = r_frontend_create(NULL);
     bool success = false;
 
@@ -160,7 +160,8 @@ static bool r_aggregate_build(bool reverse,
         (r_frontend_dump_mir(context, r_aggregate_write, mir) != R_FRONTEND_OK) ||
         (r_frontend_dump_interface(
              context, &artifact_options, r_aggregate_write, interface_output) != R_FRONTEND_OK) ||
-        (r_frontend_emit_c17(context, r_aggregate_write, c17) != R_FRONTEND_OK)) {
+        (r_frontend_emit_llvm(context, NULL, R_FRONTEND_LLVM_IR, r_aggregate_write, program) !=
+         R_FRONTEND_OK)) {
         goto cleanup;
     }
     success = true;
@@ -173,31 +174,31 @@ cleanup:
 static void r_aggregate_test_positive_and_deterministic(void) {
     RAggregateTestBuffer first_mir = {0};
     RAggregateTestBuffer first_interface = {0};
-    RAggregateTestBuffer first_c17 = {0};
+    RAggregateTestBuffer first_program = {0};
     RAggregateTestBuffer second_mir = {0};
     RAggregateTestBuffer second_interface = {0};
-    RAggregateTestBuffer second_c17 = {0};
+    RAggregateTestBuffer second_program = {0};
 
-    R_AGGREGATE_CHECK(r_aggregate_build(false, &first_mir, &first_interface, &first_c17));
-    R_AGGREGATE_CHECK(r_aggregate_build(true, &second_mir, &second_interface, &second_c17));
+    R_AGGREGATE_CHECK(r_aggregate_build(false, &first_mir, &first_interface, &first_program));
+    R_AGGREGATE_CHECK(r_aggregate_build(true, &second_mir, &second_interface, &second_program));
     R_AGGREGATE_CHECK((first_mir.length == second_mir.length) &&
                       (memcmp(first_mir.bytes, second_mir.bytes, first_mir.length) == 0));
     R_AGGREGATE_CHECK(
         (first_interface.length == second_interface.length) &&
         (memcmp(first_interface.bytes, second_interface.bytes, first_interface.length) == 0));
-    R_AGGREGATE_CHECK((first_c17.length == second_c17.length) &&
-                      (memcmp(first_c17.bytes, second_c17.bytes, first_c17.length) == 0));
+    R_AGGREGATE_CHECK(
+        (first_program.length == second_program.length) &&
+        (memcmp(first_program.bytes, second_program.bytes, first_program.length) == 0));
     R_AGGREGATE_CHECK(strstr(first_interface.bytes, "layout=declaration-order") != NULL);
     R_AGGREGATE_CHECK(strstr(first_interface.bytes, "test.aggregate.api::secret") == NULL);
     R_AGGREGATE_CHECK(strstr(first_mir.bytes, "fields=((4 %v0) (3 %v1))") != NULL);
-    R_AGGREGATE_CHECK(strstr(first_c17.bytes, ".r_m00000001") != NULL);
 
     r_aggregate_buffer_destroy(&first_mir);
     r_aggregate_buffer_destroy(&first_interface);
-    r_aggregate_buffer_destroy(&first_c17);
+    r_aggregate_buffer_destroy(&first_program);
     r_aggregate_buffer_destroy(&second_mir);
     r_aggregate_buffer_destroy(&second_interface);
-    r_aggregate_buffer_destroy(&second_c17);
+    r_aggregate_buffer_destroy(&second_program);
 }
 
 static void r_aggregate_test_qualified_import(void) {
@@ -214,18 +215,21 @@ static void r_aggregate_test_qualified_import(void) {
         "  return 1;\n"
         "}\n";
     RFrontendContext *context = r_frontend_create(NULL);
-    RAggregateTestBuffer c17 = {0};
+    RAggregateTestBuffer program = {0};
 
     R_AGGREGATE_CHECK(context != NULL);
     if (context != NULL) {
         R_AGGREGATE_CHECK(r_aggregate_add_source(context, "api.r", aggregate_api_source));
         R_AGGREGATE_CHECK(r_aggregate_add_source(context, "qualified.r", qualified_consumer));
         R_AGGREGATE_CHECK(r_frontend_analyze(context) == R_FRONTEND_OK);
-        R_AGGREGATE_CHECK(r_frontend_emit_c17(context, r_aggregate_write, &c17) == R_FRONTEND_OK);
-        R_AGGREGATE_CHECK(c17.length != 0U);
+        R_AGGREGATE_CHECK(r_frontend_lower_mir(context) == R_FRONTEND_OK);
+        R_AGGREGATE_CHECK(
+            r_frontend_emit_llvm(context, NULL, R_FRONTEND_LLVM_IR, r_aggregate_write, &program) ==
+            R_FRONTEND_OK);
+        R_AGGREGATE_CHECK(program.length != 0U);
         r_frontend_destroy(context);
     }
-    r_aggregate_buffer_destroy(&c17);
+    r_aggregate_buffer_destroy(&program);
 }
 
 static void r_aggregate_expect_diagnostic(const char *source, const char *code) {
@@ -326,10 +330,10 @@ static void r_aggregate_test_repr_c(void) {
         "extern \"C\" point translate(point value) { return value; } "
         "i32 main() { point value = point { .x = 1i32 as c_int, .y = 2i32 as c_int }; "
         "point result = translate(value); result as void; return 0; }";
-    RFrontendArtifactOptions options = {NULL, "hosted", NULL, 0U, NULL, 0U};
+    RFrontendArtifactOptions options = {NULL, "hosted", NULL, 0U, NULL, 0U, NULL, 0U, false};
     RFrontendContext *context = r_frontend_create(NULL);
     RAggregateTestBuffer interface_output = {0};
-    RAggregateTestBuffer c17 = {0};
+    RAggregateTestBuffer program = {0};
     size_t aggregate_index;
 
     R_AGGREGATE_CHECK(context != NULL);
@@ -350,11 +354,16 @@ static void r_aggregate_test_repr_c(void) {
         R_FRONTEND_OK);
     R_AGGREGATE_CHECK((interface_output.bytes != NULL) &&
                       (strstr(interface_output.bytes, "repr_c=true") != NULL));
-    R_AGGREGATE_CHECK(r_frontend_emit_c17(context, r_aggregate_write, &c17) == R_FRONTEND_OK);
-    R_AGGREGATE_CHECK(strstr(c17.bytes, "translate(") != NULL);
+    R_AGGREGATE_CHECK(
+        r_frontend_emit_llvm(context, NULL, R_FRONTEND_LLVM_IR, r_aggregate_write, &program) ==
+        R_FRONTEND_OK);
+    /* R-FFI-0024: the definition is exported under its C name with the C calling convention, which
+       passes the 8-byte @repr(C) struct in one register. */
+    R_AGGREGATE_CHECK((program.bytes != NULL) &&
+                      (strstr(program.bytes, "define i64 @translate(i64 ") != NULL));
 
     r_aggregate_buffer_destroy(&interface_output);
-    r_aggregate_buffer_destroy(&c17);
+    r_aggregate_buffer_destroy(&program);
     r_frontend_destroy(context);
 }
 
@@ -733,7 +742,11 @@ static size_t r_aggregate_allocation_run(size_t fail_at, RFrontendStatus *status
     } else {
         *status = r_frontend_analyze(context);
         if (*status == R_FRONTEND_OK) {
-            *status = r_frontend_emit_c17(context, r_aggregate_write, &output);
+            *status = r_frontend_lower_mir(context);
+        }
+        if (*status == R_FRONTEND_OK) {
+            *status =
+                r_frontend_emit_llvm(context, NULL, R_FRONTEND_LLVM_IR, r_aggregate_write, &output);
         }
     }
     *written = output.length;

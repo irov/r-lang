@@ -24,9 +24,11 @@ function(r_require_match variable pattern description)
     endif()
 endfunction()
 
+# --all-functions: the inspected functions are not called by main.
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
+        --emit=llvm-ir
+        --all-functions
         "${SYNC_SOURCE_FILE}"
         "${MAIN_SOURCE_FILE}"
     RESULT_VARIABLE sync_status
@@ -34,54 +36,29 @@ execute_process(
     ERROR_VARIABLE sync_error
 )
 if(NOT sync_status EQUAL 0)
-    message(FATAL_ERROR "sync outcome C17 emit failed (${sync_status}): ${sync_error}")
+    message(FATAL_ERROR "sync outcome LLVM IR emit failed (${sync_status}): ${sync_error}")
 endif()
-r_require_match_count(sync_output "R_STD_IO_WRITE_ALL_RESULT_WRITTEN" 1
-    "sync IO written switch tag")
-r_require_match_count(sync_output "R_STD_IO_WRITE_ALL_RESULT_FAILED" 1
-    "sync IO failed switch tag")
-r_require_match_count(sync_output "R_STD_FS_WRITE_FILE_COMMITTED" 1
-    "sync filesystem committed switch tag")
-r_require_match_count(sync_output "R_STD_FS_WRITE_FILE_FAILED" 1
-    "sync filesystem failed switch tag")
-r_require_match_count(sync_output "R_STD_FS_WRITE_FILE_RESULT_" 0
-    "non-ABI filesystem tag names")
-r_require_match_count(sync_output "r_std_io_write_all_result_move_initialize" 1
+# The outcome values move through the library's own entries.
+r_require_match(sync_output "call [^\n]*@(r_shim_)?r_std_io_write_all_result_move_initialize[(]"
     "sync IO typed moves")
-r_require_match_count(sync_output "r_std_fs_write_file_result_move_initialize" 1
+r_require_match(sync_output "call [^\n]*@(r_shim_)?r_std_fs_write_file_result_move_initialize[(]"
     "sync filesystem typed moves")
-r_require_match_count(sync_output
-    "static inline void r_type_move_s[0-9]+[(]" 4
-    "sync standard-outcome move adapter declarations and definitions")
-r_require_match_count(sync_output
-    "static inline void r_type_move_s[0-9]+_gate[(]" 4
-    "sync standard-outcome move gate declarations and definitions")
-r_require_match_count(sync_output
-    "R_STACK_FRAME[(]r_type_move_s[0-9]+[)]" 0
-    "sync standard-outcome move gates carry no preflight (R-FUNC-0004)")
-r_require_match_count(sync_output
-    "static inline void r_type_drop_s[0-9]+" 0
-    "unused sync standard-outcome drop adapters")
-r_require_match_count(sync_output "_source = [{]0[}]" 2
-    "sync synthesized failure payload sources")
-r_require_match_count(sync_output
-    "_source[.]r_m[0-9]+ = r_t[0-9]+[.]error" 2
-    "sync flattened native errors")
-r_require_match_count(sync_output
-    "_source[.]r_m[0-9]+ = r_t[0-9]+[.]written" 1
-    "sync flattened native progress")
-r_require_match_count(sync_output "[(]RStdFsErrorCode[)]INT32_C[(]4[)]" 1
+# inspect_fs compares the error code with the ABI value of std.fs::error_code::already_exists.
+string(FIND "${sync_output}" "define internal i32 @\"semantic.standard_outcomes::inspect_fs\"("
+    inspect_fs_start)
+if(inspect_fs_start EQUAL -1)
+    message(FATAL_ERROR "sync outcome LLVM IR lacks inspect_fs:\n${sync_output}")
+endif()
+string(SUBSTRING "${sync_output}" ${inspect_fs_start} -1 inspect_fs_body)
+string(FIND "${inspect_fs_body}" "\n}\n" inspect_fs_end)
+string(SUBSTRING "${inspect_fs_body}" 0 ${inspect_fs_end} inspect_fs_body)
+r_require_match_count(inspect_fs_body "icmp eq i32 %[0-9]+, 4\n" 1
     "filesystem already_exists ABI value")
-r_require_match_count(sync_output "= [(]RStdIoWriteAllResult[)][{]0[}]" 2
-    "sync IO native-owner clears")
-r_require_match_count(sync_output "= [(]RStdFsWriteFileResult[)][{]0[}]" 2
-    "sync filesystem native-owner clears")
-r_require_match_count(sync_output "R_INTERNAL_ASSERT[(]" 0
-    "sync generated C omits assertions")
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=c17
+        --emit=llvm-ir
+        --all-functions
         --entry test.codegen.async_standard_outcomes::main
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"
@@ -91,44 +68,10 @@ execute_process(
     ERROR_VARIABLE async_error
 )
 if(NOT async_status EQUAL 0)
-    message(FATAL_ERROR "async outcome C17 emit failed (${async_status}): ${async_error}")
+    message(FATAL_ERROR "async outcome LLVM IR emit failed (${async_status}): ${async_error}")
 endif()
-r_require_match_count(async_output "R_STD_IO_WRITE_ALL_RESULT_WRITTEN" 0
-    "async C omits assertion-only written-tag references")
-r_require_match_count(async_output "R_STD_IO_WRITE_ALL_RESULT_FAILED" 0
-    "async C omits assertion-only failed-tag references")
-r_require_match_count(async_output
-    "frame->r_v00000001 = [(]uint32_t[)]frame->r_v00000000[.]kind" 1
-    "async C directly discriminates the write-all outcome")
-r_require_match_count(async_output "R_INTERNAL_ASSERT[(]" 0
-    "async generated C omits assertions")
-r_require_match_count(async_output "r_std_io_write_all_result_move_initialize" 1
-    "async IO move adapter")
-r_require_match_count(async_output "r_std_io_write_all_result_destroy" 1
-    "async IO drop adapter")
-r_require_match_count(async_output
-    "static inline void r_type_move_s[0-9]+[(]" 2
-    "async standard-outcome move adapter declaration and definition")
-r_require_match_count(async_output
-    "static inline void r_type_move_s[0-9]+_gate[(]" 2
-    "async standard-outcome move gate declaration and definition")
-r_require_match_count(async_output
-    "static inline void r_type_drop_s[0-9]+[(]" 2
-    "async standard-outcome drop adapter declaration and definition")
-r_require_match_count(async_output
-    "static inline void r_type_drop_s[0-9]+_gate[(]" 2
-    "async standard-outcome drop gate declaration and definition")
-r_require_match_count(async_output
-    "R_STACK_FRAME[(]r_type_(move|drop)_s[0-9]+[)]" 0
-    "async standard-outcome glue gates carry no preflight (R-FUNC-0004)")
-r_require_match_count(async_output
-    "frame->r_v[0-9]+[.]r_m[0-9]+ = frame->r_v[0-9]+[.]error" 1
-    "async flattened native errors")
-r_require_match_count(async_output
-    "frame->r_v[0-9]+[.]r_m[0-9]+ = frame->r_v[0-9]+[.]written" 1
-    "async flattened native progress")
-r_require_match_count(async_output "= [(]RStdIoWriteAllResult[)][{]0[}]" 2
-    "async IO native-owner clears")
 r_require_match(async_output
-    "frame->r_v[0-9]+_initialized = 1;[\n ]+frame->r_v[0-9]+_initialized = 0;"
-    "async payload/source initialization transfers")
+    "call [^\n]*@(r_shim_)?r_std_io_write_all_result_move_initialize[(]"
+    "async IO move glue")
+r_require_match(async_output "call [^\n]*@(r_shim_)?r_std_io_write_all_result_destroy[(]"
+    "async IO drop glue")

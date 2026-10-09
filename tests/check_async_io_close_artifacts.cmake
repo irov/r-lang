@@ -17,7 +17,7 @@ endfunction()
 
 function(r_capture_artifact emit_kind source_file entry output_variable)
     set(arguments --emit=${emit_kind})
-    if(emit_kind STREQUAL "c17" OR emit_kind STREQUAL "link-plan")
+    if(emit_kind STREQUAL "llvm-ir" OR emit_kind STREQUAL "link-plan")
         list(APPEND arguments
             --entry "${entry}"
             --profile hosted-native-async
@@ -49,7 +49,7 @@ function(r_require_text variable expected description)
     endif()
 endfunction()
 
-function(r_check_close label source_file entry operation handle_type native_type native_call)
+function(r_check_close label source_file entry operation handle_type native_call)
     r_capture_artifact(hir "${source_file}" "${entry}" hir_output)
     r_capture_artifact(hir "${source_file}" "${entry}" hir_repeated)
     r_require_deterministic(hir_output hir_repeated "${label} HIR artifact")
@@ -87,30 +87,15 @@ function(r_check_close label source_file entry operation handle_type native_type
         "await [^\n]*task=[(]task void [(]effects [(]standard \"std[.]io::io_error\"[)][)][)] type=[(]carrier void [(]effects [(]standard \"std[.]io::io_error\"[)][)][)]" 1
         "${label} checked MIR awaits")
 
-    r_capture_artifact(c17 "${source_file}" "${entry}" c17_output)
-    r_capture_artifact(c17 "${source_file}" "${entry}" c17_repeated)
-    r_require_deterministic(c17_output c17_repeated "${label} C17 artifact")
-    r_require_match_count(c17_output "#include \"r_std_io[.]h\"" 1
-        "${label} generated std.io includes")
-    r_require_match_count(c17_output "${native_call}[(]&" 1
-        "${label} generated native close calls")
-    r_require_match_count(c17_output "RStdIoDeadline r_io_deadline_[0-9]+" 1
-        "${label} generated deadline adapters")
-    r_require_match_count(c17_output "const ${native_type} r_io_stream_before_[0-9]+" 0
-        "${label} omits debug ownership snapshots")
-    r_require_match_count(c17_output "RStdIoTaskStartResult r_io_start_[0-9]+" 1
-        "${label} generated start-result adapters")
-    r_require_match_count(c17_output "r_io_start_[0-9]+[.]task = NULL" 1
-        "${label} generated task ownership transfers")
-    r_require_match_count(c17_output
-        "R_INTERNAL_ASSERT[(]" 0
-        "${label} omits assertions")
-    r_require_match_count(c17_output
-        "if [(]r_io_start_[0-9]+[.]is_ok[)] [{][\n ]+frame->r_l[0-9]+_initialized = 0" 1
-        "${label} direct successful-start ownership transition")
-    r_require_match_count(c17_output
-        "if [(]frame->r_l[0-9]+[.]handle != NULL[)]" 0
-        "${label} successful-start runtime guards")
+    r_capture_artifact(llvm-ir "${source_file}" "${entry}" ir_output)
+    r_capture_artifact(llvm-ir "${source_file}" "${entry}" ir_repeated)
+    r_require_deterministic(ir_output ir_repeated "${label} LLVM IR artifact")
+    r_require_match_count(ir_output "call [^\n]*@${native_call}[(]" 1
+        "${label} library close calls")
+    # R-STMT-0019 (L23): the close start narrows its deadline argument by the structural
+    # deadline.
+    r_require_match_count(ir_output "call [^\n]*@r_runtime_task_deadline_narrow[(]" 1
+        "${label} deadline narrowing")
 
     r_capture_artifact(link-plan "${source_file}" "${entry}" plan_output)
     r_capture_artifact(link-plan "${source_file}" "${entry}" plan_repeated)
@@ -126,7 +111,6 @@ r_check_close(
     "test.codegen.async_io_close_input::main"
     "close_input"
     "input"
-    "RStdIoInput"
     "r_std_io_close_input")
 r_check_close(
     "close_output"
@@ -134,5 +118,4 @@ r_check_close(
     "test.codegen.async_io_close_output::main"
     "close_output"
     "output"
-    "RStdIoOutput"
     "r_std_io_close_output")

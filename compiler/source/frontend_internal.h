@@ -3005,6 +3005,12 @@ const char *r_hir_kind_name(RHirKind kind);
 /* L25.4: whether two HIR trees perform the same operations, apart from their source spans; the
    error exits of one call whose cleanups agree leave through one shared path. */
 bool r_hir_same_tree(const RFrontendContext *context, RHirNodeId left, RHirNodeId right);
+/* The spelling of a type in the MIR and interface artifacts, which does not depend on the order
+   of the sources; the LLVM emitter ranks types by it (B6-2). */
+bool r_mir_write_type_text(const RFrontendContext *context,
+                           RTypeId type_id,
+                           RFrontendWriteFn writer,
+                           void *user_data);
 const char *r_mir_instruction_kind_name(RMirInstructionKind kind);
 
 /* R-LIMIT-0001, R-LIMIT-0003: the depth that a walk of an AST or HIR tree admits. The parser admits

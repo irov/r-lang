@@ -14,7 +14,7 @@ For every requested symbol (an import whose signature passes an R-declared ``@re
 struct) the tool also records the C type of the symbol as the compiler resolved it: a type
 tree of pointers, function types, arrays, scalars and struct, union and enumeration leaves,
 obtained from ``__typeof__`` probes of the generator's own translation unit (data generation,
-never part of generated C, R-FFI-0042). Every complete struct and enumeration reached from such
+never part of the program, R-FFI-0042). Every complete struct and enumeration reached from such
 a tree, directly or through members, is inventoried as well, with a type tree per member and a
 layout read from integer constant expressions (``sizeof``, ``_Alignof``, ``offsetof``).
 
@@ -30,7 +30,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -289,13 +291,17 @@ def index_tag_declarations(tree: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return result
 
 
-def normalize_type(node: dict[str, Any], tags: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    """One compiler type node as a record type tree (schema r-abi-record-0.1)."""
+def normalize_type(
+    node: dict[str, Any], tags: dict[str, dict[str, Any]], atomics: bool = False
+) -> dict[str, Any]:
+    """One compiler type node as a record type tree (schema r-abi-record-0.1). With `atomics`,
+    `_Atomic(T)` is T marked atomic (the layout tables of the LLVM backend); otherwise it is not
+    expressible (R-FFI-0019)."""
     kind = node.get("kind", "")
     children = type_children(node)
     spelling = node.get("type", {}).get("qualType", "")
     if kind == "QualType":
-        inner = normalize_type(children[0], tags) if children else {"node": "other"}
+        inner = normalize_type(children[0], tags, atomics) if children else {"node": "other"}
         qualifiers = node.get("qualifiers", "").split()
         if "const" in qualifiers:
             inner["const"] = True
@@ -304,11 +310,11 @@ def normalize_type(node: dict[str, Any], tags: dict[str, dict[str, Any]]) -> dic
             inner = {"node": "other", "spelling": spelling}
         return inner
     if kind in TYPE_WRAPPERS:
-        return normalize_type(children[0], tags) if children else {"node": "other", "spelling": spelling}
+        return normalize_type(children[0], tags, atomics) if children else {"node": "other", "spelling": spelling}
     if kind == "DecayedType":
-        return normalize_type(children[-1], tags) if children else {"node": "other", "spelling": spelling}
+        return normalize_type(children[-1], tags, atomics) if children else {"node": "other", "spelling": spelling}
     if kind == "TypedefType":
-        inner = normalize_type(children[0], tags) if children else {"node": "other", "spelling": spelling}
+        inner = normalize_type(children[0], tags, atomics) if children else {"node": "other", "spelling": spelling}
         name = node.get("decl", {}).get("name", "")
         if name and inner.get("node") in ("record", "enum"):
             # The outermost typedef is how the header spelled this position.
@@ -319,12 +325,12 @@ def normalize_type(node: dict[str, Any], tags: dict[str, dict[str, Any]]) -> dic
             return {"node": "void"}
         return {"node": "scalar", "spelling": spelling}
     if kind == "PointerType":
-        return {"node": "pointer", "pointee": normalize_type(children[0], tags)}
+        return {"node": "pointer", "pointee": normalize_type(children[0], tags, atomics)}
     if kind == "FunctionProtoType":
         return {
             "node": "function",
-            "result": normalize_type(children[0], tags),
-            "parameters": [normalize_type(child, tags) for child in children[1:]],
+            "result": normalize_type(children[0], tags, atomics),
+            "parameters": [normalize_type(child, tags, atomics) for child in children[1:]],
             "variadic": bool(node.get("variadic", False)),
         }
     if kind == "FunctionNoProtoType":
@@ -350,8 +356,12 @@ def normalize_type(node: dict[str, Any], tags: dict[str, dict[str, Any]]) -> dic
             "tag_name": decl.get("name", "") or "",
             "_declaration": tags.get(decl.get("id", "")),
         }
+    if kind == "AtomicType" and atomics and children:
+        inner = dict(normalize_type(children[0], tags, atomics))
+        inner["atomic"] = True
+        return inner
     if kind == "ConstantArrayType":
-        return {"node": "array", "length": int(node.get("size", 0)), "element": normalize_type(children[0], tags)}
+        return {"node": "array", "length": int(node.get("size", 0)), "element": normalize_type(children[0], tags, atomics)}
     return {"node": "other", "spelling": spelling}
 
 
@@ -731,6 +741,13 @@ def main() -> int:
         base_arguments.append(f"-I{directory}")
     version = subprocess.run([args.cc, "--version"], capture_output=True, text=True, check=False)
     compiler_identity = (version.stdout.splitlines() or ["unknown"])[0].strip()
+    # R-FFI-0044: the identity names the toolchain build, which for a clang release is the
+    # digest of the compiler executable (tools/check_target_toolchain.py).
+    located = shutil.which(args.cc)
+    if located is not None:
+        executable = Path(os.path.realpath(located))
+        digest = hashlib.sha256(executable.read_bytes()).hexdigest()
+        compiler_identity = f"{compiler_identity} (sha256:{digest})"
     records = []
     with tempfile.TemporaryDirectory(prefix="r-abi-record-") as scratch:
         directory = Path(scratch)

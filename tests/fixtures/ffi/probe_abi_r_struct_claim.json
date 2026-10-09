@@ -4,7 +4,7 @@
     {
       "name": "probe-abi-r-struct-claim",
       "provider": "probe",
-      "compiler_identity": "Apple clang version 21.0.0 (clang-2100.3.34.2)",
+      "compiler_identity": "Homebrew clang version 22.1.8 (sha256:68bb87f784f09da01b7aea0f70952fb23f606242cdc4f6ff3cc26c372af0706f)",
       "feature_test_definitions": [
         "PROBE_LIBRARY_VERSION=1"
       ],

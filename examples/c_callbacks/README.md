@@ -4,9 +4,12 @@ This executable example uses exact C function pointers, nullable callbacks, and
 `std.c::handle` to manage an external resource obligation.
 
 ```sh
-r-front --emit=c17 examples/c_callbacks/main.r
-ctest --test-dir build-debug --output-on-failure -R r_frontend_codegen_c_callbacks_example
+build/debug/r-front --emit=llvm-ir examples/c_callbacks/main.r > c_callbacks.ll
+ctest --test-dir build/debug --output-on-failure -R '^r_frontend_codegen_c_callbacks_example$'
 ```
+
+The first command writes the LLVM module of the program; the test compiles it with
+`r-front --emit=object`, links it with the runtime and the library and runs it.
 
 `raw fn(c_int) -> c_int` stores a C function pointer. A matching exported
 `extern "C"` function marked `@callback` can initialize it. `@safety` documents

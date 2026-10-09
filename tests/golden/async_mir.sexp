@@ -52,7 +52,7 @@
       (%v1 = async_start callee="test.async_mir::produce" arguments=(%v0) type=(carrier (task i32) (effects (standard "std.async::start_error"))) task=(task i32))
       (%v2 = effect_tag carrier=%v1 type=(carrier (task i32) (effects (standard "std.async::start_error"))))
       (%v3 = constant type=u32 value=1)
-      (%v4 = binary op="==" left=%v2 right=%v3 type=bool)
+      (%v4 = binary op="==" left=%v2 right=%v3 type=bool panic=bb3)
       (branch condition=%v4 then=bb1 else=bb2)
     )
     (block bb1
@@ -64,6 +64,9 @@
       (store place=%local0 value=%v6)
       (%v7 = move source=%local0 type=(task i32))
       (return value=%v7)
+    )
+    (block bb3
+      (panic)
     )
   )
 )

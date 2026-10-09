@@ -13,7 +13,9 @@ static RStdFsTaskStartResult r_test_refused_start(void) {
     return result;
 }
 
-static RStdFsTaskStartResult
+RStdFsTaskStartResult
+r_test_write(const RStdFsFile *file, RRuntimeArray *buffer, RStdFsDeadline deadline);
+RStdFsTaskStartResult
 r_test_write(const RStdFsFile *file, RRuntimeArray *buffer, RStdFsDeadline deadline) {
     if (++r_test_write_count == 1U) {
         return r_test_refused_start();
@@ -21,7 +23,9 @@ r_test_write(const RStdFsFile *file, RRuntimeArray *buffer, RStdFsDeadline deadl
     return r_std_fs_write(file, buffer, deadline);
 }
 
-static RStdFsTaskStartResult
+RStdFsTaskStartResult
+r_test_read(const RStdFsFile *file, RRuntimeArray *buffer, RStdFsDeadline deadline);
+RStdFsTaskStartResult
 r_test_read(const RStdFsFile *file, RRuntimeArray *buffer, RStdFsDeadline deadline) {
     if (++r_test_read_count == 1U) {
         return r_test_refused_start();
@@ -29,22 +33,24 @@ r_test_read(const RStdFsFile *file, RRuntimeArray *buffer, RStdFsDeadline deadli
     return r_std_fs_read(file, buffer, deadline);
 }
 
-static RStdFsTaskStartResult r_test_close_file(RStdFsFile *file, RStdFsDeadline deadline) {
+RStdFsTaskStartResult r_test_close_file(RStdFsFile *file, RStdFsDeadline deadline);
+RStdFsTaskStartResult r_test_close_file(RStdFsFile *file, RStdFsDeadline deadline) {
     if (++r_test_close_file_count == 1U) {
         return r_test_refused_start();
     }
     return r_std_fs_close_file(file, deadline);
 }
 
-static RStdFsTaskStartResult r_test_close_directory(RStdFsDirectory *directory,
-                                                    RStdFsDeadline deadline) {
+RStdFsTaskStartResult r_test_close_directory(RStdFsDirectory *directory, RStdFsDeadline deadline);
+RStdFsTaskStartResult r_test_close_directory(RStdFsDirectory *directory, RStdFsDeadline deadline) {
     if (++r_test_close_directory_count == 1U) {
         return r_test_refused_start();
     }
     return r_std_fs_close_directory(directory, deadline);
 }
 
-static RStdFsTaskStartResult r_test_next(RStdFsDirectoryIter *iterator, RStdFsDeadline deadline) {
+RStdFsTaskStartResult r_test_next(RStdFsDirectoryIter *iterator, RStdFsDeadline deadline);
+RStdFsTaskStartResult r_test_next(RStdFsDirectoryIter *iterator, RStdFsDeadline deadline) {
     if (++r_test_next_count == 1U) {
         return r_test_refused_start();
     }
@@ -58,7 +64,7 @@ static RStdFsTaskStartResult r_test_next(RStdFsDirectoryIter *iterator, RStdFsDe
 #define r_std_fs_next r_test_next
 #define main r_generated_main
 int main(int argc, char *argv[]);
-#include R_TEST_GENERATED_C
+#include R_TEST_PROGRAM_PRELUDE
 #undef main
 #undef r_std_fs_write
 #undef r_std_fs_read

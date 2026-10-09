@@ -2,18 +2,18 @@
 
 #include <stddef.h>
 
-static void r_test_own_release(RRuntimeOwn *owner);
+void r_test_own_release(RRuntimeOwn *owner);
 
 #define r_runtime_own_release r_test_own_release
 #define main r_generated_main
 int main(int argc, char *argv[]);
-#include R_TEST_GENERATED_C
+#include R_TEST_PROGRAM_PRELUDE
 #undef main
 #undef r_runtime_own_release
 
 static size_t r_test_own_release_count;
 
-static void r_test_own_release(RRuntimeOwn *owner) {
+void r_test_own_release(RRuntimeOwn *owner) {
     r_test_own_release_count += 1U;
     r_runtime_own_release(owner);
 }

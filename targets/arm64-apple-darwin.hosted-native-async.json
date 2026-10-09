@@ -1,6 +1,6 @@
 {
   "schema": "r-target-manifest-0.1",
-  "manifest_revision": 10,
+  "manifest_revision": 11,
   "status": "draft-implementation-contract",
   "conformance_claim": false,
   "identity": {
@@ -12,14 +12,18 @@
     "standard_library_specification_revision": "0.1.0-draft.74"
   },
   "toolchain": {
-    "c_compiler": "Apple clang",
-    "c_compiler_version": "21.0.0",
-    "c_compiler_build": "clang-2100.3.34.2",
+    "c_compiler": "Homebrew clang",
+    "c_compiler_version": "22.1.8",
+    "c_compiler_build": "sha256:68bb87f784f09da01b7aea0f70952fb23f606242cdc4f6ff3cc26c372af0706f",
     "sdk": "macOS 27.0",
     "generated_application_language": "ISO C17",
     "generated_application_extensions": false,
     "darwin_adapter_language": "Clang C17 with Blocks",
-    "warnings_as_errors": true
+    "warnings_as_errors": true,
+    "llvm_version": "22.1.8",
+    "llvm_triple": "arm64-apple-macosx26.5.0",
+    "llvm_cpu": "apple-m1",
+    "llvm_data_layout": "e-m:o-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-n32:64-S128-Fn32"
   },
   "core": {
     "data_model": "LP64",
@@ -32,8 +36,8 @@
       "schema": "r-c-abi-numeric-types-0.1",
       "derived_from": {
         "target": "arm64-apple-macos26.5",
-        "compiler": "Apple clang 21.0.0",
-        "compiler_build": "clang-2100.3.34.2",
+        "compiler": "Homebrew clang 22.1.8",
+        "compiler_build": "sha256:68bb87f784f09da01b7aea0f70952fb23f606242cdc4f6ff3cc26c372af0706f",
         "sdk": "macOS 27.0",
         "language": "ISO C17"
       },
@@ -586,7 +590,7 @@
       "call_transition_bytes": 16384,
       "generated_frame_ceiling_bytes": 262144,
       "frame_measurement": {
-        "compiler": "Apple clang 21.0.0",
+        "compiler": "Homebrew clang 22.1.8",
         "compile_flags": [
           "-std=c17",
           "-O0",

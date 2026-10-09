@@ -16,7 +16,8 @@ ctest --test-dir build-debug -R 'example_' --output-on-failure
 
 Each new application is built by `r_frontend_codegen_example_NAME` into
 `build-debug/tests/codegen_example_NAME`. Its README lists commands and expected behavior.
-The same build harness verifies emitted C17, stack accounting and sanitizer configurations.
+The same build harness compiles each application with `r-front --emit=object`, checks its stack
+bounds and runs it in the sanitizer configurations.
 
 | Application | Purpose | Main language/library topics |
 |---|---|---|

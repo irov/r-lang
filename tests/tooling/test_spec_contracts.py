@@ -188,7 +188,7 @@ class SpecificationContractTests(unittest.TestCase):
         value["manifest_revision"] = 5
         result = self.run_target_with_manifest(value)
         self.assertEqual(result.returncode, 1)
-        self.assertIn("target manifest revision must be 10", result.stderr)
+        self.assertIn("target manifest revision must be 11", result.stderr)
 
     def test_checked_error_carrier_contract_is_closed(self) -> None:
         mutations = (
@@ -251,6 +251,9 @@ class SpecificationContractTests(unittest.TestCase):
             ("c_compiler_build", "clang-2100.1.1.102"),
             ("sdk", "macOS 26.6"),
             ("warnings_as_errors", False),
+            ("llvm_version", "22.1.7"),
+            ("llvm_triple", "arm64-apple-macosx27.0.0"),
+            ("llvm_cpu", "generic"),
         )
         for field, replacement in mutations:
             with self.subTest(field=field):
@@ -259,6 +262,16 @@ class SpecificationContractTests(unittest.TestCase):
                 result = self.run_target_with_manifest(value)
                 self.assertEqual(result.returncode, 1)
                 self.assertIn("Darwin toolchain contract is not closed", result.stderr)
+
+    def test_llvm_data_layout_agrees_with_core_abi(self) -> None:
+        # LLVM transition B0: r-front checks its target machine against this layout, and the
+        # manifest check ties the layout to the manifest's own byte order and integer facts.
+        value = json.loads(TARGET_MANIFEST.read_text(encoding="utf-8"))
+        layout = value["toolchain"]["llvm_data_layout"]
+        value["toolchain"]["llvm_data_layout"] = "E" + layout[1:]
+        result = self.run_target_with_manifest(value)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("llvm_data_layout byte order disagrees", result.stderr)
 
         value = json.loads(TARGET_MANIFEST.read_text(encoding="utf-8"))
         value["toolchain"]["host_probe"] = True

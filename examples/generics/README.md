@@ -23,11 +23,11 @@ concrete representation and functions; no runtime generic metadata is involved.
 From the repository root, inspect the generated program with:
 
 ```sh
-build-debug/r-front --module-map examples/generics/modules.map \
-    --entry example.generics.main --emit=c17
-ctest --test-dir build-debug -R r_frontend_codegen_generic_example --output-on-failure
+build/debug/r-front --module-map examples/generics/modules.map \
+    --entry example.generics.main --emit=llvm-ir
+ctest --test-dir build/debug -R r_frontend_codegen_generic_example --output-on-failure
 ```
 
-The runtime test compiles the generated C17 with warnings as errors and runs both
-Copy and Move instantiations. `count` borrows the vector, so it remains available
-for subsequent operations.
+The runtime test compiles the program with `r-front --emit=object`, links it with the
+runtime and runs both Copy and Move instantiations. `count` borrows the vector, so it remains
+available for subsequent operations.
