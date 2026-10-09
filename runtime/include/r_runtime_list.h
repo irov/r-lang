@@ -21,9 +21,9 @@ typedef enum RRuntimeListStatus {
 typedef struct RRuntimeListNode RRuntimeListNode;
 
 /*
- * Node layout shared with generated C: the compiler emits per-element-type insert, observe and
- * pop helpers over this layout, so it is part of the runtime contract and changes only together
- * with the emitter (r_c17_emit_list_helpers). Values live at list->value_offset after the node.
+ * Node layout shared with generated code: the compiler lays out the nodes of frozen lists in it
+ * (compiler/llvm/statics.c), so it is part of the runtime contract and changes only together
+ * with the emitter. Values live at list->value_offset after the node.
  */
 struct RRuntimeListNode {
     RRuntimeListNode *previous;

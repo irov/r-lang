@@ -1,31 +1,22 @@
 #!/usr/bin/env python3
-"""Check that the fixtures of index and conversion proofs compile and carry their marks.
+"""Check which index places and integer conversions keep their check in the optimized program.
 
-A fixture marks each line that holds one index place with `/* proven */` (the bounds check may
-be left out) or `/* checked */` (the check must stay), and each line that holds one explicit
-integer conversion with `/* proven conversion */` or `/* checked conversion */`.
-
-The LLVM emitter does not prove these places yet: index proofs become facts for the optimizer
-in stage B7, and the comparison of each mark with the checks of the generated code returns
-with it. Until then this check lowers every function of each fixture to LLVM IR and requires
-the marks that the comparison will read; the codegen tests of the same fixtures run them as
-programs.
+A fixture marks each line that holds one index place with `/* proven */` (no bounds check is left
+for it) or `/* checked */` (its check stays), and each line that holds one explicit integer
+conversion with `/* proven conversion */` or `/* checked conversion */`. The program is
+optimized at the default level with every function kept as if called from elsewhere
+(--all-functions), so a function is proven for its own arguments, not for the calls of main;
+the checks left are read from the IR (tests/llvm_checks.py).
 """
 
 import argparse
 from pathlib import Path
 import re
-import subprocess
 import sys
 
+import llvm_checks
+
 MARK = re.compile(r'/\* (proven|checked)( conversion)? \*/\s*$')
-
-
-def compile_fixture(front, fixture):
-    result = subprocess.run([front, '--emit=llvm-ir', '--all-functions', str(fixture)],
-                            capture_output=True, text=True, timeout=120)
-    if result.returncode != 0:
-        raise SystemExit(f'{fixture.name}: r-front failed\n{result.stderr}')
 
 
 def main():
@@ -33,15 +24,29 @@ def main():
     parser.add_argument('--front', required=True)
     parser.add_argument('fixtures', nargs='+', type=Path)
     args = parser.parse_args()
+    failures = []
     marks = 0
     for fixture in args.fixtures:
-        compile_fixture(args.front, fixture)
-        marks += sum(1 for line in fixture.read_text().splitlines() if MARK.search(line))
+        checked = llvm_checks.checked_lines(llvm_checks.emit(args.front, fixture), fixture)
+        for number, line in enumerate(fixture.read_text().splitlines(), start=1):
+            match = MARK.search(line)
+            if match is None:
+                continue
+            marks += 1
+            conversion = match.group(2) is not None
+            expected = match.group(1) == 'checked'
+            present = (conversion, number) in checked
+            if present != expected:
+                kind = 'conversion' if conversion else 'bounds'
+                state = f'has a {kind} check' if present else f'has no {kind} check'
+                failures.append(
+                    f'{fixture.name}:{number}: marked {match.group(0).strip()} but {state}')
     if marks == 0:
-        print('no marked lines', file=sys.stderr)
+        failures.append('no marked lines')
+    if failures:
+        print('\n'.join(failures), file=sys.stderr)
         return 1
-    print(f'index proofs: {marks} marked index places and conversions compile '
-          '(their checks against the generated code return in B7)')
+    print(f'index proofs: {marks} marked index places and conversions match')
     return 0
 
 

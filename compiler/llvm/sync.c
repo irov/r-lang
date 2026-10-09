@@ -1131,10 +1131,16 @@ static bool r_llvm_async_sync_started(RLlvmEmitter *emitter,
 bool r_llvm_std_receive(RLlvmEmitter *emitter, const RMirInstruction *instruction) {
     const RSemanticType *task =
         r_llvm_type(emitter, r_llvm_value_type(emitter, instruction->auxiliary_type));
+    const RMirInstruction *await =
+        emitter->frame == NULL ? NULL : r_llvm_receive_await(emitter, emitter->mir, instruction);
     LLVMValueRef arguments[2];
 
     if (task == NULL) {
         return r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+    }
+    /* B7: a channel that holds a value, or has lost every sender, answers at once. */
+    if ((await != NULL) && !r_llvm_emit_receive_now(emitter, instruction, await)) {
+        return false;
     }
     arguments[0] = r_llvm_value(emitter, r_llvm_std_operand(emitter, instruction, 0U));
     arguments[1] = r_llvm_async_sync_layout(emitter, "RStdSyncReceiveLayout", task->base, false);

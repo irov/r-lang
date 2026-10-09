@@ -93,7 +93,7 @@ foreach(mode IN ITEMS sync async)
     endif()
     execute_process(
         COMMAND "${R_FRONT_EXECUTABLE}"
-            --emit=llvm-ir
+            --emit=llvm-ir --opt-level=0
             --entry "${entry}"
             --profile hosted-native-async
             --target-manifest "${TARGET_MANIFEST}"

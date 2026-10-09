@@ -48,7 +48,7 @@ r_require_match_count(mir_output
     1 "real consuming await between slices")
 
 set(ir_arguments
-    --emit=llvm-ir
+    --emit=llvm-ir --opt-level=0
     --entry test.codegen.async_mir_slice::main
     --profile hosted-native-async
     --target-manifest "${TARGET_MANIFEST}"
@@ -93,7 +93,7 @@ r_require_match_count(array_mir_output
     1 "shared std.array slice")
 
 set(array_ir_arguments
-    --emit=llvm-ir
+    --emit=llvm-ir --opt-level=0
     --entry test.codegen.async_array_slice::main
     --profile hosted-native-async
     --target-manifest "${TARGET_MANIFEST}"

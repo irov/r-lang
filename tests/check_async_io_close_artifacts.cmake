@@ -17,6 +17,10 @@ endfunction()
 
 function(r_capture_artifact emit_kind source_file entry output_variable)
     set(arguments --emit=${emit_kind})
+    if(emit_kind STREQUAL "llvm-ir")
+        # The emitter's own IR, not the optimizer's.
+        list(APPEND arguments --opt-level=0)
+    endif()
     if(emit_kind STREQUAL "llvm-ir" OR emit_kind STREQUAL "link-plan")
         list(APPEND arguments
             --entry "${entry}"

@@ -63,6 +63,12 @@ if(NOT DEFINED R_FRONT_EXECUTABLE OR
     message(FATAL_ERROR "missing codegen program test input")
 endif()
 
+# The C parts of the program (runtime sources, shims, wrapper and foreign sources) are compiled
+# at -O0 for tests; the benchmark pairs compile them as their C mirrors are compiled.
+if(NOT DEFINED C_OPTIMIZATION)
+    set(C_OPTIMIZATION -O0)
+endif()
+
 execute_process(
     COMMAND "${PYTHON_EXECUTABLE}" "${TARGET_TOOLCHAIN_CHECK}"
         --manifest "${TARGET_MANIFEST}"
@@ -137,6 +143,14 @@ endif()
 # argument positions above stay as they are.
 if(TEST_MODE)
     list(APPEND R_FRONTEND_ARGUMENTS --test)
+endif()
+# B7.2: the bitcode of the runtime and library C the program may be optimized with, and further
+# options of a test (profile-guided optimization, tests/check_pgo_program.cmake).
+if(DEFINED BITCODE_CATALOG AND NOT BITCODE_CATALOG STREQUAL "")
+    list(APPEND R_FRONTEND_ARGUMENTS --bitcode-catalog "${BITCODE_CATALOG}")
+endif()
+if(DEFINED FRONTEND_EXTRA_ARGUMENTS AND NOT FRONTEND_EXTRA_ARGUMENTS STREQUAL "")
+    list(APPEND R_FRONTEND_ARGUMENTS ${FRONTEND_EXTRA_ARGUMENTS})
 endif()
 
 set(R_CODEGEN_SANITIZER_FLAGS)
@@ -465,7 +479,7 @@ if(DEFINED ENABLE_SANITIZERS AND ENABLE_SANITIZERS AND
                 -Wall
                 -Wextra
                 -Werror
-                -O0
+                ${C_OPTIMIZATION}
                 ${R_CODEGEN_SANITIZER_FLAGS}
                 -fno-sanitize=function
                 ${R_CODEGEN_HEADER_INCLUDE_FLAGS}
@@ -499,7 +513,7 @@ execute_process(
         -Wshadow
         -Wstrict-prototypes
         -Wmissing-prototypes
-        -O0
+        ${C_OPTIMIZATION}
         ${R_CODEGEN_SANITIZER_FLAGS}
         ${R_CODEGEN_WRAPPER_FLAGS}
         ${R_CODEGEN_HEADER_INCLUDE_FLAGS}
@@ -595,6 +609,7 @@ execute_process(
         "${RUNTIME_PANIC_SOURCE}"
         "${RUNTIME_DARWIN_EVENT_LIBRARY}"
         "${RUNTIME_DARWIN_TIMER_LIBRARY}"
+        ${LINK_EXTRA_FLAGS}
         -o "${OUTPUT_EXE}"
     RESULT_VARIABLE R_COMPILE_RESULT
     OUTPUT_VARIABLE R_COMPILE_OUTPUT

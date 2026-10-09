@@ -6,6 +6,7 @@
 #include "r_std_time.h"
 
 #include <fcntl.h>
+#include <sched.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -372,6 +373,55 @@ static void test_locks(RRuntimeAllocator *allocator) {
     destroy_file(&fixture);
 }
 
+/* B7-6: the task of a lock is cancelled while the lane worker holds its attempt before the native
+   call. The cancellation reaches the attempt, which completes when the worker resumes; until
+   then the lock's position turn is active, so the cancellation must not finish the operation
+   under it (it aborted in r_library_internal_fs_operation_unregister). */
+static void test_lock_cancel_during_attempt(RRuntimeAllocator *allocator) {
+    static const unsigned char initial[] = {'l', 'o', 'c', 'k'};
+    static const RStdFsDeadline no_deadline = {0};
+    RTestFsScopedFile fixture = create_file(allocator, initial, sizeof(initial));
+    RStdFsFile other = open_again(allocator, fixture.path, R_STD_FS_ACCESS_READ_WRITE);
+    RStdFsFile reader = open_again(allocator, fixture.path, R_STD_FS_ACCESS_READ);
+    RStdFsBoolResult bool_result;
+    RStdFsVoidResult void_result;
+    RStdFsTaskStartResult waiting;
+    uint64_t entry_sequence;
+    uint64_t signal_count;
+
+    bool_result = await_fs_bool(r_std_fs_try_lock(
+        &fixture.file, R_STD_FS_LOCK_KIND_EXCLUSIVE, UINT64_C(0), UINT64_C(0), no_deadline));
+    require(bool_result.r_tag == UINT32_C(0) && bool_result.r_payload.r_ok, "hold the file");
+    entry_sequence = r_runtime_darwin_fs_service_testing_entry_sequence();
+    signal_count = r_runtime_darwin_fs_service_testing_signal_count();
+    r_runtime_darwin_fs_service_testing_pause_before_native(1);
+    waiting =
+        r_std_fs_lock(&other, R_STD_FS_LOCK_KIND_EXCLUSIVE, UINT64_C(0), UINT64_C(0), no_deadline);
+    require(waiting.is_ok && waiting.task != NULL, "start a lock whose attempt waits");
+    while (r_runtime_darwin_fs_service_testing_entry_sequence() == entry_sequence) {
+        (void)sched_yield();
+    }
+    r_runtime_task_cancel(&waiting.task);
+    require(waiting.task == NULL, "cancel consumes the task");
+    while (r_runtime_darwin_fs_service_testing_signal_count() == signal_count) {
+        (void)sched_yield();
+    }
+    /* The cancellation callback runs to its end while the attempt is still held. */
+    (void)usleep(50000U);
+    r_runtime_darwin_fs_service_testing_pause_before_native(0);
+    (void)usleep(50000U);
+    void_result =
+        await_fs_void(r_std_fs_unlock(&fixture.file, UINT64_C(0), UINT64_C(0), no_deadline));
+    require(void_result.r_tag == UINT32_C(0), "unlock the holder");
+    bool_result = await_fs_bool(r_std_fs_try_lock(
+        &reader, R_STD_FS_LOCK_KIND_SHARED, UINT64_C(0), UINT64_C(0), no_deadline));
+    require(bool_result.r_tag == UINT32_C(0) && bool_result.r_payload.r_ok,
+            "the cancelled lock was never taken");
+    r_std_fs_file_destroy(&reader);
+    r_std_fs_file_destroy(&other);
+    destroy_file(&fixture);
+}
+
 int main(void) {
     RRuntimeAllocator allocator;
     RRuntimeDarwinFsServiceStartResult service;
@@ -384,6 +434,7 @@ int main(void) {
     test_scoped_read_and_write(&allocator);
     test_positional_read_and_write(&allocator);
     test_locks(&allocator);
+    test_lock_cancel_during_attempt(&allocator);
     require(r_runtime_executor_lifecycle_stop(), "stop task executor");
     r_runtime_darwin_fs_service_stop();
     (void)fprintf(stdout, "library_fs_scoped_tests: ok\n");

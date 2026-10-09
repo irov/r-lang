@@ -941,14 +941,13 @@ static LLVMValueRef r_llvm_element_address(RLlvmEmitter *emitter,
                                            RTypeId element_type) {
     uint32_t size = 0U;
     uint32_t align = 0U;
-    LLVMValueRef offset;
 
     if ((base == NULL) || (index == NULL) || !r_llvm_layout(emitter, element_type, &size, &align)) {
         return NULL;
     }
+    /* The INDEX instruction of this projection checked the index (r_llvm_emit_index). */
     index = LLVMBuildZExtOrBitCast(emitter->builder, index, r_llvm_int(emitter, 64U), "");
-    offset = LLVMBuildMul(emitter->builder, index, r_llvm_u64(emitter, size), "");
-    return LLVMBuildGEP2(emitter->builder, r_llvm_int(emitter, 8U), base, &offset, 1U, "");
+    return r_llvm_element_offset(emitter, base, index, size);
 }
 
 LLVMValueRef r_llvm_place_address(RLlvmEmitter *emitter,
@@ -2454,10 +2453,7 @@ static bool r_llvm_emit_slice(RLlvmEmitter *emitter, const RMirInstruction *inst
             return false;
         }
         {
-            LLVMValueRef offset =
-                LLVMBuildMul(emitter->builder, lower, r_llvm_u64(emitter, element_size), "");
-            LLVMValueRef moved =
-                LLVMBuildGEP2(emitter->builder, r_llvm_int(emitter, 8U), data, &offset, 1U, "");
+            LLVMValueRef moved = r_llvm_element_offset(emitter, data, lower, element_size);
             /* The data pointer moves only for a lower bound that is not zero. */
             data = LLVMBuildSelect(
                 emitter->builder,
@@ -2466,7 +2462,7 @@ static bool r_llvm_emit_slice(RLlvmEmitter *emitter, const RMirInstruction *inst
                 data,
                 "");
         }
-        length = LLVMBuildSub(emitter->builder, upper, lower, "");
+        length = LLVMBuildNUWSub(emitter->builder, upper, lower, "");
     }
     (void)LLVMBuildStore(emitter->builder, data, memory);
     (void)LLVMBuildStore(emitter->builder, length, r_llvm_byte_offset(emitter, memory, 8U));
@@ -2680,6 +2676,15 @@ static bool r_llvm_emit_index(RLlvmEmitter *emitter, const RMirInstruction *inst
                          failed,
                          LLVMBuildICmp(emitter->builder, LLVMIntUGE, wide, length, ""),
                          "");
+    if (!is_signed && (bits == 64U)) {
+        /* B7: an affine index of a loop is checked only where its largest value might not fit
+           (versions.c). */
+        LLVMValueRef fits = r_llvm_version_fits(emitter, instruction, length);
+        if (fits != NULL) {
+            failed = LLVMBuildAnd(
+                emitter->builder, failed, LLVMBuildNot(emitter->builder, fits, ""), "");
+        }
+    }
     return r_llvm_check(
         emitter, failed, "R_RUNTIME_PANIC_BOUNDS", instruction->span, instruction->panic_target);
 }

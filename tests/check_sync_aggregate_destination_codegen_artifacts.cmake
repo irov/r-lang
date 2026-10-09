@@ -37,7 +37,7 @@ r_require_match_count(mir_output
 # --all-functions: main's call of empty_text_length is replaced by its translation-time value
 # (R-EXPR-0032), and the exported body stays in the program.
 set(ir_arguments
-    --emit=llvm-ir
+    --emit=llvm-ir --opt-level=0
     --all-functions
     --entry test.codegen.sync_aggregate_destination::main
     --profile hosted-native-async

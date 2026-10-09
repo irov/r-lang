@@ -1,4 +1,5 @@
 #include "emit_internal.h"
+#include "standard_internal.h"
 
 #include <string.h>
 
@@ -593,6 +594,12 @@ r_llvm_unscoped_start(RLlvmEmitter *emitter, const RMirInstruction *instruction,
         r_semantic_function_value_dispatcher(emitter->frontend, callee)) {
         return r_llvm_dispatch_start(emitter, instruction, mode);
     }
+    if ((mode == 1U) && (emitter->frame != NULL) && (emitter->direct_twins[callee] != NULL)) {
+        const RMirInstruction *await = r_llvm_direct_await(emitter, emitter->mir, instruction);
+        if ((await != NULL) && !r_llvm_emit_direct_call(emitter, instruction, await)) {
+            return false;
+        }
+    }
     result = r_llvm_value_memory(emitter, instruction->result, instruction->type);
     context = result == NULL ? NULL : r_llvm_task_context(emitter, instruction);
     started = context == NULL ? NULL : r_llvm_start_task(emitter, callee, context, mode);
@@ -1078,6 +1085,213 @@ static bool r_llvm_await_completed(RLlvmEmitter *emitter,
         return false;
     }
     (void)LLVMBuildBr(emitter->builder, cancel);
+    return true;
+}
+
+/* The direct path of a start that may run directly (direct.c), written before its ordinary start:
+   when r_runtime_task_direct_begin admits the bound of the twin on this stack, the twin runs here
+   and the await completes as the await of a completed task does; otherwise the start follows. */
+static void r_llvm_report_direct(RLlvmEmitter *emitter, const RMirInstruction *await);
+
+bool r_llvm_emit_direct_call(RLlvmEmitter *emitter,
+                             const RMirInstruction *start,
+                             const RMirInstruction *await) {
+    const RSemanticSymbol *callee = &emitter->frontend->semantic_symbols[start->symbol - 1U];
+    const bool has_result = !r_llvm_type_is_void(emitter, await->type);
+    const bool in_memory = (callee->effect_carrier_type != R_TYPE_ID_INVALID) ||
+                           (!r_llvm_type_is_void(emitter, callee->return_type) &&
+                            (r_llvm_scalar_type(emitter, callee->return_type) == NULL));
+    LLVMValueRef twin = emitter->direct_twins[start->symbol];
+    LLVMValueRef result = NULL;
+    LLVMValueRef bound;
+    LLVMValueRef admitted;
+    LLVMValueRef call;
+    LLVMValueRef *arguments;
+    LLVMBasicBlockRef direct;
+    LLVMBasicBlockRef ordinary;
+    unsigned count = 0U;
+    uint32_t index;
+
+    if ((twin == NULL) || (emitter->frame == NULL)) {
+        return r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+    }
+    bound = r_llvm_direct_stack_entry(emitter, start->symbol);
+    admitted = bound == NULL
+                   ? NULL
+                   : r_llvm_call_runtime(emitter, "r_runtime_task_direct_begin", &bound, 1U, NULL);
+    if (admitted == NULL) {
+        return false;
+    }
+    direct = LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
+    ordinary = LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
+    (void)LLVMBuildCondBr(emitter->builder, admitted, direct, ordinary);
+    LLVMPositionBuilderAtEnd(emitter->builder, direct);
+    arguments = r_llvm_allocate(emitter, ((size_t)start->operand_count + 1U) * sizeof(*arguments));
+    if (arguments == NULL) {
+        return false;
+    }
+    if (has_result) {
+        result = r_llvm_value_memory(emitter, await->result, await->type);
+        if (result == NULL) {
+            r_llvm_free(emitter, arguments);
+            return false;
+        }
+    }
+    if (in_memory) {
+        arguments[count++] = result;
+    }
+    for (index = 0U; index < start->operand_count; ++index) {
+        const RMirValueId operand =
+            emitter->frontend->mir_operands[(size_t)start->first_operand + index];
+        const RMirInstruction *definition = r_llvm_definition(emitter, operand);
+        LLVMValueRef value = r_llvm_value(emitter, operand);
+        if ((value == NULL) || (definition == NULL)) {
+            r_llvm_free(emitter, arguments);
+            return false;
+        }
+        if (r_llvm_scalar_type(emitter, definition->type) == NULL) {
+            /* The twin owns a copy of an argument in memory, as an ordinary callee does; none of
+               them requires drop (direct.c). */
+            uint32_t size = 0U;
+            uint32_t align = 0U;
+            LLVMValueRef copy;
+            if (!r_llvm_layout(emitter, definition->type, &size, &align)) {
+                r_llvm_free(emitter, arguments);
+                return false;
+            }
+            copy = r_llvm_entry_alloca(emitter, size, align, "argument");
+            (void)LLVMBuildMemCpy(
+                emitter->builder, copy, align, value, align, r_llvm_u64(emitter, size));
+            value = copy;
+        }
+        arguments[count++] = value;
+    }
+    call = LLVMBuildCall2(
+        emitter->builder, emitter->direct_types[start->symbol], twin, arguments, count, "");
+    r_llvm_free(emitter, arguments);
+    r_llvm_mark_guarded_call(emitter, call);
+    if (r_llvm_call_runtime(emitter, "r_runtime_task_direct_end", NULL, 0U, NULL) == NULL) {
+        return false;
+    }
+    /* L39: a twin that panicked returns with its panic pending; the step continues in the panic
+       block of the await. */
+    if (!r_llvm_unwind_test(emitter, await->panic_target)) {
+        return false;
+    }
+    if (has_result && !in_memory && !r_llvm_set_value(emitter, await->result, call)) {
+        return false;
+    }
+    if (!r_llvm_await_completed(emitter,
+                                await,
+                                result,
+                                emitter->blocks[await->target0 - 1U],
+                                emitter->blocks[await->target1 - 1U])) {
+        return false;
+    }
+    r_llvm_report_direct(emitter, await);
+    LLVMPositionBuilderAtEnd(emitter->builder, ordinary);
+    return true;
+}
+
+/* The await sources !r.direct lists (tests/check_direct_calls.py). */
+static void r_llvm_report_direct(RLlvmEmitter *emitter, const RMirInstruction *await) {
+    LLVMMetadataRef span[3];
+
+    span[0] =
+        LLVMValueAsMetadata(r_llvm_u32(emitter, r_llvm_source_key(emitter, await->span.source)));
+    span[1] = LLVMValueAsMetadata(r_llvm_u32(emitter, await->span.start));
+    span[2] = LLVMValueAsMetadata(r_llvm_u32(emitter, await->span.end));
+    LLVMAddNamedMetadataOperand(
+        emitter->module,
+        "r.direct",
+        LLVMMetadataAsValue(emitter->context, LLVMMDNodeInContext2(emitter->context, span, 3U)));
+}
+
+/* An awaited std.sync receive (R-LIB-0016) whose channel holds a value, or has lost every
+   sender, completes at once without its task: the value moves out of the channel as the started
+   receive would move it, and the empty channel keeps the ordinary path, which waits. The receive
+   task would take no part in anything else: it is not counted (R-STMT-0020), and under a budget,
+   which still charges its frame, the ordinary path stays
+   (r_runtime_task_inline_completion_allowed). */
+bool r_llvm_emit_receive_now(RLlvmEmitter *emitter,
+                             const RMirInstruction *receive,
+                             const RMirInstruction *await) {
+    LLVMValueRef result = r_llvm_value_memory(emitter, await->result, await->type);
+    LLVMValueRef arguments[2];
+    LLVMValueRef allowed;
+    LLVMValueRef kind;
+    LLVMBasicBlockRef attempt;
+    LLVMBasicBlockRef taken;
+    LLVMBasicBlockRef ordinary;
+    uint32_t payload = 0U;
+    int64_t received = 0;
+    int64_t empty = 0;
+
+    if ((result == NULL) || !r_llvm_payload_offset(emitter, await->type, &payload) ||
+        !r_llvm_runtime_constant(emitter, "R_STD_SYNC_TRY_RECV_RESULT_RECEIVED", &received) ||
+        !r_llvm_runtime_constant(emitter, "R_STD_SYNC_TRY_RECV_RESULT_EMPTY", &empty)) {
+        return false;
+    }
+    allowed =
+        r_llvm_call_runtime(emitter, "r_runtime_task_inline_completion_allowed", NULL, 0U, NULL);
+    arguments[0] = r_llvm_value(emitter, r_llvm_std_operand(emitter, receive, 0U));
+    if ((allowed == NULL) || (arguments[0] == NULL)) {
+        return false;
+    }
+    attempt = LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
+    taken = LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
+    ordinary = LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
+    (void)LLVMBuildCondBr(emitter->builder, allowed, attempt, ordinary);
+    LLVMPositionBuilderAtEnd(emitter->builder, attempt);
+    arguments[1] = r_llvm_byte_offset(emitter, result, payload);
+    {
+        uint32_t size = 0U;
+        uint32_t align = 0U;
+        uint32_t kind_offset = 0U;
+        LLVMValueRef outcome;
+        if (!r_llvm_runtime_layout(emitter, "RStdSyncTryRecvResult", &size, &align) ||
+            !r_llvm_runtime_field(emitter, "RStdSyncTryRecvResult", "kind", &kind_offset, NULL)) {
+            return false;
+        }
+        outcome = r_llvm_entry_alloca(emitter, size, align, "received");
+        if (r_llvm_call_runtime(emitter, "r_std_sync_try_recv", arguments, 2U, outcome) == NULL) {
+            return false;
+        }
+        kind = LLVMBuildLoad2(emitter->builder,
+                              r_llvm_int(emitter, 32U),
+                              r_llvm_byte_offset(emitter, outcome, kind_offset),
+                              "");
+    }
+    (void)LLVMBuildCondBr(emitter->builder,
+                          LLVMBuildICmp(emitter->builder,
+                                        LLVMIntEQ,
+                                        kind,
+                                        LLVMConstInt(LLVMTypeOf(kind), (uint64_t)empty, 0),
+                                        ""),
+                          ordinary,
+                          taken);
+    LLVMPositionBuilderAtEnd(emitter->builder, taken);
+    /* o<T>: some when a value was received, none when every sender is gone. */
+    (void)LLVMBuildStore(
+        emitter->builder,
+        LLVMBuildZExt(emitter->builder,
+                      LLVMBuildICmp(emitter->builder,
+                                    LLVMIntEQ,
+                                    kind,
+                                    LLVMConstInt(LLVMTypeOf(kind), (uint64_t)received, 0),
+                                    ""),
+                      r_llvm_int(emitter, 32U),
+                      ""),
+        result);
+    if (!r_llvm_await_completed(emitter,
+                                await,
+                                result,
+                                emitter->blocks[await->target0 - 1U],
+                                emitter->blocks[await->target1 - 1U])) {
+        return false;
+    }
+    r_llvm_report_direct(emitter, await);
+    LLVMPositionBuilderAtEnd(emitter->builder, ordinary);
     return true;
 }
 

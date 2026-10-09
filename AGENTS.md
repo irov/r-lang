@@ -149,18 +149,36 @@ as finished. The matrix records their results per stage.
   ones before them stand in their own blocks, separated by a blank line.
 - Programs are compiled only by the LLVM emitter (`compiler/llvm`, `--emit=llvm-ir`,
   `--emit=object`); it lowers the functions the entry reaches, and `--all-functions` lowers every
-  function for checks of code no entry calls. A check that needs the emitted code reads the IR:
-  calls are `call ... @name(`, and the measured frames and stack bounds are the named metadata
-  `!r.stack.frames` and `!r.stack.entries`. The emitted module must not depend on the order of the
-  sources (`tests/check_*.py` compare the IR of both orders): name generated functions and
-  globals by the keys of `compiler/llvm/keys.c`, never by a semantic id.
+  function for checks of code no entry calls. The CLI optimizes at `--opt-level=2` by default
+  (the API at 0); a check that reads the emitter's own IR passes `--opt-level=0`, and calls are
+  `call ... @name(`, the measured frames and stack bounds the named metadata `!r.stack.frames`
+  and `!r.stack.entries`. The emitted module must not depend on the order of the sources
+  (`tests/check_*.py` compare the IR of both orders): name generated functions and globals by
+  the keys of `compiler/llvm/keys.c`, never by a semantic id, and emit named metadata in key
+  order.
+- The stack bounds are measured on the optimized code (compiler/README.md, *Optimization*): a
+  new runtime or library entry that calls back into R code needs a stack edge
+  (`r_llvm_add_stack_edge`, whose caller then is never inlined), an indirect call the emitter
+  writes must lie in a function marked by `r_llvm_mark_indirect_call`, and a value the
+  measurement refers to after the optimizer must be kept (`r_llvm_preserve_stack_functions`).
+- The optimizations that remove checks or tasks are proven by marked fixtures read from the
+  optimized IR: `/* proven */` and `/* checked */` (`tests/check_index_proofs.py`, the spans of
+  the panic calls left), `/* versioned */` (`tests/check_loop_versions.py`, `!r.versioned` of
+  `compiler/llvm/versions.c`), `/* direct */` and `/* started */` (`tests/check_direct_calls.py`,
+  `!r.direct` of `compiler/llvm/direct.c`). A fixture index that may fail stands where no
+  neighbouring check bounds it first: a passed check is a fact the optimizer keeps.
+- The C functions a program calls are optimized with it through the bitcode catalog of the build
+  (`build/<preset>/r_bitcode.catalog`, `--bitcode-catalog`, `compiler/llvm/import.c`); a new
+  runtime or library target that programs link belongs to `R_BITCODE_TARGETS` of the top
+  `CMakeLists.txt`, and its catalog symbols may not be defined twice by different sources.
 - A C wrapper of a codegen test (`tests/codegen_<x>_wrapper.c`) reaches the program only through
   `main` (renamed with `#define main r_generated_main`), its `extern "C"` exports and the
   runtime and library entries it renames: each `#define OLD NEW` before
   `#include R_TEST_PROGRAM_PRELUDE` becomes `--rename-symbol OLD=NEW` of the object; declare
   hooks with prototypes before the include and define them non-static after it.
-- The index proofs, loop versions and direct calls of the former C emitter return in stage B7
-  (roadmap); their fixtures run as programs until then.
+- A wrapper that hooks `r_runtime_task_execution_await` sees no await of a body that runs as a
+  direct call: it renames `r_runtime_task_direct_begin` to a function that returns 0 where the
+  test needs the await (`tests/codegen_scoped_cancel_wrapper.c`).
 
 ### Specification (`specification/`)
 
@@ -324,14 +342,14 @@ these rules are the ones that most often reject otherwise reasonable code:
   `iterator = move rest;`) and how a refused `std.fs` write hands its data back.
 - `u8` and `u16` operands of arithmetic, bitwise operators and shifts promote to `i32`, as in C;
   narrow the result back with `as` (`(entry >> 4usize) as u16`).
-- Hot loops: the proofs that leave out a bounds check return with stage B7; write loops in the
-  forms they prove so that they benefit then. Index a local slice or `array<T>` (one the body
-  never borrows exclusively) with a local that a condition bounds (`i < len(b)`, or
-  `n == len(b)` and `i < n`); take a sub-slice `b[lo..hi]` once and index inside it
-  (`b[a..a + 16]` holds 16); mask by a constant, or by a local checked once
-  (`if (mask >= len(t)) { return; }`, then `t[x & mask]`). An index through a field
-  (`this->table[i]`) or with an offset (`b[i + 1]`) keeps its check.
-  `tests/fixtures/codegen_index_proofs.r` lists the proven and checked forms.
+- Hot loops: the optimizer leaves out the bounds checks it can prove (compiler/README.md,
+  *Optimization*). Index a local slice or `array<T>` with a local that a condition bounds
+  (`i < len(b)`, or `n == len(b)` and `i < n`); take a sub-slice `b[lo..hi]` once and index
+  inside it (`b[a..a + 16]` holds 16); mask by a constant, or by a local checked once
+  (`if (mask >= len(t)) { return; }`, then `t[x & mask]`). An affine index `b[a + k * s]` of a
+  loop `k < n` whose `a`, `s`, `n` and base do not change runs without its check once a single
+  test of its largest value holds (loop versions). `tests/fixtures/codegen_index_proofs.r` and
+  `codegen_loop_versions.r` list the proven, versioned and checked forms.
 
 One rule is not a compile error but has cost real defects (P4.1-5): a member that a `select` did
 not choose, or a wait that lost to an until clause, may already have taken its value, and

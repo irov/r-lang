@@ -47,7 +47,7 @@ r_require_match_count(mir_output
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=llvm-ir
+        --emit=llvm-ir --opt-level=0
         --entry test.codegen_async_flush::main
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"

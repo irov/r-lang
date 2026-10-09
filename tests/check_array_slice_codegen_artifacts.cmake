@@ -34,7 +34,7 @@ r_require_match_count(hir_output
 
 # --all-functions: main calls neither conversion, and the IR shows each function's lowering.
 set(ir_arguments
-    --emit=llvm-ir
+    --emit=llvm-ir --opt-level=0
     --all-functions
     --entry test.codegen.array_slice::main
     --profile hosted-native-async

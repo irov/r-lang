@@ -208,3 +208,33 @@ uint32_t r_llvm_source_key(const RLlvmEmitter *emitter, RSourceId id) {
     return (id == 0U) || ((size_t)id > emitter->frontend->source_count) ? 0U
                                                                         : emitter->source_keys[id];
 }
+
+/* Named metadata !r.sources of the IR: the module name of each source key, in the order of the
+   keys, so a reader of the IR can tell the source of a panic's location (tests/llvm_checks.py). */
+void r_llvm_source_report(RLlvmEmitter *emitter) {
+    const size_t count = emitter->frontend->source_count;
+    uint32_t key;
+
+    for (key = 1U; key <= count; ++key) {
+        size_t index;
+        for (index = 1U; index <= count; ++index) {
+            const char *module;
+            LLVMMetadataRef fields[2];
+            if (emitter->source_keys[index] != key) {
+                continue;
+            }
+            module = r_llvm_key_module(emitter, (RSourceId)index);
+            if (module[0] == '\0') {
+                break;
+            }
+            fields[0] = LLVMValueAsMetadata(r_llvm_u32(emitter, key));
+            fields[1] = LLVMMDStringInContext2(emitter->context, module, strlen(module));
+            LLVMAddNamedMetadataOperand(
+                emitter->module,
+                "r.sources",
+                LLVMMetadataAsValue(emitter->context,
+                                    LLVMMDNodeInContext2(emitter->context, fields, 2U)));
+            break;
+        }
+    }
+}

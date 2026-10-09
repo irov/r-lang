@@ -14,7 +14,7 @@ endfunction()
 # --all-functions: main calls none of the checked functions.
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=llvm-ir
+        --emit=llvm-ir --opt-level=0
         --all-functions
         --entry test.codegen_native_result_abi::main
         "${SOURCE_FILE}"
@@ -30,7 +30,7 @@ endif()
 # the carrier the caller passes first, and the result types of the library operations
 # (std.fs/std.io *_result) are not reused for them.
 r_require_match_count(ir_output
-    "define internal void @\"test[.]codegen_native_result_abi::pass_[a-z_]+\"[(]ptr %0"
+    "define internal void @\"test[.]codegen_native_result_abi::pass_[a-z_]+\"[(]ptr( [a-z0-9]+(\\([0-9]+\\))?)* %0"
     4 "checked functions use explicit output carriers")
 r_require_match_count(ir_output "@(r_shim_)?r_std_(fs|io)_[a-z_]*result" 0
     "checked R-to-R functions do not reuse library result types")

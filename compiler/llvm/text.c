@@ -61,6 +61,79 @@ r_llvm_std_string_bytes(RLlvmEmitter *emitter, LLVMValueRef string, const char *
     return r_llvm_byte_offset(emitter, string, (uint64_t)bytes + member);
 }
 
+/* B7 (P4.2 of the C17 emitter): an append that fits the spare capacity copies the bytes and
+   counts them, as r_std_string_append_str does; only a string that must grow calls the library,
+   which reports the allocation failure. The builder ends in the block of the call; the copy
+   joins `join` with a successful result in `native`. */
+static bool r_llvm_std_append_now(RLlvmEmitter *emitter,
+                                  LLVMValueRef string,
+                                  LLVMValueRef view,
+                                  LLVMValueRef native,
+                                  LLVMBasicBlockRef join) {
+    LLVMValueRef data = r_llvm_std_string_bytes(emitter, string, "data");
+    LLVMValueRef length_place = r_llvm_std_string_bytes(emitter, string, "length");
+    LLVMValueRef capacity_place = r_llvm_std_string_bytes(emitter, string, "capacity");
+    uint32_t view_data = 0U;
+    uint32_t view_length = 0U;
+    uint32_t status = 0U;
+    int64_t success = 0;
+    LLVMValueRef length;
+    LLVMValueRef count;
+    LLVMBasicBlockRef now;
+    LLVMBasicBlockRef grow;
+
+    if ((data == NULL) || (length_place == NULL) || (capacity_place == NULL) ||
+        !r_llvm_runtime_field(emitter, "RStdStringView", "data", &view_data, NULL) ||
+        !r_llvm_runtime_field(emitter, "RStdStringView", "length", &view_length, NULL) ||
+        !r_llvm_runtime_field(emitter, "RStdStringAllocResult", "status", &status, NULL) ||
+        !r_llvm_runtime_constant(emitter, "R_STD_STRING_CALL_SUCCESS", &success)) {
+        return false;
+    }
+    length = LLVMBuildLoad2(emitter->builder, r_llvm_int(emitter, 64U), length_place, "");
+    count = LLVMBuildLoad2(emitter->builder,
+                           r_llvm_int(emitter, 64U),
+                           r_llvm_byte_offset(emitter, view, view_length),
+                           "");
+    now = LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
+    grow = LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
+    (void)LLVMBuildCondBr(
+        emitter->builder,
+        LLVMBuildICmp(
+            emitter->builder,
+            LLVMIntULE,
+            count,
+            LLVMBuildNUWSub(
+                emitter->builder,
+                LLVMBuildLoad2(emitter->builder, r_llvm_int(emitter, 64U), capacity_place, ""),
+                length,
+                ""),
+            ""),
+        now,
+        grow);
+    LLVMPositionBuilderAtEnd(emitter->builder, now);
+    (void)LLVMBuildMemCpy(
+        emitter->builder,
+        r_llvm_element_offset(emitter,
+                              LLVMBuildLoad2(emitter->builder, r_llvm_pointer(emitter), data, ""),
+                              length,
+                              1U),
+        1U,
+        LLVMBuildLoad2(emitter->builder,
+                       r_llvm_pointer(emitter),
+                       r_llvm_byte_offset(emitter, view, view_data),
+                       ""),
+        1U,
+        count);
+    (void)LLVMBuildStore(
+        emitter->builder, LLVMBuildNUWAdd(emitter->builder, length, count, ""), length_place);
+    (void)LLVMBuildStore(emitter->builder,
+                         r_llvm_u32(emitter, (uint64_t)success),
+                         r_llvm_byte_offset(emitter, native, status));
+    (void)LLVMBuildBr(emitter->builder, join);
+    LLVMPositionBuilderAtEnd(emitter->builder, grow);
+    return true;
+}
+
 static bool r_llvm_std_string(RLlvmEmitter *emitter, const RMirInstruction *instruction) {
     const RStandardCallOperation operation = instruction->standard_operation;
     const RMirValueId first = r_llvm_std_operand(emitter, instruction, 0U);
@@ -220,9 +293,22 @@ static bool r_llvm_std_string(RLlvmEmitter *emitter, const RMirInstruction *inst
                     ? r_llvm_value(emitter, r_llvm_std_operand(emitter, instruction, 1U))
                     : r_llvm_std_size(emitter, r_llvm_std_operand(emitter, instruction, 1U));
         }
-        return (arguments[0] != NULL) && (arguments[1] != NULL) &&
-               (r_llvm_call_runtime(emitter, name, arguments, 2U, native) != NULL) &&
-               r_llvm_std_three_way(emitter,
+        if ((arguments[0] == NULL) || (arguments[1] == NULL)) {
+            return false;
+        }
+        if (operation == R_STANDARD_CALL_STRING_APPEND_STR) {
+            LLVMBasicBlockRef join =
+                LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
+            if (!r_llvm_std_append_now(emitter, arguments[0], arguments[1], native, join) ||
+                (r_llvm_call_runtime(emitter, name, arguments, 2U, native) == NULL)) {
+                return false;
+            }
+            (void)LLVMBuildBr(emitter->builder, join);
+            LLVMPositionBuilderAtEnd(emitter->builder, join);
+        } else if (r_llvm_call_runtime(emitter, name, arguments, 2U, native) == NULL) {
+            return false;
+        }
+        return r_llvm_std_three_way(emitter,
                                     instruction,
                                     native,
                                     native_type,

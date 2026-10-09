@@ -83,7 +83,7 @@ foreach(mode IN ITEMS async sync)
         set(clone_count 1)
     endif()
     execute_process(
-        COMMAND "${R_FRONT_EXECUTABLE}" --emit=llvm-ir --all-functions "${source_file}"
+        COMMAND "${R_FRONT_EXECUTABLE}" --emit=llvm-ir --opt-level=0 --all-functions "${source_file}"
         RESULT_VARIABLE ir_result
         OUTPUT_VARIABLE ir_output
         ERROR_VARIABLE ir_error

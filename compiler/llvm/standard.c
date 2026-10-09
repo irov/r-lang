@@ -1254,6 +1254,74 @@ bool r_llvm_std_alloc_carrier(RLlvmEmitter *emitter,
                               r_llvm_std_member(emitter, native, type_name, "error"));
 }
 
+/* B7 (P4.2 of the C17 emitter): a push into spare capacity moves the staged value into the next
+   element and counts it, as r_runtime_array_push does once its reservation holds; only a full
+   array calls the library, which grows it or reports the allocation failure. The element moves
+   by the glue its type information names, or by a copy (r_runtime_array_move). */
+static bool r_llvm_std_array_push_now(RLlvmEmitter *emitter,
+                                      LLVMValueRef target,
+                                      LLVMValueRef staged,
+                                      RTypeId element,
+                                      LLVMValueRef result,
+                                      LLVMBasicBlockRef next) {
+    uint32_t data = 0U;
+    uint32_t length_offset = 0U;
+    uint32_t capacity = 0U;
+    uint32_t size = 0U;
+    uint32_t align = 0U;
+    LLVMValueRef length;
+    LLVMValueRef slot;
+    LLVMBasicBlockRef now;
+    LLVMBasicBlockRef full;
+
+    if (!r_llvm_runtime_field(emitter, "RRuntimeArray", "data", &data, NULL) ||
+        !r_llvm_runtime_field(emitter, "RRuntimeArray", "length", &length_offset, NULL) ||
+        !r_llvm_runtime_field(emitter, "RRuntimeArray", "capacity", &capacity, NULL) ||
+        !r_llvm_layout(emitter, element, &size, &align)) {
+        return false;
+    }
+    length = LLVMBuildLoad2(emitter->builder,
+                            r_llvm_int(emitter, 64U),
+                            r_llvm_byte_offset(emitter, target, length_offset),
+                            "");
+    now = LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
+    full = LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
+    (void)LLVMBuildCondBr(
+        emitter->builder,
+        LLVMBuildICmp(emitter->builder,
+                      LLVMIntULT,
+                      length,
+                      LLVMBuildLoad2(emitter->builder,
+                                     r_llvm_int(emitter, 64U),
+                                     r_llvm_byte_offset(emitter, target, capacity),
+                                     ""),
+                      ""),
+        now,
+        full);
+    LLVMPositionBuilderAtEnd(emitter->builder, now);
+    slot = r_llvm_element_offset(emitter,
+                                 LLVMBuildLoad2(emitter->builder,
+                                                r_llvm_pointer(emitter),
+                                                r_llvm_byte_offset(emitter, target, data),
+                                                ""),
+                                 length,
+                                 size);
+    if (r_llvm_type_requires_drop(emitter, element)) {
+        if (!r_llvm_call_move(emitter, element, slot, staged)) {
+            return false;
+        }
+    } else if (size != 0U) {
+        (void)LLVMBuildMemCpy(emitter->builder, slot, 1U, staged, 1U, r_llvm_u64(emitter, size));
+    }
+    (void)LLVMBuildStore(emitter->builder,
+                         LLVMBuildNUWAdd(emitter->builder, length, r_llvm_u64(emitter, 1U), ""),
+                         r_llvm_byte_offset(emitter, target, length_offset));
+    (void)LLVMBuildStore(emitter->builder, r_llvm_u32(emitter, 0U), result);
+    (void)LLVMBuildBr(emitter->builder, next);
+    LLVMPositionBuilderAtEnd(emitter->builder, full);
+    return true;
+}
+
 /* An insertion that stages the value and returns it in push_error<T> on an allocation failure
    (std.array::push and the std.list insertions). */
 bool r_llvm_std_staged_insert(RLlvmEmitter *emitter,
@@ -1292,18 +1360,23 @@ bool r_llvm_std_staged_insert(RLlvmEmitter *emitter,
         return false;
     }
     arguments[argument_count - 1U] = staged;
+    result = r_llvm_std_result(emitter, instruction);
+    if (result == NULL) {
+        return false;
+    }
+    next = LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
+    if ((strcmp(function_name, "r_std_array_push") == 0) &&
+        !r_llvm_std_array_push_now(
+            emitter, arguments[0], staged, members.value_type, result, next)) {
+        return false;
+    }
     if ((r_llvm_call_runtime(emitter, function_name, arguments, argument_count, native) == NULL) ||
         ((contract != NULL) &&
          !r_llvm_std_require_status(emitter, instruction, native, type_name, contract, true))) {
         return false;
     }
-    result = r_llvm_std_result(emitter, instruction);
-    if (result == NULL) {
-        return false;
-    }
     inserted = LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
     failure = LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
-    next = LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
     (void)LLVMBuildCondBr(emitter->builder,
                           r_llvm_std_status_is(emitter, native, type_name, "status", success),
                           inserted,

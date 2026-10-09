@@ -219,9 +219,12 @@ CASES = [
 
 
 def emit_options(mode):
-    """Options of one output; LLVM IR lowers every function, not only those main reaches, so
-    that code generation also accepts the functions main never calls."""
-    return ['--emit=' + mode, '--all-functions'] if mode == 'llvm-ir' else ['--emit=' + mode]
+    """Options of one output; LLVM IR is the emitter's own (no optimizer) and lowers every
+    function, not only those main reaches, so that code generation also accepts the functions
+    main never calls."""
+    if mode == 'llvm-ir':
+        return ['--emit=' + mode, '--opt-level=0', '--all-functions']
+    return ['--emit=' + mode]
 
 
 def check_modules(frontend, directory):

@@ -37,7 +37,7 @@ r_require_match_count(mir_output
     2 "option(path) start-failure cleanup and success terminal drop")
 
 set(ir_arguments
-    --emit=llvm-ir
+    --emit=llvm-ir --opt-level=0
     --entry test.codegen.async_option_path::main
     --profile hosted-native-async
     --target-manifest "${TARGET_MANIFEST}"

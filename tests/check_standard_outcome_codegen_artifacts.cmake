@@ -27,7 +27,7 @@ endfunction()
 # --all-functions: the inspected functions are not called by main.
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=llvm-ir
+        --emit=llvm-ir --opt-level=0
         --all-functions
         "${SYNC_SOURCE_FILE}"
         "${MAIN_SOURCE_FILE}"
@@ -57,7 +57,7 @@ r_require_match_count(inspect_fs_body "icmp eq i32 %[0-9]+, 4\n" 1
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=llvm-ir
+        --emit=llvm-ir --opt-level=0
         --all-functions
         --entry test.codegen.async_standard_outcomes::main
         --profile hosted-native-async

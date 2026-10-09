@@ -68,7 +68,7 @@ r_require_match_count(mir_output
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=llvm-ir
+        --emit=llvm-ir --opt-level=0
         --entry test.codegen.checked_finally_control::main
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"
@@ -90,7 +90,7 @@ r_require_match_count(ir_output "@_?(setjmp|longjmp|sigsetjmp|siglongjmp)[(]" 0
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=llvm-ir
+        --emit=llvm-ir --opt-level=0
         --entry test.codegen.checked_finally_control::main
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"

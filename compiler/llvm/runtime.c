@@ -151,6 +151,14 @@ r_llvm_abi_register_type(RLlvmEmitter *emitter, const RLlvmAbiValue *value, bool
     return LLVMArrayType2(element, value->count);
 }
 
+void r_llvm_add_function_attribute(RLlvmEmitter *emitter, LLVMValueRef function, const char *name) {
+    LLVMAddAttributeAtIndex(
+        function,
+        (LLVMAttributeIndex)LLVMAttributeFunctionIndex,
+        LLVMCreateEnumAttribute(
+            emitter->context, LLVMGetEnumAttributeKindForName(name, strlen(name)), 0U));
+}
+
 void r_llvm_add_extension(RLlvmEmitter *emitter,
                           LLVMValueRef target,
                           LLVMAttributeIndex index,
@@ -279,6 +287,15 @@ const RLlvmRuntimeFunction *r_llvm_runtime(RLlvmEmitter *emitter, const char *re
     entry->function = LLVMGetNamedFunction(emitter->module, name);
     if (entry->function == NULL) {
         entry->function = LLVMAddFunction(emitter->module, name, entry->type);
+        /* A panic is the unlikely side of every check (R-EXPR-0021 and the other run-time
+           checks): its calls are cold, so the optimizer lays the checked path out first and
+           treats a loop's checks as ones that pass; r_runtime_panic never returns. */
+        if ((strcmp(name, "r_runtime_raise") == 0) || (strcmp(name, "r_runtime_panic") == 0)) {
+            r_llvm_add_function_attribute(emitter, entry->function, "cold");
+        }
+        if (strcmp(name, "r_runtime_panic") == 0) {
+            r_llvm_add_function_attribute(emitter, entry->function, "noreturn");
+        }
         if (entry->result.abi_class == R_LLVM_ABI_INDIRECT) {
             const RLlvmSurfaceType *result = r_llvm_surface_type(type->target);
             LLVMAddAttributeAtIndex(
@@ -410,6 +427,26 @@ LLVMValueRef r_llvm_byte_offset(RLlvmEmitter *emitter, LLVMValueRef pointer, uin
     return LLVMBuildGEP2(emitter->builder, r_llvm_int(emitter, 8U), pointer, &index, 1U, "");
 }
 
+LLVMValueRef
+r_llvm_element_offset(RLlvmEmitter *emitter, LLVMValueRef base, LLVMValueRef index, uint64_t size) {
+    LLVMValueRef offset = index;
+
+    if (size != 1U) {
+        offset = LLVMBuildMul(emitter->builder, index, r_llvm_u64(emitter, size), "");
+        if (LLVMIsAInstruction(offset) != NULL) {
+            LLVMSetNUW(offset, 1);
+            LLVMSetNSW(offset, 1);
+        }
+    }
+    return LLVMBuildGEPWithNoWrapFlags(emitter->builder,
+                                       r_llvm_int(emitter, 8U),
+                                       base,
+                                       &offset,
+                                       1U,
+                                       "",
+                                       LLVMGEPFlagInBounds | LLVMGEPFlagNUW);
+}
+
 static void r_llvm_copy(RLlvmEmitter *emitter,
                         LLVMValueRef destination,
                         LLVMValueRef source,
@@ -455,7 +492,17 @@ LLVMValueRef r_llvm_call_runtime(RLlvmEmitter *emitter,
             LLVMTypeRef register_type = r_llvm_abi_register_type(emitter, value, false);
             const uint32_t register_size =
                 (uint32_t)LLVMABISizeOfType(emitter->data, register_type);
-            LLVMValueRef staging = r_llvm_entry_alloca(
+            LLVMValueRef staging;
+            if ((LLVMIsAGlobalVariable(arguments[parameter]) != NULL) &&
+                LLVMIsGlobalConstant(arguments[parameter]) &&
+                (LLVMABISizeOfType(emitter->data, LLVMGlobalGetValueType(arguments[parameter])) >=
+                 register_size)) {
+                /* A constant that covers the registers is read in place (r_llvm_span). */
+                lowered[lowered_count++] =
+                    LLVMBuildLoad2(emitter->builder, register_type, arguments[parameter], "");
+                continue;
+            }
+            staging = r_llvm_entry_alloca(
                 emitter, register_size, type->align > 8U ? type->align : 8U, "");
             r_llvm_copy(emitter, staging, arguments[parameter], type->size, type->align);
             lowered[lowered_count++] = LLVMBuildLoad2(emitter->builder, register_type, staging, "");
@@ -557,13 +604,18 @@ bool r_llvm_runtime_field(RLlvmEmitter *emitter,
     return r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
 }
 
+/* A source span is a private constant: no frame or stack holds it, and a by-value argument reads
+   its registers straight from the constant (r_llvm_call_runtime), so the optimizer folds a panic's
+   location into the call. The constant is padded to whole 8-byte registers with zeros. */
 LLVMValueRef r_llvm_span(RLlvmEmitter *emitter, RSourceSpan span) {
     uint32_t size = 0U;
     uint32_t align = 0U;
     uint32_t source_offset = 0U;
     uint32_t start_offset = 0U;
     uint32_t end_offset = 0U;
-    LLVMValueRef memory;
+    LLVMValueRef fields[4];
+    LLVMValueRef value;
+    LLVMValueRef global;
 
     if (!r_llvm_runtime_layout(emitter, "RRuntimeSourceSpan", &size, &align) ||
         !r_llvm_runtime_field(emitter, "RRuntimeSourceSpan", "module", &source_offset, NULL) ||
@@ -571,15 +623,20 @@ LLVMValueRef r_llvm_span(RLlvmEmitter *emitter, RSourceSpan span) {
         !r_llvm_runtime_field(emitter, "RRuntimeSourceSpan", "end", &end_offset, NULL)) {
         return NULL;
     }
-    memory = r_llvm_entry_alloca(emitter, size, align, "span");
-    (void)LLVMBuildStore(emitter->builder,
-                         r_llvm_u32(emitter, r_llvm_source_key(emitter, span.source)),
-                         r_llvm_byte_offset(emitter, memory, source_offset));
-    (void)LLVMBuildStore(emitter->builder,
-                         r_llvm_u32(emitter, span.start),
-                         r_llvm_byte_offset(emitter, memory, start_offset));
-    (void)LLVMBuildStore(emitter->builder,
-                         r_llvm_u32(emitter, span.end),
-                         r_llvm_byte_offset(emitter, memory, end_offset));
-    return memory;
+    if ((size != 12U) || (source_offset != 0U) || (start_offset != 4U) || (end_offset != 8U)) {
+        (void)r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+        return NULL;
+    }
+    fields[0] = r_llvm_u32(emitter, r_llvm_source_key(emitter, span.source));
+    fields[1] = r_llvm_u32(emitter, span.start);
+    fields[2] = r_llvm_u32(emitter, span.end);
+    fields[3] = r_llvm_u32(emitter, 0U);
+    value = LLVMConstArray2(r_llvm_int(emitter, 32U), fields, 4U);
+    global = LLVMAddGlobal(emitter->module, LLVMTypeOf(value), "r_span");
+    LLVMSetLinkage(global, LLVMPrivateLinkage);
+    LLVMSetGlobalConstant(global, 1);
+    LLVMSetUnnamedAddress(global, LLVMGlobalUnnamedAddr);
+    LLVMSetAlignment(global, 8U);
+    LLVMSetInitializer(global, value);
+    return global;
 }

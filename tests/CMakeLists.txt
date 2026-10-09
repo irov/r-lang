@@ -3883,6 +3883,7 @@ if(NOT MSVC)
     foreach(R_CODEGEN_CASE IN ITEMS
             ${R_EXAMPLE_CASES}
             ${R_LIBRARY_R_TEST_CASES}
+            pgo_loop_versions
             main_error_cleanup
             main_domain_allocation
             async_process_exit
@@ -4244,6 +4245,8 @@ if(NOT MSVC)
             async_tagged_switch_break
             alloc_into_value
             async_alloc_into_value
+            dict_paths
+            async_dict_paths
             field_access_instances
             user_attributes
             async_user_attributes
@@ -5531,7 +5534,7 @@ if(NOT MSVC)
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_EXPECTED_PANIC "")
-        elseif(R_CODEGEN_CASE MATCHES "^(async_arc_last_release|string_place_views|async_string_place_views|string_view_owners|async_string_view_owners|field_destructuring|field_access|async_field_access|field_access_instances|core_bits|async_core_bits|switch_dispatch|async_switch_dispatch|tagged_switch_break|async_tagged_switch_break|alloc_into_value|async_alloc_into_value|generic_field_access|async_generic_field_access|user_attributes|async_user_attributes|async_owner_shapes|async_owner_matrix|null_type|async_null_type|explicit_generics|async_explicit_generics|consteval|async_consteval|consteval_checked|async_consteval_checked|consteval_floats|async_consteval_floats|consteval_owners|consteval_frozen|async_consteval_frozen|deadline_blocks|budget_blocks|recursion_bounds|async_for|expression_forms|async_channels|group_detach|group_vacancy|group_capacity|effect_relay|swap_clone|async_swap_clone|derive|async_derive|cmp_impls|function_values|static_values|async_static_values|computed_bounds|async_computed_bounds|typed_constants|async_typed_constants|associated_constants|async_associated_constants|dyn_interfaces|async_dyn_interfaces|dyn_owners|async_dyn_owners|async_locks|async_broadcast|async_reserve|async_blocking|async_blocking_start|core_format|async_core_format|field_defaults|async_field_defaults|json_field_defaults|overloads|dict_custom_keys|common_error_fields|sync_initializer_cleanup_growth|fs_metadata_fields|string_outcomes|async_parameter_reassignment|process_outcome_records|async_math_records|numeric_error_codes|regex|async_regex|regex_oom|regex_driver|regex_example|regex_captures|library_text|library_encoding|library_iter_reductions|library_byte_cursor|async_library_text|library_text_oom|encoding_driver|json_schema_driver|json_schema_generics|async_json_schema_generics|library_random|library_uuid|library_hmac|async_library_tokens|hash_driver|hash_digest_values|hash_operations|hash_independent|async_hash_independent|library_time_formats|library_time_interval|standard_record_constructors|time_driver|cbor_driver|crypto_driver|jwt_driver|zone_driver|cose_driver|sqlite_driver|dead_new_helpers|library_signal|library_net_connect|library_net_options|library_net_unix|library_args|library_config|library_log|library_async_task_id|library_task_id_outside|async_direct_calls|arc_clone_only|async_arc_clone_only|test_mode|string_keys)$")
+        elseif(R_CODEGEN_CASE MATCHES "^(async_arc_last_release|string_place_views|async_string_place_views|string_view_owners|async_string_view_owners|field_destructuring|field_access|async_field_access|field_access_instances|core_bits|async_core_bits|switch_dispatch|async_switch_dispatch|tagged_switch_break|async_tagged_switch_break|alloc_into_value|async_alloc_into_value|dict_paths|async_dict_paths|generic_field_access|async_generic_field_access|user_attributes|async_user_attributes|async_owner_shapes|async_owner_matrix|null_type|async_null_type|explicit_generics|async_explicit_generics|consteval|async_consteval|consteval_checked|async_consteval_checked|consteval_floats|async_consteval_floats|consteval_owners|consteval_frozen|async_consteval_frozen|deadline_blocks|budget_blocks|recursion_bounds|async_for|expression_forms|async_channels|group_detach|group_vacancy|group_capacity|effect_relay|swap_clone|async_swap_clone|derive|async_derive|cmp_impls|function_values|static_values|async_static_values|computed_bounds|async_computed_bounds|typed_constants|async_typed_constants|associated_constants|async_associated_constants|dyn_interfaces|async_dyn_interfaces|dyn_owners|async_dyn_owners|async_locks|async_broadcast|async_reserve|async_blocking|async_blocking_start|core_format|async_core_format|field_defaults|async_field_defaults|json_field_defaults|overloads|dict_custom_keys|common_error_fields|sync_initializer_cleanup_growth|fs_metadata_fields|string_outcomes|async_parameter_reassignment|process_outcome_records|async_math_records|numeric_error_codes|regex|async_regex|regex_oom|regex_driver|regex_example|regex_captures|library_text|library_encoding|library_iter_reductions|library_byte_cursor|async_library_text|library_text_oom|encoding_driver|json_schema_driver|json_schema_generics|async_json_schema_generics|library_random|library_uuid|library_hmac|async_library_tokens|hash_driver|hash_digest_values|hash_operations|hash_independent|async_hash_independent|library_time_formats|library_time_interval|standard_record_constructors|time_driver|cbor_driver|crypto_driver|jwt_driver|zone_driver|cose_driver|sqlite_driver|dead_new_helpers|library_signal|library_net_connect|library_net_options|library_net_unix|library_args|library_config|library_log|library_async_task_id|library_task_id_outside|async_direct_calls|arc_clone_only|async_arc_clone_only|test_mode|string_keys)$")
             set(R_CODEGEN_SOURCE_1
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
             set(R_CODEGEN_SOURCE_2 "")
@@ -6116,6 +6119,12 @@ if(NOT MSVC)
         elseif(R_CODEGEN_CASE STREQUAL "audit_std_fs_sync_start")
             set(R_CODEGEN_SOURCE_1 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/audit_std_fs_sync_start.r")
             set(R_CODEGEN_EXPECTED_PANIC "")
+        elseif(R_CODEGEN_CASE STREQUAL "pgo_loop_versions")
+            # B7.2: built with a profile of its own runs (check_pgo_program.cmake).
+            set(R_CODEGEN_SOURCE_1 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_loop_versions.r")
+            set(R_CODEGEN_SOURCE_2 "")
+            set(R_CODEGEN_EXPECTED_PANIC "")
+            set(R_CODEGEN_CHECK_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/check_pgo_program.cmake")
         elseif(R_CODEGEN_CASE STREQUAL "audit_std_fs_complete")
             set(R_CODEGEN_SOURCE_1 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/audit_std_fs_complete.r")
             set(R_CODEGEN_SOURCE_2 "")
@@ -6526,6 +6535,7 @@ if(NOT MSVC)
                 -DENABLE_SANITIZERS=${R_FRONTEND_ENABLE_SANITIZERS}
                 -DENABLE_THREAD_SANITIZER=${R_FRONTEND_ENABLE_THREAD_SANITIZER}
                 -DR_RUNTIME_INLINE_SHIMS_LIBRARY=$<TARGET_FILE:r_runtime_inline_shims>
+                -DBITCODE_CATALOG=${R_BITCODE_CATALOG}
                 -P ${R_CODEGEN_CHECK_SCRIPT}
         )
         if(R_CODEGEN_CASE MATCHES "^async_io_close_(input|output)$" OR
@@ -9580,6 +9590,7 @@ if(NOT MSVC)
             -DENABLE_SANITIZERS=${R_FRONTEND_ENABLE_SANITIZERS}
             -DENABLE_THREAD_SANITIZER=${R_FRONTEND_ENABLE_THREAD_SANITIZER}
             -DR_RUNTIME_INLINE_SHIMS_LIBRARY=$<TARGET_FILE:r_runtime_inline_shims>
+            -DBITCODE_CATALOG=${R_BITCODE_CATALOG}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/check_codegen_program.cmake
     )
     add_test(
@@ -9664,6 +9675,7 @@ if(NOT MSVC)
             -DENABLE_SANITIZERS=${R_FRONTEND_ENABLE_SANITIZERS}
             -DENABLE_THREAD_SANITIZER=${R_FRONTEND_ENABLE_THREAD_SANITIZER}
             -DR_RUNTIME_INLINE_SHIMS_LIBRARY=$<TARGET_FILE:r_runtime_inline_shims>
+            -DBITCODE_CATALOG=${R_BITCODE_CATALOG}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/check_codegen_program.cmake
     )
     add_test(
@@ -9747,6 +9759,7 @@ if(NOT MSVC)
             -DENABLE_SANITIZERS=${R_FRONTEND_ENABLE_SANITIZERS}
             -DENABLE_THREAD_SANITIZER=${R_FRONTEND_ENABLE_THREAD_SANITIZER}
             -DR_RUNTIME_INLINE_SHIMS_LIBRARY=$<TARGET_FILE:r_runtime_inline_shims>
+            -DBITCODE_CATALOG=${R_BITCODE_CATALOG}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/check_codegen_program.cmake
     )
     add_test(
@@ -9831,6 +9844,7 @@ if(NOT MSVC)
             -DENABLE_SANITIZERS=${R_FRONTEND_ENABLE_SANITIZERS}
             -DENABLE_THREAD_SANITIZER=${R_FRONTEND_ENABLE_THREAD_SANITIZER}
             -DR_RUNTIME_INLINE_SHIMS_LIBRARY=$<TARGET_FILE:r_runtime_inline_shims>
+            -DBITCODE_CATALOG=${R_BITCODE_CATALOG}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/check_codegen_program.cmake
     )
     add_test(
@@ -9915,6 +9929,7 @@ if(NOT MSVC)
             -DENABLE_SANITIZERS=${R_FRONTEND_ENABLE_SANITIZERS}
             -DENABLE_THREAD_SANITIZER=${R_FRONTEND_ENABLE_THREAD_SANITIZER}
             -DR_RUNTIME_INLINE_SHIMS_LIBRARY=$<TARGET_FILE:r_runtime_inline_shims>
+            -DBITCODE_CATALOG=${R_BITCODE_CATALOG}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/check_codegen_program.cmake
     )
     set_tests_properties(

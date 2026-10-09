@@ -1865,10 +1865,11 @@ static void r_codegen_test_async_sync_calls(void) {
             const char *step_end = NULL;
 
             /* The step of main calls the synchronous functions as ordinary functions; the
-               borrowed argument of add is a pointer. */
+               borrowed argument of add is a pointer to a valid, aligned i32 (B7.1). */
             R_CODEGEN_CHECK(strstr(generated.bytes,
                                    "define internal i32 @\"test.codegen.async_sync_call::add\"(ptr "
-                                   "%0, i32 %1)") != NULL);
+                                   "noundef nonnull align 4 dereferenceable(4) %0, i32 %1)") !=
+                            NULL);
             R_CODEGEN_CHECK(r_codegen_ir_function(
                 generated.bytes, "@\"test.codegen.async_sync_call::main$step\"", &step, &step_end));
             R_CODEGEN_CHECK(r_codegen_count_calls(generated.bytes,
@@ -2508,7 +2509,8 @@ static void r_codegen_test_sync_main_arguments(void) {
         r_codegen_check_hosted_stack_bootstrap(generated.bytes);
         R_CODEGEN_CHECK(strstr(generated.bytes,
                                "define internal void @\"test.codegen.sync_main_args::main\"(ptr "
-                               "%0, ptr %1)") != NULL);
+                               "noundef nonnull align 8 dereferenceable(32) %0, ptr noundef "
+                               "nonnull align 8 dereferenceable(16) %1)") != NULL);
         R_CODEGEN_CHECK(strstr(generated.bytes, "$step\"(") == NULL);
         R_CODEGEN_CHECK(strstr(generated.bytes, "@r_runtime_task_") == NULL);
         R_CODEGEN_CHECK(hosted_start != NULL);

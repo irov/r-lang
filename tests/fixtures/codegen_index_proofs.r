@@ -1,9 +1,10 @@
 module test.codegen.index_proofs;
 
-/* R-EXPR-0021 with index proofs: an index proven below its bound is emitted without its check,
-   every other index keeps it. tests/check_index_proofs.py compares the checks left in the
-   generated C with the marks: a line marked proven has no bounds check, a line marked checked
-   has one. Every function computes a value that main compares, so the proven paths run. */
+/* R-EXPR-0021 with index proofs: an index the optimized program proves below its bound has no
+   check left, every other index keeps it. tests/check_index_proofs.py compares the checks left
+   in the optimized LLVM IR with the marks: a line marked proven has no bounds check, a line
+   marked checked has one. Every function computes a value that main compares, so the proven
+   paths run. */
 
 error too_far { usize index; };
 
@@ -95,47 +96,79 @@ u32 blocks(const u8[] data, usize width) {
 
 void bump(usize* value) { *value += 1usize; }
 
+/* Each index that may fail stands in its own function, so no check of a neighbouring line
+   bounds the length first: a passed check is a fact the optimizer keeps (data[1] passing proves
+   len(data) > 1 for every later index of the function). */
+u32 kept_bumped(const u8[] data) {
+    usize k = 0usize;
+    bump(&k);
+    return data[k] as u32; /* checked */
+}
+
+u32 kept_reset(const u8[] data) {
+    usize index = len(data);
+    if (index >= len(data)) { index = 0usize; }
+    return data[index] as u32; /* checked */
+}
+
+u32 kept_successor(const u8[] data) {
+    usize after = 0usize;
+    u32 total = 0u32;
+    if (after < len(data)) {
+        usize next = after + 1usize;
+        total += data[next] as u32; /* checked */
+    }
+    return total;
+}
+
+u32 kept_other_bound(const u8[] data) {
+    usize limit = 2usize;
+    usize below = 1usize;
+    u32 total = 0u32;
+    if (below < limit) {
+        total += data[below + 0usize] as u32; /* checked */
+    }
+    return total;
+}
+
+u32 kept_either(const u8[] data) {
+    usize after = 0usize;
+    bool flag = true;
+    u32 total = 0u32;
+    if ((after < len(data)) || (flag == true)) {
+        total += data[after] as u32; /* checked */
+    }
+    return total;
+}
+
 u32 kept_checks(const u8[] data, u8[] out, u64 big) {
     u32 total = 0u32;
     usize i = 0usize;
     while ((i + 1usize) < len(data)) {
         i += 1usize;
-        total += data[i] as u32; /* checked */
+        /* The condition bounded i + 1 before the step. */
+        total += data[i] as u32; /* proven */
     }
-    usize k = 0usize;
-    bump(&k);
-    total += data[k] as u32; /* checked */
-    usize index = len(data);
-    if (index >= len(data)) { index = 0usize; }
-    total += data[index] as u32; /* checked */
-    usize after = 0usize;
-    if (after < len(data)) {
-        usize next = after + 1usize;
-        total += data[next] as u32; /* checked */
-    }
-    usize limit = 2usize;
-    usize below = 1usize;
-    if (below < limit) {
-        total += data[below + 0usize] as u32; /* checked */
-    }
+    total += kept_bumped(data);
+    total += kept_reset(data);
+    total += kept_successor(data);
+    total += kept_other_bound(data);
     for (usize outer = 0usize; outer < len(data); outer += 1usize) {
         usize inner = 0usize;
         while (inner < 1usize) {
             inner += 1usize;
             outer += 0usize;
         }
-        total += data[outer] as u32; /* checked */
+        total += data[outer] as u32; /* proven */
     }
     for (usize n = 1usize; n <= len(data); n += 1usize) {
         total += data[n - 1usize] as u32; /* checked */
     }
     if (((big as u8) as usize) < len(data)) {
-        total += data[big as usize] as u32; /* checked */
+        /* The checked conversion big as u8 (R-EXPR-0015) bounds big by 255 first. */
+        total += data[big as usize] as u32; /* proven */
     }
-    bool flag = true;
-    if ((after < len(data)) || (flag == true)) {
-        total += data[after] as u32; /* checked */
-    }
+    total += kept_either(data);
     const u8[] view = data;
     for (usize v = 0usize; v < len(view); v += 1usize) {
         view = data[v..len(data)];
@@ -165,6 +198,14 @@ u32 bounded_forms(const u8[] data, const u32[] table, usize seed) {
     total += table[(seed as u8) as usize % len(table)]; /* proven */
     total += table[seed % (len(table) + 1usize)]; /* checked */
     return total;
+}
+
+u32 branch_step(const u8[] data, usize start) {
+    usize k = start;
+    if (k >= len(data)) { return 0u32; }
+    k += 1usize;
+    u8 next = data[k]; /* checked */
+    return (next as u32) - (next as u32);
 }
 
 u32 branch_deaths(const u8[] data, usize start, bool flag) {
@@ -199,8 +240,15 @@ u32 branch_deaths(const u8[] data, usize start, bool flag) {
     } else {
         k += 1usize;
     }
-    total += data[k] as u32; /* checked */
-    return total;
+    /* With flag set, the checked data[i] above passed for start + 1. */
+    total += data[k] as u32; /* proven */
+    return total + branch_step(data, start);
+}
+
+/* Apart from conversions, whose checked (value / 2u32) as u8 bounds value by 511 first. */
+u32 shifted_down(u32 value) {
+    u16 shifted = ((value as u16) >> 4usize) as u16; /* checked conversion */
+    return shifted as u32;
 }
 
 u32 conversions(u32 value) {
@@ -211,9 +259,8 @@ u32 conversions(u32 value) {
         u8 small = value as u8; /* proven conversion */
         total += small as u32;
     }
-    u16 shifted = ((value as u16) >> 4usize) as u16; /* checked conversion */
     u16 narrow = (((value & 0xfffu32) as u16) >> 4usize) as u16; /* proven conversion */
-    return total + (shifted as u32) + (narrow as u32);
+    return total + shifted_down(value) + (narrow as u32);
 }
 
 u32 array_lengths() throws std.alloc::alloc_error {
@@ -224,7 +271,8 @@ u32 array_lengths() throws std.alloc::alloc_error {
     }
     array<u32> growing = std.array::filled(2usize, 1u32);
     for (usize i = 0usize; i < len(growing); i += 1usize) {
-        total += growing[i]; /* checked */
+        /* The condition reads the length after each push. */
+        total += growing[i]; /* proven */
         if (i == 0usize) {
             try { std.array::push(&growing, 2u32); }
             catch (std.array::push_error<u32> failure) { move failure as void; }

@@ -13,14 +13,35 @@
    (tools/compute_stack_entries.py). Frame sizes are measured on the code the target machine
    generates: a copy of the finished module is compiled once while the prologue-epilogue
    inserter reports each function's stack size, the bounds are computed, written into the
-   constants the checks read, and the module itself is then compiled for output. */
+   constants the checks read, and the module itself is then compiled for output.
 
-LLVMValueRef r_llvm_stack_entry(RLlvmEmitter *emitter, RSymbolId symbol) {
+   The optimizer runs before the measurement, so the frames and calls measured are those of the
+   optimized code. Three things keep that sound: the bound constants are externally initialized,
+   so no load of one is folded before the bound is written; a function whose frame is below a
+   callback the runtime or library makes (a stack edge), that holds an indirect call, or that
+   carries a @recursion depth is never inlined, so the call that needs its edges or its depth stays
+   in its frame; and every function and constant this file refers to after the optimizer is kept
+   by llvm.compiler.used, so none of them is deleted under it. */
+
+static bool r_llvm_holds_indirect_calls(LLVMValueRef function);
+static bool r_llvm_guarded_call_marked(RLlvmEmitter *emitter, LLVMValueRef call);
+
+/* A function the object defines: an imported available_externally body is never emitted, so a
+   call of it is a call of the archive's function, which keeps its own budget (import.c). */
+static bool r_llvm_stack_defined(LLVMValueRef function) {
+    return (LLVMCountBasicBlocks(function) != 0U) &&
+           (LLVMGetLinkage(function) != LLVMAvailableExternallyLinkage);
+}
+
+/* The bound of an entry: the step of an async function or an ordinary entry, or with `direct` the
+   direct twin of an async function (direct.c). */
+static LLVMValueRef r_llvm_stack_bound(RLlvmEmitter *emitter, RSymbolId symbol, bool direct) {
     RLlvmStackEntry *entry = NULL;
     size_t index;
 
     for (index = 0U; index < emitter->stack_entry_count; ++index) {
-        if (emitter->stack_entries[index].symbol == symbol) {
+        if ((emitter->stack_entries[index].symbol == symbol) &&
+            (emitter->stack_entries[index].direct == direct)) {
             entry = &emitter->stack_entries[index];
             break;
         }
@@ -44,15 +65,33 @@ LLVMValueRef r_llvm_stack_entry(RLlvmEmitter *emitter, RSymbolId symbol) {
         }
         entry = &emitter->stack_entries[emitter->stack_entry_count];
         entry->symbol = symbol;
-        (void)snprintf(
-            name, sizeof(name), "r_stack_entry.%" PRIu32, r_llvm_symbol_key(emitter, symbol));
+        entry->direct = direct;
+        (void)snprintf(name,
+                       sizeof(name),
+                       direct ? "r_stack_entry.%" PRIu32 ".direct" : "r_stack_entry.%" PRIu32,
+                       r_llvm_symbol_key(emitter, symbol));
         entry->global = LLVMAddGlobal(emitter->module, r_llvm_int(emitter, 64U), name);
         LLVMSetLinkage(entry->global, LLVMPrivateLinkage);
         LLVMSetGlobalConstant(entry->global, 1);
+        LLVMSetExternallyInitialized(entry->global, 1);
         LLVMSetInitializer(entry->global, r_llvm_u64(emitter, 0U));
         emitter->stack_entry_count += 1U;
     }
     return LLVMBuildLoad2(emitter->builder, r_llvm_int(emitter, 64U), entry->global, "");
+}
+
+LLVMValueRef r_llvm_stack_entry(RLlvmEmitter *emitter, RSymbolId symbol) {
+    return r_llvm_stack_bound(emitter, symbol, false);
+}
+
+LLVMValueRef r_llvm_direct_stack_entry(RLlvmEmitter *emitter, RSymbolId symbol) {
+    return r_llvm_stack_bound(emitter, symbol, true);
+}
+
+/* The function an entry bounds. */
+static LLVMValueRef r_llvm_stack_entry_function(const RLlvmEmitter *emitter,
+                                                const RLlvmStackEntry *entry) {
+    return entry->direct ? emitter->direct_twins[entry->symbol] : emitter->functions[entry->symbol];
 }
 
 typedef struct RLlvmFrame {
@@ -218,11 +257,15 @@ static bool r_llvm_stack_callees(RLlvmStackGraph *graph, RLlvmStackNode *node) {
             }
             callee = LLVMGetCalledValue(instruction);
             if (LLVMIsAFunction(callee) == NULL) {
-                /* An indirect call needs the candidates the emitter marks for it. */
-                if (r_llvm_indirect_call_marked(graph->emitter, instruction)) {
-                    continue;
-                }
-                return r_llvm_unsupported(graph->emitter, "an indirect call");
+                /* Every indirect call the emitter writes lies in a function that holds it, whose
+                   edges name its candidates (r_llvm_check_indirect_calls). Any other is one of
+                   imported runtime code, through a pointer the runtime holds to its own function
+                   or to type glue, which counts as a call of the runtime (import.c). */
+                continue;
+            }
+            if (r_llvm_guarded_call_marked(graph->emitter, instruction)) {
+                /* The callee is an entry with its own bound, required before the call. */
+                continue;
             }
             if (r_llvm_stack_iterative_drop(callee)) {
                 size_t back;
@@ -328,7 +371,8 @@ static bool r_llvm_stack_components(RLlvmStackGraph *graph) {
     }
     for (entry = 0U; entry < graph->emitter->stack_entry_count; ++entry) {
         const RLlvmStackNode *start = r_llvm_stack_node(
-            graph, graph->emitter->functions[graph->emitter->stack_entries[entry].symbol]);
+            graph,
+            r_llvm_stack_entry_function(graph->emitter, &graph->emitter->stack_entries[entry]));
         size_t work_count = 0U;
         size_t root;
         if (start == NULL) {
@@ -413,31 +457,155 @@ bool r_llvm_stack_recursion(RLlvmEmitter *emitter, LLVMValueRef function, uint32
         emitter->recursion_marks = grown;
         emitter->recursion_mark_capacity = capacity;
     }
+    r_llvm_add_function_attribute(emitter, function, "noinline");
     emitter->recursion_marks[emitter->recursion_mark_count].function = function;
     emitter->recursion_marks[emitter->recursion_mark_count].depth = depth;
     emitter->recursion_mark_count += 1U;
     return true;
 }
 
-static unsigned r_llvm_indirect_kind(RLlvmEmitter *emitter) {
-    static const char name[] = "r.stack.indirect";
+static const char r_llvm_indirect_attribute[] = "r.stack.indirect";
+
+/* The function of an indirect call holds it for good: a marked function is never inlined, and
+   the optimizer turns no direct call into an indirect one, so after it every indirect call is in
+   a marked function, whose edges name its candidates. */
+void r_llvm_mark_indirect_call(RLlvmEmitter *emitter, LLVMValueRef call) {
+    LLVMValueRef function = LLVMGetBasicBlockParent(LLVMGetInstructionParent(call));
+
+    LLVMAddAttributeAtIndex(function,
+                            (LLVMAttributeIndex)LLVMAttributeFunctionIndex,
+                            LLVMCreateStringAttribute(emitter->context,
+                                                      r_llvm_indirect_attribute,
+                                                      sizeof(r_llvm_indirect_attribute) - 1U,
+                                                      "",
+                                                      0U));
+    r_llvm_add_function_attribute(emitter, function, "noinline");
+}
+
+static unsigned r_llvm_guarded_call_kind(RLlvmEmitter *emitter) {
+    static const char name[] = "r.stack.guarded";
     return LLVMGetMDKindIDInContext(emitter->context, name, sizeof(name) - 1U);
 }
 
-void r_llvm_mark_indirect_call(RLlvmEmitter *emitter, LLVMValueRef call) {
+/* A call that r_runtime_task_direct_begin admitted with the bound of its callee (direct.c). Were
+   the mark lost, the call would count as an ordinary one, which only raises the bound. */
+void r_llvm_mark_guarded_call(RLlvmEmitter *emitter, LLVMValueRef call) {
     LLVMSetMetadata(
         call,
-        r_llvm_indirect_kind(emitter),
+        r_llvm_guarded_call_kind(emitter),
         LLVMMetadataAsValue(emitter->context, LLVMMDNodeInContext2(emitter->context, NULL, 0U)));
 }
 
-bool r_llvm_indirect_call_marked(RLlvmEmitter *emitter, LLVMValueRef call) {
-    return LLVMGetMetadata(call, r_llvm_indirect_kind(emitter)) != NULL;
+static bool r_llvm_guarded_call_marked(RLlvmEmitter *emitter, LLVMValueRef call) {
+    return LLVMGetMetadata(call, r_llvm_guarded_call_kind(emitter)) != NULL;
+}
+
+static bool r_llvm_holds_indirect_calls(LLVMValueRef function) {
+    return LLVMGetStringAttributeAtIndex(function,
+                                         (LLVMAttributeIndex)LLVMAttributeFunctionIndex,
+                                         r_llvm_indirect_attribute,
+                                         sizeof(r_llvm_indirect_attribute) - 1U) != NULL;
+}
+
+/* Before the optimizer: every indirect call the emitter wrote in a function the bounds count
+   (reached from an entry through direct calls, stack edges and the callees of iterative drops)
+   lies in a function that holds indirect calls, with the edges of its candidates. The optimizer
+   turns no direct call into an indirect one, so after it any other indirect call in a counted
+   function is one of imported code (stack.c above). */
+static bool r_llvm_check_reach(RLlvmEmitter *emitter,
+                               LLVMValueRef function,
+                               LLVMValueRef **work,
+                               size_t *count,
+                               size_t *capacity) {
+    size_t index;
+
+    if ((function == NULL) || (LLVMCountBasicBlocks(function) == 0U)) {
+        return true;
+    }
+    for (index = 0U; index < *count; ++index) {
+        if ((*work)[index] == function) {
+            return true;
+        }
+    }
+    if (*count == *capacity) {
+        const size_t grown_capacity = *capacity == 0U ? 64U : *capacity * 2U;
+        LLVMValueRef *grown = r_llvm_allocate(emitter, grown_capacity * sizeof(*grown));
+        if (grown == NULL) {
+            return false;
+        }
+        if (*count != 0U) {
+            (void)memcpy(grown, *work, *count * sizeof(*grown));
+        }
+        r_llvm_free(emitter, *work);
+        *work = grown;
+        *capacity = grown_capacity;
+    }
+    (*work)[(*count)++] = function;
+    return true;
+}
+
+bool r_llvm_check_indirect_calls(RLlvmEmitter *emitter) {
+    LLVMValueRef *work = NULL;
+    size_t count = 0U;
+    size_t capacity = 0U;
+    size_t next;
+    size_t index;
+    bool success = true;
+
+    for (index = 0U; success && (index < emitter->stack_entry_count); ++index) {
+        success =
+            r_llvm_check_reach(emitter,
+                               r_llvm_stack_entry_function(emitter, &emitter->stack_entries[index]),
+                               &work,
+                               &count,
+                               &capacity);
+    }
+    for (next = 0U; success && (next < count); ++next) {
+        LLVMValueRef function = work[next];
+        LLVMBasicBlockRef block;
+        const bool holder = r_llvm_holds_indirect_calls(function);
+        for (index = 0U; success && (index < emitter->stack_edge_count); ++index) {
+            if (emitter->stack_edges[index].caller == function) {
+                success = r_llvm_check_reach(
+                    emitter, emitter->stack_edges[index].callee, &work, &count, &capacity);
+            }
+        }
+        for (block = LLVMGetFirstBasicBlock(function); success && (block != NULL);
+             block = LLVMGetNextBasicBlock(block)) {
+            LLVMValueRef instruction;
+            for (instruction = LLVMGetFirstInstruction(block); success && (instruction != NULL);
+                 instruction = LLVMGetNextInstruction(instruction)) {
+                LLVMValueRef callee;
+                if (LLVMGetInstructionOpcode(instruction) != LLVMCall) {
+                    continue;
+                }
+                callee = LLVMGetCalledValue(instruction);
+                if (LLVMIsAFunction(callee) != NULL) {
+                    success = r_llvm_check_reach(emitter, callee, &work, &count, &capacity);
+                    for (index = 0U; success && r_llvm_stack_iterative_drop(callee) &&
+                                     (index < emitter->runtime_callee_count);
+                         ++index) {
+                        success = r_llvm_check_reach(
+                            emitter, emitter->runtime_callees[index], &work, &count, &capacity);
+                    }
+                } else if (!holder && (LLVMIsAInlineAsm(callee) == NULL)) {
+                    size_t length = 0U;
+                    const char *name = LLVMGetValueName2(function, &length);
+                    success =
+                        r_llvm_unsupported_detail(emitter, "an indirect call in", name, length);
+                }
+            }
+        }
+    }
+    r_llvm_free(emitter, work);
+    return success && (emitter->status == R_FRONTEND_OK);
 }
 
 bool r_llvm_add_stack_edge(RLlvmEmitter *emitter, LLVMValueRef caller, LLVMValueRef callee) {
     size_t index;
 
+    /* The call that reaches the callee stays in the frame of the caller. */
+    r_llvm_add_function_attribute(emitter, caller, "noinline");
     for (index = 0U; index < emitter->stack_edge_count; ++index) {
         if ((emitter->stack_edges[index].caller == caller) &&
             (emitter->stack_edges[index].callee == callee)) {
@@ -490,8 +658,76 @@ static void r_llvm_stack_report(RLlvmEmitter *emitter,
    from --emit=llvm-ir: r.stack.frames holds each defined function with its frame, its
    @recursion depth and the bound below a call into it, r.stack.entries each entry with its
    bound. */
+static void r_llvm_keep(LLVMValueRef *kept, size_t *count, LLVMValueRef value) {
+    size_t index;
+
+    for (index = 0U; index < *count; ++index) {
+        if (kept[index] == value) {
+            return;
+        }
+    }
+    kept[(*count)++] = value;
+}
+
+/* llvm.compiler.used of every function and constant the measurement refers to after the
+   optimizer: entries and their bound constants, both ends of the stack edges, the callees of
+   iterative drops and the functions with a @recursion depth. With all_functions every function
+   of the program is kept too, as if called from elsewhere: the optimizer neither deletes it nor
+   specializes it for the arguments of the calls it sees, so a check proves itself or stays in
+   the function's own body. */
+bool r_llvm_preserve_stack_functions(RLlvmEmitter *emitter) {
+    const RFrontendContext *context = emitter->frontend;
+    const bool all_functions =
+        (emitter->artifact_options != NULL) && emitter->artifact_options->all_functions;
+    const size_t capacity = (emitter->stack_entry_count * 2U) + (emitter->stack_edge_count * 2U) +
+                            emitter->runtime_callee_count + emitter->recursion_mark_count +
+                            (all_functions ? context->mir_function_count : 0U);
+    LLVMValueRef *kept;
+    LLVMValueRef used;
+    size_t count = 0U;
+    size_t index;
+
+    if (capacity == 0U) {
+        return true;
+    }
+    kept = r_llvm_allocate(emitter, capacity * sizeof(*kept));
+    if (kept == NULL) {
+        return false;
+    }
+    for (index = 0U; index < emitter->stack_entry_count; ++index) {
+        r_llvm_keep(kept, &count, emitter->stack_entries[index].global);
+        if (r_llvm_stack_entry_function(emitter, &emitter->stack_entries[index]) != NULL) {
+            r_llvm_keep(
+                kept, &count, r_llvm_stack_entry_function(emitter, &emitter->stack_entries[index]));
+        }
+    }
+    for (index = 0U; index < emitter->stack_edge_count; ++index) {
+        r_llvm_keep(kept, &count, emitter->stack_edges[index].caller);
+        r_llvm_keep(kept, &count, emitter->stack_edges[index].callee);
+    }
+    for (index = 0U; index < emitter->runtime_callee_count; ++index) {
+        r_llvm_keep(kept, &count, emitter->runtime_callees[index]);
+    }
+    for (index = 0U; index < emitter->recursion_mark_count; ++index) {
+        r_llvm_keep(kept, &count, emitter->recursion_marks[index].function);
+    }
+    for (index = 0U; all_functions && (index < context->mir_function_count); ++index) {
+        const RSymbolId symbol = context->mir_functions[index].symbol;
+        if (!context->semantic_symbols[(size_t)symbol - 1U].is_import &&
+            (emitter->functions[symbol] != NULL)) {
+            r_llvm_keep(kept, &count, emitter->functions[symbol]);
+        }
+    }
+    used = LLVMAddGlobal(
+        emitter->module, LLVMArrayType2(r_llvm_pointer(emitter), count), "llvm.compiler.used");
+    LLVMSetLinkage(used, LLVMAppendingLinkage);
+    LLVMSetSection(used, "llvm.metadata");
+    LLVMSetInitializer(used, LLVMConstArray2(r_llvm_pointer(emitter), kept, count));
+    r_llvm_free(emitter, kept);
+    return true;
+}
+
 bool r_llvm_measure_stack(RLlvmEmitter *emitter) {
-    static bool remarks_enabled = false;
     RLlvmFrames frames;
     RLlvmStackGraph graph;
     LLVMModuleRef copy;
@@ -511,11 +747,6 @@ bool r_llvm_measure_stack(RLlvmEmitter *emitter) {
     (void)memset(&graph, 0, sizeof(graph));
     frames.emitter = emitter;
     graph.emitter = emitter;
-    if (!remarks_enabled) {
-        static const char *const arguments[] = {"r-front", "-pass-remarks-analysis=prologepilog"};
-        LLVMParseCommandLineOptions(2, arguments, NULL);
-        remarks_enabled = true;
-    }
     previous_handler = LLVMContextGetDiagnosticHandler(emitter->context);
     previous_context = LLVMContextGetDiagnosticContext(emitter->context);
     LLVMContextSetDiagnosticHandler(emitter->context, r_llvm_stack_remark, &frames);
@@ -537,7 +768,7 @@ bool r_llvm_measure_stack(RLlvmEmitter *emitter) {
     success = false;
     for (function = LLVMGetFirstFunction(emitter->module); function != NULL;
          function = LLVMGetNextFunction(function)) {
-        if (LLVMCountBasicBlocks(function) != 0U) {
+        if (r_llvm_stack_defined(function)) {
             count += 1U;
         }
     }
@@ -549,7 +780,7 @@ bool r_llvm_measure_stack(RLlvmEmitter *emitter) {
          function = LLVMGetNextFunction(function)) {
         size_t length = 0U;
         const char *name;
-        if (LLVMCountBasicBlocks(function) == 0U) {
+        if (!r_llvm_stack_defined(function)) {
             continue;
         }
         name = LLVMGetValueName2(function, &length);
@@ -578,7 +809,8 @@ bool r_llvm_measure_stack(RLlvmEmitter *emitter) {
     }
     for (index = 0U; index < emitter->stack_entry_count; ++index) {
         const RLlvmStackEntry *entry = &emitter->stack_entries[index];
-        RLlvmStackNode *node = r_llvm_stack_node(&graph, emitter->functions[entry->symbol]);
+        RLlvmStackNode *node =
+            r_llvm_stack_node(&graph, r_llvm_stack_entry_function(emitter, entry));
         uint64_t bound;
         if (node == NULL) {
             (void)r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);

@@ -12,9 +12,9 @@ cannot turn an unimplemented operation green.
 
 Closed suffix families are expanded here because their inventory record names
 are schemas rather than concrete source spellings.  Public types are carried to
-LLVM IR through a nullable raw pointer (every function lowered, --all-functions)
-so the check also detects names that HIR accepts as arbitrary opaque standard
-types but the backend cannot represent.
+unoptimized LLVM IR through a nullable raw pointer (every function lowered,
+--all-functions) so the check also detects names that HIR accepts as arbitrary
+opaque standard types but the backend cannot represent.
 This audit does not prove that a resolved operation accepts its valid signature
 or that a valid call has working runtime behavior.  Those contracts require the
 module runtime tests and code-generation fixtures.
@@ -34,7 +34,10 @@ import tempfile
 from typing import Any
 
 
-EXTRA_COMPILER_ARGUMENTS: list[str] = []
+# The probes check acceptance and the backend's representation of a name, which the emitter
+# decides; optimizing every function of a large module (std.mcp) only adds a third to the time
+# of a probe, so they read the IR at level 0.
+EXTRA_COMPILER_ARGUMENTS: list[str] = ["--opt-level=0"]
 UNRESOLVED_MESSAGE = "called function name is unresolved at this source position"
 
 # Library R-SLIB-RSRC-0001: an R-source module is imported before its items are named; the
@@ -703,7 +706,9 @@ def main() -> int:
             "leaves the language new convenience as the only panicking allocation"
         ),
     )
-    parser.add_argument("--timeout", type=float, default=30.0)
+    # A probe of a large R-source module (std.mcp) takes seconds; the limit only catches a hang,
+    # since a loaded machine stretches every probe.
+    parser.add_argument("--timeout", type=float, default=300.0)
     arguments = parser.parse_args()
     if arguments.deny_panic_alloc:
         EXTRA_COMPILER_ARGUMENTS.append("--deny-panic-alloc")
@@ -875,6 +880,10 @@ def main() -> int:
     if arguments.output is not None:
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         arguments.output.write_text(output, encoding="utf-8")
+        timeouts = sum(
+            counts["timeout"]
+            for counts in (operation_counts, constant_counts, type_counts, ambiguous_counts)
+        )
         print(
             "library source surface: "
             f"{len(operation_results)} operations, {operation_counts['unresolved']} unresolved, "
@@ -883,6 +892,7 @@ def main() -> int:
             f"{constant_counts['unresolved']} constants unresolved; "
             f"{type_counts['compiler_failure']} type compiler failures; "
             f"{len(inventory_missing_types)} inventory type gaps; "
+            f"{timeouts} timeouts; "
             f"unknown-type control {unknown_type_control['control_status']}"
         )
     else:

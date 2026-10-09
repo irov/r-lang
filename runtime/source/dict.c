@@ -47,8 +47,8 @@ static void r_runtime_dict_move(RRuntimeTypeInfo type, void *destination, void *
     }
 }
 
-/* Mirrored verbatim by the emitter (r_dict_mix in generated C): both sides must agree so that
- * entries inserted through either path are found by the other. */
+/* Mirrored verbatim by the emitter (r_llvm_dict_mix in compiler/llvm/dicts.c): both sides must
+ * agree so that entries inserted through either path are found by the other. */
 static uint64_t r_runtime_dict_mix(uint64_t hash, uint64_t seed) {
     uint64_t mixed = hash ^ seed ^ UINT64_C(0x9e3779b97f4a7c15);
 

@@ -70,7 +70,7 @@ r_require_match_count(async_mir_output
 # reaches gets one callback the library runs.
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=llvm-ir
+        --emit=llvm-ir --opt-level=0
         --entry test.codegen.sync_checked_retry::main
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"
@@ -94,7 +94,7 @@ r_require_match_count(sync_ir_output "define internal i1 @r_sync_initializer[.][
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=llvm-ir
+        --emit=llvm-ir --opt-level=0
         --entry test.codegen.async_sync_checked_retry::main
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"
@@ -116,7 +116,7 @@ r_require_match_count(async_ir_output "define internal i1 @r_sync_initializer[.]
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=llvm-ir
+        --emit=llvm-ir --opt-level=0
         --entry test.codegen.async_sync_checked_retry::main
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"

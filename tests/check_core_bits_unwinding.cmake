@@ -9,7 +9,7 @@ endif()
 # at translation (Core R-FUNC-0023) and lowered only on request.
 foreach(source IN LISTS SOURCES)
     execute_process(
-        COMMAND "${R_FRONT_EXECUTABLE}" --emit=llvm-ir --all-functions "${source}"
+        COMMAND "${R_FRONT_EXECUTABLE}" --emit=llvm-ir --opt-level=0 --all-functions "${source}"
         RESULT_VARIABLE status OUTPUT_VARIABLE generated ERROR_VARIABLE errors)
     if(NOT status EQUAL 0)
         message(FATAL_ERROR "core bits unwinding: ${source} failed: ${errors}")

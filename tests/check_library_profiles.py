@@ -39,10 +39,12 @@ def main() -> None:
             path = root / f'{module.replace(".", "_")}_{profile.replace("-", "_")}.r'
             path.write_text(f'module profiles.probe;\nimport {module};\ni32 main() {{ return 0; }}\n',
                             encoding='utf-8')
+            # The limit only catches a hang: a sanitized front end needs about 26 s of processor
+            # time for the largest module (std.mcp), which a loaded machine stretches several fold.
             result = subprocess.run(
                 [args.front, '--emit=mir', '--profile', profile, '--library-map',
                  args.library_map, str(path)],
-                capture_output=True, text=True, timeout=120)
+                capture_output=True, text=True, timeout=600)
             return module, least, profile, result.returncode, result.stderr
 
         cases = [(module, least, profile) for module, least in modules for profile in PROFILES]

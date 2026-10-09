@@ -104,7 +104,7 @@ r_require_match_count(mir_output
     2 "bits align MIR reader call-bounded borrows")
 
 set(r_ir_arguments
-    --emit=llvm-ir
+    --emit=llvm-ir --opt-level=0
     --entry test.codegen.bytes_operations::main
     --profile hosted-native-async
     --target-manifest "${TARGET_MANIFEST}"

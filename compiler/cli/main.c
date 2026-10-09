@@ -58,6 +58,9 @@ typedef struct RCliOptions {
     size_t symbol_rename_count;
     /* --all-functions: lower every function, not only those the entry reaches. */
     bool all_functions;
+    /* --opt-level=N: the LLVM pipeline of the program (2 when not given). */
+    uint32_t optimization_level;
+    bool optimization_level_given;
     const char **source_paths;
     size_t source_count;
     size_t source_capacity;
@@ -85,7 +88,38 @@ typedef struct RCliOptions {
     bool deny_panic_alloc;
     /* R-FUNC-0025 (M24): translate the entry module in test mode. */
     bool test_mode;
+    /* --bitcode-catalog FILE (B7.2): where the bitcode of the runtime and library C lies. */
+    const char *bitcode_catalog_path;
+    bool bitcode_catalog_seen;
+    /* --profile-generate and --profile-use FILE (B7.2): profile-guided optimization. */
+    bool profile_generate;
+    const char *profile_use_path;
+    bool profile_use_seen;
 } RCliOptions;
+
+/* One line of a bitcode catalog, "SYMBOL<TAB>PATH": the bitcode module at PATH defines the C
+   function SYMBOL. */
+typedef struct RCliBitcodeEntry {
+    const char *symbol;
+    const char *path;
+} RCliBitcodeEntry;
+
+typedef struct RCliBitcodeModule {
+    const char *path;
+    uint8_t *bytes;
+    size_t length;
+} RCliBitcodeModule;
+
+/* The catalog text, split in place, its entries sorted by symbol, and the modules read so far. */
+typedef struct RCliBitcodeCatalog {
+    uint8_t *text;
+    size_t text_length;
+    RCliBitcodeEntry *entries;
+    size_t entry_count;
+    RCliBitcodeModule *modules;
+    size_t module_count;
+    size_t module_capacity;
+} RCliBitcodeCatalog;
 
 static bool r_cli_status_is_resource_failure(RFrontendStatus status);
 
@@ -99,7 +133,9 @@ static void r_cli_usage(FILE *stream) {
                   "[--profile freestanding|allocation|hosted|hosted-thread|"
                   "hosted-native-async] [--deny-panic-alloc] [--test] [--target-manifest FILE] "
                   "[--link-manifest FILE] [--abi-record FILE] [--abi-header-dir DIR]... "
-                  "[--rename-symbol OLD=NEW]... [--all-functions] [--version] [FILE ...]\n");
+                  "[--rename-symbol OLD=NEW]... [--all-functions] [--opt-level=0|1|2|3] "
+                  "[--bitcode-catalog FILE] [--profile-generate | --profile-use FILE] "
+                  "[--version] [FILE ...]\n");
 }
 
 /* The compiler and its backend; the backend check fails when the linked LLVM or its target
@@ -453,6 +489,45 @@ static bool r_cli_parse_arguments(int argc, char **argv, RCliOptions *options) {
                 return r_cli_option_error("duplicate option", "--all-functions");
             }
             options->all_functions = true;
+        } else if ((strcmp(argument, "--bitcode-catalog") == 0) ||
+                   (r_cli_option_value(argument, "--bitcode-catalog") != NULL)) {
+            if (options->bitcode_catalog_seen) {
+                return r_cli_option_error("duplicate option", "--bitcode-catalog");
+            }
+            options->bitcode_catalog_seen = true;
+            if (!r_cli_take_option_value(argc,
+                                         argv,
+                                         &index,
+                                         argument,
+                                         "--bitcode-catalog",
+                                         &options->bitcode_catalog_path)) {
+                return false;
+            }
+        } else if (strcmp(argument, "--profile-generate") == 0) {
+            if (options->profile_generate) {
+                return r_cli_option_error("duplicate option", "--profile-generate");
+            }
+            options->profile_generate = true;
+        } else if ((strcmp(argument, "--profile-use") == 0) ||
+                   (r_cli_option_value(argument, "--profile-use") != NULL)) {
+            if (options->profile_use_seen) {
+                return r_cli_option_error("duplicate option", "--profile-use");
+            }
+            options->profile_use_seen = true;
+            if (!r_cli_take_option_value(
+                    argc, argv, &index, argument, "--profile-use", &options->profile_use_path)) {
+                return false;
+            }
+        } else if (strncmp(argument, "--opt-level=", 12U) == 0) {
+            const char *level = argument + 12U;
+            if (options->optimization_level_given) {
+                return r_cli_option_error("duplicate option", "--opt-level");
+            }
+            if ((level[0] < '0') || (level[0] > '3') || (level[1] != '\0')) {
+                return r_cli_option_error("expected 0, 1, 2 or 3", argument);
+            }
+            options->optimization_level = (uint32_t)(level[0] - '0');
+            options->optimization_level_given = true;
         } else if ((strcmp(argument, "--help") == 0) || (strcmp(argument, "-h") == 0)) {
             r_cli_usage(stdout);
             exit(0);
@@ -864,6 +939,120 @@ static bool r_cli_read_existing_file(const char *path, uint8_t **bytes, size_t *
         return false;
     }
     (void)fclose(stream);
+    return true;
+}
+
+static int r_cli_bitcode_compare(const void *left, const void *right) {
+    return strcmp(((const RCliBitcodeEntry *)left)->symbol,
+                  ((const RCliBitcodeEntry *)right)->symbol);
+}
+
+static void r_cli_bitcode_destroy(RCliBitcodeCatalog *catalog) {
+    size_t index;
+
+    for (index = 0U; index < catalog->module_count; ++index) {
+        r_cli_deallocate(catalog->modules[index].bytes);
+    }
+    r_cli_deallocate(catalog->modules);
+    r_cli_deallocate(catalog->entries);
+    r_cli_deallocate(catalog->text);
+    (void)memset(catalog, 0, sizeof(*catalog));
+}
+
+/* Reads the catalog and splits its lines in place; a line without a tab is a usage error. */
+static bool r_cli_bitcode_load(const char *path, RCliBitcodeCatalog *catalog) {
+    size_t index;
+    size_t lines = 0U;
+    char *text;
+
+    (void)memset(catalog, 0, sizeof(*catalog));
+    if (!r_cli_read_file_bytes("--bitcode-catalog", path, &catalog->text, &catalog->text_length)) {
+        return false;
+    }
+    text = (char *)catalog->text;
+    for (index = 0U; index < catalog->text_length; ++index) {
+        lines += text[index] == '\n' ? 1U : 0U;
+    }
+    catalog->entries = r_cli_allocate((lines + 1U) * sizeof(*catalog->entries));
+    if (catalog->entries == NULL) {
+        r_cli_bitcode_destroy(catalog);
+        return false;
+    }
+    index = 0U;
+    while (index < catalog->text_length) {
+        char *line = text + index;
+        char *end = memchr(line, '\n', catalog->text_length - index);
+        char *tab;
+        if (end == NULL) {
+            (void)fprintf(stderr, "r-front: --bitcode-catalog: the last line has no end\n");
+            r_cli_bitcode_destroy(catalog);
+            return false;
+        }
+        *end = '\0';
+        index = (size_t)(end - text) + 1U;
+        tab = strchr(line, '\t');
+        if ((tab == NULL) || (tab == line) || (tab[1] == '\0')) {
+            (void)fprintf(stderr, "r-front: --bitcode-catalog: malformed line: %s\n", line);
+            r_cli_bitcode_destroy(catalog);
+            return false;
+        }
+        *tab = '\0';
+        catalog->entries[catalog->entry_count].symbol = line;
+        catalog->entries[catalog->entry_count].path = tab + 1;
+        catalog->entry_count += 1U;
+    }
+    qsort(catalog->entries, catalog->entry_count, sizeof(*catalog->entries), r_cli_bitcode_compare);
+    return true;
+}
+
+/* RFrontendArtifactOptions.load_bitcode: a module is read once, the first time one of its
+   symbols is asked for, and lives until the catalog is destroyed. */
+static bool
+r_cli_load_bitcode(void *user_data, const char *symbol, const uint8_t **data, size_t *length) {
+    RCliBitcodeCatalog *catalog = user_data;
+    const RCliBitcodeEntry key = {symbol, NULL};
+    const RCliBitcodeEntry *entry = bsearch(&key,
+                                            catalog->entries,
+                                            catalog->entry_count,
+                                            sizeof(*catalog->entries),
+                                            r_cli_bitcode_compare);
+    RCliBitcodeModule *module;
+    size_t index;
+
+    if (entry == NULL) {
+        return false;
+    }
+    for (index = 0U; index < catalog->module_count; ++index) {
+        if (strcmp(catalog->modules[index].path, entry->path) == 0) {
+            *data = catalog->modules[index].bytes;
+            *length = catalog->modules[index].length;
+            return catalog->modules[index].bytes != NULL;
+        }
+    }
+    if (catalog->module_count == catalog->module_capacity) {
+        const size_t capacity =
+            catalog->module_capacity == 0U ? 32U : catalog->module_capacity * 2U;
+        RCliBitcodeModule *grown = r_cli_allocate(capacity * sizeof(*grown));
+        if (grown == NULL) {
+            return false;
+        }
+        if (catalog->module_count != 0U) {
+            (void)memcpy(grown, catalog->modules, catalog->module_count * sizeof(*grown));
+        }
+        r_cli_deallocate(catalog->modules);
+        catalog->modules = grown;
+        catalog->module_capacity = capacity;
+    }
+    module = &catalog->modules[catalog->module_count++];
+    module->path = entry->path;
+    /* A module that cannot be read stays recorded, so it is not tried again. */
+    if (!r_cli_read_existing_file(entry->path, &module->bytes, &module->length)) {
+        module->bytes = NULL;
+        module->length = 0U;
+        return false;
+    }
+    *data = module->bytes;
+    *length = module->length;
     return true;
 }
 
@@ -1300,7 +1489,9 @@ static int r_cli_run(RFrontendContext *context, RCliOptions *options) {
         if (r_cli_emits_program(emit) && !source_failure &&
             (r_frontend_diagnostic_count(context) == 0U)) {
             RFrontendArtifactOptions artifact_options;
+            RCliBitcodeCatalog bitcode_catalog;
 
+            (void)memset(&bitcode_catalog, 0, sizeof(bitcode_catalog));
             if (r_frontend_entry_point_count(context) != 1U) {
                 (void)fprintf(stderr,
                               "r-front: R-DIAG-FLOW-001 [R-FUNC-0008]: a program requires exactly "
@@ -1330,12 +1521,34 @@ static int r_cli_run(RFrontendContext *context, RCliOptions *options) {
             artifact_options.symbol_renames = options->symbol_renames;
             artifact_options.symbol_rename_count = options->symbol_rename_count;
             artifact_options.all_functions = options->all_functions;
+            artifact_options.optimization_level =
+                options->optimization_level_given ? options->optimization_level : 2U;
+            if ((options->bitcode_catalog_path != NULL) &&
+                !r_cli_bitcode_load(options->bitcode_catalog_path, &bitcode_catalog)) {
+                return 2;
+            }
+            if (options->bitcode_catalog_path != NULL) {
+                artifact_options.load_bitcode = r_cli_load_bitcode;
+                artifact_options.bitcode_user_data = &bitcode_catalog;
+            }
+            artifact_options.profile_generate = options->profile_generate;
+            artifact_options.profile_use = options->profile_use_path;
+            if ((options->profile_generate || (options->profile_use_path != NULL)) &&
+                ((artifact_options.optimization_level == 0U) ||
+                 (options->profile_generate && (options->profile_use_path != NULL)))) {
+                r_cli_bitcode_destroy(&bitcode_catalog);
+                (void)fprintf(stderr,
+                              "r-front: --profile-generate and --profile-use exclude each other "
+                              "and --opt-level=0\n");
+                return 2;
+            }
             status = r_frontend_emit_llvm(context,
                                           &artifact_options,
                                           emit == R_EMIT_LLVM_IR ? R_FRONTEND_LLVM_IR
                                                                  : R_FRONTEND_LLVM_OBJECT,
                                           r_file_writer,
                                           stdout);
+            r_cli_bitcode_destroy(&bitcode_catalog);
             if (status == R_FRONTEND_NOT_LOWERABLE) {
                 (void)fprintf(stderr,
                               "r-front: R-DIAG-SLICE-001 [R-DIAG-0001]: the program is valid R "

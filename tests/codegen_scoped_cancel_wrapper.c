@@ -26,7 +26,9 @@ r_test_await(RRuntimeTaskExecution *execution, RRuntimeTask **task, void *result
 void r_test_cancel(RRuntimeTaskScope *scope);
 void r_test_release(RRuntimeOwn *owner);
 void r_test_async_cancel(RRuntimeTask **operation);
+_Bool r_test_direct_begin(size_t stack_bytes);
 #define r_runtime_task_execution_await r_test_await
+#define r_runtime_task_direct_begin r_test_direct_begin
 #define r_runtime_task_scope_cancel r_test_cancel
 #define r_runtime_own_release r_test_release
 #define r_std_async_cancel r_test_async_cancel
@@ -34,6 +36,7 @@ void r_test_async_cancel(RRuntimeTask **operation);
 int main(int argc, char *argv[]);
 #include R_TEST_PROGRAM_PRELUDE
 #undef main
+#undef r_runtime_task_direct_begin
 #undef r_std_async_cancel
 #undef r_runtime_own_release
 #undef r_runtime_task_scope_cancel
@@ -42,6 +45,12 @@ int main(int argc, char *argv[]);
 enum {
     R_TEST_ATTEMPTS = 5000
 };
+
+/* B7: the empty `pause` would run as a direct call; the test holds its await instead. */
+_Bool r_test_direct_begin(size_t stack_bytes) {
+    (void)stack_bytes;
+    return 0;
+}
 
 static void r_test_pause(void) {
     const struct timespec interval = {0, 1000000L};

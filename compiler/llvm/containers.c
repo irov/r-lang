@@ -90,6 +90,69 @@ static bool r_llvm_std_array_allocate(RLlvmEmitter *emitter, const RMirInstructi
         r_llvm_std_member(emitter, native, "RStdArrayAllocValueResult", "error"));
 }
 
+/* B7: get and get_mut address the element at the static size of the element type, as
+   r_runtime_array_get does at the header's element size. The optimizer cannot know the header's
+   size once a call received the array, and a constant stride lets it widen the loads of a loop.
+   The option is built from the native result the call would have written. */
+static bool r_llvm_std_array_get_now(RLlvmEmitter *emitter,
+                                     const RMirInstruction *instruction,
+                                     LLVMValueRef array,
+                                     LLVMValueRef index,
+                                     LLVMValueRef native,
+                                     const char *type_name) {
+    const RSemanticType *option =
+        r_llvm_type(emitter, r_llvm_value_type(emitter, instruction->type));
+    const RSemanticType *borrow =
+        option == NULL ? NULL : r_llvm_type(emitter, r_llvm_value_type(emitter, option->base));
+    uint32_t data = 0U;
+    uint32_t length = 0U;
+    uint32_t size = 0U;
+    uint32_t align = 0U;
+    int64_t success = 0;
+    LLVMValueRef present;
+    LLVMValueRef element;
+
+    if ((borrow == NULL) || !r_llvm_runtime_field(emitter, "RRuntimeArray", "data", &data, NULL) ||
+        !r_llvm_runtime_field(emitter, "RRuntimeArray", "length", &length, NULL) ||
+        !r_llvm_layout(emitter, borrow->base, &size, &align) ||
+        !r_llvm_runtime_constant(emitter, "R_STD_ARRAY_CALL_SUCCESS", &success)) {
+        return r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+    }
+    {
+        LLVMValueRef count = LLVMBuildLoad2(emitter->builder,
+                                            r_llvm_int(emitter, 64U),
+                                            r_llvm_byte_offset(emitter, array, length),
+                                            "");
+        /* A masked index below the count is present in every iteration (versions.c). */
+        LLVMValueRef fits = r_llvm_version_mask_fits(
+            emitter, instruction, r_llvm_std_operand(emitter, instruction, 1U), count);
+        present = LLVMBuildICmp(emitter->builder, LLVMIntULT, index, count, "");
+        if (fits != NULL) {
+            present = LLVMBuildOr(emitter->builder, fits, present, "");
+        }
+    }
+    /* Out of range the address is poison, which the select does not choose. */
+    element = r_llvm_element_offset(emitter,
+                                    LLVMBuildLoad2(emitter->builder,
+                                                   r_llvm_pointer(emitter),
+                                                   r_llvm_byte_offset(emitter, array, data),
+                                                   ""),
+                                    index,
+                                    size);
+    (void)LLVMBuildStore(emitter->builder,
+                         r_llvm_u32(emitter, (uint64_t)success),
+                         r_llvm_std_member(emitter, native, type_name, "status"));
+    (void)LLVMBuildStore(emitter->builder,
+                         LLVMBuildZExt(emitter->builder, present, r_llvm_int(emitter, 8U), ""),
+                         r_llvm_std_member(emitter, native, type_name, "has_value"));
+    (void)LLVMBuildStore(
+        emitter->builder,
+        LLVMBuildSelect(
+            emitter->builder, present, element, LLVMConstNull(r_llvm_pointer(emitter)), ""),
+        r_llvm_std_member(emitter, native, type_name, "value"));
+    return true;
+}
+
 static bool r_llvm_std_array_operation(RLlvmEmitter *emitter, const RMirInstruction *instruction) {
     LLVMValueRef arguments[3];
 
@@ -143,17 +206,15 @@ static bool r_llvm_std_array_operation(RLlvmEmitter *emitter, const RMirInstruct
                                                                  3U);
     case R_STANDARD_CALL_ARRAY_GET:
     case R_STANDARD_CALL_ARRAY_GET_MUT: {
-        const bool is_mutable = instruction->standard_operation == R_STANDARD_CALL_ARRAY_GET_MUT;
+        const char *type_name = instruction->standard_operation == R_STANDARD_CALL_ARRAY_GET_MUT
+                                    ? "RStdArrayMutPointerOption"
+                                    : "RStdArrayConstPointerOption";
+        LLVMValueRef native = r_llvm_std_structure(emitter, type_name);
         arguments[1] = r_llvm_std_size(emitter, r_llvm_std_operand(emitter, instruction, 1U));
-        return (arguments[1] != NULL) &&
-               r_llvm_std_pointer_option(emitter,
-                                         instruction,
-                                         is_mutable ? "r_std_array_get_mut" : "r_std_array_get",
-                                         is_mutable ? "RStdArrayMutPointerOption"
-                                                    : "RStdArrayConstPointerOption",
-                                         "R_STD_ARRAY_CALL_SUCCESS",
-                                         arguments,
-                                         2U);
+        return (arguments[1] != NULL) && (native != NULL) &&
+               r_llvm_std_array_get_now(
+                   emitter, instruction, arguments[0], arguments[1], native, type_name) &&
+               r_llvm_std_option_from_native(emitter, instruction, native, type_name);
     }
     default:
         return r_llvm_unsupported(emitter, "this std.array operation");
@@ -407,6 +468,7 @@ static bool r_llvm_std_dict_insert(RLlvmEmitter *emitter, const RMirInstruction 
     RLlvmRecoveringMembers members;
     LLVMValueRef arguments[4];
     LLVMValueRef result;
+    LLVMBasicBlockRef joined;
     LLVMBasicBlockRef inserted;
     LLVMBasicBlockRef replaced;
     LLVMBasicBlockRef failure;
@@ -436,8 +498,22 @@ static bool r_llvm_std_dict_insert(RLlvmEmitter *emitter, const RMirInstruction 
     }
     arguments[3] =
         r_llvm_byte_offset(emitter, r_llvm_byte_offset(emitter, result, payload), option_payload);
-    if ((r_llvm_call_runtime(emitter, "r_std_dict_insert", arguments, 4U, native) == NULL) ||
-        !r_llvm_std_require_status(emitter,
+    joined = LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
+    if (!r_llvm_dict_insert_now(emitter,
+                                members.key_type,
+                                members.value_type,
+                                arguments[0],
+                                arguments[1],
+                                arguments[2],
+                                arguments[3],
+                                native,
+                                joined) ||
+        (r_llvm_call_runtime(emitter, "r_std_dict_insert", arguments, 4U, native) == NULL)) {
+        return false;
+    }
+    (void)LLVMBuildBr(emitter->builder, joined);
+    LLVMPositionBuilderAtEnd(emitter->builder, joined);
+    if (!r_llvm_std_require_status(emitter,
                                    instruction,
                                    native,
                                    "RStdDictInsertResult",
@@ -588,7 +664,11 @@ static bool r_llvm_std_dict_operation(RLlvmEmitter *emitter, const RMirInstructi
             "R_STD_DICT_CALL_SUCCESS",
             operation == R_STANDARD_CALL_DICT_NEXT);
     }
-    if ((operation != R_STANDARD_CALL_DICT_CLEAR) &&
+    /* The lookups call the key functions in the program (dicts.c); the runtime calls them for the
+       other operations. */
+    if ((operation != R_STANDARD_CALL_DICT_CLEAR) && (operation != R_STANDARD_CALL_DICT_GET) &&
+        (operation != R_STANDARD_CALL_DICT_GET_MUT) &&
+        (operation != R_STANDARD_CALL_DICT_CONTAINS) &&
         !r_llvm_std_dict_callbacks(emitter, r_llvm_std_dict_key(emitter, instruction))) {
         return false;
     }
@@ -614,45 +694,44 @@ static bool r_llvm_std_dict_operation(RLlvmEmitter *emitter, const RMirInstructi
                                         "R_STD_DICT_CALL_SUCCESS",
                                         "value");
     }
-    case R_STANDARD_CALL_DICT_CONTAINS: {
-        LLVMValueRef native = r_llvm_std_structure(emitter, "RStdDictBoolResult");
-        arguments[1] = r_llvm_value(emitter, r_llvm_std_operand(emitter, instruction, 1U));
-        if ((native == NULL) || (arguments[1] == NULL) ||
-            (r_llvm_call_runtime(emitter, "r_std_dict_contains", arguments, 2U, native) == NULL) ||
-            !r_llvm_std_require_status(emitter,
-                                       instruction,
-                                       native,
-                                       "RStdDictBoolResult",
-                                       "R_STD_DICT_CALL_SUCCESS",
-                                       false)) {
-            return false;
-        }
-        return r_llvm_set_value(
-            emitter,
-            instruction->result,
-            LLVMBuildICmp(
-                emitter->builder,
-                LLVMIntNE,
-                LLVMBuildLoad2(emitter->builder,
-                               r_llvm_int(emitter, 8U),
-                               r_llvm_std_member(emitter, native, "RStdDictBoolResult", "value"),
-                               ""),
-                LLVMConstInt(r_llvm_int(emitter, 8U), 0U, 0),
-                ""));
-    }
+    case R_STANDARD_CALL_DICT_CONTAINS:
     case R_STANDARD_CALL_DICT_GET:
     case R_STANDARD_CALL_DICT_GET_MUT: {
-        const bool is_mutable = operation == R_STANDARD_CALL_DICT_GET_MUT;
+        /* r_std_dict_get, r_std_dict_get_mut and r_std_dict_contains in the program (dicts.c). */
+        LLVMValueRef lookup =
+            r_llvm_dict_lookup(emitter, r_llvm_std_dict_key(emitter, instruction));
+        const char *type_name = operation == R_STANDARD_CALL_DICT_GET_MUT
+                                    ? "RStdDictMutPointerOption"
+                                    : "RStdDictConstPointerOption";
+        LLVMValueRef native;
+        LLVMValueRef value;
+        LLVMValueRef present;
+        int64_t success = 0;
         arguments[1] = r_llvm_value(emitter, r_llvm_std_operand(emitter, instruction, 1U));
-        return (arguments[1] != NULL) &&
-               r_llvm_std_pointer_option(emitter,
-                                         instruction,
-                                         is_mutable ? "r_std_dict_get_mut" : "r_std_dict_get",
-                                         is_mutable ? "RStdDictMutPointerOption"
-                                                    : "RStdDictConstPointerOption",
-                                         "R_STD_DICT_CALL_SUCCESS",
-                                         arguments,
-                                         2U);
+        if ((lookup == NULL) || (arguments[1] == NULL)) {
+            return false;
+        }
+        value = LLVMBuildCall2(
+            emitter->builder, LLVMGlobalGetValueType(lookup), lookup, arguments, 2U, "");
+        present = LLVMBuildICmp(
+            emitter->builder, LLVMIntNE, value, LLVMConstNull(r_llvm_pointer(emitter)), "");
+        if (operation == R_STANDARD_CALL_DICT_CONTAINS) {
+            return r_llvm_set_value(emitter, instruction->result, present);
+        }
+        native = r_llvm_std_structure(emitter, type_name);
+        if ((native == NULL) ||
+            !r_llvm_runtime_constant(emitter, "R_STD_DICT_CALL_SUCCESS", &success)) {
+            return r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+        }
+        (void)LLVMBuildStore(emitter->builder,
+                             r_llvm_u32(emitter, (uint64_t)success),
+                             r_llvm_std_member(emitter, native, type_name, "status"));
+        (void)LLVMBuildStore(emitter->builder,
+                             LLVMBuildZExt(emitter->builder, present, r_llvm_int(emitter, 8U), ""),
+                             r_llvm_std_member(emitter, native, type_name, "has_value"));
+        (void)LLVMBuildStore(
+            emitter->builder, value, r_llvm_std_member(emitter, native, type_name, "value"));
+        return r_llvm_std_option_from_native(emitter, instruction, native, type_name);
     }
     case R_STANDARD_CALL_DICT_REMOVE:
         arguments[1] = r_llvm_value(emitter, r_llvm_std_operand(emitter, instruction, 1U));

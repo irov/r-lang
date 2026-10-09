@@ -36,7 +36,7 @@ r_require_match_count(mir_output
 r_require_match_count(mir_output "= await " 1 "real await after owner construction")
 
 set(ir_arguments
-    --emit=llvm-ir
+    --emit=llvm-ir --opt-level=0
     --entry test.codegen.async_fused_default_own::main
     --profile hosted-native-async
     --target-manifest "${TARGET_MANIFEST}"

@@ -78,7 +78,11 @@ add_library(r_frontend STATIC
     compiler/llvm/json_decode.c
     compiler/llvm/json_encode.c
     compiler/llvm/json_stream.c
+    compiler/llvm/dicts.c
+    compiler/llvm/direct.c
+    compiler/llvm/import.c
     compiler/llvm/keys.c
+    compiler/llvm/versions.c
     compiler/llvm/library.c
     compiler/llvm/outcome.c
     compiler/llvm/reflection.c
@@ -487,6 +491,68 @@ endif()
 if(R_FRONTEND_ENABLE_THREAD_SANITIZER AND NOT MSVC)
     target_compile_options(r-front PRIVATE -fsanitize=thread -fno-omit-frame-pointer)
     target_link_options(r-front PRIVATE -fsanitize=thread -fno-omit-frame-pointer)
+endif()
+
+# B7.2 of the LLVM transition: the bitcode twin of each runtime and library target a program
+# links, and the catalog r-front reads (--bitcode-catalog) to optimize the definitions a program
+# calls together with it (compiler/llvm/import.c). A twin compiles the sources of its target with
+# the target's own definitions and options as optimized bitcode without debug information. The
+# sanitized and fuzzing builds have no catalog: their archives carry instrumentation and module
+# constructors that a program must not copy.
+set(R_BITCODE_CATALOG "")
+if(Python3_Interpreter_FOUND AND CMAKE_C_COMPILER_ID MATCHES "Clang" AND
+   NOT R_FRONTEND_ENABLE_SANITIZERS AND NOT R_FRONTEND_ENABLE_THREAD_SANITIZER AND
+   NOT R_FRONTEND_ENABLE_FUZZERS)
+    set(R_BITCODE_TARGETS r_runtime_inline_shims r_runtime_0_1 r_core r_std_alloc r_std_arc
+        r_std_rc r_std_array r_std_list r_std_dict r_std_error r_std_bytes r_std_hash r_std_utf8
+        r_std_bits r_std_secret r_std_random r_std_test r_std_string r_std_convert r_std_format
+        r_std_json r_std_math r_std_time r_std_env r_std_thread r_std_sync r_std_async r_std_io
+        r_std_fs r_std_net r_std_process r_std_signal r_std_c)
+    if(APPLE)
+        list(APPEND R_BITCODE_TARGETS r_runtime_darwin_base r_runtime_darwin_event
+            r_runtime_darwin_dns r_runtime_darwin_fs_lane r_runtime_darwin_io
+            r_runtime_darwin_task r_runtime_darwin_process r_runtime_darwin_socket
+            r_runtime_darwin_timer)
+    endif()
+    get_filename_component(R_BITCODE_TOOL_DIRECTORY "${CMAKE_C_COMPILER}" DIRECTORY)
+    set(R_BITCODE_OBJECTS)
+    set(R_BITCODE_TWINS)
+    foreach(R_BITCODE_TARGET IN LISTS R_BITCODE_TARGETS)
+        get_target_property(R_BITCODE_SOURCES ${R_BITCODE_TARGET} SOURCES)
+        get_target_property(R_BITCODE_DIRECTORY ${R_BITCODE_TARGET} SOURCE_DIR)
+        set(R_BITCODE_PATHS)
+        foreach(R_BITCODE_SOURCE IN LISTS R_BITCODE_SOURCES)
+            cmake_path(ABSOLUTE_PATH R_BITCODE_SOURCE BASE_DIRECTORY "${R_BITCODE_DIRECTORY}"
+                       OUTPUT_VARIABLE R_BITCODE_PATH)
+            list(APPEND R_BITCODE_PATHS "${R_BITCODE_PATH}")
+        endforeach()
+        add_library(${R_BITCODE_TARGET}_bitcode OBJECT ${R_BITCODE_PATHS})
+        target_link_libraries(${R_BITCODE_TARGET}_bitcode PRIVATE
+            $<TARGET_PROPERTY:${R_BITCODE_TARGET},LINK_LIBRARIES>)
+        target_include_directories(${R_BITCODE_TARGET}_bitcode PRIVATE
+            $<TARGET_PROPERTY:${R_BITCODE_TARGET},INCLUDE_DIRECTORIES>)
+        target_compile_definitions(${R_BITCODE_TARGET}_bitcode PRIVATE
+            $<TARGET_PROPERTY:${R_BITCODE_TARGET},COMPILE_DEFINITIONS>)
+        target_compile_options(${R_BITCODE_TARGET}_bitcode PRIVATE
+            $<TARGET_PROPERTY:${R_BITCODE_TARGET},COMPILE_OPTIONS> -O2 -g0 -emit-llvm)
+        set_target_properties(${R_BITCODE_TARGET}_bitcode PROPERTIES
+            C_STANDARD 17 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
+        list(APPEND R_BITCODE_OBJECTS "$<TARGET_OBJECTS:${R_BITCODE_TARGET}_bitcode>")
+        list(APPEND R_BITCODE_TWINS ${R_BITCODE_TARGET}_bitcode)
+    endforeach()
+    set(R_BITCODE_CATALOG "${PROJECT_BINARY_DIR}/r_bitcode.catalog")
+    add_custom_command(
+        OUTPUT "${R_BITCODE_CATALOG}"
+        COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/generate_bitcode_catalog.py"
+            --nm "${R_BITCODE_TOOL_DIRECTORY}/llvm-nm"
+            --output "${R_BITCODE_CATALOG}"
+            ${R_BITCODE_OBJECTS}
+        DEPENDS ${R_BITCODE_TWINS} "${PROJECT_SOURCE_DIR}/tools/generate_bitcode_catalog.py"
+        COMMENT "Writing the bitcode catalog of the runtime and library"
+        COMMAND_EXPAND_LISTS
+        VERBATIM
+    )
+    add_custom_target(r_bitcode_catalog ALL DEPENDS "${R_BITCODE_CATALOG}")
 endif()
 
 find_program(RE2C_EXECUTABLE re2c)

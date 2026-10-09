@@ -62,6 +62,7 @@ typedef struct RLlvmGlue {
 typedef struct RLlvmStackEntry {
     RSymbolId symbol;
     LLVMValueRef global; /* the bound, an i64 constant global set after measurement */
+    bool direct;         /* the bound of the direct twin of the async function (direct.c) */
 } RLlvmStackEntry;
 
 typedef struct RLlvmEmitter {
@@ -99,6 +100,9 @@ typedef struct RLlvmEmitter {
     /* The hash and equality functions of std.dict keys, per key type (glue.c). */
     LLVMValueRef *key_hashes;
     LLVMValueRef *key_equals;
+    /* The probe and the lookup of std.dict per key type (dicts.c). */
+    LLVMValueRef *dict_probes;
+    LLVMValueRef *dict_lookups;
     /* Calls library code makes back into a function's callees: the key functions a std.dict
        operation hands over, for the stack bounds (stack.c). */
     RLlvmStackEdge *stack_edges;
@@ -120,6 +124,15 @@ typedef struct RLlvmEmitter {
     /* R functions by symbol id. */
     LLVMValueRef *functions;
     LLVMTypeRef *function_types;
+    /* B7: per async function, its direct twin and the twin's type (direct.c), and whether its
+       awaited calls may run directly: 0 not decided, 1 they may, 2 they may not. */
+    LLVMValueRef *direct_twins;
+    LLVMTypeRef *direct_types;
+    uint8_t *direct_states;
+    const RMirFunction **mir_by_symbol;
+    /* The immediate dominators of the MIR blocks of the function being written (versions.c),
+       computed at its first versioned index. */
+    uint32_t *version_dominators;
     RSymbolId entry_symbol;
     /* The function being lowered. */
     const RMirFunction *mir;
@@ -304,6 +317,13 @@ uint32_t r_llvm_frame_reserve(RLlvmEmitter *emitter, uint32_t size, uint32_t ali
 /* The address of a frame offset, computed in the entry block of the current function. */
 LLVMValueRef r_llvm_frame_address(RLlvmEmitter *emitter, uint32_t offset);
 LLVMValueRef r_llvm_byte_offset(RLlvmEmitter *emitter, LLVMValueRef pointer, uint64_t offset);
+/* B7: base + index * size for an index that a bounds check or a capacity test bounds by the
+   element count of the storage at base. The storage holds count * size bytes, so the product
+   wraps neither way and the address lies in the storage or at its end: the product is `nuw nsw`
+   and the address `inbounds nuw`, which lets the optimizer reason about the access as about one
+   of a C array. */
+LLVMValueRef
+r_llvm_element_offset(RLlvmEmitter *emitter, LLVMValueRef base, LLVMValueRef index, uint64_t size);
 /* The pointer plus an offset computed in the entry block, so that it dominates every use; NULL
    when the pointer is defined elsewhere. */
 LLVMValueRef r_llvm_entry_offset(RLlvmEmitter *emitter, LLVMValueRef pointer, uint64_t offset);
@@ -416,6 +436,31 @@ bool r_llvm_define_dispatcher(RLlvmEmitter *emitter, RSymbolId id, const RSemant
    left to the frame initializer of a start. */
 bool r_llvm_emit_async_start(RLlvmEmitter *emitter, const RMirInstruction *instruction);
 bool r_llvm_emit_await(RLlvmEmitter *emitter, const RMirInstruction *instruction);
+bool r_llvm_prepare_direct_calls(RLlvmEmitter *emitter);
+bool r_llvm_declare_direct_twin(RLlvmEmitter *emitter, RSymbolId id);
+const RMirInstruction *
+r_llvm_direct_await(RLlvmEmitter *emitter, const RMirFunction *mir, const RMirInstruction *start);
+bool r_llvm_emit_direct_call(RLlvmEmitter *emitter,
+                             const RMirInstruction *start,
+                             const RMirInstruction *await);
+void r_llvm_mark_guarded_call(RLlvmEmitter *emitter, LLVMValueRef call);
+LLVMValueRef
+r_llvm_version_fits(RLlvmEmitter *emitter, const RMirInstruction *instruction, LLVMValueRef length);
+/* `fits` of an index value masked by a value below the length (versions.c), or NULL when the
+   index is no mask; the instruction names the source listed in !r.versioned. */
+LLVMValueRef r_llvm_version_mask_fits(RLlvmEmitter *emitter,
+                                      const RMirInstruction *instruction,
+                                      RMirValueId index,
+                                      LLVMValueRef length);
+/* Unswitches the loops of the functions with a versioned index on `fits` when `run`, before the
+   default pipeline; removes the mark of those functions in any case. */
+bool r_llvm_unswitch_versions(RLlvmEmitter *emitter, bool run);
+const RMirInstruction *r_llvm_receive_await(RLlvmEmitter *emitter,
+                                            const RMirFunction *mir,
+                                            const RMirInstruction *receive);
+bool r_llvm_emit_receive_now(RLlvmEmitter *emitter,
+                             const RMirInstruction *receive,
+                             const RMirInstruction *await);
 bool r_llvm_staged_move(RLlvmEmitter *emitter, const RMirInstruction *instruction);
 /* Prepares and commits the task of an async function; its RRuntimeTaskStartResult in memory.
    Mode 0 commits for the executor, 1 may run the first step on this thread, 2 defers it to
@@ -499,10 +544,11 @@ bool r_llvm_emit_c_exports(RLlvmEmitter *emitter);
 void r_llvm_ffi_release(RLlvmEmitter *emitter);
 /* Marks a call through a pointer whose callees the caller named as stack edges (stack.c). */
 void r_llvm_mark_indirect_call(RLlvmEmitter *emitter, LLVMValueRef call);
-bool r_llvm_indirect_call_marked(RLlvmEmitter *emitter, LLVMValueRef call);
+bool r_llvm_check_indirect_calls(RLlvmEmitter *emitter);
 /* The C ABI helpers of runtime.c. */
 LLVMTypeRef
 r_llvm_abi_register_type(RLlvmEmitter *emitter, const RLlvmAbiValue *value, bool result);
+void r_llvm_add_function_attribute(RLlvmEmitter *emitter, LLVMValueRef function, const char *name);
 void r_llvm_add_extension(RLlvmEmitter *emitter,
                           LLVMValueRef target,
                           LLVMAttributeIndex index,
@@ -557,6 +603,20 @@ LLVMValueRef r_llvm_type_info(RLlvmEmitter *emitter, RTypeId type);
 /* The hash (`uint64_t (*)(const void *)`) or equality (`_Bool (*)(const void *, const void *)`)
    function of a std.dict key type, as the C17 emitter's r_core_key_hash and r_core_key_equal. */
 LLVMValueRef r_llvm_key_function(RLlvmEmitter *emitter, RTypeId key, bool hash);
+/* `ptr r_dict_lookup.K(ptr dict, ptr key)`: the value of a key in a std.dict, or null. */
+LLVMValueRef r_llvm_dict_lookup(RLlvmEmitter *emitter, RTypeId key);
+/* An insertion into a std.dict that needs no growth, written in the program: it stores the
+   result in `native` (RStdDictInsertResult) and branches to `join`; the builder ends in the
+   block where the runtime must insert (an empty table, or one without a free entry). */
+bool r_llvm_dict_insert_now(RLlvmEmitter *emitter,
+                            RTypeId key,
+                            RTypeId value,
+                            LLVMValueRef dict,
+                            LLVMValueRef staged_key,
+                            LLVMValueRef staged_value,
+                            LLVMValueRef replaced,
+                            LLVMValueRef native,
+                            LLVMBasicBlockRef join);
 
 /* Initialization flags (values.c): the flag of a place or value that requires drop, the drop of
    what a flag says is initialized, and the guarded move between two flagged storages. */
@@ -584,9 +644,13 @@ bool r_llvm_emit_hosted_main(RLlvmEmitter *emitter);
 /* Stack bounds (stack.c): the bound of an entry as a value at the insertion point, and the
    measurement that sets every bound once the module is complete. */
 LLVMValueRef r_llvm_stack_entry(RLlvmEmitter *emitter, RSymbolId symbol);
+LLVMValueRef r_llvm_direct_stack_entry(RLlvmEmitter *emitter, RSymbolId symbol);
 /* The entry stack budget of the target manifest (target.c). */
 uint64_t r_llvm_target_entry_budget(void);
 bool r_llvm_measure_stack(RLlvmEmitter *emitter);
+bool r_llvm_import_bitcode(RLlvmEmitter *emitter, uint32_t level);
+void r_llvm_source_report(RLlvmEmitter *emitter);
+bool r_llvm_preserve_stack_functions(RLlvmEmitter *emitter);
 /* Records that library code called from `caller` may call `callee` back. */
 bool r_llvm_add_stack_edge(RLlvmEmitter *emitter, LLVMValueRef caller, LLVMValueRef callee);
 /* Records that `function` counts at most `depth` activations of itself (@recursion). */

@@ -2,6 +2,9 @@
 
 #include <llvm-c/Analysis.h>
 #include <llvm-c/Core.h>
+#include <llvm-c/Error.h>
+#include <llvm-c/Support.h>
+#include <llvm-c/Transforms/PassBuilder.h>
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -123,12 +126,152 @@ r_llvm_declare_async_function(RLlvmEmitter *emitter, RSymbolId id, const RSemant
     return true;
 }
 
-static bool r_llvm_declare_function(RLlvmEmitter *emitter, RSymbolId id) {
-    const RSemanticSymbol *symbol = r_llvm_semantic_symbol(emitter, id);
+/* The type of an ordinary function of the program (the convention above). */
+static LLVMTypeRef r_llvm_sync_signature(RLlvmEmitter *emitter, const RSemanticSymbol *symbol) {
     LLVMTypeRef *parameters;
+    LLVMTypeRef result;
+    LLVMTypeRef type;
     unsigned count = 0U;
     uint32_t index;
-    LLVMTypeRef result;
+
+    parameters =
+        r_llvm_allocate(emitter, ((size_t)symbol->parameter_count + 1U) * sizeof(*parameters));
+    if (parameters == NULL) {
+        return NULL;
+    }
+    if (r_llvm_result_in_memory(emitter, symbol)) {
+        uint32_t size = 0U;
+        uint32_t align = 0U;
+        if (!r_llvm_layout(emitter,
+                           symbol->effect_carrier_type != R_TYPE_ID_INVALID
+                               ? symbol->effect_carrier_type
+                               : symbol->return_type,
+                           &size,
+                           &align)) {
+            r_llvm_free(emitter, parameters);
+            return NULL;
+        }
+        parameters[count++] = r_llvm_pointer(emitter);
+        result = LLVMVoidTypeInContext(emitter->context);
+    } else if (r_llvm_type_is_void(emitter, symbol->return_type)) {
+        result = LLVMVoidTypeInContext(emitter->context);
+    } else {
+        result = r_llvm_scalar_type(emitter, symbol->return_type);
+    }
+    for (index = 0U; index < symbol->parameter_count; ++index) {
+        const RTypeId parameter =
+            emitter->frontend->semantic_parameter_types[symbol->first_parameter_type + index];
+        LLVMTypeRef scalar = r_llvm_scalar_type(emitter, parameter);
+        if (scalar == NULL) {
+            uint32_t size = 0U;
+            uint32_t align = 0U;
+            if (!r_llvm_layout(emitter, parameter, &size, &align)) {
+                r_llvm_free(emitter, parameters);
+                return NULL;
+            }
+            scalar = r_llvm_pointer(emitter);
+        }
+        parameters[count++] = scalar;
+    }
+    type = LLVMFunctionType(result, parameters, count, 0);
+    r_llvm_free(emitter, parameters);
+    return type;
+}
+
+static void r_llvm_enum_attribute(RLlvmEmitter *emitter,
+                                  LLVMValueRef function,
+                                  unsigned position,
+                                  const char *name,
+                                  uint64_t value) {
+    LLVMAddAttributeAtIndex(
+        function,
+        position,
+        LLVMCreateEnumAttribute(
+            emitter->context, LLVMGetEnumAttributeKindForName(name, strlen(name)), value));
+}
+
+/* Valid, aligned storage of `size` bytes at a pointer parameter. */
+static void r_llvm_storage_facts(RLlvmEmitter *emitter,
+                                 LLVMValueRef function,
+                                 unsigned position,
+                                 uint32_t size,
+                                 uint32_t align) {
+    r_llvm_enum_attribute(emitter, function, position, "nonnull", 0U);
+    r_llvm_enum_attribute(emitter, function, position, "noundef", 0U);
+    if (size != 0U) {
+        r_llvm_enum_attribute(emitter, function, position, "dereferenceable", size);
+    }
+    if (align != 0U) {
+        r_llvm_enum_attribute(emitter, function, position, "align", align);
+    }
+}
+
+/* B7.1: what the convention guarantees about the pointer parameters of an ordinary function of the
+   program, for the optimizer. The result or carrier memory and every parameter in memory are
+   valid, aligned storage of their type. A borrow of the non-null form (R-BORROW-0005) is
+   dereferenceable for its referent, and an exclusive borrow excludes every other overlapping
+   access while the call runs (R-BORROW-0002), so no other pointer the function uses reaches its
+   referent. */
+static void r_llvm_parameter_facts(RLlvmEmitter *emitter,
+                                   LLVMValueRef function,
+                                   const RSemanticSymbol *symbol) {
+    unsigned position = 1U;
+    uint32_t index;
+
+    if (r_llvm_result_in_memory(emitter, symbol)) {
+        uint32_t size = 0U;
+        uint32_t align = 0U;
+        if (r_llvm_layout(emitter,
+                          symbol->effect_carrier_type != R_TYPE_ID_INVALID
+                              ? symbol->effect_carrier_type
+                              : symbol->return_type,
+                          &size,
+                          &align)) {
+            r_llvm_storage_facts(emitter, function, position, size, align);
+        }
+        position += 1U;
+    }
+    for (index = 0U; index < symbol->parameter_count; ++index, ++position) {
+        const RTypeId parameter =
+            emitter->frontend->semantic_parameter_types[symbol->first_parameter_type + index];
+        const RSemanticType *type = r_llvm_type(emitter, r_llvm_value_type(emitter, parameter));
+        uint32_t size = 0U;
+        uint32_t align = 0U;
+        if (type == NULL) {
+            continue;
+        }
+        if (r_llvm_scalar_type(emitter, parameter) == NULL) {
+            if (r_llvm_layout(emitter, parameter, &size, &align)) {
+                r_llvm_storage_facts(emitter, function, position, size, align);
+            }
+            continue;
+        }
+        if ((type->kind != R_SEMANTIC_TYPE_BORROW) ||
+            ((type->flags & R_SEMANTIC_TYPE_FLAG_NULLABLE) != 0U) ||
+            (LLVMGetTypeKind(r_llvm_scalar_type(emitter, parameter)) != LLVMPointerTypeKind)) {
+            continue;
+        }
+        {
+            const RSemanticType *referent =
+                r_llvm_type(emitter, r_llvm_value_type(emitter, type->base));
+            const bool sized =
+                (referent != NULL) && ((r_llvm_scalar_type(emitter, type->base) != NULL) ||
+                                       (referent->kind == R_SEMANTIC_TYPE_STRUCT) ||
+                                       (referent->kind == R_SEMANTIC_TYPE_FIXED_ARRAY));
+            if (!sized || !r_llvm_layout(emitter, type->base, &size, &align)) {
+                size = 0U;
+                align = 0U;
+            }
+        }
+        r_llvm_storage_facts(emitter, function, position, size, align);
+        if ((type->flags & R_SEMANTIC_TYPE_FLAG_SHARED) == 0U) {
+            r_llvm_enum_attribute(emitter, function, position, "noalias", 0U);
+        }
+    }
+}
+
+static bool r_llvm_declare_function(RLlvmEmitter *emitter, RSymbolId id) {
+    const RSemanticSymbol *symbol = r_llvm_semantic_symbol(emitter, id);
     char name[512];
 
     if (symbol == NULL) {
@@ -156,54 +299,39 @@ static bool r_llvm_declare_function(RLlvmEmitter *emitter, RSymbolId id) {
         return r_llvm_unsupported_detail(
             emitter, r_llvm_synthesized_body(emitter, id), function_name, strlen(function_name));
     }
-    parameters =
-        r_llvm_allocate(emitter, ((size_t)symbol->parameter_count + 1U) * sizeof(*parameters));
-    if (parameters == NULL) {
-        return false;
-    }
-    if (r_llvm_result_in_memory(emitter, symbol)) {
-        uint32_t size = 0U;
-        uint32_t align = 0U;
-        if (!r_llvm_layout(emitter,
-                           symbol->effect_carrier_type != R_TYPE_ID_INVALID
-                               ? symbol->effect_carrier_type
-                               : symbol->return_type,
-                           &size,
-                           &align)) {
-            r_llvm_free(emitter, parameters);
-            return false;
-        }
-        parameters[count++] = r_llvm_pointer(emitter);
-        result = LLVMVoidTypeInContext(emitter->context);
-    } else if (r_llvm_type_is_void(emitter, symbol->return_type)) {
-        result = LLVMVoidTypeInContext(emitter->context);
-    } else {
-        result = r_llvm_scalar_type(emitter, symbol->return_type);
-    }
-    for (index = 0U; index < symbol->parameter_count; ++index) {
-        const RTypeId parameter =
-            emitter->frontend->semantic_parameter_types[symbol->first_parameter_type + index];
-        LLVMTypeRef scalar = r_llvm_scalar_type(emitter, parameter);
-        if (scalar == NULL) {
-            uint32_t size = 0U;
-            uint32_t align = 0U;
-            if (!r_llvm_layout(emitter, parameter, &size, &align)) {
-                r_llvm_free(emitter, parameters);
-                return false;
-            }
-            scalar = r_llvm_pointer(emitter);
-        }
-        parameters[count++] = scalar;
-    }
     if (!r_llvm_function_name(emitter, id, name, sizeof(name))) {
-        r_llvm_free(emitter, parameters);
         return false;
     }
-    emitter->function_types[id] = LLVMFunctionType(result, parameters, count, 0);
-    r_llvm_free(emitter, parameters);
+    emitter->function_types[id] = r_llvm_sync_signature(emitter, symbol);
+    if (emitter->function_types[id] == NULL) {
+        return false;
+    }
     emitter->functions[id] = LLVMAddFunction(emitter->module, name, emitter->function_types[id]);
     LLVMSetLinkage(emitter->functions[id], LLVMInternalLinkage);
-    return true;
+    r_llvm_parameter_facts(emitter, emitter->functions[id], symbol);
+    return emitter->status == R_FRONTEND_OK;
+}
+
+/* B7: the direct twin of an async function, an ordinary function of the same parameters and
+   outcome (direct.c). */
+bool r_llvm_declare_direct_twin(RLlvmEmitter *emitter, RSymbolId id) {
+    const RSemanticSymbol *symbol = r_llvm_semantic_symbol(emitter, id);
+    char name[520];
+    size_t length;
+
+    if ((symbol == NULL) || !r_llvm_function_name(emitter, id, name, sizeof(name) - 8U)) {
+        return r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+    }
+    length = strlen(name);
+    (void)memcpy(name + length, ".direct", 8U);
+    emitter->direct_types[id] = r_llvm_sync_signature(emitter, symbol);
+    if (emitter->direct_types[id] == NULL) {
+        return false;
+    }
+    emitter->direct_twins[id] = LLVMAddFunction(emitter->module, name, emitter->direct_types[id]);
+    LLVMSetLinkage(emitter->direct_twins[id], LLVMInternalLinkage);
+    r_llvm_parameter_facts(emitter, emitter->direct_twins[id], symbol);
+    return emitter->status == R_FRONTEND_OK;
 }
 
 /* ---- Control ---- */
@@ -1403,6 +1531,8 @@ static bool r_llvm_emit_instruction(RLlvmEmitter *emitter, const RMirInstruction
 }
 
 static void r_llvm_release_function_state(RLlvmEmitter *emitter) {
+    r_llvm_free(emitter, emitter->version_dominators);
+    emitter->version_dominators = NULL;
     r_llvm_free(emitter, emitter->blocks);
     r_llvm_free(emitter, emitter->block_ends);
     r_llvm_free(emitter, emitter->definitions);
@@ -1884,10 +2014,13 @@ cleanup:
     return success;
 }
 
+static bool r_llvm_define_sync(RLlvmEmitter *emitter,
+                               const RMirFunction *mir,
+                               const RSemanticSymbol *symbol,
+                               LLVMValueRef function);
+
 static bool r_llvm_define_function(RLlvmEmitter *emitter, const RMirFunction *mir) {
     const RSemanticSymbol *symbol = r_llvm_semantic_symbol(emitter, mir->symbol);
-    LLVMBasicBlockRef entry;
-    uint32_t block_index;
     bool success = false;
 
     if ((symbol != NULL) && symbol->is_async &&
@@ -1915,15 +2048,30 @@ static bool r_llvm_define_function(RLlvmEmitter *emitter, const RMirFunction *mi
         return success;
     }
     if (symbol->is_async) {
-        return r_llvm_define_async_function(emitter, mir, symbol);
+        return r_llvm_define_async_function(emitter, mir, symbol) &&
+               ((emitter->direct_twins[mir->symbol] == NULL) ||
+                r_llvm_define_sync(emitter, mir, symbol, emitter->direct_twins[mir->symbol]));
     }
+    return r_llvm_define_sync(emitter, mir, symbol, emitter->functions[mir->symbol]);
+}
+
+/* An ordinary function from its MIR, or the direct twin of an async function whose body never
+   suspends (direct.c): the same body over the parameters of the function. */
+static bool r_llvm_define_sync(RLlvmEmitter *emitter,
+                               const RMirFunction *mir,
+                               const RSemanticSymbol *symbol,
+                               LLVMValueRef function) {
+    LLVMBasicBlockRef entry;
+    uint32_t block_index;
+    bool success = false;
+
     if (mir->block_count == 0U) {
         return r_llvm_unsupported(emitter, "a function without a MIR body");
     }
     emitter->mir = mir;
     emitter->symbol = symbol;
     emitter->symbol_id = mir->symbol;
-    emitter->function = emitter->functions[mir->symbol];
+    emitter->function = function;
     if (!r_llvm_prepare_function(emitter, mir)) {
         goto cleanup;
     }
@@ -2218,10 +2366,16 @@ static void r_llvm_dispose(RLlvmEmitter *emitter) {
     r_llvm_free(emitter, emitter->async_frame_sizes);
     r_llvm_free(emitter, emitter->frame_ones);
     r_llvm_free(emitter, emitter->key_equals);
+    r_llvm_free(emitter, emitter->dict_probes);
+    r_llvm_free(emitter, emitter->dict_lookups);
     r_llvm_free(emitter, emitter->stack_edges);
     r_llvm_free(emitter, emitter->recursion_marks);
     r_llvm_free(emitter, emitter->glue);
     r_llvm_free(emitter, emitter->reachable);
+    r_llvm_free(emitter, emitter->direct_twins);
+    r_llvm_free(emitter, emitter->direct_types);
+    r_llvm_free(emitter, emitter->direct_states);
+    r_llvm_free(emitter, emitter->mir_by_symbol);
     r_llvm_release_keys(emitter);
     r_llvm_free(emitter, emitter->strings);
     r_llvm_free(emitter, emitter->functions);
@@ -2251,6 +2405,95 @@ r_llvm_write(RFrontendWriteFn writer, void *user_data, const char *bytes, size_t
 /* The frame remarks that the stack measurement asks the code generator for (stack.c) come from
    the compilation for output as well; they are no diagnostics of the program and stay off stderr.
    Errors and warnings of the code generator are reported. */
+/* The LLVM pipeline of the requested level runs on the verified module before the stack bounds
+   are measured, so the bounds are those of the optimized code (stack.c). Core R-AM-0003 admits
+   every transformation that keeps the observable behaviour; the emitter's IR has none that
+   depends on more. */
+/* The options of LLVM, set once per process: the prologue-epilogue inserter reports each frame
+   (stack.c), loop unswitching may copy a loop for a condition that does not leave it, so that a
+   versioned index runs without its check where its test holds (versions.c), and the profile of
+   profile-guided optimization is read from the file the first emission that uses one names; a
+   later emission naming another file fails. */
+static bool r_llvm_set_options(RLlvmEmitter *emitter, const char *profile) {
+    static bool set = false;
+    static char used_profile[1024];
+    char profile_option[1100];
+    const char *arguments[4] = {
+        "r-front", "-pass-remarks-analysis=prologepilog", "-enable-nontrivial-unswitch", NULL};
+    int count = 3;
+
+    if (set) {
+        if ((profile != NULL) && (strcmp(profile, used_profile) != 0)) {
+            (void)fprintf(stderr,
+                          "r-front: this process already optimizes with the profile '%s'\n",
+                          used_profile);
+            return r_llvm_fail(emitter, R_FRONTEND_INVALID_ARGUMENT);
+        }
+        return true;
+    }
+    if (profile != NULL) {
+        const int written =
+            snprintf(profile_option, sizeof(profile_option), "-pgo-test-profile-file=%s", profile);
+        if ((written <= 0) || ((size_t)written >= sizeof(profile_option)) ||
+            (strlen(profile) >= sizeof(used_profile))) {
+            return r_llvm_fail(emitter, R_FRONTEND_INVALID_ARGUMENT);
+        }
+        (void)memcpy(used_profile, profile, strlen(profile) + 1U);
+        arguments[count++] = profile_option;
+    }
+    LLVMParseCommandLineOptions(count, arguments, NULL);
+    set = true;
+    return true;
+}
+
+static bool r_llvm_optimize(RLlvmEmitter *emitter, uint32_t level) {
+    /* After the default pipeline, inductive range check elimination splits a loop whose index
+       checks the optimizer bounded (a constant trip count, or nuw arithmetic it inferred) into a
+       part without them; versions.c covers the bounds known only at run time. */
+    static const char *const pipelines[] = {
+        "default<O1>",
+        "default<O2>,function(irce,loop-unroll<O2>,simplifycfg,instcombine<no-verify-fixpoint>)",
+        "default<O3>,function(irce,loop-unroll<O3>,simplifycfg,instcombine<no-verify-fixpoint>)"};
+    const RFrontendArtifactOptions *artifact = emitter->artifact_options;
+    char pipeline[256];
+    LLVMPassBuilderOptionsRef options;
+    LLVMErrorRef error;
+    int written;
+
+    if (!r_llvm_unswitch_versions(emitter, level > 1U)) {
+        return false;
+    }
+    if (level == 0U) {
+        return true;
+    }
+    if (!r_llvm_preserve_stack_functions(emitter) || !r_llvm_import_bitcode(emitter, level)) {
+        return false;
+    }
+    /* B7.2: the profile counters are placed, or the profile read, on the module as the emitter
+       wrote it, before any other pass, so that the functions and their control flow match
+       between the instrumented build and the build the profile guides. */
+    written = snprintf(pipeline,
+                       sizeof(pipeline),
+                       "%s%s",
+                       (artifact != NULL) && artifact->profile_generate ? "pgo-instr-gen,instrprof,"
+                       : (artifact != NULL) && (artifact->profile_use != NULL) ? "pgo-instr-use,"
+                                                                               : "",
+                       pipelines[level - 1U]);
+    if ((written <= 0) || ((size_t)written >= sizeof(pipeline))) {
+        return r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+    }
+    options = LLVMCreatePassBuilderOptions();
+    error = LLVMRunPasses(emitter->module, pipeline, emitter->machine, options);
+    LLVMDisposePassBuilderOptions(options);
+    if (error != NULL) {
+        char *message = LLVMGetErrorMessage(error);
+        (void)fprintf(stderr, "r-front: the LLVM optimizer failed: %s\n", message);
+        LLVMDisposeErrorMessage(message);
+        return r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+    }
+    return true;
+}
+
 static void r_llvm_quiet_remarks(LLVMDiagnosticInfoRef info, void *user_data) {
     const LLVMDiagnosticSeverity severity = LLVMGetDiagInfoSeverity(info);
     char *text;
@@ -2278,7 +2521,11 @@ RFrontendStatus r_frontend_emit_llvm(const RFrontendContext *context,
     if ((context == NULL) || (writer == NULL) || !context->mir_lowered ||
         ((options != NULL) &&
          (((options->link_manifest == NULL) != (options->link_manifest_length == 0U)) ||
-          ((options->target_manifest == NULL) != (options->target_manifest_length == 0U))))) {
+          ((options->target_manifest == NULL) != (options->target_manifest_length == 0U)) ||
+          (options->optimization_level > 3U) ||
+          ((options->profile_generate || (options->profile_use != NULL)) &&
+           (options->optimization_level == 0U)) ||
+          (options->profile_generate && (options->profile_use != NULL))))) {
         return R_FRONTEND_INVALID_ARGUMENT;
     }
     (void)memset(&emitter, 0, sizeof(emitter));
@@ -2358,12 +2605,24 @@ RFrontendStatus r_frontend_emit_llvm(const RFrontendContext *context,
         &emitter, (context->semantic_type_count + 1U) * sizeof(*emitter.key_hashes));
     emitter.key_equals = r_llvm_allocate(
         &emitter, (context->semantic_type_count + 1U) * sizeof(*emitter.key_equals));
+    emitter.dict_probes = r_llvm_allocate(
+        &emitter, (context->semantic_type_count + 1U) * sizeof(*emitter.dict_probes));
+    emitter.dict_lookups = r_llvm_allocate(
+        &emitter, (context->semantic_type_count + 1U) * sizeof(*emitter.dict_lookups));
+    emitter.direct_twins = r_llvm_allocate(
+        &emitter, (context->semantic_symbol_count + 1U) * sizeof(*emitter.direct_twins));
+    emitter.direct_types = r_llvm_allocate(
+        &emitter, (context->semantic_symbol_count + 1U) * sizeof(*emitter.direct_types));
+    emitter.direct_states = r_llvm_allocate(&emitter, context->semantic_symbol_count + 1U);
+    emitter.mir_by_symbol = r_llvm_allocate(
+        &emitter, (context->semantic_symbol_count + 1U) * sizeof(*emitter.mir_by_symbol));
     if ((emitter.functions == NULL) || (emitter.function_types == NULL) ||
         (emitter.layouts == NULL) || (emitter.strings == NULL) || (emitter.drop_glue == NULL) ||
         (emitter.move_glue == NULL) || (emitter.statics == NULL) ||
         (emitter.drop_cursors == NULL) || (emitter.drop_counts == NULL) ||
         (emitter.drop_nodes == NULL) || (emitter.drop_hooks == NULL) ||
         (emitter.key_hashes == NULL) || (emitter.key_equals == NULL) ||
+        (emitter.dict_probes == NULL) || (emitter.dict_lookups == NULL) ||
         (emitter.async_initializers == NULL) || (emitter.async_drops == NULL) ||
         (emitter.async_frame_sizes == NULL) || (emitter.thread_entries == NULL) ||
         (emitter.thread_moves == NULL) || (emitter.thread_drops == NULL) ||
@@ -2374,7 +2633,9 @@ RFrontendStatus r_frontend_emit_llvm(const RFrontendContext *context,
         (emitter.json_encoders == NULL) || (emitter.json_zeros == NULL) ||
         (emitter.json_decoders == NULL) || (emitter.json_ordinaries == NULL) ||
         (emitter.json_streams == NULL) || (emitter.json_written == NULL) ||
-        (emitter.c_functions == NULL) || (emitter.broadcast_clones == NULL)) {
+        (emitter.c_functions == NULL) || (emitter.broadcast_clones == NULL) ||
+        (emitter.direct_twins == NULL) || (emitter.direct_types == NULL) ||
+        (emitter.direct_states == NULL) || (emitter.mir_by_symbol == NULL)) {
         goto cleanup;
     }
     if (!r_llvm_prepare_keys(&emitter) || !r_llvm_reachable_functions(&emitter)) {
@@ -2385,6 +2646,9 @@ RFrontendStatus r_frontend_emit_llvm(const RFrontendContext *context,
         if (emitter.reachable[mir->symbol] && !r_llvm_declare_function(&emitter, mir->symbol)) {
             goto cleanup;
         }
+    }
+    if (!r_llvm_prepare_direct_calls(&emitter)) {
+        goto cleanup;
     }
     for (index = 0U; index < context->mir_function_count; ++index) {
         const RMirFunction *mir = &context->mir_functions[index];
@@ -2412,11 +2676,16 @@ RFrontendStatus r_frontend_emit_llvm(const RFrontendContext *context,
         }
         LLVMDisposeMessage(message);
     }
-    if (!r_llvm_measure_stack(&emitter)) {
+    if (!r_llvm_set_options(&emitter, options == NULL ? NULL : options->profile_use) ||
+        !r_llvm_check_indirect_calls(&emitter) ||
+        !r_llvm_optimize(&emitter, options == NULL ? 0U : options->optimization_level) ||
+        !r_llvm_measure_stack(&emitter)) {
         goto cleanup;
     }
     if (output == R_FRONTEND_LLVM_IR) {
-        char *text = LLVMPrintModuleToString(emitter.module);
+        char *text;
+        r_llvm_source_report(&emitter);
+        text = LLVMPrintModuleToString(emitter.module);
         const bool written = r_llvm_write(writer, user_data, text, strlen(text));
         LLVMDisposeMessage(text);
         if (!written) {

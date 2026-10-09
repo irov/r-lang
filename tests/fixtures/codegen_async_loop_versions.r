@@ -1,16 +1,25 @@
 module test.codegen.async_loop_versions;
 
-/* P4.4: the direct twin of an async function whose body cannot suspend is an ordinary function,
-   so its innermost loops check their affine indices once, as those of a synchronous body do
-   (Core R-AM-0003, R-EXPR-0021); a started task runs the step of the same body with every
-   check. Both reach the same values. A line marked `versioned` holds an index that the C17
-   output checks once before its loop (tests/check_loop_versions.py). */
+/* The direct twin of an async function whose body cannot suspend is an ordinary function, so its
+   loops version their affine indices as those of a synchronous body do (Core R-AM-0003,
+   R-EXPR-0021); a started task runs the step of the same body, whose index is versioned the same
+   way. Both reach the same values. A line marked `versioned` holds an index whose check tests
+   its largest value (tests/check_loop_versions.py). */
 
 async u32 strided(u32[16] data, usize stride, usize count) {
     const u32[] view = data[..];
     u32 total = 0u32;
     for (usize k = 0usize; k < count; k += 1usize) {
         total += view[k * stride + 1usize]; /* versioned */
+    }
+    return total;
+}
+
+async u32 masked(u32[16] data, usize rounds) {
+    const u32[] view = data[..];
+    u32 total = 0u32;
+    for (usize k = 0usize; k < rounds; k += 1usize) {
+        total += view[k & 15usize]; /* versioned */
     }
     return total;
 }
@@ -22,5 +31,6 @@ async i32 main() {
     task<u32> started = strided(storage, 2usize, 8usize);
     if ((await move started) != 72u32) { return 2; }
     if ((await strided(storage, 2usize, 8usize)) != 72u32) { return 3; }
+    if ((await masked(storage, 20usize)) != 146u32) { return 4; }
     return 0;
 }

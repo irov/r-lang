@@ -44,7 +44,7 @@ endfunction()
 # --all-functions: main calls none of the synchronous starters.
 function(r_emit_ir source entry output_name)
     set(arguments
-        --emit=llvm-ir
+        --emit=llvm-ir --opt-level=0
         --all-functions
         --entry "${entry}"
         --profile hosted-native-async

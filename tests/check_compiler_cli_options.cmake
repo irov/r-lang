@@ -170,3 +170,86 @@ if(NOT removed_emit_result EQUAL 2 OR
             "--emit=c17 was not rejected as an unknown option "
             "(${removed_emit_result}): ${removed_emit_stderr}")
 endif()
+
+# --opt-level selects the LLVM pipeline of the program (B7): the emitter's own module at 0 and
+# default<O2> when the option is absent; a level is given once and is 0, 1, 2 or 3.
+execute_process(
+    COMMAND "${R_FRONT_EXECUTABLE}" --emit=llvm-ir --opt-level=1 --opt-level=2 "${SOURCE_FILE}"
+    RESULT_VARIABLE level_duplicate_result
+    OUTPUT_VARIABLE level_duplicate_stdout
+    ERROR_VARIABLE level_duplicate_stderr
+)
+if(NOT level_duplicate_result EQUAL 2 OR
+   NOT level_duplicate_stderr MATCHES "r-front: duplicate option: --opt-level")
+    message(FATAL_ERROR
+            "a repeated --opt-level was not rejected "
+            "(${level_duplicate_result}): ${level_duplicate_stderr}")
+endif()
+execute_process(
+    COMMAND "${R_FRONT_EXECUTABLE}" --emit=llvm-ir --opt-level=4 "${SOURCE_FILE}"
+    RESULT_VARIABLE level_invalid_result
+    OUTPUT_VARIABLE level_invalid_stdout
+    ERROR_VARIABLE level_invalid_stderr
+)
+if(NOT level_invalid_result EQUAL 2 OR
+   NOT level_invalid_stderr MATCHES "r-front: expected 0, 1, 2 or 3: --opt-level=4")
+    message(FATAL_ERROR
+            "--opt-level=4 was not rejected (${level_invalid_result}): ${level_invalid_stderr}")
+endif()
+execute_process(
+    COMMAND "${R_FRONT_EXECUTABLE}" --emit=llvm-ir --opt-level=0 "${SOURCE_FILE}"
+    RESULT_VARIABLE level_zero_result
+    OUTPUT_VARIABLE level_zero_ir
+    ERROR_VARIABLE level_zero_stderr
+)
+execute_process(
+    COMMAND "${R_FRONT_EXECUTABLE}" --emit=llvm-ir "${SOURCE_FILE}"
+    RESULT_VARIABLE level_default_result
+    OUTPUT_VARIABLE level_default_ir
+    ERROR_VARIABLE level_default_stderr
+)
+if(NOT level_zero_result EQUAL 0 OR NOT level_default_result EQUAL 0)
+    message(FATAL_ERROR
+            "--opt-level=0 or the default level failed: ${level_zero_stderr}${level_default_stderr}")
+endif()
+# The optimizer runs only above level 0, after the stack bookkeeping is kept from it.
+if(level_zero_ir MATCHES "llvm\\.compiler\\.used" OR
+   NOT level_default_ir MATCHES "@llvm\\.compiler\\.used = appending global" OR
+   NOT level_default_ir MATCHES "@r_stack_entry\\.[0-9]+ = private externally_initialized constant")
+    message(FATAL_ERROR "the default level did not optimize the program:\n${level_default_ir}")
+endif()
+
+# B7.2: profile-guided optimization needs an optimizing level, and generating and using a profile
+# exclude each other.
+execute_process(
+    COMMAND "${R_FRONT_EXECUTABLE}" --emit=llvm-ir --opt-level=0 --profile-generate "${SOURCE_FILE}"
+    RESULT_VARIABLE profile_level_result
+    OUTPUT_VARIABLE profile_level_stdout
+    ERROR_VARIABLE profile_level_stderr
+)
+execute_process(
+    COMMAND "${R_FRONT_EXECUTABLE}" --emit=llvm-ir --profile-generate --profile-use missing.profdata
+        "${SOURCE_FILE}"
+    RESULT_VARIABLE profile_both_result
+    OUTPUT_VARIABLE profile_both_stdout
+    ERROR_VARIABLE profile_both_stderr
+)
+if(NOT profile_level_result EQUAL 2 OR NOT profile_both_result EQUAL 2 OR
+   NOT profile_level_stderr MATCHES "--profile-generate and --profile-use exclude each other" OR
+   NOT profile_both_stderr MATCHES "--profile-generate and --profile-use exclude each other")
+    message(FATAL_ERROR
+            "profile options were not rejected (${profile_level_result}, ${profile_both_result}): "
+            "${profile_level_stderr}${profile_both_stderr}")
+endif()
+execute_process(
+    COMMAND "${R_FRONT_EXECUTABLE}" --emit=llvm-ir --profile-generate "${SOURCE_FILE}"
+    RESULT_VARIABLE profile_generate_result
+    OUTPUT_VARIABLE profile_generate_ir
+    ERROR_VARIABLE profile_generate_stderr
+)
+if(NOT profile_generate_result EQUAL 0 OR
+   NOT profile_generate_ir MATCHES "__profc_|__llvm_profile")
+    message(FATAL_ERROR
+            "--profile-generate did not instrument the program "
+            "(${profile_generate_result}): ${profile_generate_stderr}")
+endif()

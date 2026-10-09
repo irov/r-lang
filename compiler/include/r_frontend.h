@@ -110,8 +110,26 @@ typedef struct RFrontendArtifactOptions {
     const char *const *symbol_renames;
     size_t symbol_rename_count;
     /* The LLVM backend lowers the functions the entry reaches; with all_functions it lowers every
-       function of the program, as acceptance audits need for code no entry calls. */
+       function of the program, as acceptance audits need for code no entry calls, and keeps each
+       through the optimizer as if called from elsewhere. */
     bool all_functions;
+    /* The LLVM pipeline default<O1>..default<O3> for levels 1-3; 0 leaves the module as the
+       emitter writes it. */
+    uint32_t optimization_level;
+    /* Above level 0, the bitcode of the runtime and library C a program calls (B7.2): given the
+       name of a C function, the loader sets *data and *length to a bitcode module that defines
+       it, valid until the emission returns, and returns true; it returns false when it has none.
+       The definitions are optimized together with the program and still linked from the
+       archives. */
+    bool (*load_bitcode)(void *user_data, const char *symbol, const uint8_t **data, size_t *length);
+    void *bitcode_user_data;
+    /* Above level 0, profile-guided optimization (B7.2): profile_generate instruments the program
+       for a profile it writes when it ends (linked with the profile runtime of the toolchain);
+       profile_use names a merged profile (llvm-profdata) of such runs that guides the optimizer.
+       LLVM reads the profile path once per process, so every emission of a process that uses a
+       profile names the same file. */
+    bool profile_generate;
+    const char *profile_use;
 } RFrontendArtifactOptions;
 
 RFrontendOptions r_frontend_default_options(void);

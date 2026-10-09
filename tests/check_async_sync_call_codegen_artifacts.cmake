@@ -50,7 +50,7 @@ r_require_match_count(mir_output
     1 "MIR void-result call")
 
 set(ir_arguments
-    --emit=llvm-ir
+    --emit=llvm-ir --opt-level=0
     --entry test.codegen.async_sync_call::main
     --profile hosted-native-async
     --target-manifest "${TARGET_MANIFEST}"

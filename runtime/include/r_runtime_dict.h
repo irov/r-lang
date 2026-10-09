@@ -51,9 +51,9 @@ typedef struct RRuntimeDict {
 } RRuntimeDict;
 
 /*
- * Index and entry layout shared with generated C: the compiler emits per-key-type probe,
- * lookup and insert helpers over this layout (see r_c17_emit_dict_helpers in the emitter),
- * so it is part of the runtime contract and changes only together with the emitter.
+ * Index and entry layout shared with generated code: the compiler emits per-key-type probe,
+ * lookup and insert paths over this layout (compiler/llvm/dicts.c), so it is part of the
+ * runtime contract and changes only together with the emitter.
  */
 typedef enum RRuntimeDictSlotState {
     R_RUNTIME_DICT_SLOT_EMPTY = 0,

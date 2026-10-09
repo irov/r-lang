@@ -1,7 +1,6 @@
-# M5 benchmark pairs: each R program is an object of r-front linked by the codegen program
-# pipeline (COMPILE_ONLY), each C mirror is compiled by the same compiler at -O2. The LLVM objects
-# are not optimized before B7; docs/benchmarks.md keeps the last measurement of the C17 emitter,
-# which B7.3 compares against.
+# M5 benchmark pairs: each R program is an object of r-front at its default optimization level,
+# linked by the codegen program pipeline (COMPILE_ONLY) with the runtime sources it compiles at
+# -O2; each C mirror is compiled by the same compiler at -O2.
 
 set(R_BENCH_CHECK_SCRIPT "${PROJECT_SOURCE_DIR}/tests/check_codegen_program.cmake")
 set(R_BENCH_TARGET_MANIFEST
@@ -140,8 +139,14 @@ set(R_BENCH_CODEGEN_ARGUMENTS
     -DENABLE_SANITIZERS=${R_FRONTEND_ENABLE_SANITIZERS}
     -DENABLE_THREAD_SANITIZER=${R_FRONTEND_ENABLE_THREAD_SANITIZER}
     -DR_RUNTIME_INLINE_SHIMS_LIBRARY=$<TARGET_FILE:r_runtime_inline_shims>
+    -DBITCODE_CATALOG=${R_BITCODE_CATALOG}
+    -DC_OPTIMIZATION=-O2
     -DCOMPILE_ONLY=ON)
 
+set(R_BENCH_CATALOG_TARGET)
+if(TARGET r_bitcode_catalog)
+    set(R_BENCH_CATALOG_TARGET r_bitcode_catalog "${R_BITCODE_CATALOG}")
+endif()
 set(R_BENCH_PROGRAM_OUTPUTS)
 set(R_BENCH_PAIR_ARGUMENTS)
 set(R_BENCH_PAIR_SPECIFICATIONS)
@@ -162,6 +167,7 @@ foreach(R_BENCH_NAME IN LISTS R_BENCH_PAIRS)
         DEPENDS
             r-front
             ${R_BENCH_LIBRARY_TARGETS}
+            ${R_BENCH_CATALOG_TARGET}
             "${CMAKE_CURRENT_SOURCE_DIR}/${R_BENCH_NAME}.r"
             "${R_BENCH_CHECK_SCRIPT}"
         COMMENT "Compiling benchmark ${R_BENCH_NAME}.r through r-front"

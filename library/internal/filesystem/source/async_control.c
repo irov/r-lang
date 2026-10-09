@@ -647,13 +647,18 @@ static RStdFsError cancellation_error(RLibraryFsPositionCancelReason reason) {
     return fs_error(R_STD_FS_ERROR_CANCELLED, INT64_C(0));
 }
 
+/* Completes a selected cancellation of an operation that no lane request or lock resubmission
+   owns. An owned operation's position turn is active until that request completes, and its
+   completion finishes the turn and the operation (native_completed, control_retry_fired); a
+   cancellation completed under it would unregister the operation while its turn is still active
+   (R-SLIB-ASYNC-0007: one terminal outcome, published by the request's completion). */
 static void control_complete_pending_cancellation(RLibraryFsControl *control) {
     RLibraryFsPositionCancelReason reason;
     _Bool pending;
 
     control_lock(control);
     pending = control->cancel_pending && control->execution != NULL && control->start_published &&
-              !control->terminal;
+              !control->terminal && control->request == NULL && !control->retry_resubmitting;
     reason = control->cancel_reason;
     control_unlock(control);
     if (pending) {

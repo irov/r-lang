@@ -79,7 +79,7 @@ r_require_match_count(plan_output
 
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}"
-        --emit=llvm-ir
+        --emit=llvm-ir --opt-level=0
         --entry test.codegen.async_fs_write_file_atomic_no_replace_beneath::main
         --profile hosted-native-async
         --target-manifest "${TARGET_MANIFEST}"

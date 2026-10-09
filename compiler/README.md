@@ -33,9 +33,9 @@ typed throws, handler dispatch, rethrow, pending completion, LIFO `finally` rout
 Move places, async suspension, and cleanup state explicit. Automatic propagation is
 resolved before code generation; each normalized checked-effect set has one deterministic
 tagged carrier rather than nested source-level result values. Generated slices are
-pointer/length pairs, every index and range is checked before access (the proofs that leave
-out a check that cannot fail return in stage B7, see *Index and conversion proofs*), and an
-invalid access reports `R_RUNTIME_PANIC_BOUNDS`. Call-bounded borrow metadata covers the full
+pointer/length pairs, every index and range is checked before access (the optimizer leaves
+out a check that cannot fail, see *Optimization*), and an invalid access reports
+`R_RUNTIME_PANIC_BOUNDS`. Call-bounded borrow metadata covers the full
 normative limit of 127 arguments.
 
 The backend preserves left-to-right evaluation, implements checked signed arithmetic
@@ -134,10 +134,11 @@ calls (R-CONF-0005). A construct the emitter does not lower makes the program
 `R_FRONTEND_NOT_LOWERABLE`, and the first one is named on stderr.
 
 `--all-functions` (`RFrontendArtifactOptions.all_functions`) lowers every function of the
-program, not only those the entry reaches. The acceptance audits use it
-(`tools/audit_compiler_implementation.py`, `tools/audit_language_safety.py`,
-`tools/audit_library_source_surface.py`), and so do the checks of code that no entry calls
-(`tests/check_*.py`).
+program, not only those the entry reaches, and keeps each through the optimizer as if called from
+elsewhere (`llvm.compiler.used`), so that none is deleted or specialized for the calls the program
+makes. The acceptance audits use it (`tools/audit_compiler_implementation.py`,
+`tools/audit_language_safety.py`, `tools/audit_library_source_surface.py`), and so do the checks
+of code that no entry calls (`tests/check_*.py`).
 
 Representation. A value has the representation the runtime and the library C expect, so both
 sides see the same bytes: a scalar is an SSA value (a `bool` is `i1`, a byte in memory), an enum
@@ -328,24 +329,144 @@ of native providers of the library (`r_bridge_r_std_*_native_*`), the absence of
 `longjmp`, and the library dependencies of a `HASH_ONLY` program. `STACK_FRAME_LIMIT` bounds
 every frame through `!r.stack.frames`, and `STACK_REPORT` keeps the IR next to the executable as
 `<exe>.ll` for drivers that read the bounds (the calculator example checks its `@recursion`
-bound there).
+bound there). The program is optimized at the default level with the bitcode catalog of the
+configuration (`BITCODE_CATALOG`, none in sanitized builds); the C parts the driver compiles
+(runtime sources, shims, wrapper) are compiled at `C_OPTIMIZATION`, `-O0` unless a caller such as
+the benchmarks asks for `-O2`; `FRONTEND_EXTRA_ARGUMENTS` and `LINK_EXTRA_FLAGS` let a script add
+options of `r-front` and of the link (`tests/check_pgo_program.cmake`).
 
-### Index and conversion proofs
+### Optimization
 
-The LLVM emitter checks every index, slice and explicit integer conversion and starts every
-awaited call as a task. Three optimizations of the removed C17 emitter return in stage B7, where
-index proofs become facts for the LLVM optimizer: proofs that leave out a bounds check
-(R-EXPR-0021) or an explicit integer conversion check (R-EXPR-0015) that cannot fail, versions of
-loops with affine indices that run a copy without their checks after one test before the loop,
-and direct calls of async bodies (and the immediate completion of an awaited receive) where
-nothing can tell the difference from a started task (R-AM-0003). Their fixtures
-(`codegen_index_proofs.r`, `codegen_async_index_proofs.r`, `codegen_index_proofs_static_bounds.r`,
-`codegen_loop_versions.r`, `codegen_async_loop_versions.r`, `codegen_async_direct_calls.r`)
-still run as programs. `tests/check_index_proofs.py`, `tests/check_loop_versions.py` and
-`tests/check_direct_calls.py` lower each of them with `--all-functions` and require the marks of
-its lines (`/* proven */`, `/* checked */`, `/* proven conversion */`, `/* checked conversion */`,
-`/* versioned */`, `/* direct */`, `/* started */`); the comparison of each mark with the
-generated code returns with B7.
+`--opt-level=N` (`RFrontendArtifactOptions.optimization_level`) selects the LLVM pipeline of the
+program: level 0 leaves the module as the emitter writes it (the API default, and what the checks
+of the emitter's IR read: they pass `--opt-level=0`), levels 1 to 3 run `default<O1>` to
+`default<O3>` on the verified module before the stack bounds are measured; the CLI default is 2.
+Above level 1 inductive range check elimination, loop unrolling and a cleanup follow the default
+pipeline, for loops whose checks the optimizer bounded itself (a constant trip count after
+inlining). LLVM's options are set once per process (`r_llvm_set_options`): the prologue-epilogue
+remarks of the stack measurement, non-trivial loop unswitching (which runs the copy of a loop
+without its versioned checks, below) and the profile file of profile-guided optimization.
+
+Stack bounds under optimization. The bounds of R-FUNC-0004 are measured on the optimized code, so
+the optimizer must neither invalidate them nor delete what they refer to. The bound constants
+`r_stack_entry.N` are `externally_initialized`, so no check folds a bound before it is written. A
+function whose frame lies below a callback of the runtime or library (a stack edge), a function
+that holds an indirect call of C (`r.stack.indirect`) and a function with a `@recursion` depth are
+`noinline`: the call that needs the edges or the depth stays in the frame they are attached to.
+`llvm.compiler.used` keeps every function and constant the measurement refers to. Before the
+optimizer, every indirect call the emitter wrote in a function an entry reaches must lie in such
+a holder (`r_llvm_check_indirect_calls`); the optimizer makes no direct call indirect, so after it
+an indirect call elsewhere comes from imported runtime code (below) and counts as a call of the
+runtime, as it did inside the archive's function. A call of a direct twin is marked
+`r.stack.guarded`: `r_runtime_task_direct_begin` admitted it with the twin's own bound, so it
+adds no edge.
+
+Facts for the optimizer. The calls of `r_runtime_raise` and `r_runtime_panic` are cold, and
+`r_runtime_panic` does not return, so every check is laid out as a branch that is not taken. A
+source span is a private constant read in place by the call (no frame or stack slot holds it). The
+pointer parameters of an ordinary function carry what the convention guarantees: the result or
+carrier memory and every parameter in memory are `nonnull`, `noundef`, `dereferenceable` and aligned
+storage of their type; a borrow of the non-null form is dereferenceable for a sized referent, and an
+exclusive borrow (R-BORROW-0002 excludes every other overlapping access while it lives) is
+`noalias`. The address of an element whose index a check bounds (an index, the lower bound of a
+sub-slice, the next element of a push, the end of an append) is `index * size` with `nuw nsw` and a
+`getelementptr inbounds nuw` (`r_llvm_element_offset`): the storage holds the elements, so neither
+wraps. Signed arithmetic keeps its overflow intrinsics, whose checks give scalar evolution the
+absence of wrapping; unsigned arithmetic wraps in R and carries no flag. Type-based alias metadata
+is not attached: slices over raw parts and byte views of values reach the same memory with different
+types.
+
+Index and conversion proofs. The optimizer proves the indices and explicit integer conversions it
+can (R-EXPR-0021, R-EXPR-0015): from the conditions and the checks that dominate them, the
+ranges of the values and the bounds of loops. `tests/check_index_proofs.py` compares the marks of
+its fixtures (`/* proven */`, `/* checked */`, `/* proven conversion */`, `/* checked conversion
+*/`) with the checks left in the optimized IR of every function, kept by `--all-functions` as if
+called from elsewhere; a check left is a call of `r_runtime_raise` or `r_runtime_panic` whose
+span names the line (`tests/llvm_checks.py` decodes the spans, also through the phis of merged
+calls, and the named metadata `!r.sources` gives the module of each source key).
+
+Loop versions (`versions.c`). An index `base[A + k * S]` dominated by a test `k < B` of an unsigned
+local k that nothing writes between the test and the load of k the index uses is at most
+`A + (B - 1) * S`; the check is written as `index >= len && !fits`, where `fits` tests that this
+largest value is computed without wrapping and lies below the length at the check. That is the check
+as written wherever `fits` is false and a check that cannot fail wherever it is true, from the same
+values the index and the test use, so it needs no proof that anything is invariant; when A, S, B and
+the length do not change in the loop, the optimizer tests `fits` once and runs a copy of the loop
+without the check. That copy is made first: at levels 2 and 3 a function with a versioned index runs
+SROA, a cleanup and non-trivial loop unswitching on its own before the default pipeline
+(`r_llvm_unswitch_versions`), since after inlining has made B and S constants the optimizer proves
+that a failing check implies `!fits`, folds the check back to `index >= len`, and inductive range
+check elimination takes unit strides only. An index masked by a value, `x & m`, is at most m without
+any loop test, so its `fits` is `m < len`, and `std.array::get` of such an index treats `fits` as
+presence the same way. Since a failing check implies `!fits`, `fits` passes through `llvm.expect`,
+which the optimizer cannot see through before it lowers the intrinsic after the unswitching, and
+which weights the copy without the check as the likely one. The dominating test is found on the
+dominator tree of the MIR blocks of a function without finally routes, task scopes or cancellation,
+and k is neither borrowed nor stored on a path from the test to its load. `!r.versioned` lists the
+indices written this way, which `tests/check_loop_versions.py` compares with `/* versioned */` and
+`/* checked */`.
+
+Direct calls (`direct.c`, R-AM-0003). `await f(...)` of an unscoped async function whose MIR has
+no start, await, task scope, cancel, deadline or budget, whose parameters and outcome carry no
+drop obligation, and whose start the await consumes at once (no phi at its targets) may run the
+body of f as an ordinary function, its twin `f.direct`, emitted from the same MIR by the ordinary
+path. When `r_runtime_task_direct_begin` admits the twin's bound on the stack (not under a budget,
+nor while the executor drains), the twin runs, `r_runtime_task_direct_end` follows, a pending
+panic continues at the await's panic block, and the await completes as that of a completed task
+does, reading the cancellation request of the awaiting task; otherwise the task starts as
+written. An awaited `std.sync` receive whose channel holds a value, or has lost every sender,
+takes it with `r_std_sync_try_recv` without its task when
+`r_runtime_task_inline_completion_allowed`. `!r.direct` lists the awaits of both paths, which
+`tests/check_direct_calls.py` compares with `/* direct */` and `/* started */`. A C wrapper that
+hooks `r_runtime_task_execution_await` sees no await of a body that runs as a direct call; it
+renames `r_runtime_task_direct_begin` to a function that refuses when the test needs the await.
+
+Spare capacity and element access. A `std.array::push` into spare capacity moves the staged value
+into the next element (by the move glue its type names, or by a copy) and counts it, and a
+`std.string::append_str` that fits the capacity copies its bytes; only a full array or string calls
+the library, which grows it or reports the allocation failure. `std.array::get` and `get_mut`
+address the element at the static size of the element type, as the library does at the header's
+element size, which the optimizer cannot know once a call has received the array; a constant stride
+lets it widen the loads of a loop.
+
+Dictionary paths (`dicts.c`). The runtime hashes and compares the keys of a `std.dict` through the
+key information of the dictionary, which the optimizer cannot follow once a call has received the
+dictionary. `get`, `get_mut` and `contains` therefore call `r_dict_lookup.K` of the key type, and an
+`insert` probes with `r_dict_probe.K` and writes the entry itself when the table has a free one;
+both call the key functions `r_key_hash.K` and `r_key_equal.K` directly, so the hash and the
+comparison inline into the probe and the probe into its caller. The probe, the mix of a hash with
+the seed and the layout of slots and entries are those of `runtime/source/dict.c`
+(`r_runtime_dict.h` declares the layout a contract with the emitter); an empty or full table,
+removal, growth and iteration stay in the runtime, which finds what these paths insert.
+
+Runtime and library bitcode (`import.c`, B7.2). With `--bitcode-catalog FILE`
+(`RFrontendArtifactOptions.load_bitcode`) the C functions a program calls are optimized together
+with it. The build compiles a bitcode twin of every runtime and library target a program links
+(`<target>_bitcode`, the same sources, definitions and options, `-O2 -g0 -emit-llvm`) and writes
+`r_bitcode.catalog` (`tools/generate_bitcode_catalog.py`, one line `SYMBOL<TAB>PATH` per external
+function); sanitized and fuzzing builds have none, since their twins would carry instrumentation
+and module constructors. Before the optimizer, the module that defines each declared C function
+is linked into the program with its external definitions `available_externally`: the optimizer
+may inline or fold them, never emits them, and the program still links the archive, so no state is
+duplicated. Two rounds import the callees of imported functions. A module with mutable or
+thread-local state of its own or module-level assembly is not imported, nor one that defines or
+calls a function a harness renames (the archives and the driver's shims keep their behaviour); a
+function larger than 300 instructions, on a cycle of calls, with an invoke, callbr or inline
+assembly, or calling such a function keeps only its declaration. The pipeline of a program thus
+inlines the inline helpers of the headers that the shims export, the fast paths of the library
+and the runtime functions the program calls in its loops. A linker's ThinLTO would optimize the
+program after its stack bounds were measured, and the C interface of LLVM writes no ThinLTO
+summaries, so the cross-module optimization runs in `r-front`.
+
+Profile-guided optimization (B7.2). `--profile-generate` instruments the program
+(`pgo-instr-gen,instrprof` before the default pipeline); the program is linked with the profile
+runtime of the toolchain (`lib/darwin/libclang_rt.profile_osx.a` of `clang -print-resource-dir`)
+and writes its profile where `LLVM_PROFILE_FILE` names when it ends. `llvm-profdata merge` makes
+one profile of the runs, and `--profile-use FILE` reads it (`pgo-instr-use`) before the default
+pipeline: both see the module as the emitter wrote it, so functions and control flow match. Both
+options need a level above 0 and exclude each other. `tests/check_pgo_program.cmake` builds the
+loop fixture with a profile of its own runs and checks the profile summary and branch weights of
+its IR.
 
 ### Hosted main error boundary
 
@@ -2302,6 +2423,9 @@ build/debug/r-front --emit=bundle \
   --entry application.main::main --profile hosted source.r
 build/debug/r-front --emit=llvm-ir source.r > program.ll
 build/debug/r-front --emit=object source.r > program.o
+build/debug/r-front --emit=object --opt-level=3 \
+  --bitcode-catalog build/debug/r_bitcode.catalog source.r > program.o
+build/debug/r-front --emit=object --profile-use program.profdata source.r > program.o
 ```
 
 `--target-manifest` accepts only the committed manifest of the selected profile's target, byte
@@ -2309,8 +2433,9 @@ for byte, in every emit mode; any other manifest is refused before an artifact i
 `--module-map` and `--entry`, an import that no map entry declares is reported at the import as
 `R-DIAG-MOD-001` (R-MOD-0007), and a cycle of imports as `R-DIAG-MOD-001` (R-MOD-0004).
 
-`--emit=object` writes the object of the program, with its entry stack bounds already computed
-(*LLVM emitter*, Stack bounds); `r-front` does not call the linker itself yet (B10). The object
+`--emit=object` writes the object of the program, optimized at `--opt-level` (2 when not given)
+and with its entry stack bounds already computed on the optimized code (*LLVM emitter*, Stack
+bounds; *Optimization*); `r-front` does not call the linker itself yet (B10). The object
 is linked as `tests/check_codegen_program.cmake` links it: with the runtime, the inline shims
 (`r_runtime_inline_shims`), the `r_core` and `r_std_*` archives, the archives of the native
 providers it imports and, for a program whose C imports need it, the bridge unit of
@@ -2427,9 +2552,10 @@ physical library resolution remain work for the target/link resolver.
 `async_fs_read_into`, `array_push`, `format_int`, `own_alloc`, `array_get`, `string_append`,
 `dict_lookup`, `json_parse`, `deflate_roundtrip`, `tcp_echo`).
 The CMake target
-`benchmarks` compiles each R program with `r-front --emit=object` and links it as
-`tests/check_codegen_program.cmake` does, compiles the C mirror with the pinned clang at `-O2`,
-times both and writes `docs/benchmarks.md`; the
+`benchmarks` compiles each R program with `r-front --emit=object` at the default level with the
+bitcode catalog of the configuration and links it as `tests/check_codegen_program.cmake` does,
+with the runtime sources the driver compiles at `-O2` (`C_OPTIMIZATION`); it compiles the C
+mirror with the pinned clang at `-O2`, times both and writes `docs/benchmarks.md`; the
 ctest `r_bench_pairs_agree` only verifies that each pair returns the same checksum. The R
 programs link the runtime and standard libraries of the configuration the target runs in,
 so measurements are only accepted from an optimized configuration (`cmake -S . -B
