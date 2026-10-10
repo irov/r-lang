@@ -53,7 +53,7 @@ i32 main() {
 
         interface = emit('interface', [provider, consumer])
         assert interface == emit('interface', [consumer, provider])
-        assert '(interface version=34 ' in interface
+        assert '(interface version=35 ' in interface
         assert interface.count('noalloc=true nonblocking=true') >= 3
         assert '(function-schema ' in interface
         assert emit('llvm-ir', [provider, consumer]) == emit('llvm-ir', [consumer, provider])

@@ -36,7 +36,7 @@ against the link manifest; see `compiler/README.md`. The same blocks now declare
 `opaque struct` types with `@c_type` tag, union or typedef spellings, verified
 `@c_constant` integer constants, imported (`const`, `thread_local`) C objects,
 variadic prototypes and complete `@repr(C)` structs and enums proven one-for-one
-against an ABI record produced by `tools/generate_c_abi_record.py` (R-FFI-0017,
+against an ABI record that `r-front --emit=abi-record` derives with libclang (R-FFI-0017,
 R-FFI-0040, R-FFI-0041), each also probed by the verifier unit; a record is also
 checked against its block's provider, the target manifest and C17 options.
 

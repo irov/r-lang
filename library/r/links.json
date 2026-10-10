@@ -544,6 +544,34 @@
           "binding": "strong"
         }
       ]
+    },
+    {
+      "logical_name": "std.dl.native",
+      "available": true,
+      "kind": "static",
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "library/native/dl",
+      "link_artifact_identity": "r_std_dl_native",
+      "header_roots": [
+        "library/native/dl/include"
+      ],
+      "abi_record_roots": [],
+      "library_version": "0.1",
+      "dependencies": [],
+      "feature_test_definitions": [],
+      "symbols": [
+        {
+          "c_identifier": "r_std_dl_native_open",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "r_std_dl_native_symbol",
+          "kind": "function",
+          "binding": "strong"
+        }
+      ]
     }
   ]
 }

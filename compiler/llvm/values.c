@@ -261,6 +261,159 @@ bool r_llvm_load_into(RLlvmEmitter *emitter,
     return (memory != NULL) && r_llvm_store_value(emitter, type, pointer, memory);
 }
 
+/* R-FFI-0061: a load or store at an address below the alignment of its type: the scalar access
+   or the copy carries the alignment the place has. */
+static bool r_llvm_load_into_aligned(RLlvmEmitter *emitter,
+                                     RMirValueId result,
+                                     RTypeId type,
+                                     LLVMValueRef pointer,
+                                     uint32_t alignment) {
+    LLVMValueRef memory;
+    uint32_t size = 0U;
+    uint32_t align = 0U;
+
+    if (pointer == NULL) {
+        return false;
+    }
+    if (r_llvm_scalar_type(emitter, type) != NULL) {
+        LLVMValueRef value = r_llvm_load_scalar(emitter, type, pointer);
+        LLVMValueRef load = value;
+        if ((value != NULL) && (LLVMIsALoadInst(value) == NULL)) {
+            load = LLVMGetOperand(value, 0U); /* the byte of a bool */
+        }
+        if (load != NULL) {
+            LLVMSetAlignment(load, alignment);
+        }
+        return r_llvm_set_value(emitter, result, value);
+    }
+    memory = r_llvm_value_memory(emitter, result, type);
+    if ((memory == NULL) || !r_llvm_layout(emitter, type, &size, &align)) {
+        return false;
+    }
+    (void)LLVMBuildMemCpy(
+        emitter->builder, memory, align, pointer, alignment, r_llvm_u64(emitter, size));
+    return true;
+}
+
+static bool r_llvm_store_value_aligned(RLlvmEmitter *emitter,
+                                       RTypeId type,
+                                       LLVMValueRef value,
+                                       LLVMValueRef pointer,
+                                       uint32_t alignment) {
+    uint32_t size = 0U;
+    uint32_t align = 0U;
+
+    if ((value == NULL) || (pointer == NULL)) {
+        return false;
+    }
+    if (r_llvm_scalar_type(emitter, type) != NULL) {
+        if (r_llvm_value_kind(emitter, type) == R_SEMANTIC_TYPE_BOOL) {
+            value = LLVMBuildZExt(emitter->builder, value, r_llvm_int(emitter, 8U), "");
+        }
+        LLVMSetAlignment(LLVMBuildStore(emitter->builder, value, pointer), alignment);
+        return true;
+    }
+    if (!r_llvm_layout(emitter, type, &size, &align)) {
+        return false;
+    }
+    (void)LLVMBuildMemCpy(
+        emitter->builder, pointer, alignment, value, align, r_llvm_u64(emitter, size));
+    return true;
+}
+
+/* R-FFI-0062: a bit-field is read and written through the bytes that hold its bits, one
+   little-endian integer, so no byte outside the field's storage is touched. */
+static LLVMTypeRef r_llvm_bits_unit(RLlvmEmitter *emitter, const RSemanticFieldPlace *place) {
+    return r_llvm_int(emitter, ((place->bit_offset + place->bit_width + 7U) / 8U) * 8U);
+}
+
+static bool r_llvm_bits_signed(RLlvmEmitter *emitter, RTypeId type) {
+    bool is_signed = false;
+    uint32_t width = 0U;
+    const RSemanticTypeKind kind = r_semantic_integer_representation(emitter->frontend, type);
+    return r_semantic_integer_properties_public(kind, &is_signed, &width) && is_signed;
+}
+
+LLVMValueRef r_llvm_load_bits(RLlvmEmitter *emitter,
+                              RTypeId type,
+                              LLVMValueRef address,
+                              const RSemanticFieldPlace *place) {
+    LLVMTypeRef scalar = r_llvm_scalar_type(emitter, type);
+    LLVMTypeRef unit = r_llvm_bits_unit(emitter, place);
+    LLVMValueRef word;
+    LLVMValueRef bits;
+
+    if ((scalar == NULL) || (address == NULL)) {
+        (void)r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+        return NULL;
+    }
+    word = LLVMBuildLoad2(emitter->builder, unit, address, "");
+    LLVMSetAlignment(word, 1U);
+    bits = LLVMBuildTrunc(
+        emitter->builder,
+        LLVMBuildLShr(emitter->builder, word, LLVMConstInt(unit, place->bit_offset, 0), ""),
+        r_llvm_int(emitter, place->bit_width),
+        "");
+    if (LLVMGetIntTypeWidth(scalar) == place->bit_width) {
+        return bits;
+    }
+    return r_llvm_bits_signed(emitter, type) ? LLVMBuildSExt(emitter->builder, bits, scalar, "")
+                                             : LLVMBuildZExt(emitter->builder, bits, scalar, "");
+}
+
+bool r_llvm_store_bits(RLlvmEmitter *emitter,
+                       RTypeId type,
+                       LLVMValueRef value,
+                       LLVMValueRef address,
+                       const RSemanticFieldPlace *place,
+                       RSourceSpan span,
+                       RMirBlockId panic_target) {
+    LLVMTypeRef scalar = r_llvm_scalar_type(emitter, type);
+    LLVMTypeRef unit = r_llvm_bits_unit(emitter, place);
+    const uint32_t unit_width = LLVMGetIntTypeWidth(unit);
+    LLVMValueRef narrow;
+    LLVMValueRef word;
+    uint64_t mask[2];
+    uint64_t keep[2];
+
+    if ((scalar == NULL) || (value == NULL) || (address == NULL)) {
+        return r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+    }
+    narrow = LLVMBuildTrunc(emitter->builder, value, r_llvm_int(emitter, place->bit_width), "");
+    if (LLVMGetIntTypeWidth(scalar) > place->bit_width) {
+        /* R-EXPR-0016: the value must survive the round trip through the field's width. */
+        const bool is_signed = r_llvm_bits_signed(emitter, type);
+        LLVMValueRef back = is_signed ? LLVMBuildSExt(emitter->builder, narrow, scalar, "")
+                                      : LLVMBuildZExt(emitter->builder, narrow, scalar, "");
+        if (!r_llvm_check(emitter,
+                          LLVMBuildICmp(emitter->builder, LLVMIntNE, back, value, ""),
+                          "R_RUNTIME_PANIC_INVALID_CONVERSION",
+                          span,
+                          panic_target)) {
+            return false;
+        }
+    }
+    /* The field's bits within the unit (at most 71 bits), and the bits of the unit to keep. */
+    mask[0] = (place->bit_width >= 64U) ? UINT64_MAX : ((UINT64_C(1) << place->bit_width) - 1U);
+    mask[1] = place->bit_offset == 0U ? 0U : mask[0] >> (64U - place->bit_offset);
+    mask[0] <<= place->bit_offset;
+    keep[0] = ~mask[0];
+    keep[1] = ~mask[1];
+    word = LLVMBuildLoad2(emitter->builder, unit, address, "");
+    LLVMSetAlignment(word, 1U);
+    word =
+        LLVMBuildAnd(emitter->builder, word, LLVMConstIntOfArbitraryPrecision(unit, 2U, keep), "");
+    narrow = LLVMBuildShl(
+        emitter->builder,
+        unit_width > place->bit_width ? LLVMBuildZExt(emitter->builder, narrow, unit, "") : narrow,
+        LLVMConstInt(unit, place->bit_offset, 0),
+        "");
+    LLVMSetAlignment(
+        LLVMBuildStore(emitter->builder, LLVMBuildOr(emitter->builder, word, narrow, ""), address),
+        1U);
+    return true;
+}
+
 /* ---- Initialization flags ---- */
 
 /* An i8 flag in the entry block with its initial value, stored before anything reads it. */
@@ -703,6 +856,12 @@ r_llvm_destination_memory(RLlvmEmitter *emitter, RMirValueId id, const RMirInstr
             uint32_t member_align = 0U;
             LLVMValueRef base;
             LLVMValueRef address;
+            if ((field != NULL) && (field->aggregate != 0U) &&
+                emitter->frontend->semantic_aggregates[field->aggregate - 1U].c_layout) {
+                /* R-AGG-0014, R-FFI-0061, R-FFI-0062: a member of a C layout is stored in
+                   operand order (the zero of a union first) and may have no address. */
+                return NULL;
+            }
             if ((member_type == R_TYPE_ID_INVALID) ||
                 (r_llvm_value_type(emitter, member_type) !=
                  r_llvm_value_type(emitter, definition->type)) ||
@@ -2074,6 +2233,46 @@ static bool r_llvm_returned_at_once(const RLlvmEmitter *emitter,
 
 static bool r_llvm_emit_load_place(RLlvmEmitter *emitter, const RMirInstruction *instruction);
 
+/* R-FFI-0061, R-FFI-0062 (B9.3): how a projection reaches memory. `alignment` is one when a
+   packed field below the alignment of its type lies on the path after the last dereference
+   (zero: the alignment of the type); `bits` is set when the projection ends at a bit-field. */
+typedef struct RLlvmPlaceAccess {
+    uint32_t alignment;
+    bool is_bits;
+    RSemanticFieldPlace bits;
+} RLlvmPlaceAccess;
+
+static bool
+r_llvm_place_access(RLlvmEmitter *emitter, RMirValueId projection, RLlvmPlaceAccess *access) {
+    bool last = true;
+
+    (void)memset(access, 0, sizeof(*access));
+    for (uint32_t depth = 0U; (projection != R_MIR_VALUE_ID_INVALID) && (depth < 4096U); ++depth) {
+        const RMirInstruction *definition = r_llvm_definition(emitter, projection);
+        if ((definition == NULL) || ((definition->kind != R_MIR_INSTRUCTION_FIELD) &&
+                                     (definition->kind != R_MIR_INSTRUCTION_INDEX))) {
+            break;
+        }
+        if (definition->kind == R_MIR_INSTRUCTION_FIELD) {
+            const RSemanticField *field = r_llvm_field(emitter, definition->aggregate_member);
+            if ((field != NULL) && r_semantic_field_without_address(emitter->frontend, field)) {
+                if (field->bit_width != 0U) {
+                    if (!last ||
+                        !r_llvm_field_place(emitter, definition->aggregate_member, &access->bits)) {
+                        return r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+                    }
+                    access->is_bits = true;
+                } else {
+                    access->alignment = 1U;
+                }
+            }
+        }
+        last = false;
+        projection = definition->operand0;
+    }
+    return true;
+}
+
 /* A read through an imported C object, a field or an element of it, is checked like any value
    that comes from C (R-FFI-0056). */
 static bool r_llvm_emit_load(RLlvmEmitter *emitter, const RMirInstruction *instruction) {
@@ -2140,10 +2339,24 @@ static bool r_llvm_emit_load_place(RLlvmEmitter *emitter, const RMirInstruction 
     }
     if (!owned || ((instruction->kind == R_MIR_INSTRUCTION_LOAD) &&
                    (instruction->operand1 != R_MIR_VALUE_ID_INVALID))) {
+        RLlvmPlaceAccess access;
         address = r_llvm_place_address(emitter,
                                        instruction->place_ordinal,
                                        instruction->place_is_parameter,
                                        instruction->operand1);
+        if (!r_llvm_place_access(emitter, instruction->operand1, &access)) {
+            return false;
+        }
+        if (access.is_bits) {
+            return r_llvm_set_value(
+                emitter,
+                instruction->result,
+                r_llvm_load_bits(emitter, instruction->type, address, &access.bits));
+        }
+        if (access.alignment != 0U) {
+            return r_llvm_load_into_aligned(
+                emitter, instruction->result, instruction->type, address, access.alignment);
+        }
         /* `return place;` of a value in memory without drop glue copies the place into the
            result, as C17 does, instead of through a slot of its own: nothing runs between the
            load and the return, which moves the value out first (R-FUNC-0004 budgets). */
@@ -2215,6 +2428,23 @@ static bool r_llvm_emit_store(RLlvmEmitter *emitter, const RMirInstruction *inst
         return false;
     }
     if (!r_llvm_type_requires_drop(emitter, value_definition->type)) {
+        RLlvmPlaceAccess access;
+        if (!r_llvm_place_access(emitter, instruction->operand1, &access)) {
+            return false;
+        }
+        if (access.is_bits) {
+            return r_llvm_store_bits(emitter,
+                                     value_definition->type,
+                                     value,
+                                     address,
+                                     &access.bits,
+                                     instruction->span,
+                                     instruction->panic_target);
+        }
+        if (access.alignment != 0U) {
+            return r_llvm_store_value_aligned(
+                emitter, value_definition->type, value, address, access.alignment);
+        }
         return r_llvm_store_value(emitter, value_definition->type, value, address);
     }
     if (instruction->operand1 != R_MIR_VALUE_ID_INVALID) {
@@ -2810,6 +3040,29 @@ r_llvm_build_aggregate(RLlvmEmitter *emitter, const RMirInstruction *instruction
         if (emitter->forwarded[value_id] == R_LLVM_FORWARDED_MEMBER) {
             /* Built in the member already (B6-3); it moved in. */
             r_llvm_set_flag(emitter, r_llvm_value_flag(emitter, value_id), false);
+            continue;
+        }
+        if (!is_array && r_semantic_field_without_address(emitter->frontend, field)) {
+            /* R-FFI-0061, R-FFI-0062: a bit-field or a packed field below its alignment. */
+            RSemanticFieldPlace place;
+            if (!r_llvm_field_place(emitter, member, &place)) {
+                return false;
+            }
+            if (place.bit_width != 0U
+                    ? !r_llvm_store_bits(emitter,
+                                         element_type,
+                                         value,
+                                         r_llvm_byte_offset(emitter, memory, offset),
+                                         &place,
+                                         instruction->span,
+                                         instruction->panic_target)
+                    : !r_llvm_store_value_aligned(emitter,
+                                                  element_type,
+                                                  value,
+                                                  r_llvm_byte_offset(emitter, memory, offset),
+                                                  1U)) {
+                return false;
+            }
             continue;
         }
         if (r_llvm_type_requires_drop(emitter, element_type)) {

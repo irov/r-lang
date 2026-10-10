@@ -35,13 +35,125 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from generate_c_abi_record import (  # noqa: E402
-    index_tag_declarations,
-    normalize_type,
-    type_children,
-    walk,
-)
+
+# The type trees of the clang JSON AST, in the schema of the ABI records (r-abi-record-0.1)
+# that compiler/clang/record.c writes from libclang.
+
+def walk(node: dict[str, Any]):
+    yield node
+    for child in node.get("inner", []) or []:
+        if isinstance(child, dict):
+            yield from walk(child)
+
+
+# Sugar around a type that does not change it: the named or adjusted type is the child.
+TYPE_WRAPPERS = {
+    "ElaboratedType",
+    "ParenType",
+    "AttributedType",
+    "MacroQualifiedType",
+    "BTFTagAttributedType",
+    "CountAttributedType",
+    "TypeOfExprType",
+    "TypeOfType",
+    "UsingType",
+}
+
+
+def type_children(node: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        child
+        for child in node.get("inner", []) or []
+        if isinstance(child, dict) and child.get("kind", "").endswith("Type")
+    ]
+
+
+def index_tag_declarations(tree: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Complete record and every enumeration declaration by AST id."""
+    result: dict[str, dict[str, Any]] = {}
+    for node in walk(tree):
+        kind = node.get("kind")
+        if (kind == "RecordDecl" and node.get("completeDefinition")) or (
+            kind == "EnumDecl"
+            and any(child.get("kind") == "EnumConstantDecl" for child in node.get("inner", []) or [])
+        ):
+            result[node["id"]] = node
+    return result
+
+
+def normalize_type(
+    node: dict[str, Any], tags: dict[str, dict[str, Any]], atomics: bool = False
+) -> dict[str, Any]:
+    """One compiler type node as a record type tree (schema r-abi-record-0.1). With `atomics`,
+    `_Atomic(T)` is T marked atomic (the layout tables of the LLVM backend); otherwise it is not
+    expressible (R-FFI-0019)."""
+    kind = node.get("kind", "")
+    children = type_children(node)
+    spelling = node.get("type", {}).get("qualType", "")
+    if kind == "QualType":
+        inner = normalize_type(children[0], tags, atomics) if children else {"node": "other"}
+        qualifiers = node.get("qualifiers", "").split()
+        if "const" in qualifiers:
+            inner["const"] = True
+        if any(qualifier != "const" for qualifier in qualifiers):
+            # volatile, restrict and _Atomic are not expressible (R-FFI-0019).
+            inner = {"node": "other", "spelling": spelling}
+        return inner
+    if kind in TYPE_WRAPPERS:
+        return normalize_type(children[0], tags, atomics) if children else {"node": "other", "spelling": spelling}
+    if kind == "DecayedType":
+        return normalize_type(children[-1], tags, atomics) if children else {"node": "other", "spelling": spelling}
+    if kind == "TypedefType":
+        inner = normalize_type(children[0], tags, atomics) if children else {"node": "other", "spelling": spelling}
+        name = node.get("decl", {}).get("name", "")
+        if name and inner.get("node") in ("record", "enum"):
+            # The outermost typedef is how the header spelled this position.
+            inner["typedef"] = name
+        return inner
+    if kind == "BuiltinType":
+        if spelling == "void":
+            return {"node": "void"}
+        return {"node": "scalar", "spelling": spelling}
+    if kind == "PointerType":
+        return {"node": "pointer", "pointee": normalize_type(children[0], tags, atomics)}
+    if kind == "FunctionProtoType":
+        return {
+            "node": "function",
+            "result": normalize_type(children[0], tags, atomics),
+            "parameters": [normalize_type(child, tags, atomics) for child in children[1:]],
+            "variadic": bool(node.get("variadic", False)),
+        }
+    if kind == "FunctionNoProtoType":
+        return {"node": "other", "spelling": spelling}
+    if kind == "RecordType":
+        decl = node.get("decl", {})
+        declaration = tags.get(decl.get("id", ""))
+        tag = declaration.get("tagUsed", "struct") if declaration else (
+            "union" if spelling.startswith("union ") else "struct"
+        )
+        # The declaration of this compilation only; AST ids never leave the generator.
+        return {
+            "node": "record",
+            "tag": tag,
+            "tag_name": decl.get("name", "") or "",
+            "complete": declaration is not None,
+            "_declaration": declaration,
+        }
+    if kind == "EnumType":
+        decl = node.get("decl", {})
+        return {
+            "node": "enum",
+            "tag_name": decl.get("name", "") or "",
+            "_declaration": tags.get(decl.get("id", "")),
+        }
+    if kind == "AtomicType" and atomics and children:
+        inner = dict(normalize_type(children[0], tags, atomics))
+        inner["atomic"] = True
+        return inner
+    if kind == "ConstantArrayType":
+        return {"node": "array", "length": int(node.get("size", 0)), "element": normalize_type(children[0], tags, atomics)}
+    return {"node": "other", "spelling": spelling}
+
 
 OUTPUT = Path("compiler/llvm/runtime_surface.generated.inc")
 SHIMS = Path("runtime/llvm/inline_shims.generated.c")

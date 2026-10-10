@@ -5,11 +5,11 @@
   "coverage_note": "This catalog records normative source rules only. It makes no claim that a rule is implemented, tested or otherwise covered.",
   "generated_from": {
     "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-    "revision": "0.1.0-draft.74",
-    "sha256": "43d2f47ffa40ecb8f28e8721f50bd6aec317c8f7a900d877922ed5673e96723d"
+    "revision": "0.1.0-draft.75",
+    "sha256": "2bf8cd9d319dd94ed823c2b8ab67ad6adf987b31a3f65a9479c3164e5f376b73"
   },
-  "rule_count": 478,
-  "rules_sha256": "1b31a8f616fef5afb7132e187c940f960ff4ac0cf6442e7475b9ed32691e9bf2",
+  "rule_count": 482,
+  "rules_sha256": "eca5ddd9f8bca5b7f256d728c279ac5aa28ac502832f4db21d75676afe782d8b",
   "rules": [
     {
       "id": "R-SLIB-GEN-0001",
@@ -5139,7 +5139,7 @@
         "declaration_column": 1,
         "end_line": 4483
       },
-      "text_sha256": "d275cb099b0ee27f3804e4520e1070c379df6d321eff0e6abc635fa4a77db33c"
+      "text_sha256": "82a1705f804ba26fbf53e6f78d6b08e98b36ceb803f127ea58db0ce0a7003d65"
     },
     {
       "id": "R-SLIB-RSRC-0003",
@@ -11630,7 +11630,123 @@
         "declaration_column": 1,
         "end_line": 8363
       },
-      "text_sha256": "e07eab7b7ca50c3e62a133ba73dc7e72673ca3f610696ad863a736a2588d2785"
+      "text_sha256": "b6c1357dc3b372b69703969390766dc7c4bff2c4326479cbf1fbbbbd86ebc2ab"
+    },
+    {
+      "id": "R-SLIB-DL-0001",
+      "anchor": "R-SLIB-DL-0001",
+      "headings": [
+        {
+          "level": 1,
+          "title": "R Standard Library Specification 0.1",
+          "line": 1
+        },
+        {
+          "level": 2,
+          "title": "21. Standard modules written in R",
+          "line": 4446
+        },
+        {
+          "level": 3,
+          "title": "21.35 Shared libraries opened at run time: `+std.dl+`",
+          "line": 8363
+        }
+      ],
+      "source_location": {
+        "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
+        "anchor_line": 8365,
+        "declaration_line": 8366,
+        "declaration_column": 1,
+        "end_line": 8372
+      },
+      "text_sha256": "8e31d1ea0f01d0307b7a61dce409fe4864cbe1fa86d5d3a4d06b87b60934b914"
+    },
+    {
+      "id": "R-SLIB-DL-0002",
+      "anchor": "R-SLIB-DL-0002",
+      "headings": [
+        {
+          "level": 1,
+          "title": "R Standard Library Specification 0.1",
+          "line": 1
+        },
+        {
+          "level": 2,
+          "title": "21. Standard modules written in R",
+          "line": 4446
+        },
+        {
+          "level": 3,
+          "title": "21.35 Shared libraries opened at run time: `+std.dl+`",
+          "line": 8363
+        }
+      ],
+      "source_location": {
+        "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
+        "anchor_line": 8374,
+        "declaration_line": 8375,
+        "declaration_column": 1,
+        "end_line": 8381
+      },
+      "text_sha256": "535786d516160d5226b772e858ad1bdc67b45734847a1abccf4e4cddee540b46"
+    },
+    {
+      "id": "R-SLIB-DL-0003",
+      "anchor": "R-SLIB-DL-0003",
+      "headings": [
+        {
+          "level": 1,
+          "title": "R Standard Library Specification 0.1",
+          "line": 1
+        },
+        {
+          "level": 2,
+          "title": "21. Standard modules written in R",
+          "line": 4446
+        },
+        {
+          "level": 3,
+          "title": "21.35 Shared libraries opened at run time: `+std.dl+`",
+          "line": 8363
+        }
+      ],
+      "source_location": {
+        "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
+        "anchor_line": 8383,
+        "declaration_line": 8384,
+        "declaration_column": 1,
+        "end_line": 8387
+      },
+      "text_sha256": "14c348283991b5bca15816dd8236b4f153b36b15abc56c5f3d943cb0718b508a"
+    },
+    {
+      "id": "R-SLIB-DL-0004",
+      "anchor": "R-SLIB-DL-0004",
+      "headings": [
+        {
+          "level": 1,
+          "title": "R Standard Library Specification 0.1",
+          "line": 1
+        },
+        {
+          "level": 2,
+          "title": "21. Standard modules written in R",
+          "line": 4446
+        },
+        {
+          "level": 3,
+          "title": "21.35 Shared libraries opened at run time: `+std.dl+`",
+          "line": 8363
+        }
+      ],
+      "source_location": {
+        "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
+        "anchor_line": 8389,
+        "declaration_line": 8390,
+        "declaration_column": 1,
+        "end_line": 8398
+      },
+      "text_sha256": "a83198e40920babbbc3fbfa3bea0afaff5210450442fed54a08f028f070256a9"
     },
     {
       "id": "R-SLIB-API-A001",
@@ -11644,17 +11760,17 @@
         {
           "level": 2,
           "title": "Annex A — Normative public API inventory",
-          "line": 8363
+          "line": 8398
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8365,
-        "declaration_line": 8366,
+        "anchor_line": 8400,
+        "declaration_line": 8401,
         "declaration_column": 1,
-        "end_line": 8824
+        "end_line": 8866
       },
-      "text_sha256": "5da8b395fd11d794e957c841acfb4c3f10bd9268776678fcc689109f14614085"
+      "text_sha256": "17e56aa6c6bf754b51fda4e1f38c42e98925d7b5541367f4d857e56bc3ec73a7"
     },
     {
       "id": "R-SLIB-API-A002",
@@ -11668,20 +11784,20 @@
         {
           "level": 2,
           "title": "Annex A — Normative public API inventory",
-          "line": 8363
+          "line": 8398
         },
         {
           "level": 3,
           "title": "A.2 Asynchronous APIs",
-          "line": 8609
+          "line": 8651
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8826,
-        "declaration_line": 8827,
+        "anchor_line": 8868,
+        "declaration_line": 8869,
         "declaration_column": 1,
-        "end_line": 8839
+        "end_line": 8881
       },
       "text_sha256": "a7d489e0f7cdcba7dfdc8741fe58f1a47bf1b42bfe8af091e4b8777e35ba3cfb"
     },
@@ -11697,20 +11813,20 @@
         {
           "level": 2,
           "title": "Annex A — Normative public API inventory",
-          "line": 8363
+          "line": 8398
         },
         {
           "level": 3,
           "title": "A.2 Asynchronous APIs",
-          "line": 8609
+          "line": 8651
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8841,
-        "declaration_line": 8842,
+        "anchor_line": 8883,
+        "declaration_line": 8884,
         "declaration_column": 1,
-        "end_line": 8847
+        "end_line": 8889
       },
       "text_sha256": "8e02c0fefe249db25e44acc02641e625552a9569bc2c68a2a2b9b132e7c97bdb"
     },
@@ -11726,15 +11842,15 @@
         {
           "level": 2,
           "title": "Annex B — Normative C17 and native mapping",
-          "line": 8849
+          "line": 8891
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8851,
-        "declaration_line": 8852,
+        "anchor_line": 8893,
+        "declaration_line": 8894,
         "declaration_column": 1,
-        "end_line": 8856
+        "end_line": 8898
       },
       "text_sha256": "a4e97a0b67b0b6d18760d92c0ea31d401380591ffa658fc938761689989d120e"
     },
@@ -11750,15 +11866,15 @@
         {
           "level": 2,
           "title": "Annex B — Normative C17 and native mapping",
-          "line": 8849
+          "line": 8891
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8858,
-        "declaration_line": 8859,
+        "anchor_line": 8900,
+        "declaration_line": 8901,
         "declaration_column": 1,
-        "end_line": 8986
+        "end_line": 9028
       },
       "text_sha256": "b722482b4f7a52412cb0a176dbc20156827f205bb40346acb62357ec8a03f260"
     },
@@ -11774,15 +11890,15 @@
         {
           "level": 2,
           "title": "Annex B — Normative C17 and native mapping",
-          "line": 8849
+          "line": 8891
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8988,
-        "declaration_line": 8989,
+        "anchor_line": 9030,
+        "declaration_line": 9031,
         "declaration_column": 1,
-        "end_line": 8996
+        "end_line": 9038
       },
       "text_sha256": "0b0e395682534bdb10c0023e205c7ef32ca3ee18f846701312ff0e1e6c40fd35"
     },
@@ -11798,15 +11914,15 @@
         {
           "level": 2,
           "title": "Annex B — Normative C17 and native mapping",
-          "line": 8849
+          "line": 8891
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8998,
-        "declaration_line": 8999,
+        "anchor_line": 9040,
+        "declaration_line": 9041,
         "declaration_column": 1,
-        "end_line": 9006
+        "end_line": 9048
       },
       "text_sha256": "8734d48777b5d5f96994ec7904e4e31610fb1cfecc951ac3d6df4e3ce7c1f970"
     },
@@ -11822,15 +11938,15 @@
         {
           "level": 2,
           "title": "Annex B — Normative C17 and native mapping",
-          "line": 8849
+          "line": 8891
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9008,
-        "declaration_line": 9009,
+        "anchor_line": 9050,
+        "declaration_line": 9051,
         "declaration_column": 1,
-        "end_line": 9016
+        "end_line": 9058
       },
       "text_sha256": "185598d0981cb33a1218810651214ca9d6e07fd0d78874e819c6341b64c241df"
     },
@@ -11846,15 +11962,15 @@
         {
           "level": 2,
           "title": "Annex B — Normative C17 and native mapping",
-          "line": 8849
+          "line": 8891
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9018,
-        "declaration_line": 9019,
+        "anchor_line": 9060,
+        "declaration_line": 9061,
         "declaration_column": 1,
-        "end_line": 9023
+        "end_line": 9065
       },
       "text_sha256": "74ba9a77015f3d3a5362ae02ca1b49249dd108f36fe0bab25b33c78d24cd7f34"
     },
@@ -11870,15 +11986,15 @@
         {
           "level": 2,
           "title": "Annex B — Normative C17 and native mapping",
-          "line": 8849
+          "line": 8891
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9025,
-        "declaration_line": 9026,
+        "anchor_line": 9067,
+        "declaration_line": 9068,
         "declaration_column": 1,
-        "end_line": 9030
+        "end_line": 9072
       },
       "text_sha256": "276632499676a7c99d403a92f2488077ec6a31e1a31658c8960fdca08f4683d5"
     },
@@ -11894,15 +12010,15 @@
         {
           "level": 2,
           "title": "Annex B — Normative C17 and native mapping",
-          "line": 8849
+          "line": 8891
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9032,
-        "declaration_line": 9033,
+        "anchor_line": 9074,
+        "declaration_line": 9075,
         "declaration_column": 1,
-        "end_line": 9036
+        "end_line": 9078
       },
       "text_sha256": "4beb4c6134fe611baa108a4b0a318c701b840e897779993fec35162ac3aae97e"
     },
@@ -11918,15 +12034,15 @@
         {
           "level": 2,
           "title": "Annex B — Normative C17 and native mapping",
-          "line": 8849
+          "line": 8891
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9038,
-        "declaration_line": 9039,
+        "anchor_line": 9080,
+        "declaration_line": 9081,
         "declaration_column": 1,
-        "end_line": 9047
+        "end_line": 9089
       },
       "text_sha256": "a0107b976aafff4828e4fa0be27064da7fd406d114376fd0ddbca7822877d847"
     },
@@ -11942,15 +12058,15 @@
         {
           "level": 2,
           "title": "Annex B — Normative C17 and native mapping",
-          "line": 8849
+          "line": 8891
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9049,
-        "declaration_line": 9050,
+        "anchor_line": 9091,
+        "declaration_line": 9092,
         "declaration_column": 1,
-        "end_line": 9055
+        "end_line": 9097
       },
       "text_sha256": "59772550f67ecd1978287d029454eec503caa15a09e76838d102f36b9aa11125"
     },
@@ -11966,15 +12082,15 @@
         {
           "level": 2,
           "title": "Annex B — Normative C17 and native mapping",
-          "line": 8849
+          "line": 8891
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9057,
-        "declaration_line": 9058,
+        "anchor_line": 9099,
+        "declaration_line": 9100,
         "declaration_column": 1,
-        "end_line": 9065
+        "end_line": 9107
       },
       "text_sha256": "9c80488d4167bd6b84fa0b4ab1bde91e32adc0df97c7d4f112dc8ff03163ee95"
     },
@@ -11990,15 +12106,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9067
+          "line": 9109
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9072,
-        "declaration_line": 9073,
+        "anchor_line": 9114,
+        "declaration_line": 9115,
         "declaration_column": 1,
-        "end_line": 9075
+        "end_line": 9117
       },
       "text_sha256": "f36288fe8393324eee30642f428ea136aba98c9a7c66ffb9b62ba3757ae614b4"
     },
@@ -12014,15 +12130,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9067
+          "line": 9109
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9077,
-        "declaration_line": 9078,
+        "anchor_line": 9119,
+        "declaration_line": 9120,
         "declaration_column": 1,
-        "end_line": 9081
+        "end_line": 9123
       },
       "text_sha256": "351957c652950ef21f359f03ce8120ee886d8852f8897cef12d249427a646e75"
     },
@@ -12038,15 +12154,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9067
+          "line": 9109
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9083,
-        "declaration_line": 9084,
+        "anchor_line": 9125,
+        "declaration_line": 9126,
         "declaration_column": 1,
-        "end_line": 9087
+        "end_line": 9129
       },
       "text_sha256": "c5e6f2a78b4856094befe4ed85294d6b638d73685b27d2efbf12fcf65c577632"
     },
@@ -12062,15 +12178,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9067
+          "line": 9109
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9089,
-        "declaration_line": 9090,
+        "anchor_line": 9131,
+        "declaration_line": 9132,
         "declaration_column": 1,
-        "end_line": 9092
+        "end_line": 9134
       },
       "text_sha256": "3b16f42954f18afd96a8732bc2996bb6021d58d8bd6ed5266652942bf5b4c6b4"
     },
@@ -12086,15 +12202,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9067
+          "line": 9109
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9094,
-        "declaration_line": 9095,
+        "anchor_line": 9136,
+        "declaration_line": 9137,
         "declaration_column": 1,
-        "end_line": 9097
+        "end_line": 9139
       },
       "text_sha256": "82779522096ed9b31042ae84c20103c8c54380dcc37951d8eea12a97898ef661"
     },
@@ -12110,15 +12226,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9067
+          "line": 9109
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9099,
-        "declaration_line": 9100,
+        "anchor_line": 9141,
+        "declaration_line": 9142,
         "declaration_column": 1,
-        "end_line": 9106
+        "end_line": 9148
       },
       "text_sha256": "214f9121dc71e8154073cbf443ac91abc3887abd85dad88bacc641359306a3fc"
     },
@@ -12134,15 +12250,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9067
+          "line": 9109
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9108,
-        "declaration_line": 9109,
+        "anchor_line": 9150,
+        "declaration_line": 9151,
         "declaration_column": 1,
-        "end_line": 9111
+        "end_line": 9153
       },
       "text_sha256": "af449c90541246c1aed2988bd11c2d859e859637b4831b15ac537d15adc6a6bb"
     },
@@ -12158,15 +12274,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9067
+          "line": 9109
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9113,
-        "declaration_line": 9114,
+        "anchor_line": 9155,
+        "declaration_line": 9156,
         "declaration_column": 1,
-        "end_line": 9117
+        "end_line": 9159
       },
       "text_sha256": "2dfc68c1edb7e3666f35c570b23b957813173e59bcaeea3748ed234a7f7f68d9"
     },
@@ -12182,15 +12298,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9067
+          "line": 9109
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9119,
-        "declaration_line": 9120,
+        "anchor_line": 9161,
+        "declaration_line": 9162,
         "declaration_column": 1,
-        "end_line": 9128
+        "end_line": 9170
       },
       "text_sha256": "21e0b27ffd4a2cf975c5fe861f6f5992942a84a0521f8cbd48803d51406be1f3"
     },
@@ -12206,15 +12322,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9067
+          "line": 9109
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9130,
-        "declaration_line": 9131,
+        "anchor_line": 9172,
+        "declaration_line": 9173,
         "declaration_column": 1,
-        "end_line": 9139
+        "end_line": 9181
       },
       "text_sha256": "b958337bddc61c3223b03d4ced5943bdece28e9c065f2e200b8336a4a1ad3570"
     },
@@ -12230,15 +12346,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9067
+          "line": 9109
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9141,
-        "declaration_line": 9142,
+        "anchor_line": 9183,
+        "declaration_line": 9184,
         "declaration_column": 1,
-        "end_line": 9154
+        "end_line": 9196
       },
       "text_sha256": "8e59d8812e1d29d955a9ca0ecafe7feb2277745b65dec4ddf1bfcbd29284fe52"
     },
@@ -12254,15 +12370,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9067
+          "line": 9109
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9156,
-        "declaration_line": 9157,
+        "anchor_line": 9198,
+        "declaration_line": 9199,
         "declaration_column": 1,
-        "end_line": 9160
+        "end_line": 9202
       },
       "text_sha256": "8d49f39f4e7b13604ebbed79ee4387d5767aec8f8ad3d001b7c8308373e5816c"
     },
@@ -12278,15 +12394,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9067
+          "line": 9109
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9162,
-        "declaration_line": 9163,
+        "anchor_line": 9204,
+        "declaration_line": 9205,
         "declaration_column": 1,
-        "end_line": 9165
+        "end_line": 9207
       },
       "text_sha256": "8cc203be65a6ef61ce8d1902f1125cc5c4c873daf4f99a0f7e29fae22dd267ba"
     },
@@ -12302,15 +12418,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9067
+          "line": 9109
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9167,
-        "declaration_line": 9168,
+        "anchor_line": 9209,
+        "declaration_line": 9210,
         "declaration_column": 1,
-        "end_line": 9180
+        "end_line": 9222
       },
       "text_sha256": "2b73492bdb17cd0a70b043c56ba2b151b719e08b0b8ce45c46b603b24ea9e0e3"
     },
@@ -12326,15 +12442,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9067
+          "line": 9109
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9182,
-        "declaration_line": 9183,
+        "anchor_line": 9224,
+        "declaration_line": 9225,
         "declaration_column": 1,
-        "end_line": 9188
+        "end_line": 9230
       },
       "text_sha256": "93910660dd35ebafda5ba77721d78b7f2b47c4265ab9c229090360fa4295fc89"
     },
@@ -12350,15 +12466,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9067
+          "line": 9109
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9190,
-        "declaration_line": 9191,
+        "anchor_line": 9232,
+        "declaration_line": 9233,
         "declaration_column": 1,
-        "end_line": 9200
+        "end_line": 9242
       },
       "text_sha256": "cdba2985f611aee4623e111657e4205dcd3e9e15d41f0ce037c2e01be240bbe7"
     },
@@ -12374,15 +12490,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9067
+          "line": 9109
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9202,
-        "declaration_line": 9203,
+        "anchor_line": 9244,
+        "declaration_line": 9245,
         "declaration_column": 1,
-        "end_line": 9207
+        "end_line": 9249
       },
       "text_sha256": "6254eb38ebf3fff9dc5757dfe7ac9b1b2f010cba7ea4a245561ef16afe650317"
     },
@@ -12398,15 +12514,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9067
+          "line": 9109
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9209,
-        "declaration_line": 9210,
+        "anchor_line": 9251,
+        "declaration_line": 9252,
         "declaration_column": 1,
-        "end_line": 9213
+        "end_line": 9255
       },
       "text_sha256": "1dc1e4ccf7a2a3c64352a9ad03c5c50f076a9ca9f623ac94848add98f6c7dc74"
     },
@@ -12422,15 +12538,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9067
+          "line": 9109
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9215,
-        "declaration_line": 9216,
+        "anchor_line": 9257,
+        "declaration_line": 9258,
         "declaration_column": 1,
-        "end_line": 9219
+        "end_line": 9261
       },
       "text_sha256": "ff646b5a90f0f6c346334221737039b0857c2d14db94a38f674e866860fafb4b"
     },
@@ -12446,15 +12562,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined library behavior",
-          "line": 9067
+          "line": 9109
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9221,
-        "declaration_line": 9222,
+        "anchor_line": 9263,
+        "declaration_line": 9264,
         "declaration_column": 1,
-        "end_line": 9227
+        "end_line": 9269
       },
       "text_sha256": "88c90411297452bca312f938a08818ce8f8b060386d4b84a20ce8b70f9803240"
     },
@@ -12470,15 +12586,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9229
+          "line": 9271
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9231,
-        "declaration_line": 9232,
+        "anchor_line": 9273,
+        "declaration_line": 9274,
         "declaration_column": 1,
-        "end_line": 9262
+        "end_line": 9304
       },
       "text_sha256": "a59424ad27147761099b4bc08a401faa0b90b2ca40786b1fbf1da31c5f4279b1"
     },
@@ -12494,15 +12610,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9229
+          "line": 9271
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9264,
-        "declaration_line": 9265,
+        "anchor_line": 9306,
+        "declaration_line": 9307,
         "declaration_column": 1,
-        "end_line": 9316
+        "end_line": 9358
       },
       "text_sha256": "a22244a6ad76c7aa1a1d867bf6cc0cff9131727668d0d8c70e09b47632ad48db"
     },
@@ -12518,15 +12634,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9229
+          "line": 9271
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9318,
-        "declaration_line": 9319,
+        "anchor_line": 9360,
+        "declaration_line": 9361,
         "declaration_column": 1,
-        "end_line": 9340
+        "end_line": 9382
       },
       "text_sha256": "a12c9805583205ad8ba1f778ac41afd0881213497be4def32461a74a92f1f368"
     },
@@ -12542,15 +12658,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9229
+          "line": 9271
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9342,
-        "declaration_line": 9343,
+        "anchor_line": 9384,
+        "declaration_line": 9385,
         "declaration_column": 1,
-        "end_line": 9362
+        "end_line": 9404
       },
       "text_sha256": "dbb9f7f0e59d3fc9d182bf34525c27614666e5a1742a409e187d704bc319af5f"
     },
@@ -12566,15 +12682,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9229
+          "line": 9271
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9364,
-        "declaration_line": 9365,
+        "anchor_line": 9406,
+        "declaration_line": 9407,
         "declaration_column": 1,
-        "end_line": 9379
+        "end_line": 9421
       },
       "text_sha256": "ed64c36477905d34954deddffae91d00c136ee9d9d2144f5bba6a437251a2c8a"
     },
@@ -12590,15 +12706,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9229
+          "line": 9271
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9381,
-        "declaration_line": 9382,
+        "anchor_line": 9423,
+        "declaration_line": 9424,
         "declaration_column": 1,
-        "end_line": 9409
+        "end_line": 9451
       },
       "text_sha256": "a32ef5ec9792d553165cb20a962a4cfbb8c80a39aa7100cdce9826f2118bbf34"
     },
@@ -12614,15 +12730,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9229
+          "line": 9271
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9411,
-        "declaration_line": 9412,
+        "anchor_line": 9453,
+        "declaration_line": 9454,
         "declaration_column": 1,
-        "end_line": 9426
+        "end_line": 9468
       },
       "text_sha256": "1e63cf22510e1b10ded7081a683d83c0b68bb886483734d8d91216d731345e45"
     },
@@ -12638,15 +12754,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9229
+          "line": 9271
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9428,
-        "declaration_line": 9429,
+        "anchor_line": 9470,
+        "declaration_line": 9471,
         "declaration_column": 1,
-        "end_line": 9442
+        "end_line": 9484
       },
       "text_sha256": "91e2896fa2b2eca7bb2bbe15d918a0c9a0fd8374dff5c7d4c50fe83428edb9ba"
     },
@@ -12662,15 +12778,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9229
+          "line": 9271
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9444,
-        "declaration_line": 9445,
+        "anchor_line": 9486,
+        "declaration_line": 9487,
         "declaration_column": 1,
-        "end_line": 9449
+        "end_line": 9491
       },
       "text_sha256": "bba5fe9896976c7fbea5310c64707ca1bfd444f10751ef42e5880d1950de73b1"
     },
@@ -12686,15 +12802,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9229
+          "line": 9271
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9451,
-        "declaration_line": 9452,
+        "anchor_line": 9493,
+        "declaration_line": 9494,
         "declaration_column": 1,
-        "end_line": 9471
+        "end_line": 9513
       },
       "text_sha256": "07e94bbd0f17e471b626cc69e4706fece540c4f72d0e51ccd957a7b37f41ba9d"
     },
@@ -12710,15 +12826,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9229
+          "line": 9271
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9473,
-        "declaration_line": 9474,
+        "anchor_line": 9515,
+        "declaration_line": 9516,
         "declaration_column": 1,
-        "end_line": 9533
+        "end_line": 9575
       },
       "text_sha256": "07679d5398ae25b02b9771e87de4c6f07554c9329df7994a08e14b8d81afedb4"
     },
@@ -12734,15 +12850,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9229
+          "line": 9271
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9535,
-        "declaration_line": 9536,
+        "anchor_line": 9577,
+        "declaration_line": 9578,
         "declaration_column": 1,
-        "end_line": 9577
+        "end_line": 9619
       },
       "text_sha256": "878ad201eec0765016b9829400414a048964a359d30cf68730ed5d4bcc61a5ca"
     },
@@ -12758,15 +12874,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9229
+          "line": 9271
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9579,
-        "declaration_line": 9580,
+        "anchor_line": 9621,
+        "declaration_line": 9622,
         "declaration_column": 1,
-        "end_line": 9623
+        "end_line": 9665
       },
       "text_sha256": "aaf697c350232504a570b5b08826670efbfb7632c08b3ea75e4a6b0ab0225212"
     },
@@ -12782,15 +12898,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9229
+          "line": 9271
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9625,
-        "declaration_line": 9626,
+        "anchor_line": 9667,
+        "declaration_line": 9668,
         "declaration_column": 1,
-        "end_line": 9641
+        "end_line": 9683
       },
       "text_sha256": "c73193e5ca162a600721a2a44300814f3b25e1fe8e4a53c7aaa0f57e01425b0d"
     },
@@ -12806,15 +12922,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9229
+          "line": 9271
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9643,
-        "declaration_line": 9644,
+        "anchor_line": 9685,
+        "declaration_line": 9686,
         "declaration_column": 1,
-        "end_line": 9653
+        "end_line": 9695
       },
       "text_sha256": "2654b4883a493bd0dca0ba50e2bd32837dbc88934401f0f96b27941d0328bbaa"
     },
@@ -12830,15 +12946,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9229
+          "line": 9271
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9655,
-        "declaration_line": 9656,
+        "anchor_line": 9697,
+        "declaration_line": 9698,
         "declaration_column": 1,
-        "end_line": 9660
+        "end_line": 9702
       },
       "text_sha256": "4a2d9ce7fb299c95731713b9fa152b55ebd65f03e91d1b545059e9de551f20e5"
     },
@@ -12854,15 +12970,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9229
+          "line": 9271
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9662,
-        "declaration_line": 9663,
+        "anchor_line": 9704,
+        "declaration_line": 9705,
         "declaration_column": 1,
-        "end_line": 9665
+        "end_line": 9707
       },
       "text_sha256": "d27590c6728a827310cc043df7a2b88725694573765f3ac276d17578b0910bec"
     },
@@ -12878,15 +12994,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9229
+          "line": 9271
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9667,
-        "declaration_line": 9668,
+        "anchor_line": 9709,
+        "declaration_line": 9710,
         "declaration_column": 1,
-        "end_line": 9671
+        "end_line": 9713
       },
       "text_sha256": "46231dc8e60f265bcadc42efb89cea0545cc789eda2b019b779ea0b2e747560e"
     },
@@ -12902,15 +13018,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9229
+          "line": 9271
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9673,
-        "declaration_line": 9674,
+        "anchor_line": 9715,
+        "declaration_line": 9716,
         "declaration_column": 1,
-        "end_line": 9680
+        "end_line": 9722
       },
       "text_sha256": "d3d57ecbd111042548823b379ac312bf22574b8cefb473622cb9e2004e2d1b85"
     },
@@ -12926,15 +13042,15 @@
         {
           "level": 2,
           "title": "Annex D — Conformance requirements",
-          "line": 9229
+          "line": 9271
         }
       ],
       "source_location": {
         "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 9682,
-        "declaration_line": 9683,
+        "anchor_line": 9724,
+        "declaration_line": 9725,
         "declaration_column": 1,
-        "end_line": 9691
+        "end_line": 9733
       },
       "text_sha256": "8bb4c6684a591c9e372645610f2c2d4cfc37e164c06c884590f2a4d5d8a45308"
     }

@@ -878,6 +878,7 @@ bool r_link_manifest_kind_from_text(const uint8_t *bytes, size_t length, RLinkKi
         {"dynamic", R_LINK_KIND_DYNAMIC},
         {"framework", R_LINK_KIND_FRAMEWORK},
         {"system", R_LINK_KIND_SYSTEM},
+        {"loadable", R_LINK_KIND_LOADABLE},
     };
     size_t index;
 
@@ -903,6 +904,8 @@ const char *r_link_manifest_kind_name(RLinkKind kind) {
         return "framework";
     case R_LINK_KIND_SYSTEM:
         return "system";
+    case R_LINK_KIND_LOADABLE:
+        return "loadable";
     case R_LINK_KIND_UNSPECIFIED:
     default:
         return "unspecified";

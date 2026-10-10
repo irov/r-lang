@@ -361,7 +361,7 @@ static LLVMMetadataRef r_llvm_debug_struct(RLlvmEmitter *emitter,
     uint32_t index;
 
     placeholder = LLVMDIBuilderCreateReplaceableCompositeType(emitter->debug_builder,
-                                                              0x13U,
+                                                              aggregate->is_union ? 0x17U : 0x13U,
                                                               name,
                                                               strlen(name),
                                                               emitter->debug_unit,
@@ -392,6 +392,27 @@ static LLVMMetadataRef r_llvm_debug_struct(RLlvmEmitter *emitter,
             continue;
         }
         field_name = r_llvm_debug_text(emitter, field->name_intern_id, &length);
+        if (field->bit_width != 0U) {
+            /* R-FFI-0062: a bit-field member at its bit offset in the struct. */
+            RSemanticFieldPlace place;
+            if (!r_llvm_field_place(emitter, field_id, &place)) {
+                emitter->status = status;
+                continue;
+            }
+            members[count++] = LLVMDIBuilderCreateBitFieldMemberType(
+                emitter->debug_builder,
+                placeholder,
+                field_name,
+                length,
+                emitter->debug_files[0],
+                0U,
+                place.bit_width,
+                (place.offset * 8U) + place.bit_offset,
+                0U,
+                LLVMDIFlagZero,
+                r_llvm_debug_type_at(emitter, field->type, depth + 1U));
+            continue;
+        }
         members[count++] =
             r_llvm_debug_member(emitter,
                                 placeholder,
@@ -402,22 +423,37 @@ static LLVMMetadataRef r_llvm_debug_struct(RLlvmEmitter *emitter,
                                 (uint64_t)field_size * 8U,
                                 field_align);
     }
-    result = LLVMDIBuilderCreateStructType(emitter->debug_builder,
-                                           emitter->debug_unit,
-                                           name,
-                                           strlen(name),
-                                           emitter->debug_files[0],
-                                           0U,
-                                           (uint64_t)size * 8U,
-                                           align * 8U,
-                                           LLVMDIFlagZero,
-                                           NULL,
-                                           members,
-                                           count,
-                                           0U,
-                                           NULL,
-                                           "",
-                                           0U);
+    /* R-AGG-0014: a union is described as one, every member at offset zero. */
+    result = aggregate->is_union ? LLVMDIBuilderCreateUnionType(emitter->debug_builder,
+                                                                emitter->debug_unit,
+                                                                name,
+                                                                strlen(name),
+                                                                emitter->debug_files[0],
+                                                                0U,
+                                                                (uint64_t)size * 8U,
+                                                                align * 8U,
+                                                                LLVMDIFlagZero,
+                                                                members,
+                                                                count,
+                                                                0U,
+                                                                "",
+                                                                0U)
+                                 : LLVMDIBuilderCreateStructType(emitter->debug_builder,
+                                                                 emitter->debug_unit,
+                                                                 name,
+                                                                 strlen(name),
+                                                                 emitter->debug_files[0],
+                                                                 0U,
+                                                                 (uint64_t)size * 8U,
+                                                                 align * 8U,
+                                                                 LLVMDIFlagZero,
+                                                                 NULL,
+                                                                 members,
+                                                                 count,
+                                                                 0U,
+                                                                 NULL,
+                                                                 "",
+                                                                 0U);
     LLVMMetadataReplaceAllUsesWith(placeholder, result);
     emitter->debug_types[value_id] = result;
     return result;

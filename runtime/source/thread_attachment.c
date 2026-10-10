@@ -230,6 +230,11 @@ void r_runtime_c_entry_begin(RRuntimeCEntryGuard *guard) {
     if (!r_runtime_thread_current_attached) {
         const RRuntimeThreadAttachResult attached = r_runtime_thread_attach();
 
+        if (attached.status == R_RUNTIME_THREAD_ATTACH_RUNTIME_STOPPING) {
+            /* R-FFI-0055, R-FFI-0064: an export entered before the runtime started (a library
+               before NAME_initialize) or after its shutdown; the caller broke the contract. */
+            r_runtime_thread_contract_violation();
+        }
         if (attached.status != R_RUNTIME_THREAD_ATTACH_OK) {
             abort();
         }

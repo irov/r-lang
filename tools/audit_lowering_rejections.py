@@ -35,7 +35,7 @@ INCLUDE = re.compile(r'^#include "([^"]+\.inc)"$', re.MULTILINE)
 UNITS = (
     "compiler/mir/mir.c",
     "compiler/llvm",
-    "compiler/codegen/c_abi_bridge.c",
+    "compiler/codegen/c_abi_verifier.c",
 )
 
 
@@ -70,8 +70,8 @@ def category(unit: str, path: Path, function: str) -> str:
         if function == "r_frontend_lower_mir":
             return "mir-lowering"
         return "mir-artifact-selection"
-    if unit.endswith("c_abi_bridge.c"):
-        return "c-abi-bridge"
+    if unit.endswith("c_abi_verifier.c"):
+        return "c-abi-verifier"
     # The LLVM emitter: one category per file, which holds one family of lowerings.
     return "llvm-" + path.stem.replace("_", "-")
 

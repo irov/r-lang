@@ -422,8 +422,8 @@ RFrontendStatus r_frontend_scan_interface(RFrontendContext *context, RSourceId s
     while (r_scan_kind(source, index) != R_TOKEN_EOF) {
         size_t significant = r_skip_trivia(source, index);
         RTokenKind kind = r_scan_kind(source, significant);
-        if ((kind == R_TOKEN_KW_STRUCT) || (kind == R_TOKEN_KW_ENUM) ||
-            r_scan_error_declaration(source, significant)) {
+        if ((kind == R_TOKEN_KW_STRUCT) || (kind == R_TOKEN_KW_UNION) ||
+            (kind == R_TOKEN_KW_ENUM) || r_scan_error_declaration(source, significant)) {
             size_t previous = significant;
             size_t next = significant + 1U;
             bool is_protected = false;
@@ -3737,6 +3737,7 @@ static bool r_attribute_name_is_known(const RParser *parser, const RToken *name)
         "test",
         "recursion",
         "attribute",
+        "align",
     };
     size_t index;
     for (index = 0U; index < (sizeof(known_names) / sizeof(known_names[0])); ++index) {
@@ -3974,6 +3975,17 @@ static bool r_parse_field_declaration(RParser *parser) {
         (void)r_parser_syntax_error(parser, "expected field type");
     }
     (void)r_parser_expect(parser, R_TOKEN_IDENTIFIER, "expected field name");
+    /* R-FFI-0062 (B9.3): `: width` declares a bit-field of a @repr(C) struct. The width binds
+       tighter than an assignment, so `= initializer` after it stays the field initializer. */
+    if (r_parser_eat(parser, R_TOKEN_COLON)) {
+        const size_t width = r_parser_open(parser, R_SYNTAX_EXPRESSION);
+        const bool parsed =
+            r_parse_expression_bp(parser, R_EXPRESSION_NORMAL, UINT32_C(3), false).parsed;
+        (void)r_parser_close(parser, width);
+        if (!parsed) {
+            (void)r_parser_syntax_error(parser, "expected bit-field width");
+        }
+    }
     /* R-INIT-0004 (L33): `= initializer` gives the field the value of an initialization that
        omits it. */
     if (r_parser_eat(parser, R_TOKEN_EQUAL) && !r_parse_initializer(parser, R_EXPRESSION_NORMAL)) {
@@ -3986,9 +3998,12 @@ static bool r_parse_field_declaration(RParser *parser) {
 static bool r_parse_struct_declaration(RParser *parser, bool is_error) {
     size_t node = r_parser_open(
         parser, is_error ? R_SYNTAX_ERROR_STRUCT_DECLARATION : R_SYNTAX_STRUCT_DECLARATION);
-    (void)r_parser_expect(parser,
-                          is_error ? R_TOKEN_IDENTIFIER : R_TOKEN_KW_STRUCT,
-                          is_error ? "expected error" : "expected struct");
+    /* R-AGG-0014 (B9.3): a C union is a struct declaration introduced by `union`. */
+    if (is_error || !r_parser_eat(parser, R_TOKEN_KW_UNION)) {
+        (void)r_parser_expect(parser,
+                              is_error ? R_TOKEN_IDENTIFIER : R_TOKEN_KW_STRUCT,
+                              is_error ? "expected error" : "expected struct");
+    }
     (void)r_parser_expect(parser, R_TOKEN_IDENTIFIER, "expected struct name");
     if (is_error && r_parser_eat(parser, R_TOKEN_COLON)) {
         /* R-AGG-0011 (L21.1): the parent error whose fields this error extends. */
@@ -4577,7 +4592,7 @@ static bool r_parse_c_declaration(RParser *parser) {
         (void)r_parser_expect(parser, R_TOKEN_KW_STRUCT, "expected struct after opaque");
         (void)r_parser_expect(parser, R_TOKEN_IDENTIFIER, "expected opaque struct name");
         (void)r_parser_expect(parser, R_TOKEN_SEMICOLON, "expected ';' after opaque struct");
-    } else if (r_parser_at(parser, R_TOKEN_KW_STRUCT)) {
+    } else if (r_parser_at(parser, R_TOKEN_KW_STRUCT) || r_parser_at(parser, R_TOKEN_KW_UNION)) {
         (void)r_parse_struct_declaration(parser, false);
     } else if (r_parser_at(parser, R_TOKEN_KW_ENUM)) {
         (void)r_parse_enum_declaration(parser, false);
@@ -4921,7 +4936,7 @@ static bool r_parse_external_declaration(RParser *parser) {
         (void)r_parse_impl_declaration(parser);
     } else if (r_scan_error_declaration(parser->source, parser->cursor)) {
         (void)r_parse_error_declaration(parser);
-    } else if (r_parser_at(parser, R_TOKEN_KW_STRUCT)) {
+    } else if (r_parser_at(parser, R_TOKEN_KW_STRUCT) || r_parser_at(parser, R_TOKEN_KW_UNION)) {
         (void)r_parse_struct_declaration(parser, false);
     } else if (r_parser_at(parser, R_TOKEN_KW_ENUM)) {
         (void)r_parse_enum_declaration(parser, false);
@@ -5889,6 +5904,7 @@ RFrontendStatus r_parse_source(RFrontendContext *context, RSourceId source_id) {
             static const RTokenKind synchronizers[] = {
                 R_TOKEN_SEMICOLON,
                 R_TOKEN_KW_STRUCT,
+                R_TOKEN_KW_UNION,
                 R_TOKEN_KW_ENUM,
                 R_TOKEN_KW_EXTERN,
                 R_TOKEN_RBRACE,

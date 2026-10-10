@@ -333,9 +333,9 @@ add_test(NAME r_library_format_unit COMMAND r_library_format_tests)
 # (std.tls, std.crypto, std.sqlite, std.alloc). A program links those its generated code bridges
 # to.
 set(R_STD_NATIVE_INCLUDE_DIRS
-    "${R_STD_TLS_NATIVE_INCLUDE_DIR};${R_STD_CRYPTO_NATIVE_INCLUDE_DIR};${R_STD_SQLITE_NATIVE_INCLUDE_DIR};${R_STD_ALLOC_NATIVE_INCLUDE_DIR};${R_STD_FS_NATIVE_INCLUDE_DIR};${R_STD_LOG_NATIVE_INCLUDE_DIR}")
+    "${R_STD_TLS_NATIVE_INCLUDE_DIR};${R_STD_CRYPTO_NATIVE_INCLUDE_DIR};${R_STD_SQLITE_NATIVE_INCLUDE_DIR};${R_STD_ALLOC_NATIVE_INCLUDE_DIR};${R_STD_FS_NATIVE_INCLUDE_DIR};${R_STD_LOG_NATIVE_INCLUDE_DIR};${R_STD_DL_NATIVE_INCLUDE_DIR}")
 set(R_STD_NATIVE_LINK_ARCHIVES
-    "${R_STD_TLS_NATIVE_LINK_ARCHIVES};${R_STD_CRYPTO_NATIVE_LINK_ARCHIVES};${R_STD_SQLITE_NATIVE_LINK_ARCHIVES};${R_STD_ALLOC_NATIVE_LINK_ARCHIVES};${R_STD_FS_NATIVE_LINK_ARCHIVES};${R_STD_LOG_NATIVE_LINK_ARCHIVES}")
+    "${R_STD_TLS_NATIVE_LINK_ARCHIVES};${R_STD_CRYPTO_NATIVE_LINK_ARCHIVES};${R_STD_SQLITE_NATIVE_LINK_ARCHIVES};${R_STD_ALLOC_NATIVE_LINK_ARCHIVES};${R_STD_FS_NATIVE_LINK_ARCHIVES};${R_STD_LOG_NATIVE_LINK_ARCHIVES};${R_STD_DL_NATIVE_LINK_ARCHIVES}")
 
 # Library R-SLIB-CRYPTO-0001 (M28): the native provider of std.crypto over libsodium, each
 # primitive against a known answer of its RFC.
@@ -4674,6 +4674,12 @@ if(NOT MSVC)
             ffi_never_returns
             async_ffi_never_returns
             ffi_wide_declarations
+            c_layouts
+            async_c_layouts
+            c_layouts_bit_range
+            ffi_c_layouts
+            dynamic_loading
+            async_dynamic_loading
             library_native_merge
             audit_aggregate_slice_field
             audit_std_library_schema_calls
@@ -4773,7 +4779,6 @@ if(NOT MSVC)
         set(R_CODEGEN_EXPECTED_SECOND_PANIC "")
         set(R_CODEGEN_LINK_MANIFEST "")
         set(R_CODEGEN_EXTRA_C_SOURCES "")
-        set(R_CODEGEN_ABI_VERIFY OFF)
         set(R_CODEGEN_ABI_INVENTORY OFF)
         set(R_CODEGEN_HEADER_INCLUDE_DIRS "")
         set(R_CODEGEN_C_WRAPPER "")
@@ -4798,7 +4803,6 @@ if(NOT MSVC)
             set(R_CODEGEN_ENTRY "${R_EXAMPLE_${R_CODEGEN_CASE}_ENTRY}")
             if(DEFINED R_EXAMPLE_${R_CODEGEN_CASE}_LINK_MANIFEST)
                 set(R_CODEGEN_LINK_MANIFEST "${PROJECT_SOURCE_DIR}/${R_EXAMPLE_${R_CODEGEN_CASE}_LINK_MANIFEST}")
-                set(R_CODEGEN_ABI_VERIFY ON)
             endif()
             if(DEFINED R_EXAMPLE_${R_CODEGEN_CASE}_TEST_MODE)
                 set(R_CODEGEN_TEST_MODE ${R_EXAMPLE_${R_CODEGEN_CASE}_TEST_MODE})
@@ -5142,6 +5146,11 @@ if(NOT MSVC)
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_EXPECTED_PANIC "")
             set(R_CODEGEN_TEST_MODE ON)
+            if(R_CODEGEN_CASE STREQUAL "rtest_dl")
+                # R-FFI-0063: the loadable block of the std.dl tests names the system library.
+                set(R_CODEGEN_LINK_MANIFEST
+                    "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_dynamic_loading_link_manifest.json")
+            endif()
         elseif(R_CODEGEN_CASE MATCHES "^(async_)?(array_(create|filled)|index_proofs|loop_versions)$")
             set(R_CODEGEN_SOURCE_1
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
@@ -6305,11 +6314,43 @@ if(NOT MSVC)
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_EXPECTED_PANIC "")
             set(R_CODEGEN_LINK_MANIFEST "${PROJECT_SOURCE_DIR}/examples/offload/link_manifest.json")
-            set(R_CODEGEN_ABI_VERIFY ON)
+        elseif(R_CODEGEN_CASE MATCHES "^(async_)?c_layouts$")
+            # R-AGG-0014, R-FFI-0061, R-FFI-0062 (B9.3): unions, packed and aligned aggregates
+            # and bit-fields in the layout of the target C compiler.
+            set(R_CODEGEN_SOURCE_1
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
+            set(R_CODEGEN_SOURCE_2 "")
+            set(R_CODEGEN_EXPECTED_PANIC "")
+        elseif(R_CODEGEN_CASE STREQUAL "c_layouts_bit_range")
+            set(R_CODEGEN_SOURCE_1
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
+            set(R_CODEGEN_SOURCE_2 "")
+            set(R_CODEGEN_EXPECTED_PANIC "invalid_conversion")
+        elseif(R_CODEGEN_CASE STREQUAL "ffi_c_layouts")
+            # B9.3: the same forms declared from a header, proven by its ABI record and passed
+            # to C by value and through pointers.
+            set(R_CODEGEN_SOURCE_1
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
+            set(R_CODEGEN_SOURCE_2 "")
+            set(R_CODEGEN_EXPECTED_PANIC "")
+            set(R_CODEGEN_LINK_MANIFEST
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_ffi_c_layouts_link_manifest.json")
+            set(R_CODEGEN_EXTRA_C_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ffi/c_layouts.c")
+            set(R_CODEGEN_ABI_INVENTORY ON)
+            set(R_CODEGEN_HEADER_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ffi")
+        elseif(R_CODEGEN_CASE MATCHES "^(async_)?dynamic_loading$")
+            # R-FFI-0063, Library R-SLIB-DL-0001..0004 (B9.3): functions obtained from a library
+            # the program opens while it runs.
+            set(R_CODEGEN_SOURCE_1
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
+            set(R_CODEGEN_SOURCE_2 "")
+            set(R_CODEGEN_EXPECTED_PANIC "")
+            set(R_CODEGEN_LINK_MANIFEST
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_dynamic_loading_link_manifest.json")
         elseif(R_CODEGEN_CASE STREQUAL "ffi_wide_declarations")
             # R-LIMIT-0001, R-FFI-0042 (L14-N3): a declaration spelled longer than two
-            # kilobytes and a member name longer than sixty-three bytes pass the ABI verifier
-            # and the bridge.
+            # kilobytes and a member name longer than sixty-three bytes pass the header
+            # verification and the ABI record.
             set(R_CODEGEN_SOURCE_1
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
             set(R_CODEGEN_SOURCE_2 "")
@@ -6318,7 +6359,6 @@ if(NOT MSVC)
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_ffi_wide_link_manifest.json")
             set(R_CODEGEN_EXTRA_C_SOURCES
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ffi/wide_library.c")
-            set(R_CODEGEN_ABI_VERIFY ON)
             set(R_CODEGEN_ABI_INVENTORY ON)
             set(R_CODEGEN_HEADER_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ffi")
         elseif(R_CODEGEN_CASE MATCHES
@@ -6331,7 +6371,6 @@ if(NOT MSVC)
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_ffi_link_manifest.json")
             set(R_CODEGEN_EXTRA_C_SOURCES
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ffi/probe_library.c")
-            set(R_CODEGEN_ABI_VERIFY ON)
             set(R_CODEGEN_HEADER_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ffi")
             if(R_CODEGEN_CASE MATCHES
                "^(ffi_records|ffi_conformance|ffi_enum_ingress|ffi_repr_c_(imports|objects)|async_ffi_repr_c|ffi_(enum_result|struct_result|struct_null|callback_struct)_ingress|(async_)?ffi_object_enum_ingress)$")
@@ -6475,9 +6514,7 @@ if(NOT MSVC)
                 -DLIBRARY_MAP=${PROJECT_SOURCE_DIR}/library/r/library.map
                 -DLINK_MANIFEST=${R_CODEGEN_LINK_MANIFEST}
                 -DEXTRA_C_SOURCES=${R_CODEGEN_EXTRA_C_SOURCES}
-                -DABI_VERIFY=${R_CODEGEN_ABI_VERIFY}
                 -DABI_INVENTORY=${R_CODEGEN_ABI_INVENTORY}
-                -DABI_RECORD_TOOL=${PROJECT_SOURCE_DIR}/tools/generate_c_abi_record.py
                 -DHEADER_INCLUDE_DIRS=${R_CODEGEN_HEADER_INCLUDE_DIRS}
                 -DOUTPUT_EXE=${CMAKE_CURRENT_BINARY_DIR}/codegen_${R_CODEGEN_CASE}
                 -DHASH_ONLY=${R_CODEGEN_HASH_ONLY}
@@ -6591,7 +6628,6 @@ if(NOT MSVC)
         unset(R_CODEGEN_EXPECTED_STDOUT)
         unset(R_CODEGEN_LINK_MANIFEST)
         unset(R_CODEGEN_EXTRA_C_SOURCES)
-        unset(R_CODEGEN_ABI_VERIFY)
         unset(R_CODEGEN_ABI_INVENTORY)
         unset(R_CODEGEN_HEADER_INCLUDE_DIRS)
     endforeach()
@@ -7113,6 +7149,52 @@ if(NOT MSVC)
             --front "$<TARGET_FILE:r-front>"
             --library-map "${PROJECT_SOURCE_DIR}/library/r/library.map")
     set_tests_properties(r_frontend_derived_implementations PROPERTIES LABELS "semantic;traits")
+    add_test(NAME r_frontend_c_layouts
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/check_c_layouts.py"
+            --front "$<TARGET_FILE:r-front>"
+            --library-map "${PROJECT_SOURCE_DIR}/library/r/library.map")
+    set_tests_properties(r_frontend_c_layouts PROPERTIES LABELS "semantic;ffi")
+    add_test(NAME r_frontend_dynamic_loading
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/check_dynamic_loading.py"
+            --front "$<TARGET_FILE:r-front>"
+            --library-map "${PROJECT_SOURCE_DIR}/library/r/library.map"
+            --link-manifest "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_dynamic_loading_link_manifest.json"
+            --target-manifest "${PROJECT_SOURCE_DIR}/targets/arm64-apple-darwin.hosted-native-async.json"
+            --header-dir "${PROJECT_SOURCE_DIR}/library/native/dl/include")
+    set_tests_properties(r_frontend_dynamic_loading PROPERTIES LABELS "semantic;ffi")
+    # B10 (R-FFI-0064..0066): a library linked by r-front, its header and its ABI baseline.
+    set(R_SHARED_LIBRARY_LINK_TARGETS r_runtime_0_1 r_runtime_inline_shims r_core r_std_alloc
+        r_std_arc r_std_rc r_std_array r_std_list r_std_dict r_std_error r_std_bytes r_std_hash
+        r_std_utf8 r_std_bits r_std_secret r_std_random r_std_string r_std_convert r_std_format
+        r_std_json r_std_math r_std_time r_std_env r_std_thread r_std_sync r_std_async r_std_io
+        r_std_fs r_std_net r_std_process r_std_signal r_std_c r_runtime_darwin_base
+        r_runtime_darwin_event r_runtime_darwin_dns r_runtime_darwin_fs_lane
+        r_runtime_darwin_io r_runtime_darwin_task r_runtime_darwin_process
+        r_runtime_darwin_socket r_runtime_darwin_timer)
+    set(R_SHARED_LIBRARY_LINK_INPUTS)
+    foreach(R_SHARED_LIBRARY_TARGET IN LISTS R_SHARED_LIBRARY_LINK_TARGETS)
+        list(APPEND R_SHARED_LIBRARY_LINK_INPUTS
+            --link-input "$<TARGET_FILE:${R_SHARED_LIBRARY_TARGET}>")
+    endforeach()
+    set(R_SHARED_LIBRARY_SANITIZE none)
+    if(R_FRONTEND_ENABLE_SANITIZERS OR R_FRONTEND_ENABLE_FUZZERS)
+        set(R_SHARED_LIBRARY_SANITIZE address)
+    elseif(R_FRONTEND_ENABLE_THREAD_SANITIZER)
+        set(R_SHARED_LIBRARY_SANITIZE thread)
+    endif()
+    add_test(NAME r_frontend_shared_library
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/check_shared_library.py"
+            --front "$<TARGET_FILE:r-front>"
+            --library-map "${PROJECT_SOURCE_DIR}/library/r/library.map"
+            --target-manifest "${PROJECT_SOURCE_DIR}/targets/arm64-apple-darwin.hosted-native-async.json"
+            --linker "${CMAKE_C_COMPILER}"
+            --source "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/library_geometry.r"
+            --host "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ffi/library_geometry_host.c"
+            --c-link-manifest "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ffi_implicit_link_manifest.json"
+            --c-header-dir "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ffi"
+            --sanitize ${R_SHARED_LIBRARY_SANITIZE}
+            ${R_SHARED_LIBRARY_LINK_INPUTS})
+    set_tests_properties(r_frontend_shared_library PROPERTIES LABELS "codegen;ffi;library")
     add_test(NAME r_frontend_function_values
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/check_function_values.py"
             --front "$<TARGET_FILE:r-front>")
@@ -7613,7 +7695,6 @@ if(NOT MSVC)
                 -DR_FRONT_EXECUTABLE=$<TARGET_FILE:r-front>
                 -DC_COMPILER=${CMAKE_C_COMPILER}
                 -DPYTHON_EXECUTABLE=${Python3_EXECUTABLE}
-                -DABI_RECORD_TOOL=${PROJECT_SOURCE_DIR}/tools/generate_c_abi_record.py
                 -DABI_INVENTORY=ON
                 -DHEADER_INCLUDE_DIRS=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ffi
                 -DOUTPUT_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/abi_record_${R_RECORD_FIXTURE}
@@ -7668,7 +7749,6 @@ if(NOT MSVC)
             -DR_FRONT_EXECUTABLE=$<TARGET_FILE:r-front>
             -DC_COMPILER=${CMAKE_C_COMPILER}
             -DPYTHON_EXECUTABLE=${Python3_EXECUTABLE}
-            -DABI_RECORD_TOOL=${PROJECT_SOURCE_DIR}/tools/generate_c_abi_record.py
             -DABI_INVENTORY=ON
             -DHEADER_INCLUDE_DIRS=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ffi
             -DOUTPUT_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/abi_record_interface_fingerprint
@@ -7705,7 +7785,8 @@ if(NOT MSVC)
             "codegen_ffi_repr_c_objects:pass:none:generate"
             "ffi_verify_r_struct_claim:fail:incompatible:probe_abi_r_struct_claim.json"
             "codegen_ffi_never_results:pass:none:none"
-            "ffi_verify_never_mismatch:fail:incompatible:none")
+            "ffi_verify_never_mismatch:fail:incompatible:none"
+            "ffi_verify_decorated:fail:decorated.symbol:none")
         string(REPLACE ":" ";" R_ABI_PARTS "${R_ABI_CASE}")
         list(GET R_ABI_PARTS 0 R_ABI_FIXTURE)
         list(GET R_ABI_PARTS 1 R_ABI_EXPECTATION)
@@ -7724,7 +7805,6 @@ if(NOT MSVC)
                 -DR_FRONT_EXECUTABLE=$<TARGET_FILE:r-front>
                 -DC_COMPILER=${CMAKE_C_COMPILER}
                 -DPYTHON_EXECUTABLE=${Python3_EXECUTABLE}
-                -DABI_RECORD_TOOL=${PROJECT_SOURCE_DIR}/tools/generate_c_abi_record.py
                 -DABI_INVENTORY=${R_ABI_INVENTORY}
                 -DABI_RECORD=${R_ABI_RECORD_FILE}
                 -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/${R_ABI_FIXTURE}.r
@@ -7739,6 +7819,28 @@ if(NOT MSVC)
             r_frontend_abi_verifier_${R_ABI_FIXTURE}
             PROPERTIES LABELS "semantic;ffi"
         )
+    endforeach()
+
+    # B9.2: bindings of C headers, against their golden output and verified by the headers.
+    foreach(R_BINDINGS_CASE IN ITEMS
+            "bindings_cases:bindings_cases_link_manifest.json"
+            "bindings_layouts:codegen_ffi_c_layouts_link_manifest.json"
+            "bindings_probe:codegen_ffi_link_manifest.json")
+        string(REPLACE ":" ";" R_BINDINGS_PARTS "${R_BINDINGS_CASE}")
+        list(GET R_BINDINGS_PARTS 0 R_BINDINGS_FIXTURE)
+        list(GET R_BINDINGS_PARTS 1 R_BINDINGS_MANIFEST)
+        add_test(
+            NAME r_frontend_${R_BINDINGS_FIXTURE}
+            COMMAND "${CMAKE_COMMAND}"
+                -DR_FRONT_EXECUTABLE=$<TARGET_FILE:r-front>
+                -DSTUB=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/${R_BINDINGS_FIXTURE}.r
+                -DLINK_MANIFEST=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/${R_BINDINGS_MANIFEST}
+                -DHEADER_DIR=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ffi
+                -DGOLDEN=${CMAKE_CURRENT_SOURCE_DIR}/golden/${R_BINDINGS_FIXTURE}.r
+                -DOUTPUT_PREFIX=${CMAKE_CURRENT_BINARY_DIR}/${R_BINDINGS_FIXTURE}
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/check_bindings.cmake
+        )
+        set_tests_properties(r_frontend_${R_BINDINGS_FIXTURE} PROPERTIES LABELS "semantic;ffi")
     endforeach()
 
     add_test(

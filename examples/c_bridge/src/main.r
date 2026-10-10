@@ -1,12 +1,13 @@
 module example.c_bridge.main;
 import std.console;
+import std.dl;
 import example.c_bridge.native;
 import example.calculator.common::{Usage};
 
 // Output and exit status shared by command and error branches.
 struct CommandResponse { std.string::string output; i32 status; };
 
-enum Command { target, attachment, inspect, upper, release, bytes, cstring };
+enum Command { target, attachment, inspect, upper, release, bytes, cstring, loadable };
 
 async i32 main(const str[] arguments) {
     CommandResponse response = {.output = std.string::create(), .status = 0};
@@ -14,7 +15,7 @@ async i32 main(const str[] arguments) {
     try {
         usize count = len(arguments);
         if (count == 1usize) {
-            std.string::string help = std.string::from_str("c_bridge target\nc_bridge inspect|upper|release TEXT\nc_bridge bytes|cstring HEX\n");
+            std.string::string help = std.string::from_str("c_bridge target\nc_bridge inspect|upper|release TEXT\nc_bridge bytes|cstring HEX\nc_bridge loadable LIBRARY\n");
             await std.console::print(move help);
             return 0;
         }
@@ -30,6 +31,9 @@ async i32 main(const str[] arguments) {
             else { response.output = example.c_bridge.native::attachment_status(); }
         } else {
             throw (count != 3usize) Usage { .message = "bridge operation needs text" };
+            if (command == Command::loadable) {
+                response.output = example.c_bridge.native::load(arguments[2]);
+            } else {
             if (command == Command::bytes || command == Command::cstring) {
                 bytes data = example.c_bridge.native::decode_hex(arguments[2]);
                 const u8[] source = data.as_slice();
@@ -45,8 +49,17 @@ async i32 main(const str[] arguments) {
                 response.output = f"{transformed}\n";
             }
             }
+            }
         }
     } catch (Usage failure) { response.output = f"{failure.message}\n"; response.status = 64; }
+    catch (std.dl::dl_error failure) {
+        // An unusable path is a usage error; a library the loader refuses is unavailable.
+        if (failure.code == std.dl::error_code::invalid_path) {
+            response.output = std.string::from_str("invalid library path\n"); response.status = 64;
+        } else {
+            response.output = std.string::from_str("library not loaded\n"); response.status = 69;
+        }
+    }
     catch (core::utf8_error failure) { response.status = 65; }
     catch (std.c::string_error failure) {
         std.error::error error = failure.as_error();

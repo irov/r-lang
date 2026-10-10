@@ -10386,7 +10386,7 @@ RFrontendStatus r_frontend_dump_interface(const RFrontendContext *context,
     }
     if (!r_write_text(writer,
                       user_data,
-                      "(interface version=34 core_revision=\"" R_FRONTEND_CORE_REVISION "\"\n") ||
+                      "(interface version=35 core_revision=\"" R_FRONTEND_CORE_REVISION "\"\n") ||
         !r_mir_write_indent(writer, user_data, UINT32_C(1)) ||
         !r_write_text(writer, user_data, "(profile ") ||
         !r_write_escaped(
@@ -10417,7 +10417,8 @@ RFrontendStatus r_frontend_dump_interface(const RFrontendContext *context,
             !r_mir_write_qualified_aggregate(context, aggregate, writer, user_data) ||
             !r_write_text(writer,
                           user_data,
-                          aggregate->kind == R_SEMANTIC_AGGREGATE_STRUCT
+                          aggregate->is_union ? " kind=union layout=overlapping copy="
+                          : aggregate->kind == R_SEMANTIC_AGGREGATE_STRUCT
                               ? " kind=struct layout=declaration-order copy="
                               : (aggregate->is_tagged ? " kind=enum layout=tagged-union copy="
                                                       : " kind=enum layout=fieldless copy=")) ||
@@ -10440,6 +10441,11 @@ RFrontendStatus r_frontend_dump_interface(const RFrontendContext *context,
                 context, R_ATTRIBUTE_TARGET_TYPE, aggregate->type, 0U, writer, user_data) ||
             !r_write_text(writer, user_data, " repr_c=") ||
             !r_mir_write_bool(writer, user_data, aggregate->is_repr_c) ||
+            /* R-FFI-0061 (B9.3): packing and the alignment of the aggregate. */
+            (aggregate->is_packed && !r_write_text(writer, user_data, " packed=true")) ||
+            ((aggregate->align_attribute != 0U) &&
+             (!r_write_text(writer, user_data, " align=") ||
+              !r_write_uint32(writer, user_data, aggregate->align_attribute))) ||
             !r_write_text(writer, user_data, " default=") ||
             !r_mir_write_bool(writer, user_data, aggregate->is_default_initializable) ||
             !r_mir_write_aggregate_schema(context, aggregate, writer, user_data)) {
@@ -10475,6 +10481,13 @@ RFrontendStatus r_frontend_dump_interface(const RFrontendContext *context,
                     /* R-INIT-0004 (L33): an initialization may omit the field. */
                     ((field->initializer.node != 0U) &&
                      !r_write_text(writer, user_data, " initializer=true")) ||
+                    /* R-FFI-0061, R-FFI-0062 (B9.3): a bit-field width, a field alignment. */
+                    ((field->bit_width != 0U) &&
+                     (!r_write_text(writer, user_data, " bits=") ||
+                      !r_write_uint32(writer, user_data, field->bit_width))) ||
+                    ((field->align_attribute != 0U) &&
+                     (!r_write_text(writer, user_data, " align=") ||
+                      !r_write_uint32(writer, user_data, field->align_attribute))) ||
                     !r_write_text(writer,
                                   user_data,
                                   field->is_protected ? " visibility=protected)"

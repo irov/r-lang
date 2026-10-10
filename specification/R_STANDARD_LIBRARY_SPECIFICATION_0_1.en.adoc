@@ -15,7 +15,7 @@ Normative draft of the R standard library
 |Field |Value
 |Document|R Standard Library Specification
 |Language version|0.1
-|Document revision|0.1.0-draft.74
+|Document revision|0.1.0-draft.75
 |Status|Normative draft; not a stable R 1.0 standard
 |Document language|English; normative original
 |Required language standard|R Core Language Specification 0.1
@@ -4469,7 +4469,7 @@ module written in R from a profile below the profile its library map entry names
 `+std.cmp+`, `+std.slice+` and `+std.text+` (`+freestanding+`), `+std.iter+`, `+std.set+`,
 `+std.deque+`, `+std.heap+`, `+std.sorted+`, `+std.deflate+`, `+std.xml+`, `+std.arena+`
 and the R part of `+std.alloc+` (`+allocation+`), `+std.regex+`, `+std.encoding+`, `+std.uuid+`, `+std.args+`, `+std.url+`, `+std.mime+`,
-`+std.cbor+`, `+std.crypto+`, `+std.cose+`, `+std.jwt+` and the R
+`+std.cbor+`, `+std.crypto+`, `+std.cose+`, `+std.jwt+`, `+std.dl+` and the R
 parts of `+std.bytes+`, `+std.string+`, `+std.hash+`, `+std.random+`, `+std.test+` and
 `+std.time+` (`+hosted+`), and `+std.service+`, `+std.stream+`, `+std.bufio+`, `+std.console+`,
 `+std.log+`, `+std.config+`, `+std.tls+`, `+std.http+`, `+std.dns+`, `+std.websocket+`,
@@ -8360,6 +8360,41 @@ the endpoint returned last in place of its grant, so a code is exchanged once an
 refresh token is followed; a source of a service account signs a new assertion for its scope
 and subject each time.
 
+=== 21.35 Shared libraries opened at run time: `+std.dl+`
+
+[[R-SLIB-DL-0001]]
+*R-SLIB-DL-0001* — `+std.dl+` is a standard module written in R in the `+hosted+` profile over the
+native provider `+std.dl.native+` (R-SLIB-RSRC-0003): a program opens a shared library while it
+runs and obtains the functions of an `+extern "C"+` block whose link kind is `+"loadable"+` from
+it (Core R-FFI-0063). An opened library stays loaded until the program ends, so every address
+obtained from it stays valid. `+std.dl::error_code+` is a Copy fieldless enum with exactly
+`+not_loaded+` and `+invalid_path+`, and `+std.dl::dl_error+` is an error of the module with the
+field `+std.dl::error_code code+`.
+
+[[R-SLIB-DL-0002]]
+*R-SLIB-DL-0002* — `+std.dl::library+` is a Copy, Send+Sync struct with no public field: an
+opened library; its copies name the same library.
+`+std.dl::open(str path) -> std.dl::library throws std.dl::dl_error+` opens the shared library at
+path, or the one the dynamic loader of the target finds by that name when it holds no slash,
+with every symbol bound at once and none made visible to other libraries; opening a library
+again returns the same library. A path that the loader cannot open is `+not_loaded+`, and an
+empty path or one that holds a NUL byte is `+invalid_path+`.
+
+[[R-SLIB-DL-0003]]
+*R-SLIB-DL-0003* — `+std.dl::symbol(const std.dl::library* opened, str name) -> raw void*?+` is
+the address of the symbol name in the opened library, or null when the library defines none or
+the name is empty or holds a NUL byte. Using the address is a conversion of the caller, which
+Core R-EXPR-0019 does not admit for raw function pointers.
+
+[[R-SLIB-DL-0004]]
+*R-SLIB-DL-0004* — `+std.dl::resolve(const std.dl::library* opened, F import) -> raw fn?(P...) -> R+`,
+where import names a function `+R name(P...)+` of an `+extern "C"+` block whose link kind is
+`+"loadable"+`, is the address of the C symbol of that function in the opened library as a
+nullable raw C function pointer of its prototype, which the headers of the block verified (Core
+R-FFI-0042), or null when the library defines no such symbol. The compiler lowers it to
+`+std.dl::symbol+` and the module shall be imported. Calling through the pointer is unsafe (Core
+R-FUNC-0007).
+
 == Annex A — Normative public API inventory
 
 [[R-SLIB-API-A001]]
@@ -8604,6 +8639,13 @@ R-SLIB-SET-0001, R-SLIB-DEQUE-0001, R-SLIB-HEAP-0001, R-SLIB-SORTED-0001..0002
 `+std.alloc::alloc_error+`
 |Only Core arithmetic and bounds panics of the item bodies
 |R source translated with the program (R-SLIB-RSRC-0001); no C symbol
+|`+std.dl+`: R-SLIB-DL-0001..0004
+|Copy, Send+Sync library handles; paths and names are call-bounded; resolved functions are
+nullable raw C function pointers
+|Refused paths are `+std.dl::dl_error+`; a missing symbol is null; opening allocates in the loader
+|Only Core arithmetic and bounds panics of the item bodies; the loader is thread-safe
+|R source translated with the program over the native provider `+std.dl.native+` (`+dlopen+`,
+`+dlsym+`)
 |===
 
 === A.2 Asynchronous APIs

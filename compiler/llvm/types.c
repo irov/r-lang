@@ -546,7 +546,6 @@ r_llvm_compute_layout(RLlvmEmitter *emitter, RTypeId id, uint32_t *size, uint32_
         uint32_t index;
         uint32_t offset = 0U;
         uint32_t largest = 1U;
-        const bool is_union = aggregate != NULL && aggregate->c_type_kind == R_C_TYPE_KIND_UNION;
 
         if ((aggregate == NULL) || aggregate->is_opaque) {
             return r_llvm_unsupported(emitter, "an opaque aggregate by value");
@@ -566,6 +565,19 @@ r_llvm_compute_layout(RLlvmEmitter *emitter, RTypeId id, uint32_t *size, uint32_
             *align = 1U;
             return true;
         }
+        if (aggregate->c_layout) {
+            /* R-AGG-0014, R-FFI-0061, R-FFI-0062: the C layout of the semantic analysis. */
+            uint64_t c_size = 0U;
+            uint64_t c_align = 0U;
+            if (!r_semantic_aggregate_layout(
+                    emitter->frontend, aggregate, UINT32_MAX, NULL, &c_size, &c_align) ||
+                (c_size > UINT32_MAX)) {
+                return r_llvm_unsupported(emitter, "the layout of this C aggregate");
+            }
+            *size = (uint32_t)c_size;
+            *align = (uint32_t)c_align;
+            return true;
+        }
         for (index = 0U; index < aggregate->field_count; ++index) {
             const RSemanticField *field =
                 &emitter->frontend->semantic_fields[(size_t)aggregate->first_field + index];
@@ -574,11 +586,7 @@ r_llvm_compute_layout(RLlvmEmitter *emitter, RTypeId id, uint32_t *size, uint32_
             if (!r_llvm_layout(emitter, field->type, &field_size, &field_align)) {
                 return false;
             }
-            if (is_union) {
-                offset = field_size > offset ? field_size : offset;
-            } else {
-                offset = r_llvm_align_up(offset, field_align) + field_size;
-            }
+            offset = r_llvm_align_up(offset, field_align) + field_size;
             largest = field_align > largest ? field_align : largest;
         }
         *align = largest;
@@ -852,6 +860,33 @@ static const char *r_llvm_standard_member(RLlvmEmitter *emitter,
     return buffer;
 }
 
+bool r_llvm_field_place(RLlvmEmitter *emitter, uint32_t field_id, RSemanticFieldPlace *place) {
+    const RSemanticField *field = r_llvm_field(emitter, field_id);
+    const RSemanticAggregate *aggregate =
+        (field == NULL) || (field->aggregate == 0U) ||
+                ((size_t)field->aggregate > emitter->frontend->semantic_aggregate_count)
+            ? NULL
+            : &emitter->frontend->semantic_aggregates[(size_t)field->aggregate - 1U];
+    uint64_t size = 0U;
+    uint64_t align = 0U;
+
+    (void)memset(place, 0, sizeof(*place));
+    if ((aggregate == NULL) || !aggregate->c_layout) {
+        uint32_t offset = 0U;
+        if (!r_llvm_field_offset(emitter, field_id, &offset)) {
+            return false;
+        }
+        place->offset = offset;
+        return true;
+    }
+    if (!r_semantic_aggregate_layout(
+            emitter->frontend, aggregate, field->layout_index, place, &size, &align) ||
+        (place->offset > UINT32_MAX)) {
+        return r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+    }
+    return true;
+}
+
 bool r_llvm_field_offset(RLlvmEmitter *emitter, uint32_t field_id, uint32_t *offset) {
     const RSemanticField *field = r_llvm_field(emitter, field_id);
     const RSemanticAggregate *aggregate =
@@ -897,8 +932,14 @@ bool r_llvm_field_offset(RLlvmEmitter *emitter, uint32_t field_id, uint32_t *off
         }
         return r_llvm_runtime_field(emitter, c_type, member, offset, NULL);
     }
-    if (aggregate->c_type_kind == R_C_TYPE_KIND_UNION) {
-        *offset = 0U;
+    if (aggregate->c_layout) {
+        /* R-AGG-0014, R-FFI-0061, R-FFI-0062: a bit-field lies at a bit of the byte at its
+           offset (r_llvm_field_place). */
+        RSemanticFieldPlace place;
+        if (!r_llvm_field_place(emitter, field_id, &place)) {
+            return false;
+        }
+        *offset = (uint32_t)place.offset;
         return true;
     }
     for (index = 0U; index < aggregate->field_count; ++index) {

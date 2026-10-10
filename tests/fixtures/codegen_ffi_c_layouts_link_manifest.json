@@ -1,0 +1,70 @@
+{
+  "schema": "r-link-manifest-0.1",
+  "links": [
+    {
+      "logical_name": "layouts",
+      "available": true,
+      "kind": "static",
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "tests/fixtures/ffi/c_layouts.c",
+      "link_artifact_identity": "tests/fixtures/ffi/c_layouts.c",
+      "header_roots": [
+        "tests/fixtures/ffi"
+      ],
+      "abi_record_roots": [
+        "tests/fixtures/ffi"
+      ],
+      "library_version": "0.1",
+      "dependencies": [],
+      "feature_test_definitions": [],
+      "symbols": [
+        {
+          "c_identifier": "layout_value_real",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "layout_value_of_integer",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "layout_packed_sum",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "layout_packed_make",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "layout_aligned_get",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "layout_field_aligned_sum",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "layout_bits_sum",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "layout_bits_make",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "layout_packed_bits_b",
+          "kind": "function",
+          "binding": "strong"
+        }
+      ]
+    }
+  ]
+}

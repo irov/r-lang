@@ -290,3 +290,58 @@ foreach(cli_arguments "--sanitize=address" "--sanitize=thread" "--debug-info")
         message(FATAL_ERROR "${cli_arguments} did not lower as expected (${cli_result}): ${cli_stderr}")
     endif()
 endforeach()
+
+# B9.1: the headers of imports are parsed by libclang in process. --sysroot is given once and
+# names the SDK the target manifest pins; --emit=abi-record needs it; the C bridge of the C17
+# path is no emit kind any more; --version names the libclang release.
+foreach(cli_case
+        "sysroot_duplicate|--emit=llvm-ir,--sysroot,a,--sysroot,b|r-front: duplicate option: --sysroot"
+        "sysroot_wrong|--emit=llvm-ir,--sysroot,/|r-front: --sysroot is not the SDK of the target manifest"
+        "record_without_sysroot|--emit=abi-record|r-front: --emit=abi-record requires --sysroot"
+        "bindings_without_sysroot|--emit=bindings|r-front: --emit=bindings requires --sysroot"
+        "bridge_removed|--emit=c17-bridge|r-front: unknown option: --emit=c17-bridge")
+    string(REPLACE "|" ";" cli_fields "${cli_case}")
+    list(GET cli_fields 0 cli_name)
+    list(GET cli_fields 1 cli_arguments)
+    list(GET cli_fields 2 cli_message)
+    string(REPLACE "," ";" cli_arguments "${cli_arguments}")
+    execute_process(
+        COMMAND "${R_FRONT_EXECUTABLE}" ${cli_arguments} "${SOURCE_FILE}"
+        RESULT_VARIABLE cli_result
+        OUTPUT_VARIABLE cli_stdout
+        ERROR_VARIABLE cli_stderr
+    )
+    if(NOT cli_result EQUAL 2 OR NOT cli_stderr MATCHES "${cli_message}")
+        message(FATAL_ERROR "${cli_name} was not rejected (${cli_result}): ${cli_stderr}")
+    endif()
+endforeach()
+execute_process(
+    COMMAND "${R_FRONT_EXECUTABLE}" --version
+    RESULT_VARIABLE cli_result
+    OUTPUT_VARIABLE cli_stdout
+    ERROR_VARIABLE cli_stderr
+)
+if(NOT cli_result EQUAL 0 OR NOT cli_stdout MATCHES "\nlibclang 22\\.1\\.8\n")
+    message(FATAL_ERROR "--version does not name libclang 22.1.8 (${cli_result}): ${cli_stdout}${cli_stderr}")
+endif()
+
+# B9.2: bindings fill the one empty extern "C" block of a module; a module without one is told so.
+execute_process(
+    COMMAND xcrun --sdk macosx --show-sdk-path
+    RESULT_VARIABLE cli_sdk_result
+    OUTPUT_VARIABLE cli_sdk
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+if(NOT cli_sdk_result EQUAL 0)
+    message(FATAL_ERROR "could not resolve the macOS SDK path")
+endif()
+execute_process(
+    COMMAND "${R_FRONT_EXECUTABLE}" --emit=bindings --sysroot "${cli_sdk}" "${SOURCE_FILE}"
+    RESULT_VARIABLE cli_result
+    OUTPUT_VARIABLE cli_stdout
+    ERROR_VARIABLE cli_stderr
+)
+if(NOT cli_result EQUAL 1 OR
+   NOT cli_stderr MATCHES "exactly one empty extern \"C\" block with @header")
+    message(FATAL_ERROR "bindings of a module without a stub block (${cli_result}): ${cli_stderr}")
+endif()

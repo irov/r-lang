@@ -6,13 +6,13 @@
 
 /*
  * ABI records for complete @repr(C) aggregates declared inside extern "C" blocks (R-FFI-0017,
- * R-FFI-0040, R-FFI-0041, R-CMAP-0018). A record is an immutable JSON document produced by
- * tools/generate_c_abi_record.py from the block's verified headers with the selected C
- * compiler. The frontend loads it, proves every C-declared struct member inventory (name,
- * order, type spelling, offset, size, alignment) and every C-declared enumerator inventory
- * (name, value, compatible integer type) one-for-one, and emits the inventory request that
- * the generator consumes. Layout alone is never accepted: a member omitted by the R
- * declaration is a mismatch even when it hides in padding.
+ * R-FFI-0040, R-FFI-0041, R-CMAP-0018). A record is an immutable JSON document that
+ * --emit=abi-record derives from the block's verified headers with libclang
+ * (compiler/clang/record.c). The frontend loads it, proves every C-declared struct member
+ * inventory (name, order, type spelling, offset, size, alignment) and every C-declared
+ * enumerator inventory (name, value, compatible integer type) one-for-one, and emits the
+ * inventory request that names what a record shall contain. Layout alone is never accepted: a
+ * member omitted by the R declaration is a mismatch even when it hides in padding.
  */
 
 #define R_ABI_JSON_MAX_DEPTH 64U
@@ -708,6 +708,23 @@ static bool r_abi_load_members(RFrontendContext *context,
             return false;
         }
         member.offset = (uint64_t)offset;
+        {
+            int64_t bit_offset = 0;
+            int64_t bit_width = 0;
+            bool has_offset = false;
+            bool has_width = false;
+            if (!r_abi_integer_field(document, child, "bit_offset", &bit_offset, &has_offset) ||
+                !r_abi_integer_field(document, child, "bit_width", &bit_width, &has_width) ||
+                (has_offset != has_width) || (bit_offset < 0) || (bit_offset > 7) ||
+                (bit_width < 0) || (bit_width > 64) || (has_width && (bit_width == 0))) {
+                r_context_free(context, member.name);
+                r_context_free(context, member.type);
+                r_context_free(context, member.desugared_type);
+                return false;
+            }
+            member.bit_offset = (uint32_t)bit_offset;
+            member.bit_width = (uint32_t)bit_width;
+        }
         if ((r_abi_json_member(document, child, "type_tree") != NULL) &&
             !r_abi_load_type_tree(context, document, child, "type_tree", &member.type_node)) {
             r_context_free(context, member.name);
@@ -798,6 +815,15 @@ static bool r_abi_load_type(RFrontendContext *context,
         r_context_free(context, type.c_name);
         return false;
     }
+    if ((type.kind == R_C_TYPE_KIND_TYPEDEF) &&
+        (r_abi_json_member(document, object, "tag_name") != NULL) &&
+        !r_abi_copy_text(context,
+                         r_abi_json_member(document, object, "tag_name"),
+                         &type.tag_name,
+                         &type.tag_name_length)) {
+        r_context_free(context, type.c_name);
+        return false;
+    }
     if (!r_abi_integer_field(document, object, "size", &size, &has_size) ||
         !r_abi_integer_field(document, object, "alignment", &alignment, &has_alignment) ||
         (has_size != has_alignment) || (size < 0) || (alignment < 0)) {
@@ -817,10 +843,11 @@ static bool r_abi_load_type(RFrontendContext *context,
     type.first_enumerator = context->abi_enumerator_count;
     if (type.inexpressible) {
         /* Reached from a prototype only: no inventory to load. */
-    } else if (type.tag_kind == R_C_TYPE_KIND_STRUCT) {
+    } else if ((type.tag_kind == R_C_TYPE_KIND_STRUCT) || (type.tag_kind == R_C_TYPE_KIND_UNION)) {
         if (!r_abi_load_members(
                 context, document, r_abi_json_member(document, object, "members"), &type)) {
             r_context_free(context, type.c_name);
+            r_context_free(context, type.tag_name);
             r_context_free(context, type.underlying);
             return false;
         }
@@ -828,6 +855,7 @@ static bool r_abi_load_type(RFrontendContext *context,
         if (!r_abi_load_enumerators(
                 context, document, r_abi_json_member(document, object, "enumerators"), &type)) {
             r_context_free(context, type.c_name);
+            r_context_free(context, type.tag_name);
             r_context_free(context, type.underlying);
             return false;
         }
@@ -1148,16 +1176,175 @@ r_abi_spelling_equal(const char *left, size_t left_length, const char *right, si
     return true;
 }
 
+static const RSemanticAggregate *
+r_abi_aggregate(const RFrontendContext *context, const RSemanticType *type, uint32_t *aggregate_id);
+static const RAbiTypeNode *r_abi_type_node(const RFrontendContext *context, size_t index);
+static size_t
+r_abi_type_node_child(const RFrontendContext *context, const RAbiTypeNode *node, uint32_t index);
+
+static bool r_abi_text_equal_bytes(const char *left,
+                                   size_t left_length,
+                                   const char *right,
+                                   size_t right_length) {
+    return (left != NULL) && (right != NULL) && (left_length == right_length) &&
+           (memcmp(left, right, left_length) == 0);
+}
+
+/* A struct, union or enumeration of R against a record or enumeration node: the C type @c_type
+   names, by its tag, by the typedef the header spells there, or by the tag the record knows
+   for its typedef. */
+static bool r_abi_leaf_names(const RFrontendContext *context,
+                             const RAbiRecordEntry *record,
+                             const RSemanticAggregate *aggregate,
+                             const RAbiTypeNode *node) {
+    const char *name;
+    size_t name_length;
+    size_t index;
+
+    if (!r_abi_intern_text(context, aggregate->c_name_intern_id, &name, &name_length)) {
+        return false;
+    }
+    if (r_abi_text_equal_bytes(name, name_length, node->typedef_name, node->typedef_name_length)) {
+        return true;
+    }
+    if (aggregate->c_type_kind != R_C_TYPE_KIND_TYPEDEF) {
+        return r_abi_text_equal_bytes(name, name_length, node->tag_name, node->tag_name_length);
+    }
+    for (index = 0U; (record != NULL) && (index < record->type_count); ++index) {
+        const RAbiRecordType *type = &context->abi_types[record->first_type + index];
+
+        if ((type->kind == R_C_TYPE_KIND_TYPEDEF) &&
+            r_abi_text_equal_bytes(name, name_length, type->c_name, type->c_name_length)) {
+            return r_abi_text_equal_bytes(
+                type->tag_name, type->tag_name_length, node->tag_name, node->tag_name_length);
+        }
+    }
+    return false;
+}
+
+/* B9.2: the type of a field of a C-declared struct against the member's type tree, as one C type
+   whatever the header spells it by: a typedef of a scalar is its canonical type, a struct may be
+   spelled by its tag or by a typedef. The verifier's member probes prove the same in C
+   (R-FFI-0042); this proves it from the record alone (R-FFI-0017). */
+static bool r_abi_member_matches(const RFrontendContext *context,
+                                 const RAbiRecordEntry *record,
+                                 RTypeId type_id,
+                                 size_t node_index,
+                                 bool qualified,
+                                 uint32_t depth) {
+    const RSemanticType *type = r_semantic_type(context, type_id);
+    const RAbiTypeNode *node = r_abi_type_node(context, node_index);
+    /* A shared raw pointer (raw const T*) qualifies its pointee. */
+    bool is_const = qualified;
+
+    if ((type == NULL) || (node == NULL) || (depth > context->options.limits.max_nesting)) {
+        return false;
+    }
+    if (type->kind == R_SEMANTIC_TYPE_CONST) {
+        is_const = true;
+        type = r_semantic_type(context, type->base);
+        if (type == NULL) {
+            return false;
+        }
+    }
+    if (is_const != node->is_const) {
+        return false;
+    }
+    switch (type->kind) {
+    case R_SEMANTIC_TYPE_C_ABI_NUMERIC: {
+        const char *canonical = (type->length <= (uint64_t)R_TOKEN_KIND_COUNT)
+                                    ? r_c_abi_canonical_spelling((RTokenKind)type->length)
+                                    : NULL;
+
+        return (node->kind == R_ABI_TYPE_NODE_SCALAR) && (canonical != NULL) &&
+               r_abi_text_equal_bytes(
+                   canonical, strlen(canonical), node->spelling, node->spelling_length);
+    }
+    case R_SEMANTIC_TYPE_VOID:
+        return node->kind == R_ABI_TYPE_NODE_VOID;
+    case R_SEMANTIC_TYPE_RAW:
+        return (node->kind == R_ABI_TYPE_NODE_POINTER) &&
+               r_abi_member_matches(context,
+                                    record,
+                                    type->base,
+                                    r_abi_type_node_child(context, node, 0U),
+                                    (type->flags & R_SEMANTIC_TYPE_FLAG_SHARED) != 0U,
+                                    depth + UINT32_C(1));
+    case R_SEMANTIC_TYPE_FIXED_ARRAY:
+        return (node->kind == R_ABI_TYPE_NODE_ARRAY) && (node->length == type->length) &&
+               r_abi_member_matches(context,
+                                    record,
+                                    type->base,
+                                    r_abi_type_node_child(context, node, 0U),
+                                    false,
+                                    depth + UINT32_C(1));
+    case R_SEMANTIC_TYPE_RAW_FUNCTION: {
+        const size_t function_index = (node->kind == R_ABI_TYPE_NODE_POINTER)
+                                          ? r_abi_type_node_child(context, node, 0U)
+                                          : SIZE_MAX;
+        const RAbiTypeNode *function = r_abi_type_node(context, function_index);
+        RTypeId parameter = type->second;
+        uint64_t index;
+
+        if ((function == NULL) || (function->kind != R_ABI_TYPE_NODE_FUNCTION) ||
+            ((uint64_t)function->child_count != type->length + UINT64_C(1)) ||
+            (function->is_variadic != ((type->flags & R_SEMANTIC_TYPE_FLAG_VARIADIC) != 0U)) ||
+            !r_abi_member_matches(context,
+                                  record,
+                                  type->base,
+                                  r_abi_type_node_child(context, function, 0U),
+                                  false,
+                                  depth + UINT32_C(1))) {
+            return false;
+        }
+        for (index = UINT64_C(0); index < type->length; ++index) {
+            const RSemanticType *item = r_semantic_type(context, parameter);
+
+            if ((item == NULL) || (item->kind != R_SEMANTIC_TYPE_FUNCTION_PARAMETER) ||
+                !r_abi_member_matches(
+                    context,
+                    record,
+                    item->base,
+                    r_abi_type_node_child(context, function, (uint32_t)index + 1U),
+                    false,
+                    depth + UINT32_C(1))) {
+                return false;
+            }
+            parameter = item->second;
+        }
+        return true;
+    }
+    case R_SEMANTIC_TYPE_STRUCT:
+    case R_SEMANTIC_TYPE_ENUM: {
+        const RSemanticAggregate *aggregate = r_abi_aggregate(context, type, NULL);
+
+        if ((aggregate == NULL) || !(aggregate->is_c_declared || aggregate->is_opaque)) {
+            return false;
+        }
+        if (aggregate->kind == R_SEMANTIC_AGGREGATE_ENUM) {
+            return (node->kind == R_ABI_TYPE_NODE_ENUM) &&
+                   r_abi_leaf_names(context, record, aggregate, node);
+        }
+        return (node->kind == R_ABI_TYPE_NODE_RECORD) &&
+               (node->is_union == (aggregate->c_type_kind == R_C_TYPE_KIND_UNION)) &&
+               r_abi_leaf_names(context, record, aggregate, node);
+    }
+    default:
+        return false;
+    }
+}
+
 static bool r_abi_verify_struct(RFrontendContext *context,
+                                const RAbiRecordEntry *record,
                                 RSemanticAggregate *aggregate,
                                 const RAbiRecordType *type,
                                 bool *failed) {
-    uint64_t offset = UINT64_C(0);
+    uint64_t size = UINT64_C(0);
     uint64_t alignment = UINT64_C(1);
     uint32_t field_index;
     char spelling[R_ABI_SPELL_CAPACITY];
 
-    if (type->tag_kind != R_C_TYPE_KIND_STRUCT) {
+    if (type->tag_kind != (aggregate->is_union ? R_C_TYPE_KIND_UNION : R_C_TYPE_KIND_STRUCT)) {
         *failed = true;
         aggregate->poisoned = true;
         return r_abi_diagnostic(context,
@@ -1180,9 +1367,7 @@ static bool r_abi_verify_struct(RFrontendContext *context,
         const RAbiRecordMember *member = &context->abi_members[type->first_member + field_index];
         const char *name;
         size_t name_length;
-        uint64_t field_size;
-        uint64_t field_alignment;
-        uint64_t aligned;
+        RSemanticFieldPlace place;
 
         if ((position >= context->semantic_field_count) ||
             !r_abi_intern_text(context, field->name_intern_id, &name, &name_length)) {
@@ -1213,7 +1398,9 @@ static bool r_abi_verify_struct(RFrontendContext *context,
              !r_abi_spelling_equal(spelling,
                                    strlen(spelling),
                                    member->desugared_type,
-                                   member->desugared_type_length))) {
+                                   member->desugared_type_length)) &&
+            ((member->type_node == SIZE_MAX) ||
+             !r_abi_member_matches(context, record, field->type, member->type_node, false, 0U))) {
             *failed = true;
             aggregate->poisoned = true;
             return r_abi_diagnostic(context,
@@ -1222,31 +1409,28 @@ static bool r_abi_verify_struct(RFrontendContext *context,
                                     "struct field type",
                                     field->name_span);
         }
-        if (!r_semantic_type_layout(context, field->type, &field_size, &field_alignment) ||
-            (field_alignment == UINT64_C(0))) {
+        /* R-FFI-0006, R-FFI-0061, R-FFI-0062: the place of the field in the C layout. */
+        if (!r_semantic_aggregate_layout(
+                context, aggregate, field_index, &place, &size, &alignment)) {
             context->resource_status = R_FRONTEND_INTERNAL_ERROR;
             return false;
         }
-        aligned = offset + ((field_alignment - (offset % field_alignment)) % field_alignment);
-        if (aligned != member->offset) {
+        if ((place.offset != member->offset) || (place.bit_width != member->bit_width) ||
+            (place.bit_offset != member->bit_offset)) {
             *failed = true;
             aggregate->poisoned = true;
             return r_abi_diagnostic(context,
                                     "R-FFI-0017",
-                                    "ABI record member offset disagrees with the @repr(C) "
-                                    "struct layout",
+                                    "ABI record member offset or bit-field width disagrees with "
+                                    "the @repr(C) struct layout",
                                     field->name_span);
         }
-        offset = aligned + field_size;
-        if (field_alignment > alignment) {
-            alignment = field_alignment;
-        }
     }
-    offset += (alignment - (offset % alignment)) % alignment;
     if (aggregate->field_count == UINT32_C(0)) {
-        offset = UINT64_C(0);
+        size = UINT64_C(0);
+        alignment = UINT64_C(1);
     }
-    if ((offset != type->size) || (alignment != type->alignment)) {
+    if ((size != type->size) || (alignment != type->alignment)) {
         *failed = true;
         aggregate->poisoned = true;
         return r_abi_diagnostic(context,
@@ -1417,10 +1601,10 @@ static bool r_abi_manifest_string(const uint8_t *manifest,
 }
 
 /* R-FFI-0040: a used record shall belong to the block's provider, target and C17 options. */
-static bool r_abi_manifest_target_triple(const uint8_t *manifest,
-                                         size_t length,
-                                         const uint8_t **triple,
-                                         size_t *triple_length) {
+bool r_abi_manifest_target_triple(const uint8_t *manifest,
+                                  size_t length,
+                                  const uint8_t **triple,
+                                  size_t *triple_length) {
     return r_abi_manifest_string(manifest, length, "\"target_triple\"", triple, triple_length);
 }
 
@@ -1805,11 +1989,12 @@ static bool r_abi_match_type(RAbiMatch *match, RTypeId type_id, size_t node_inde
         type_index = (node->kind == R_ABI_TYPE_NODE_RECORD)
                          ? r_abi_leaf_type(context, match->record, node)
                          : SIZE_MAX;
-        if ((node->kind != R_ABI_TYPE_NODE_RECORD) || node->is_union) {
+        if ((node->kind != R_ABI_TYPE_NODE_RECORD) || (aggregate == NULL) ||
+            (node->is_union != aggregate->is_union)) {
             return r_abi_mismatch(match,
                                   "R-FFI-0021",
-                                  "C type at the position of an R-declared @repr(C) struct is not "
-                                  "a struct");
+                                  "C type at the position of an R-declared @repr(C) struct or "
+                                  "union is not one of the same kind");
         }
         if ((type_index == SIZE_MAX) || context->abi_types[type_index].inexpressible) {
             return r_abi_mismatch(match,
@@ -1845,7 +2030,7 @@ r_abi_verify_r_struct(RAbiMatch *match, uint32_t aggregate_id, size_t abi_type, 
     const RSemanticAggregate *aggregate = &context->semantic_aggregates[(size_t)aggregate_id - 1U];
     const RAbiRecordType *type = &context->abi_types[abi_type];
     RAbiMatch member_match = *match;
-    uint64_t offset = UINT64_C(0);
+    uint64_t size = UINT64_C(0);
     uint64_t alignment = UINT64_C(1);
     uint32_t field_index;
     size_t pair;
@@ -1873,8 +2058,8 @@ r_abi_verify_r_struct(RAbiMatch *match, uint32_t aggregate_id, size_t abi_type, 
     context->c_repr_pair_count += 1U;
     member_match.collect = false;
     member_match.span = aggregate->name_span;
-    if ((type->tag_kind != R_C_TYPE_KIND_STRUCT) || !type->has_layout ||
-        ((size_t)type->member_count != (size_t)aggregate->field_count)) {
+    if ((type->tag_kind != (aggregate->is_union ? R_C_TYPE_KIND_UNION : R_C_TYPE_KIND_STRUCT)) ||
+        !type->has_layout || ((size_t)type->member_count != (size_t)aggregate->field_count)) {
         return r_abi_mismatch(&member_match,
                               "R-FFI-0041",
                               "ABI record member inventory count disagrees with the R-declared "
@@ -1886,9 +2071,7 @@ r_abi_verify_r_struct(RAbiMatch *match, uint32_t aggregate_id, size_t abi_type, 
         const RAbiRecordMember *member = &context->abi_members[type->first_member + field_index];
         const char *name;
         size_t name_length;
-        uint64_t field_size;
-        uint64_t field_alignment;
-        uint64_t aligned;
+        RSemanticFieldPlace place;
 
         if ((position >= context->semantic_field_count) ||
             !r_abi_intern_text(context, field->name_intern_id, &name, &name_length)) {
@@ -1923,29 +2106,25 @@ r_abi_verify_r_struct(RAbiMatch *match, uint32_t aggregate_id, size_t abi_type, 
                                   "ABI record member type disagrees with the R-declared "
                                   "@repr(C) struct field type");
         }
-        if (!r_semantic_type_layout(context, field->type, &field_size, &field_alignment) ||
-            (field_alignment == UINT64_C(0))) {
+        if (!r_semantic_aggregate_layout(
+                context, aggregate, field_index, &place, &size, &alignment)) {
             context->resource_status = R_FRONTEND_INTERNAL_ERROR;
             return false;
         }
-        aligned = offset + ((field_alignment - (offset % field_alignment)) % field_alignment);
-        if (aligned != member->offset) {
+        if ((place.offset != member->offset) || (place.bit_width != member->bit_width) ||
+            (place.bit_offset != member->bit_offset)) {
             return r_abi_mismatch(&member_match,
                                   "R-FFI-0041",
-                                  "ABI record member offset disagrees with the R-declared "
-                                  "@repr(C) struct layout");
-        }
-        offset = aligned + field_size;
-        if (field_alignment > alignment) {
-            alignment = field_alignment;
+                                  "ABI record member offset or bit-field width disagrees with "
+                                  "the R-declared @repr(C) struct layout");
         }
     }
-    offset += (alignment - (offset % alignment)) % alignment;
     if (aggregate->field_count == UINT32_C(0)) {
-        offset = UINT64_C(0);
+        size = UINT64_C(0);
+        alignment = UINT64_C(1);
     }
     member_match.span = aggregate->name_span;
-    if ((offset != type->size) || (alignment != type->alignment)) {
+    if ((size != type->size) || (alignment != type->alignment)) {
         return r_abi_mismatch(&member_match,
                               "R-FFI-0041",
                               "ABI record size or alignment disagrees with the R-declared "
@@ -2180,7 +2359,7 @@ RFrontendStatus r_frontend_verify_abi_records(RFrontendContext *context,
             continue;
         }
         success = aggregate->kind == R_SEMANTIC_AGGREGATE_STRUCT
-                      ? r_abi_verify_struct(context, aggregate, type, &failed)
+                      ? r_abi_verify_struct(context, record, aggregate, type, &failed)
                       : r_abi_verify_enum(context, aggregate, type, &failed);
         if (!success) {
             return context->resource_status != R_FRONTEND_OK ? context->resource_status
@@ -2325,10 +2504,10 @@ RFrontendStatus r_frontend_verify_abi_record_headers(RFrontendContext *context,
 
 /* ---- inventory request ---------------------------------------------------------------- */
 
-static bool r_abi_write_json_string(RFrontendWriteFn writer,
-                                    void *user_data,
-                                    const char *bytes,
-                                    size_t length) {
+bool r_abi_write_json_string(RFrontendWriteFn writer,
+                             void *user_data,
+                             const char *bytes,
+                             size_t length) {
     size_t index;
 
     if (!r_write_text(writer, user_data, "\"")) {
@@ -2356,7 +2535,7 @@ static bool r_abi_write_json_string(RFrontendWriteFn writer,
     return r_write_text(writer, user_data, "\"");
 }
 
-static const char *r_abi_kind_name(RCTypeKind kind) {
+const char *r_abi_kind_name(RCTypeKind kind) {
     switch (kind) {
     case R_C_TYPE_KIND_STRUCT:
         return "struct";
@@ -2372,9 +2551,9 @@ static const char *r_abi_kind_name(RCTypeKind kind) {
     }
 }
 
-static int r_abi_compare_blocks(const RFrontendContext *context,
-                                const RExternBlockRecord *left,
-                                const RExternBlockRecord *right) {
+int r_abi_compare_blocks(const RFrontendContext *context,
+                         const RExternBlockRecord *left,
+                         const RExternBlockRecord *right) {
     const RSource *left_source = r_get_source_const(context, left->source);
     const RSource *right_source = r_get_source_const(context, right->source);
     const char *left_name =
@@ -2566,4 +2745,199 @@ RFrontendStatus r_frontend_emit_abi_inventory(const RFrontendContext *context,
         return R_FRONTEND_IO_ERROR;
     }
     return R_FRONTEND_OK;
+}
+
+/* ---- R-FFI-0066 (B10.2): the ABI baseline of a library ------------------------------------ */
+
+static bool r_abi_baseline_parse(RAbiJsonDocument *document, size_t *root) {
+    *root = R_ABI_NODE_NONE;
+    if (!r_abi_json_value(document, root)) {
+        return false;
+    }
+    r_abi_json_whitespace(document);
+    return document->cursor == document->length;
+}
+
+static bool r_abi_baseline_text(const RAbiJsonNode *node) {
+    return (node != NULL) && (node->kind == R_ABI_JSON_STRING);
+}
+
+static bool r_abi_baseline_same_text(const RAbiJsonNode *left, const RAbiJsonNode *right) {
+    return r_abi_baseline_text(left) && r_abi_baseline_text(right) &&
+           (left->text_length == right->text_length) &&
+           (memcmp(left->text, right->text, left->text_length) == 0);
+}
+
+/* A version X[.Y[.Z]] as one number that orders versions. */
+static bool r_abi_baseline_version(const RAbiJsonNode *node, uint64_t *value) {
+    uint64_t parts[3] = {0U, 0U, 0U};
+    size_t part = 0U;
+    bool digit = false;
+
+    if (!r_abi_baseline_text(node)) {
+        return false;
+    }
+    for (size_t index = 0U; index < node->text_length; ++index) {
+        const char c = node->text[index];
+        if ((c >= '0') && (c <= '9')) {
+            parts[part] = parts[part] * 10U + (uint64_t)(c - '0');
+            digit = true;
+            if (parts[part] > 65535U) {
+                return false;
+            }
+        } else if ((c == '.') && digit && (part < 2U)) {
+            part += 1U;
+            digit = false;
+        } else {
+            return false;
+        }
+    }
+    *value = (parts[0] << 32U) | (parts[1] << 16U) | parts[2];
+    return digit;
+}
+
+/* Two values equal in kind, text, integer and, for containers, every key and child in order. */
+static bool r_abi_baseline_equal(const RAbiJsonDocument *left_document,
+                                 size_t left,
+                                 const RAbiJsonDocument *right_document,
+                                 size_t right) {
+    const RAbiJsonNode *a = &left_document->nodes[left];
+    const RAbiJsonNode *b = &right_document->nodes[right];
+    size_t left_child;
+    size_t right_child;
+
+    if ((a->kind != b->kind) || (a->child_count != b->child_count) ||
+        ((a->kind == R_ABI_JSON_STRING) && !r_abi_baseline_same_text(a, b)) ||
+        ((a->kind == R_ABI_JSON_INTEGER) && (a->integer != b->integer))) {
+        return false;
+    }
+    left_child = a->first_child;
+    right_child = b->first_child;
+    while ((left_child != R_ABI_NODE_NONE) && (right_child != R_ABI_NODE_NONE)) {
+        const RAbiJsonNode *x = &left_document->nodes[left_child];
+        const RAbiJsonNode *y = &right_document->nodes[right_child];
+        if ((x->key_length != y->key_length) ||
+            ((x->key_length != 0U) && (memcmp(x->key, y->key, x->key_length) != 0)) ||
+            !r_abi_baseline_equal(left_document, left_child, right_document, right_child)) {
+            return false;
+        }
+        left_child = x->next_sibling;
+        right_child = y->next_sibling;
+    }
+    return left_child == right_child;
+}
+
+/* The object of an array whose "name" is the "name" of `object`, or NONE. */
+static size_t r_abi_baseline_find(const RAbiJsonDocument *document,
+                                  const RAbiJsonNode *array,
+                                  const RAbiJsonNode *name) {
+    for (size_t child = array->first_child; child != R_ABI_NODE_NONE;
+         child = document->nodes[child].next_sibling) {
+        if (r_abi_baseline_same_text(r_abi_json_member(document, child, "name"), name)) {
+            return child;
+        }
+    }
+    return R_ABI_NODE_NONE;
+}
+
+/* R-FFI-0066: every export and type of the baseline array is in the current one and equal. */
+static bool r_abi_baseline_kept(const RAbiJsonDocument *baseline,
+                                const RAbiJsonNode *old_items,
+                                const RAbiJsonDocument *current,
+                                const RAbiJsonNode *new_items,
+                                bool types,
+                                RFrontendAbiBaselineResult *result) {
+    for (size_t child = old_items->first_child; child != R_ABI_NODE_NONE;
+         child = baseline->nodes[child].next_sibling) {
+        const RAbiJsonNode *name = r_abi_json_member(baseline, child, "name");
+        const size_t match = r_abi_baseline_text(name)
+                                 ? r_abi_baseline_find(current, new_items, name)
+                                 : R_ABI_NODE_NONE;
+        if (!r_abi_baseline_text(name)) {
+            result->verdict = R_FRONTEND_ABI_BASELINE_FOREIGN;
+            return false;
+        }
+        if ((match == R_ABI_NODE_NONE) || !r_abi_baseline_equal(baseline, child, current, match)) {
+            result->verdict = (match == R_ABI_NODE_NONE) ? R_FRONTEND_ABI_BASELINE_REMOVED
+                                                         : R_FRONTEND_ABI_BASELINE_CHANGED;
+            result->subject_is_type = types;
+            (void)snprintf(result->subject,
+                           sizeof(result->subject),
+                           "%.*s",
+                           (int)(name->text_length < 255U ? name->text_length : 255U),
+                           name->text);
+            return false;
+        }
+    }
+    return true;
+}
+
+bool r_abi_baseline_compare(RFrontendContext *context,
+                            const uint8_t *baseline_bytes,
+                            size_t baseline_length,
+                            const uint8_t *current_bytes,
+                            size_t current_length,
+                            RFrontendAbiBaselineResult *result) {
+    static const char *const identity[] = {"schema", "library", "target"};
+    RAbiJsonDocument baseline;
+    RAbiJsonDocument current;
+    size_t baseline_root;
+    size_t current_root;
+    bool parsed;
+
+    (void)memset(result, 0, sizeof(*result));
+    (void)memset(&baseline, 0, sizeof(baseline));
+    (void)memset(&current, 0, sizeof(current));
+    baseline.context = context;
+    baseline.bytes = baseline_bytes;
+    baseline.length = baseline_length;
+    current.context = context;
+    current.bytes = current_bytes;
+    current.length = current_length;
+    parsed = r_abi_baseline_parse(&current, &current_root);
+    if (parsed) {
+        const RAbiJsonNode *old_exports;
+        const RAbiJsonNode *old_types;
+        uint64_t old_version = 0U;
+        uint64_t new_version = 0U;
+        bool same = r_abi_baseline_parse(&baseline, &baseline_root) &&
+                    (baseline.nodes[baseline_root].kind == R_ABI_JSON_OBJECT);
+
+        for (size_t index = 0U; same && (index < sizeof(identity) / sizeof(identity[0])); ++index) {
+            same = r_abi_baseline_same_text(
+                r_abi_json_member(&baseline, baseline_root, identity[index]),
+                r_abi_json_member(&current, current_root, identity[index]));
+        }
+        old_exports = same ? r_abi_json_member(&baseline, baseline_root, "exports") : NULL;
+        old_types = same ? r_abi_json_member(&baseline, baseline_root, "types") : NULL;
+        if (!same || (old_exports == NULL) || (old_exports->kind != R_ABI_JSON_ARRAY) ||
+            (old_types == NULL) || (old_types->kind != R_ABI_JSON_ARRAY) ||
+            !r_abi_baseline_version(
+                r_abi_json_member(&baseline, baseline_root, "compatibility_version"),
+                &old_version) ||
+            !r_abi_baseline_version(
+                r_abi_json_member(&current, current_root, "compatibility_version"), &new_version)) {
+            result->verdict = R_FRONTEND_ABI_BASELINE_FOREIGN;
+        } else if (new_version < old_version) {
+            result->verdict = R_FRONTEND_ABI_BASELINE_OLDER;
+        } else if (new_version > old_version) {
+            result->verdict = R_FRONTEND_ABI_BASELINE_ADMITTED;
+        } else if (r_abi_baseline_kept(&baseline,
+                                       old_exports,
+                                       &current,
+                                       r_abi_json_member(&current, current_root, "exports"),
+                                       false,
+                                       result) &&
+                   r_abi_baseline_kept(&baseline,
+                                       old_types,
+                                       &current,
+                                       r_abi_json_member(&current, current_root, "types"),
+                                       true,
+                                       result)) {
+            result->verdict = R_FRONTEND_ABI_BASELINE_KEPT;
+        }
+    }
+    r_abi_json_dispose(&baseline);
+    r_abi_json_dispose(&current);
+    return parsed;
 }

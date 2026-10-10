@@ -156,6 +156,7 @@ typedef enum RTokenKind {
     R_TOKEN_KW_U32,
     R_TOKEN_KW_U64,
     R_TOKEN_KW_UNSAFE,
+    R_TOKEN_KW_UNION,
     R_TOKEN_KW_USIZE,
     R_TOKEN_KW_VARIANT,
     R_TOKEN_KW_VOID,
@@ -695,6 +696,14 @@ typedef struct RSemanticAggregate {
     bool is_protected;
     bool is_error;
     bool is_repr_c;
+    /* R-AGG-0014 (B9.3): a C union; every field begins at offset zero. */
+    bool is_union;
+    /* R-FFI-0061 (B9.3): @repr(C, packed) and the alignment of @repr(C, align = N), or zero. */
+    bool is_packed;
+    uint32_t align_attribute;
+    /* A union, a packed or aligned aggregate, or one with a bit-field or an aligned field: its
+       layout is r_semantic_aggregate_layout's (R-AGG-0014, R-FFI-0061, R-FFI-0062). */
+    bool c_layout;
     bool is_tagged;
     uint32_t payload_parent;
     RTypeId standard_payload_element;
@@ -752,7 +761,8 @@ typedef struct RSemanticAggregate {
     /* Complete @repr(C) aggregate declared inside an extern "C" block (R-FFI-0017): its member
        or enumerator inventory is proven one-for-one against the block's ABI record. */
     bool is_c_declared;
-    /* Declaring extern block: AST node while collecting, then the one-based block index. */
+    /* Declaring extern block: AST node while collecting, then the one-based block index (also
+       of an opaque struct, B10-2). */
     RAstNodeId extern_block_ast;
     uint32_t extern_block;
     /* The main translation unit may not spell the C name (typedef or reserved spelling);
@@ -899,6 +909,10 @@ typedef struct RSemanticField {
     RJsonFieldContract json;
     bool is_protected;
     bool is_closure_value_capture;
+    /* R-FFI-0062 (B9.3): the width of a bit-field, zero for an ordinary field. */
+    uint32_t bit_width;
+    /* R-FFI-0061 (B9.3): the alignment of the field attribute @align(N), or zero. */
+    uint32_t align_attribute;
     /* R-INIT-0004 (L33): the declared `= initializer` of the field (node zero when absent),
        checked once in the module of its aggregate; an invalid one is not lowered again. */
     RAstRef initializer;
@@ -1160,6 +1174,8 @@ typedef struct RSemanticSymbol {
     uint32_t json_schema_text;
     bool is_static;
     bool is_thread_local;
+    /* B9.1: the verified header binds the import to another symbol (R-CMAP-0026). */
+    bool decorated_header_symbol;
     /* A local the compiler declares for a range-for (R-STMT-0014); named by symbol. */
     bool is_hidden_local;
     bool is_task_scope;
@@ -2406,6 +2422,9 @@ typedef struct RAbiRecordType {
     RCTypeKind kind;
     /* Tag kind behind a typedef spelling; equals kind for a tag spelling. */
     RCTypeKind tag_kind;
+    /* The tag a typedef names; NULL for a tag spelling or a typedef of an anonymous tag. */
+    char *tag_name;
+    size_t tag_name_length;
     char *underlying;
     size_t underlying_length;
     uint64_t size;
@@ -2425,6 +2444,10 @@ typedef struct RAbiRecordMember {
     char *desugared_type;
     size_t desugared_type_length;
     uint64_t offset;
+    /* R-FFI-0062: a bit-field of `bit_width` bits at bit `bit_offset` of the byte at `offset`;
+       zero width for an ordinary member. */
+    uint32_t bit_offset;
+    uint32_t bit_width;
     /* Type tree of the member; SIZE_MAX when the record carries none. */
     size_t type_node;
 } RAbiRecordMember;
@@ -2746,6 +2769,8 @@ struct RFrontendContext {
     bool interfaces_linked;
     bool semantic_analyzing;
     bool semantic_analyzed;
+    /* B9-2: the Copy status of every aggregate is computed (r_semantic_type_is_copy holds). */
+    bool semantic_copy_known;
     bool mir_lowered;
     bool sources_sealed;
     RFrontendProfile profile;
@@ -2824,6 +2849,10 @@ struct RFrontendContext {
     /* SHA-256 of the loaded ABI record document; part of the interface fingerprint. */
     uint8_t abi_record_digest[32];
     bool abi_record_digest_present;
+    /* B9.1: the diagnostics of the in-process header verification, as libclang formats them. */
+    char *header_report;
+    size_t header_report_length;
+    size_t header_report_capacity;
 };
 
 /* Spells a C ABI type as the header declares it (struct/enum tags, typedef names, pointers,
@@ -2833,11 +2862,115 @@ bool r_c_abi_spell_header_type(const RFrontendContext *context,
                                char *buffer,
                                size_t capacity);
 
+/* The canonical C type of a C ABI numeric type of the target ("long long" for c_int64). */
+const char *r_c_abi_canonical_spelling(RTokenKind token);
+
+/* Marks of the R-FFI-0042 verifier translation unit (B9.1): before the probes of each import and
+   of each aggregate the writer names the R declaration they prove and its rule, so that a
+   diagnostic of the in-process verification lands on that declaration. */
+typedef struct RCAbiVerifierMarks {
+    void (*mark)(void *user_data, RSourceSpan span, const char *rule_id);
+    void *user_data;
+} RCAbiVerifierMarks;
+
+/* Shared with the in-process ABI record generator (compiler/clang/record.c, B9.1). */
+bool r_abi_write_json_string(RFrontendWriteFn writer,
+                             void *user_data,
+                             const char *bytes,
+                             size_t length);
+const char *r_abi_kind_name(RCTypeKind kind);
+/* The target_triple of a target manifest. */
+bool r_abi_manifest_target_triple(const uint8_t *manifest,
+                                  size_t length,
+                                  const uint8_t **triple,
+                                  size_t *triple_length);
+/* Extern blocks in ascending (module, position) order. */
+int r_abi_compare_blocks(const RFrontendContext *context,
+                         const RExternBlockRecord *left,
+                         const RExternBlockRecord *right);
+
+/* The toolchain pins of the target manifest (compiler/llvm/target.c). */
+const char *r_frontend_target_c_compiler_version(void);
+const char *r_frontend_target_sdk_version(void);
+const char *r_frontend_target_c_compiler_build(void);
+/* The prefix the target's object format gives a C name as a global symbol. */
+const char *r_frontend_target_global_prefix(void);
+
+/* B10.2 (compiler/codegen/c_library_header.inc): the C header and the ABI baseline of a
+   library, and what keeps its API from a C declaration. */
+RFrontendStatus r_c_abi_write_library_header(const RFrontendContext *context,
+                                             const char *library,
+                                             const char *version,
+                                             RFrontendWriteFn writer,
+                                             void *user_data);
+RFrontendStatus r_c_abi_write_library_baseline(const RFrontendContext *context,
+                                               const char *library,
+                                               const char *version,
+                                               const char *compatibility_version,
+                                               RFrontendWriteFn writer,
+                                               void *user_data);
+bool r_c_abi_library_problem(const RFrontendContext *context,
+                             const char *library,
+                             char *text,
+                             size_t capacity);
+/* The target_triple of the pinned target manifest ("arm64-apple-darwin"). */
+const char *r_semantic_target_triple(void);
+/* R-FFI-0066 (compiler/source/abi_record.c): the verdict of the current baseline of a library on
+   an earlier one; false when the current one does not parse or the allocator is exhausted. */
+bool r_abi_baseline_compare(RFrontendContext *context,
+                            const uint8_t *baseline,
+                            size_t baseline_length,
+                            const uint8_t *current,
+                            size_t current_length,
+                            RFrontendAbiBaselineResult *result);
+
+/* Writes the verifier translation unit of r_frontend_emit_abi_verifier; marks may be NULL. */
+RFrontendStatus r_c_abi_write_verifier(const RFrontendContext *context,
+                                       RFrontendWriteFn writer,
+                                       void *user_data,
+                                       const RCAbiVerifierMarks *marks);
+
 /* Target size and alignment of a complete value type; false for dependent or incomplete types. */
 bool r_semantic_type_layout(const RFrontendContext *context,
                             RTypeId type_id,
                             uint64_t *size,
                             uint64_t *alignment);
+
+/* Where a field of a struct or union lies (R-AGG-0014, R-FFI-0006, R-FFI-0061, R-FFI-0062): an
+   ordinary field at byte `offset`, a bit-field of `bit_width` bits at bit `bit_offset` (0..7) of
+   the byte at `offset`. `alignment` is the alignment the field has there, lower than that of its
+   type for a field of a packed aggregate. */
+typedef struct RSemanticFieldPlace {
+    uint64_t offset;
+    uint64_t alignment;
+    uint32_t bit_offset;
+    uint32_t bit_width;
+} RSemanticFieldPlace;
+
+/* The C layout of a complete struct or union, as the target C implementation lays out the
+   equivalent declaration; `place` (may be NULL) receives the place of the field with layout
+   index `wanted`. False for an aggregate whose field types have no layout. */
+bool r_semantic_aggregate_layout(const RFrontendContext *context,
+                                 const RSemanticAggregate *aggregate,
+                                 uint32_t wanted,
+                                 RSemanticFieldPlace *place,
+                                 uint64_t *size,
+                                 uint64_t *alignment);
+
+/* Whether the field lies below the alignment of its type (a packed aggregate, R-FFI-0061) or is
+   a bit-field (R-FFI-0062): it has no address of its own. */
+bool r_semantic_field_without_address(const RFrontendContext *context, const RSemanticField *field);
+
+/* R-FFI-0062, R-EXPR-0016: whether `bits`, a value of the field's type, survives the round trip
+   through the width of a bit-field (always true for an ordinary field). */
+bool r_semantic_bit_field_value_fits(const RFrontendContext *context,
+                                     const RSemanticField *field,
+                                     uint64_t bits);
+
+/* Whether a struct or union has a field that generated per-field code cannot reach: any field
+   of a union, or a field without an address (r_semantic_field_without_address). */
+bool r_semantic_aggregate_has_unplaced_fields(const RFrontendContext *context,
+                                              const RSemanticAggregate *aggregate);
 
 /* Signedness and width of a fixed R integer kind (the representation of a C ABI integer). */
 bool r_semantic_integer_properties_public(RSemanticTypeKind kind, bool *is_signed, uint32_t *width);
@@ -2904,6 +3037,10 @@ const char *r_token_kind_name(RTokenKind kind);
 const char *r_syntax_kind_name(RSyntaxKind kind);
 bool r_token_is_trivia(RTokenKind kind);
 bool r_token_is_keyword(RTokenKind kind);
+/* Whether a C identifier belongs to a class the C implementation reserves (R-FFI-0057). */
+bool r_semantic_c_name_reserved(const char *name);
+/* Whether an ASCII identifier spelling is a keyword of R (B9.2 bindings). */
+bool r_lexer_is_keyword(const uint8_t *bytes, size_t length);
 bool r_token_is_c_abi_type(RTokenKind kind);
 bool r_token_is_primitive_type(RTokenKind kind);
 

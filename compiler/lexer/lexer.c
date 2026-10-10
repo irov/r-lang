@@ -90,6 +90,7 @@ static const RKeyword r_keywords[] = {
     {"u32", R_TOKEN_KW_U32},
     {"u64", R_TOKEN_KW_U64},
     {"unsafe", R_TOKEN_KW_UNSAFE},
+    {"union", R_TOKEN_KW_UNION},
     {"usize", R_TOKEN_KW_USIZE},
     {"variant", R_TOKEN_KW_VARIANT},
     {"void", R_TOKEN_KW_VOID},
@@ -200,6 +201,10 @@ static RTokenKind r_keyword_kind(const uint8_t *bytes, size_t length) {
         }
     }
     return R_TOKEN_IDENTIFIER;
+}
+
+bool r_lexer_is_keyword(const uint8_t *bytes, size_t length) {
+    return r_keyword_kind(bytes, length) != R_TOKEN_IDENTIFIER;
 }
 
 static bool r_scan_identifier(RFrontendContext *context,

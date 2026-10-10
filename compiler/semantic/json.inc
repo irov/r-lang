@@ -144,6 +144,16 @@ static bool r_json_encode_type_visit(RBodyContext *body,
         return true;
     }
     if (type->kind == R_SEMANTIC_TYPE_STRUCT) {
+        if (r_semantic_aggregate_has_unplaced_fields(context,
+                                                     r_semantic_aggregate_for_type(context, id)))
+            /* R-AGG-0014, R-FFI-0061, R-FFI-0062: the fields of a union overlap and a packed or
+               bit-field member has no address; a converter is required. */
+            return r_body_diagnostic(body,
+                                     "R-DIAG-JSON-001",
+                                     "R-JSON-0001",
+                                     "a union, a packed field or a bit-field has no automatic "
+                                     "JSON representation",
+                                     span);
         if (!r_json_build_field_schema(context, id))
             return false;
         const RSemanticAggregate *aggregate = r_semantic_aggregate_for_type(context, id);
@@ -251,6 +261,16 @@ static bool r_json_decode_type_visit(RBodyContext *body,
         return true;
     }
     if (type->kind == R_SEMANTIC_TYPE_STRUCT) {
+        if (r_semantic_aggregate_has_unplaced_fields(context,
+                                                     r_semantic_aggregate_for_type(context, id)))
+            /* R-AGG-0014, R-FFI-0061, R-FFI-0062: the fields of a union overlap and a packed or
+               bit-field member has no address; a converter is required. */
+            return r_body_diagnostic(body,
+                                     "R-DIAG-JSON-001",
+                                     "R-JSON-0001",
+                                     "a union, a packed field or a bit-field has no automatic "
+                                     "JSON representation",
+                                     span);
         if (!r_json_build_field_schema(context, id))
             return false;
         const RSemanticAggregate *aggregate = r_semantic_aggregate_for_type(context, id);

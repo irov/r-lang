@@ -181,6 +181,19 @@ as finished. The matrix records their results per stage.
   and `--sanitize=address|thread` instruments it; the sanitizer presets build every program with
   the sanitizer of the preset (compiler/README.md, *Debugging, coverage and sanitizers*).
   `tools/mutate_r.py` and the target `mutation-report` mutate an R source against a CTest test.
+- The headers of `extern "C"` imports are parsed by the libclang `r-front` links (B9): with
+  `--sysroot DIR` (the pinned SDK) and `--abi-header-dir DIR` the compiler proves every import,
+  object, constant and C aggregate against them before it emits anything (R-FFI-0042), and
+  `--emit=abi-record` writes the ABI record of an `@abi` block. There is no C bridge: imports are
+  called by their C names, and one whose header binds it to a decorated symbol is rejected. The
+  test drivers always pass `--sysroot`; a fixture's headers need their directory as a header root.
+- `--library NAME` translates a program without `main` as a library (R-FFI-0064): its
+  `extern "C"` definitions are the API, and the emitter adds `NAME_initialize`/`NAME_shutdown`,
+  which a C host calls around every export (an export outside them is the `contract_violation`
+  panic). `--emit=shared-library` links it with the manifest's clang (checked by digest) and
+  verifies the exported symbols, `--emit=c-header` writes the C/C++ header (proved by libclang, so
+  it needs `--sysroot`), `--emit=abi-baseline` and `--abi-baseline FILE` keep the ABI between
+  builds (compiler/README.md, *Libraries with an exported ABI*; test `r_frontend_shared_library`).
 - A wrapper that hooks `r_runtime_task_execution_await` sees no await of a body that runs as a
   direct call: it renames `r_runtime_task_direct_begin` to a function that returns 0 where the
   test needs the await (`tests/codegen_scoped_cancel_wrapper.c`).
@@ -347,6 +360,12 @@ these rules are the ones that most often reject otherwise reasonable code:
   `iterator = move rest;`) and how a refused `std.fs` write hands its data back.
 - `u8` and `u16` operands of arithmetic, bitwise operators and shifts promote to `i32`, as in C;
   narrow the result back with `as` (`(entry >> 4usize) as u16`).
+- C layouts (B9.3): every access to a field of a `@repr(C) union` needs `unsafe`; a bit-field
+  (`c_uint flags : 3;`) and a field of `@repr(C, packed)` below its alignment have no address,
+  so read and assign them by value and never borrow them; a store outside a bit-field's range
+  panics with `invalid_conversion`. A function of a `kind = "loadable"` block is called only
+  through `std.dl::resolve(&library, import)`, whose `raw fn?` is not Send: obtain it after the
+  awaits that the `std.dl::library` (Send+Sync) lives across.
 - Hot loops: the optimizer leaves out the bounds checks it can prove (compiler/README.md,
   *Optimization*). Index a local slice or `array<T>` with a local that a condition bounds
   (`i < len(b)`, or `n == len(b)` and `i < n`); take a sub-slice `b[lo..hi]` once and index

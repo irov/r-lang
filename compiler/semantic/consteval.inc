@@ -2550,6 +2550,22 @@ static bool r_consteval_standard_call(RConstEval *eval,
     }
 }
 
+/* R-FFI-0062, R-EXPR-0016 (B9.3): a value stored into a bit-field (`member`, a one-based field
+   id) survives the round trip through the field's width, as r_llvm_store_bits checks at run
+   time; otherwise the evaluation panics with invalid_conversion. */
+static bool r_consteval_bit_field_fits(RConstEval *eval,
+                                       uint32_t member,
+                                       uint64_t bits,
+                                       RSourceSpan span) {
+    const RFrontendContext *context = eval->context;
+
+    if ((member == 0U) || ((size_t)member > context->semantic_field_count) ||
+        r_semantic_bit_field_value_fits(context, &context->semantic_fields[member - 1U], bits)) {
+        return true;
+    }
+    return r_consteval_panic(eval, "invalid_conversion", span);
+}
+
 static bool r_consteval_assign(RConstEval *eval, const RHirNode *node, uint32_t depth) {
     RFrontendContext *context = eval->context;
     const RHirNodeId place_id = r_consteval_child(context, node, 0U);
@@ -2573,6 +2589,10 @@ static bool r_consteval_assign(RConstEval *eval, const RHirNode *node, uint32_t 
     if (node->kind == R_HIR_ASSIGN) {
         if (!r_consteval_expression(
                 eval, r_consteval_child(context, node, 1U), &value, depth + 1U)) {
+            return false;
+        }
+        if ((place_node.kind == R_HIR_FIELD_PLACE) &&
+            !r_consteval_bit_field_fits(eval, place_node.aggregate_member, value.bits, node->span)) {
             return false;
         }
         return r_consteval_store(eval, place, &value, node->span);
@@ -2617,6 +2637,10 @@ static bool r_consteval_assign(RConstEval *eval, const RHirNode *node, uint32_t 
                 new_bits, calculation_kind, place_kind, is_signed, &new_bits)) {
             return r_consteval_panic(eval, "integer_overflow", node->span);
         }
+    }
+    if ((place_node.kind == R_HIR_FIELD_PLACE) &&
+        !r_consteval_bit_field_fits(eval, place_node.aggregate_member, new_bits, node->span)) {
+        return false;
     }
     place->bits = new_bits;
     return true;
@@ -2717,6 +2741,8 @@ r_consteval_expression(RConstEval *eval, RHirNodeId node_id, RConstCell *result,
             }
             if (!r_consteval_expression(
                     eval, r_consteval_child(context, &field, 0U), &left, depth + 1U) ||
+                ((left.kind == R_CONST_SCALAR) &&
+                 !r_consteval_bit_field_fits(eval, field.aggregate_member, left.bits, field.span)) ||
                 !r_consteval_store(eval, &result->items[field_index], &left, field.span)) {
                 return false;
             }

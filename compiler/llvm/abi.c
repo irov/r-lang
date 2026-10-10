@@ -45,19 +45,24 @@ static bool r_llvm_abi_homogeneous(const RLlvmTypeTable *table,
         *count += element_count * type->count;
         return true;
     }
-    case R_LLVM_SURFACE_STRUCT:
+    case R_LLVM_SURFACE_STRUCT: {
+        /* The members of this struct alone: a nested struct is checked against its own size
+           (B10-1). */
+        uint32_t members = 0U;
         if (type->count == 0U) {
             return false;
         }
         for (member = 0U; member < type->count; ++member) {
             const RLlvmSurfaceField *field = table->field(table->context, type->first + member);
             if ((field == NULL) ||
-                !r_llvm_abi_homogeneous(table, field->type, depth + 1U, base_size, count)) {
+                !r_llvm_abi_homogeneous(table, field->type, depth + 1U, base_size, &members)) {
                 return false;
             }
         }
+        *count += members;
         /* Padding breaks homogeneity: the members must fill the aggregate. */
-        return (*base_size != 0U) && ((*count * *base_size) == type->size);
+        return (*base_size != 0U) && ((members * *base_size) == type->size);
+    }
     case R_LLVM_SURFACE_UNION: {
         uint32_t widest = 0U;
         if (type->count == 0U) {

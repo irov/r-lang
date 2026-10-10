@@ -1,9 +1,9 @@
 {
   "version": 4,
   "scope": "source references and resolved program operations and types; execution checked separately",
-  "total_records": 1580,
-  "covered_records": 1580,
-  "application_records": 1580,
+  "total_records": 1586,
+  "covered_records": 1586,
+  "application_records": 1586,
   "items": [
     {
       "record_id": "core::adopt#operation",
@@ -5816,6 +5816,84 @@
       "application_missing": [],
       "examples": [
         "warehouse"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "std.dl::dl_error#type",
+      "required": [
+        "std.dl::dl_error"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "c_bridge"
+      ],
+      "resolved_type_examples": [
+        "c_bridge"
+      ]
+    },
+    {
+      "record_id": "std.dl::error_code#type",
+      "required": [
+        "std.dl::error_code"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "c_bridge"
+      ],
+      "resolved_type_examples": [
+        "c_bridge"
+      ]
+    },
+    {
+      "record_id": "std.dl::library#type",
+      "required": [
+        "std.dl::library"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "c_bridge"
+      ],
+      "resolved_type_examples": [
+        "c_bridge"
+      ]
+    },
+    {
+      "record_id": "std.dl::open#operation",
+      "required": [
+        "std.dl::open"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "c_bridge"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "std.dl::resolve#operation",
+      "required": [
+        "std.dl::resolve"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "c_bridge"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "std.dl::symbol#operation",
+      "required": [
+        "std.dl::symbol"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "c_bridge"
       ],
       "resolved_type_examples": []
     },

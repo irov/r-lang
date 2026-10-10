@@ -181,14 +181,21 @@ if(DEFINED HEADER_INCLUDE_DIRS AND NOT HEADER_INCLUDE_DIRS STREQUAL "")
     endforeach()
 endif()
 
+# B9.1: r-front verifies the headers of the imports itself (R-FFI-0042): libclang parses them in
+# the SDK the C parts are compiled with, under the header roots of the program and of the
+# library's native providers.
+if(DEFINED R_SDK_PATH AND NOT R_SDK_PATH STREQUAL "")
+    list(APPEND R_FRONTEND_ARGUMENTS --sysroot "${R_SDK_PATH}")
+endif()
+foreach(R_CODEGEN_HEADER_DIR IN LISTS HEADER_INCLUDE_DIRS STD_NATIVE_INCLUDE_DIRS)
+    list(APPEND R_FRONTEND_ARGUMENTS --abi-header-dir "${R_CODEGEN_HEADER_DIR}")
+endforeach()
+
 if(DEFINED ABI_INVENTORY AND ABI_INVENTORY)
     # R-FFI-0041: complete C aggregates need the record produced from the verified headers.
     include("${CMAKE_CURRENT_LIST_DIR}/abi_record_support.cmake")
     r_abi_generate_record(
         FRONT "${R_FRONT_EXECUTABLE}"
-        PYTHON "${PYTHON_EXECUTABLE}"
-        TOOL "${ABI_RECORD_TOOL}"
-        CC "${C_COMPILER}"
         OUTPUT_PREFIX "${OUTPUT_EXE}"
         ARGUMENTS_VARIABLE R_FRONTEND_ARGUMENTS
         INCLUDE_FLAGS ${R_CODEGEN_HEADER_INCLUDE_FLAGS}
@@ -339,12 +346,11 @@ endif()
 
 # Library R-SLIB-RSRC-0003 (M25): a standard module written in R that imports the C functions of
 # a native provider of the library, such as std.tls, is verified against the header of the
-# provider and bridged like any extern "C" import (Core R-FFI-0042); the archives of the provider
-# follow the generated code. With ABI_VERIFY the verifier and the bridge below cover these
-# imports together with those of the program.
+# provider (Core R-FFI-0042, in r-front since B9.1) and calls them directly like any extern "C"
+# import; the archives of the provider follow the program's object.
 set(R_CODEGEN_STD_NATIVE_ARCHIVES)
 set(R_CODEGEN_STD_NATIVE OFF)
-if(R_CODEGEN_IMPORTS MATCHES "(^|\n)_r_bridge_r_std_[a-z]+_native_")
+if(R_CODEGEN_IMPORTS MATCHES "(^|\n)_r_std_[a-z]+_native_")
     if(NOT DEFINED STD_NATIVE_INCLUDE_DIRS OR STD_NATIVE_INCLUDE_DIRS STREQUAL "")
         message(FATAL_ERROR "the program imports a native provider of the library without "
                             "STD_NATIVE_INCLUDE_DIRS")
@@ -354,115 +360,6 @@ if(R_CODEGEN_IMPORTS MATCHES "(^|\n)_r_bridge_r_std_[a-z]+_native_")
     endforeach()
     set(R_CODEGEN_STD_NATIVE_ARCHIVES ${STD_NATIVE_LIBRARIES})
     set(R_CODEGEN_STD_NATIVE ON)
-endif()
-
-if(R_CODEGEN_STD_NATIVE AND NOT (DEFINED ABI_VERIFY AND ABI_VERIFY))
-    set(R_STD_NATIVE_ARGUMENTS ${R_FRONTEND_ARGUMENTS})
-    list(REMOVE_AT R_STD_NATIVE_ARGUMENTS 0)
-    set(R_STD_NATIVE_VERIFIER_C "${OUTPUT_EXE}.native-verifier.c")
-    set(R_STD_NATIVE_BRIDGE_C "${OUTPUT_EXE}.native-bridge.c")
-    execute_process(
-        COMMAND "${R_FRONT_EXECUTABLE}" --emit=abi-verifier ${R_STD_NATIVE_ARGUMENTS}
-        RESULT_VARIABLE R_STD_NATIVE_EMIT_RESULT
-        OUTPUT_FILE "${R_STD_NATIVE_VERIFIER_C}"
-        ERROR_VARIABLE R_STD_NATIVE_EMIT_ERROR
-    )
-    if(NOT R_STD_NATIVE_EMIT_RESULT EQUAL 0)
-        message(FATAL_ERROR "r-front --emit=abi-verifier failed (${R_STD_NATIVE_EMIT_RESULT}): "
-                            "${R_STD_NATIVE_EMIT_ERROR}")
-    endif()
-    execute_process(
-        COMMAND "${C_COMPILER}"
-            ${R_CODEGEN_PLATFORM_FLAGS}
-            -std=c17
-            -pedantic-errors
-            -Wall
-            -Wextra
-            -Werror
-            -Wconversion
-            -Wsign-conversion
-            -Wshadow
-            -Wstrict-prototypes
-            -Wmissing-prototypes
-            ${R_CODEGEN_HEADER_INCLUDE_FLAGS}
-            -fsyntax-only
-            "${R_STD_NATIVE_VERIFIER_C}"
-        RESULT_VARIABLE R_STD_NATIVE_VERIFY_RESULT
-        OUTPUT_VARIABLE R_STD_NATIVE_VERIFY_OUTPUT
-        ERROR_VARIABLE R_STD_NATIVE_VERIFY_ERROR
-    )
-    if(NOT R_STD_NATIVE_VERIFY_RESULT EQUAL 0)
-        message(FATAL_ERROR
-            "R-DIAG-FFI-004 [R-FFI-0042]: header verification rejected the imports of a native "
-            "provider of the library (${R_STD_NATIVE_VERIFY_RESULT}):\n"
-            "${R_STD_NATIVE_VERIFY_OUTPUT}${R_STD_NATIVE_VERIFY_ERROR}")
-    endif()
-    execute_process(
-        COMMAND "${R_FRONT_EXECUTABLE}" --emit=c17-bridge ${R_STD_NATIVE_ARGUMENTS}
-        RESULT_VARIABLE R_STD_NATIVE_BRIDGE_RESULT
-        OUTPUT_FILE "${R_STD_NATIVE_BRIDGE_C}"
-        ERROR_VARIABLE R_STD_NATIVE_BRIDGE_ERROR
-    )
-    if(NOT R_STD_NATIVE_BRIDGE_RESULT EQUAL 0)
-        message(FATAL_ERROR "r-front --emit=c17-bridge failed (${R_STD_NATIVE_BRIDGE_RESULT}): "
-                            "${R_STD_NATIVE_BRIDGE_ERROR}")
-    endif()
-    list(APPEND R_CODEGEN_EXTRA_C_SOURCES "${R_STD_NATIVE_BRIDGE_C}")
-endif()
-
-if(DEFINED ABI_VERIFY AND ABI_VERIFY)
-    # R-FFI-0042: the verifier translation unit is compiled for the target with the C options of
-    # the bridge and never executed; a failed compile is the R-DIAG-FFI-004 outcome.
-    set(R_ABI_ARGUMENTS ${R_FRONTEND_ARGUMENTS})
-    list(REMOVE_AT R_ABI_ARGUMENTS 0)
-    set(R_ABI_VERIFIER_C "${OUTPUT_EXE}.abi-verifier.c")
-    set(R_ABI_BRIDGE_C "${OUTPUT_EXE}.bridge.c")
-    execute_process(
-        COMMAND "${R_FRONT_EXECUTABLE}" --emit=abi-verifier ${R_ABI_ARGUMENTS}
-        RESULT_VARIABLE R_ABI_EMIT_RESULT
-        OUTPUT_FILE "${R_ABI_VERIFIER_C}"
-        ERROR_VARIABLE R_ABI_EMIT_ERROR
-    )
-    if(NOT R_ABI_EMIT_RESULT EQUAL 0)
-        message(FATAL_ERROR
-            "r-front --emit=abi-verifier failed (${R_ABI_EMIT_RESULT}): ${R_ABI_EMIT_ERROR}")
-    endif()
-    execute_process(
-        COMMAND "${C_COMPILER}"
-            ${R_CODEGEN_PLATFORM_FLAGS}
-            -std=c17
-            -pedantic-errors
-            -Wall
-            -Wextra
-            -Werror
-            -Wconversion
-            -Wsign-conversion
-            -Wshadow
-            -Wstrict-prototypes
-            -Wmissing-prototypes
-            ${R_CODEGEN_HEADER_INCLUDE_FLAGS}
-            -fsyntax-only
-            "${R_ABI_VERIFIER_C}"
-        RESULT_VARIABLE R_ABI_VERIFY_RESULT
-        OUTPUT_VARIABLE R_ABI_VERIFY_OUTPUT
-        ERROR_VARIABLE R_ABI_VERIFY_ERROR
-    )
-    if(NOT R_ABI_VERIFY_RESULT EQUAL 0)
-        message(FATAL_ERROR
-            "R-DIAG-FFI-004 [R-FFI-0042]: header verification rejected the extern C "
-            "imports (${R_ABI_VERIFY_RESULT}):\n${R_ABI_VERIFY_OUTPUT}${R_ABI_VERIFY_ERROR}")
-    endif()
-    execute_process(
-        COMMAND "${R_FRONT_EXECUTABLE}" --emit=c17-bridge ${R_ABI_ARGUMENTS}
-        RESULT_VARIABLE R_ABI_BRIDGE_RESULT
-        OUTPUT_FILE "${R_ABI_BRIDGE_C}"
-        ERROR_VARIABLE R_ABI_BRIDGE_ERROR
-    )
-    if(NOT R_ABI_BRIDGE_RESULT EQUAL 0)
-        message(FATAL_ERROR
-            "r-front --emit=c17-bridge failed (${R_ABI_BRIDGE_RESULT}): ${R_ABI_BRIDGE_ERROR}")
-    endif()
-    list(APPEND R_CODEGEN_EXTRA_C_SOURCES "${R_ABI_BRIDGE_C}")
 endif()
 
 # The inline functions of the headers that the object calls by their shims.

@@ -497,6 +497,7 @@ static const RStandardResultDescriptor r_standard_results[] = {
     {"std.dict::remove", "o<V>"},
     {"std.dict::reserve", "void"},
     {"std.dict::with_capacity", "dict<K,V>"},
+    {"std.dl::resolve", "R"},
     {"std.env::arguments", "array<std.string::string>"},
     {"std.env::as_error", "std.error::error"},
     {"std.env::get", "o<std.string::string>"},

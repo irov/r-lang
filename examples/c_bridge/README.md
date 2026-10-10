@@ -13,6 +13,7 @@ build-debug/tests/codegen_example_c_bridge upper 'Hello, C'
 build-debug/tests/codegen_example_c_bridge release 'Hello, C'
 build-debug/tests/codegen_example_c_bridge bytes 68656c6c6f00ff
 build-debug/tests/codegen_example_c_bridge cstring 68656c6c6f
+build-debug/tests/codegen_example_c_bridge loadable libSystem.B.dylib
 ```
 
 `inspect` creates an owning NUL-terminated C string, obtains bounded and raw views,
@@ -35,6 +36,13 @@ the handle, so validation always happens before the packet is destroyed. `upper`
 drops the handle; `release` transfers the cleanup obligation and calls the destructor
 explicitly. The destructor reacquires and drops the original R allocation.
 
+`loadable` opens a shared library while the program runs (`std.dl::open`, by name or by path)
+and calls its `labs` through `std.dl::resolve`: the `extern "C"` block that declares `labs` has
+the link kind `loadable`, so the link step never names the library, and `<stdlib.h>` verifies the
+prototype the resolved function pointer carries. It prints `labs(-42)=42 strlen=true` for the
+system library (`std.dl::symbol` finds `strlen` as well); a library the loader refuses exits with
+69 (`library not loaded`), an empty path with 64.
+
 The raw-pointer contracts describe allocation, length, alignment and lifetime.
 `core::assume` repeats a bound already enforced before creating the packet; it does
 not validate untrusted lengths. The callback entry trampoline also provides the
@@ -43,18 +51,16 @@ checks that a duplicate acquisition is rejected, and releases the first attachme
 A callback must reuse its trampoline context rather than attach a second time. `target` prints the selected C capabilities
 and manifest availability, rather than probing arbitrary installed libraries.
 
-To compile the program manually, supply both maps and the link manifest. The object goes to
-standard output, and `--emit=c17-bridge` with the same options writes the C unit that forwards
-the calls of reserved C names such as `strlen`. The CTest case
-`r_frontend_codegen_example_c_bridge` also compiles the verifier unit of `--emit=abi-verifier`
-against the headers and links the object and the bridge with the runtime and the library into
+To compile the program manually, supply both maps and the link manifest. With `--sysroot`,
+r-front parses the headers of the imports with libclang in that SDK and proves each imported
+prototype against them before it writes the object; the object goes to standard output and calls
+`strlen` and the other imports directly. The CTest case `r_frontend_codegen_example_c_bridge`
+builds it the same way and links it with the runtime and the library into
 `build/debug/tests/codegen_example_c_bridge`:
 
 ```sh
 build/debug/r-front --module-map examples/c_bridge/modules.map \
   --entry example.c_bridge.main --library-map library/r/library.map \
-  --link-manifest examples/c_bridge/link_manifest.json --emit=object > /tmp/c_bridge.o
-build/debug/r-front --module-map examples/c_bridge/modules.map \
-  --entry example.c_bridge.main --library-map library/r/library.map \
-  --link-manifest examples/c_bridge/link_manifest.json --emit=c17-bridge > /tmp/c_bridge_bridge.c
+  --link-manifest examples/c_bridge/link_manifest.json \
+  --sysroot "$(xcrun --show-sdk-path)" --emit=object > /tmp/c_bridge.o
 ```

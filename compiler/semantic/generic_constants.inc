@@ -10,6 +10,85 @@ static bool r_generic_align(uint64_t size, uint64_t alignment, uint64_t *result)
     return true;
 }
 
+/* The C layout of a struct or union (R-AGG-0014, R-FFI-0006, R-FFI-0061, R-FFI-0062), positions
+ * counted in bits. A field takes the alignment of its type, one in a packed aggregate, raised by
+ * its @align. A bit-field continues at the next free bit unless it would leave the storage unit
+ * of its type aligned at the alignment of that type, as AAPCS64 allocates it; in a packed
+ * aggregate it continues at the next free bit always. The type of a bit-field contributes its
+ * alignment as an ordinary field does. */
+static bool r_generic_aggregate_layout(const RFrontendContext *context,
+                                       const RSemanticAggregate *aggregate,
+                                       uint32_t wanted,
+                                       RSemanticFieldPlace *place,
+                                       uint64_t *size,
+                                       uint64_t *alignment,
+                                       uint32_t depth) {
+    uint64_t position = 0U; /* the first free bit */
+    uint64_t end = 0U;      /* the end of the largest union field, in bytes */
+    uint32_t index;
+
+    *alignment = 1U;
+    for (index = 0U; index < aggregate->field_count; ++index) {
+        const RSemanticField *field = &context->semantic_fields[aggregate->first_field + index];
+        uint64_t field_size, field_alignment, offset, natural;
+        if (field->type == R_TYPE_ID_INVALID) {
+            continue;
+        }
+        if (!r_generic_layout(context, field->type, &field_size, &natural, depth + 1U) ||
+            natural == 0U || field_size > UINT64_MAX / 16U) {
+            return false;
+        }
+        field_alignment = aggregate->is_packed ? 1U : natural;
+        if (field->align_attribute > field_alignment) {
+            field_alignment = field->align_attribute;
+        }
+        if (field_alignment > *alignment) {
+            *alignment = field_alignment;
+        }
+        if (field->bit_width != 0U) {
+            const uint64_t unit = natural * 8U;
+            if (!aggregate->is_packed &&
+                (position / unit) != ((position + field->bit_width - 1U) / unit)) {
+                position = ((position + unit - 1U) / unit) * unit;
+            }
+            if (index == wanted && place != NULL) {
+                place->offset = position / 8U;
+                place->bit_offset = (uint32_t)(position % 8U);
+                place->bit_width = field->bit_width;
+                place->alignment = 1U;
+            }
+            position += field->bit_width;
+            continue;
+        }
+        offset = aggregate->is_union ? 0U : (position + 7U) / 8U;
+        if (!r_generic_align(offset, field_alignment, &offset) ||
+            offset > UINT64_MAX / 16U - field_size) {
+            return false;
+        }
+        if (index == wanted && place != NULL) {
+            place->offset = offset;
+            place->bit_offset = 0U;
+            place->bit_width = 0U;
+            place->alignment = field_alignment;
+        }
+        if (aggregate->is_union) {
+            end = field_size > end ? field_size : end;
+        } else {
+            position = (offset + field_size) * 8U;
+        }
+    }
+    if (aggregate->align_attribute > *alignment) {
+        *alignment = aggregate->align_attribute;
+    }
+    *size = aggregate->is_union ? end : (position + 7U) / 8U;
+    if (*size == 0U) {
+        /* An R struct without fields still occupies a byte. */
+        *size = 1U;
+    }
+    return (wanted == UINT32_MAX || wanted < aggregate->field_count) &&
+           r_generic_align(*size, *alignment, size);
+}
+
 static bool r_generic_layout(const RFrontendContext *context,
                              RTypeId id,
                              uint64_t *size,
@@ -147,15 +226,15 @@ static bool r_generic_layout(const RFrontendContext *context,
             return r_generic_layout(
                 context, aggregate->enum_underlying_type, size, alignment, depth + 1U);
         }
+        if (!aggregate->is_tagged) {
+            return r_generic_aggregate_layout(
+                context, aggregate, UINT32_MAX, NULL, size, alignment, depth + 1U);
+        }
         *size = 0U;
         *alignment = 1U;
-        for (index = 0U;
-             index < (aggregate->is_tagged ? aggregate->variant_count : aggregate->field_count);
-             ++index) {
+        for (index = 0U; index < aggregate->variant_count; ++index) {
             const RTypeId member =
-                aggregate->is_tagged
-                    ? context->semantic_variants[aggregate->first_variant + index].payload_type
-                    : context->semantic_fields[aggregate->first_field + index].type;
+                context->semantic_variants[aggregate->first_variant + index].payload_type;
             if (member == 0U) {
                 continue;
             }
@@ -165,23 +244,13 @@ static bool r_generic_layout(const RFrontendContext *context,
             if (member_alignment > *alignment) {
                 *alignment = member_alignment;
             }
-            if (aggregate->is_tagged) {
-                if (member_size > *size) {
-                    *size = member_size;
-                }
-            } else {
-                if (!r_generic_align(*size, member_alignment, size) ||
-                    *size > UINT64_MAX - member_size) {
-                    return false;
-                }
-                *size += member_size;
+            /* A payload begins at offset zero. */
+            if (member_size > *size) {
+                *size = member_size;
             }
         }
         if (*size == 0U) {
             *size = 1U;
-        }
-        if (!aggregate->is_tagged) {
-            return r_generic_align(*size, *alignment, size);
         }
         break;
     default:

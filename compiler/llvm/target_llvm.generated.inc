@@ -5,3 +5,6 @@ static const char r_target_llvm_cpu[] = "apple-m1";
 static const char r_target_llvm_data_layout[] =
     "e-m:o-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-n32:64-S128-Fn32";
 static const uint64_t r_target_llvm_entry_budget_bytes = UINT64_C(393216);
+static const char r_target_c_compiler_version[] = "22.1.8";
+static const char r_target_sdk_version[] = "27.0";
+static const char r_target_c_compiler_build[] = "sha256:68bb87f784f09da01b7aea0f70952fb23f606242cdc4f6ff3cc26c372af0706f";

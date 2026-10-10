@@ -12,7 +12,7 @@ static const char *const r_attribute_builtin_names[] = {
     "repr",        "safety",     "link",        "header",   "abi",   "link_name",        "fenv",
     "c_type",      "c_constant", "export_name", "callback", "json",  "deny_panic_alloc", "noalloc",
     "nonblocking", "must_use",   "discardable", "lending",  "chain", "scoped",           "derive",
-    "test",        "recursion",  "attribute",   "default",
+    "test",        "recursion",  "attribute",   "default",  "align",
 };
 
 static bool r_semantic_attribute_is_user(const RFrontendContext *context, RAstRef attribute) {

@@ -905,3 +905,176 @@ bool r_llvm_emit_hosted_main(RLlvmEmitter *emitter) {
     (void)LLVMBuildRet(emitter->builder, result);
     return true;
 }
+
+/* B10.1 (R-FFI-0064): a library has no main. NAME_initialize starts the runtime (the hosted start
+   of a program without arguments) and the program's static state, once per load: the internal
+   state word goes from 0 (new) to 1 (running) and a second call returns 1. NAME_shutdown, once
+   while running, drains (R-AM-0013), destroys the static objects in reverse and stops the
+   runtime as main does after its entry, and leaves the state at 2 (shut down): the static
+   images are not restored, so a library is not started again. */
+static LLVMValueRef r_llvm_library_state_exchange(RLlvmEmitter *emitter,
+                                                  LLVMValueRef state,
+                                                  uint64_t expected,
+                                                  uint64_t desired) {
+    LLVMValueRef exchange = LLVMBuildAtomicCmpXchg(emitter->builder,
+                                                   state,
+                                                   r_llvm_u32(emitter, expected),
+                                                   r_llvm_u32(emitter, desired),
+                                                   LLVMAtomicOrderingSequentiallyConsistent,
+                                                   LLVMAtomicOrderingSequentiallyConsistent,
+                                                   0);
+    return LLVMBuildExtractValue(emitter->builder, exchange, 1U, "");
+}
+
+static LLVMValueRef
+r_llvm_library_function(RLlvmEmitter *emitter, const char *suffix, LLVMTypeRef result) {
+    const char *name = emitter->artifact_options->library_name;
+    const size_t length = strlen(name) + strlen(suffix) + 1U;
+    char *symbol = r_llvm_allocate(emitter, length);
+    LLVMValueRef function;
+
+    if (symbol == NULL) {
+        return NULL;
+    }
+    (void)snprintf(symbol, length, "%s%s", name, suffix);
+    if (LLVMGetNamedFunction(emitter->module, symbol) != NULL) {
+        /* An export of the same C name (R-FFI-0007) is reported before emission. */
+        r_llvm_free(emitter, symbol);
+        (void)r_llvm_fail(emitter, R_FRONTEND_INVALID_ARGUMENT);
+        return NULL;
+    }
+    function = LLVMAddFunction(emitter->module, symbol, LLVMFunctionType(result, NULL, 0U, 0));
+    r_llvm_free(emitter, symbol);
+    emitter->function = function;
+    LLVMPositionBuilderAtEnd(emitter->builder,
+                             LLVMAppendBasicBlockInContext(emitter->context, function, "entry"));
+    return function;
+}
+
+/* The stack of the calling thread, as main begins. */
+static bool r_llvm_library_stack(RLlvmEmitter *emitter, RSourceSpan span) {
+    LLVMBasicBlockRef failed =
+        LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
+    LLVMBasicBlockRef ready =
+        LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
+    LLVMValueRef arguments[2];
+    LLVMValueRef started =
+        r_llvm_call_runtime(emitter, "r_runtime_stack_initialize_current_thread", NULL, 0U, NULL);
+
+    if (started == NULL) {
+        return false;
+    }
+    (void)LLVMBuildCondBr(emitter->builder, started, ready, failed);
+    LLVMPositionBuilderAtEnd(emitter->builder, failed);
+    if (!r_llvm_contract_panic(emitter, "R_RUNTIME_PANIC_STACK_EXHAUSTION", span)) {
+        return false;
+    }
+    LLVMPositionBuilderAtEnd(emitter->builder, ready);
+    arguments[0] = r_llvm_u64(emitter, 0U);
+    arguments[1] = r_llvm_span(emitter, span);
+    return (arguments[1] != NULL) &&
+           (r_llvm_call_runtime(emitter, "r_runtime_stack_require", arguments, 2U, NULL) != NULL);
+}
+
+bool r_llvm_emit_library_entries(RLlvmEmitter *emitter) {
+    const RSourceSpan span = {(RSourceId)1U, 0U, 0U};
+    LLVMTypeRef word = r_llvm_int(emitter, 32U);
+    LLVMValueRef state = LLVMAddGlobal(emitter->module, word, "r_library_state");
+    LLVMValueRef start;
+    LLVMValueRef arguments[2];
+    LLVMBasicBlockRef refused;
+    LLVMBasicBlockRef running;
+    LLVMBasicBlockRef start_failed;
+    uint32_t start_size = 0U;
+    uint32_t start_align = 0U;
+    uint32_t started_offset = 0U;
+    uint32_t status_offset = 0U;
+
+    LLVMSetInitializer(state, r_llvm_u32(emitter, 0U));
+    LLVMSetLinkage(state, LLVMInternalLinkage);
+    LLVMSetAlignment(state, 4U);
+    if (!r_llvm_runtime_layout(emitter, "RRuntimeStartResult", &start_size, &start_align) ||
+        !r_llvm_runtime_field(emitter, "RRuntimeStartResult", "started", &started_offset, NULL) ||
+        !r_llvm_runtime_field(
+            emitter, "RRuntimeStartResult", "process_status", &status_offset, NULL)) {
+        return false;
+    }
+
+    /* int32_t NAME_initialize(void): 0, 1 when called before, or a hosted start status. */
+    if (r_llvm_library_function(emitter, "_initialize", word) == NULL) {
+        return false;
+    }
+    start = r_llvm_entry_alloca(emitter, start_size, start_align, "start");
+    refused = LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
+    running = LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
+    (void)LLVMBuildCondBr(
+        emitter->builder, r_llvm_library_state_exchange(emitter, state, 0U, 1U), running, refused);
+    LLVMPositionBuilderAtEnd(emitter->builder, refused);
+    (void)LLVMBuildRet(emitter->builder, r_llvm_u32(emitter, 1U));
+    LLVMPositionBuilderAtEnd(emitter->builder, running);
+    if (!r_llvm_library_stack(emitter, span)) {
+        return false;
+    }
+    arguments[0] = r_llvm_u32(emitter, 0U);
+    arguments[1] = LLVMConstNull(r_llvm_pointer(emitter));
+    if (r_llvm_call_runtime(emitter, "r_runtime_hosted_start", arguments, 2U, start) == NULL) {
+        return false;
+    }
+    start_failed = LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
+    running = LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
+    (void)LLVMBuildCondBr(
+        emitter->builder,
+        LLVMBuildTrunc(emitter->builder,
+                       LLVMBuildLoad2(emitter->builder,
+                                      r_llvm_int(emitter, 8U),
+                                      r_llvm_byte_offset(emitter, start, started_offset),
+                                      ""),
+                       r_llvm_int(emitter, 1U),
+                       ""),
+        running,
+        start_failed);
+    LLVMPositionBuilderAtEnd(emitter->builder, start_failed);
+    /* A refused start leaves the library new: the runtime reported its category. */
+    LLVMSetOrdering(LLVMBuildStore(emitter->builder, r_llvm_u32(emitter, 0U), state),
+                    LLVMAtomicOrderingSequentiallyConsistent);
+    (void)LLVMBuildRet(
+        emitter->builder,
+        LLVMBuildLoad2(
+            emitter->builder, word, r_llvm_byte_offset(emitter, start, status_offset), ""));
+    LLVMPositionBuilderAtEnd(emitter->builder, running);
+    if (((emitter->thread_local_drop_all != NULL) &&
+         (r_llvm_call_runtime(emitter,
+                              "r_runtime_thread_local_cleanup_install",
+                              &emitter->thread_local_drop_all,
+                              1U,
+                              NULL) == NULL)) ||
+        !r_llvm_initialize_static_bytes(emitter)) {
+        return false;
+    }
+    (void)LLVMBuildRet(emitter->builder, r_llvm_u32(emitter, 0U));
+
+    /* void NAME_shutdown(void): only while running. */
+    if (r_llvm_library_function(emitter, "_shutdown", LLVMVoidTypeInContext(emitter->context)) ==
+        NULL) {
+        return false;
+    }
+    refused = LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
+    running = LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
+    (void)LLVMBuildCondBr(
+        emitter->builder, r_llvm_library_state_exchange(emitter, state, 1U, 2U), running, refused);
+    LLVMPositionBuilderAtEnd(emitter->builder, refused);
+    (void)LLVMBuildRetVoid(emitter->builder);
+    LLVMPositionBuilderAtEnd(emitter->builder, running);
+    if (!r_llvm_library_stack(emitter, span) ||
+        (r_llvm_call_runtime(emitter, "r_runtime_hosted_drain", NULL, 0U, NULL) == NULL) ||
+        !r_llvm_emit_static_drops(emitter) ||
+        (r_llvm_call_runtime(emitter, "r_runtime_hosted_drain", NULL, 0U, NULL) == NULL)) {
+        return false;
+    }
+    arguments[0] = r_llvm_u32(emitter, 0U);
+    if (r_llvm_call_runtime(emitter, "r_runtime_hosted_finish", arguments, 1U, NULL) == NULL) {
+        return false;
+    }
+    (void)LLVMBuildRetVoid(emitter->builder);
+    return true;
+}

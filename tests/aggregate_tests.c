@@ -152,6 +152,7 @@ static bool r_aggregate_build(bool reverse,
                                                               NULL,
                                                               R_FRONTEND_SANITIZER_NONE,
                                                               false,
+                                                              NULL,
                                                               NULL};
     RFrontendContext *context = r_frontend_create(NULL);
     bool success = false;
@@ -361,6 +362,7 @@ static void r_aggregate_test_repr_c(void) {
                                         NULL,
                                         R_FRONTEND_SANITIZER_NONE,
                                         false,
+                                        NULL,
                                         NULL};
     RFrontendContext *context = r_frontend_create(NULL);
     RAggregateTestBuffer interface_output = {0};

@@ -50,3 +50,4 @@ std.pool = std/pool.r hosted-native-async
 std.fs = std/fs.r hosted-native-async
 std.postgres = std/postgres.r hosted-native-async
 std.oauth2 = std/oauth2.r hosted-native-async
+std.dl = std/dl.r hosted

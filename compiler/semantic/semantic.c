@@ -1210,6 +1210,13 @@ static bool r_generic_constant_literal(RFrontendContext *, RTypeId, uint64_t, RT
 static bool r_generic_constant_evaluate(const RFrontendContext *, RTypeId, uint64_t *, uint32_t);
 static bool r_generic_constant_fold(RFrontendContext *, RTypeId *, uint64_t *, RSourceSpan);
 static bool r_generic_layout(const RFrontendContext *, RTypeId, uint64_t *, uint64_t *, uint32_t);
+static bool r_generic_aggregate_layout(const RFrontendContext *,
+                                       const RSemanticAggregate *,
+                                       uint32_t,
+                                       RSemanticFieldPlace *,
+                                       uint64_t *,
+                                       uint64_t *,
+                                       uint32_t);
 /* R-FUNC-0023, R-EXPR-0032: translation-time evaluation (consteval.inc). */
 static bool r_hir_build_module_object_initializer(RFrontendContext *, RSymbolId);
 static bool
@@ -5194,6 +5201,11 @@ static bool r_semantic_c_abi_type(const RFrontendContext *context,
         aggregate = r_semantic_aggregate_for_type(context, type->base);
         if ((aggregate != NULL) && aggregate->is_opaque)
             return !aggregate->poisoned;
+        /* While fields are being resolved, a pointee struct may still be incomplete (a member that
+           is a C function pointer taking a pointer to the struct itself) or have no Copy status
+           yet; its own completion checks it, so here it needs a C spelling only (B9-2). */
+        if ((aggregate != NULL) && (!aggregate->complete || !context->semantic_copy_known))
+            return aggregate->is_repr_c && !aggregate->is_tagged && !aggregate->poisoned;
         return r_semantic_c_abi_type(context, type->base, true, depth + 1U);
     }
     if (type->kind == R_SEMANTIC_TYPE_RAW_FUNCTION) {
@@ -8497,10 +8509,7 @@ typedef enum RCNameClass {
     R_C_NAME_ORDINARY
 } RCNameClass;
 
-static RCNameClass r_semantic_c_name_class(const RFrontendContext *context, uint32_t intern_id) {
-    const RInternEntry *name = (intern_id != 0U && intern_id <= context->intern_count)
-                                   ? &context->intern_entries[intern_id - 1U]
-                                   : NULL;
+static RCNameClass r_semantic_c_name_class_of(const RInternEntry *name) {
     static const char *const reserved[] = {
         "auto",    "break",  "case",     "char",   "const",    "continue", "default",
         "do",      "double", "else",     "enum",   "extern",   "float",    "for",
@@ -8727,6 +8736,27 @@ static RCNameClass r_semantic_c_name_class(const RFrontendContext *context, uint
         name->bytes[3] >= '0' && name->bytes[3] <= '9')
         return R_C_NAME_RESERVED;
     return R_C_NAME_ORDINARY;
+}
+
+static RCNameClass r_semantic_c_name_class(const RFrontendContext *context, uint32_t intern_id) {
+    return r_semantic_c_name_class_of((intern_id != 0U && intern_id <= context->intern_count)
+                                          ? &context->intern_entries[intern_id - 1U]
+                                          : NULL);
+}
+
+bool r_semantic_c_name_reserved(const char *name) {
+    char copy[256];
+    RInternEntry entry;
+    const size_t length = strlen(name);
+
+    if (length >= sizeof(copy)) {
+        return false;
+    }
+    (void)memcpy(copy, name, length + 1U);
+    entry.bytes = copy;
+    entry.length = length;
+    entry.hash = 0U;
+    return r_semantic_c_name_class_of(&entry) == R_C_NAME_RESERVED;
 }
 
 static bool r_semantic_c_export_name(const RFrontendContext *context, uint32_t intern_id) {
@@ -9834,6 +9864,33 @@ static bool r_semantic_find_enum_declaration(const RFrontendContext *context,
            r_ast_find_direct_child(context, parent, R_SYNTAX_ERROR_ENUM_DECLARATION, declaration);
 }
 
+/* R-FFI-0061 (B9.3): `= N` at child `equal` of an attribute, N an unsuffixed power of two from 1
+   to 4096. */
+static bool r_semantic_alignment_argument(const RFrontendContext *context,
+                                          RAstRef attribute,
+                                          uint32_t equal,
+                                          uint64_t *value) {
+    RAstRef part;
+    RAstTokenView equal_token;
+    RAstTokenView number;
+    RToken literal = {0};
+    RTokenKind suffix = R_TOKEN_INVALID;
+
+    if (!r_ast_ref_child(context, attribute, equal, &part) ||
+        !r_ast_ref_token(context, part, &equal_token) || (equal_token.kind != R_TOKEN_EQUAL) ||
+        !r_ast_ref_child(context, attribute, equal + 1U, &part) ||
+        !r_ast_ref_token(context, part, &number) || (number.kind != R_TOKEN_INTEGER_LITERAL)) {
+        return false;
+    }
+    literal.kind = number.kind;
+    literal.span = number.span;
+    literal.intern_id = number.intern_id;
+    return (r_semantic_parse_integer_token(context, &literal, value, &suffix) ==
+            R_INTEGER_TOKEN_VALID) &&
+           (suffix == R_TOKEN_INVALID) && (*value >= 1U) && (*value <= 4096U) &&
+           ((*value & (*value - 1U)) == 0U);
+}
+
 static bool r_semantic_append_aggregate_header(RFrontendContext *context,
                                                RSourceId source_id,
                                                RAstRef external,
@@ -9887,6 +9944,8 @@ static bool r_semantic_append_aggregate_header(RFrontendContext *context,
         }
         aggregate.is_error = (declaration_view.kind == R_SYNTAX_ERROR_STRUCT_DECLARATION) ||
                              (declaration_view.kind == R_SYNTAX_ERROR_ENUM_DECLARATION);
+        aggregate.is_union = (declaration_view.kind == R_SYNTAX_STRUCT_DECLARATION) &&
+                             r_ast_has_direct_token(context, declaration, R_TOKEN_KW_UNION);
     }
     aggregate.name_span = name.span;
     aggregate.name_intern_id = name.intern_id;
@@ -9944,13 +10003,39 @@ static bool r_semantic_append_aggregate_header(RFrontendContext *context,
                        r_semantic_token_text_equal_owned(context, &attribute_name, "repr")) {
                 RAstNodeView argument_view;
 
-                valid = !aggregate.is_repr_c && (child_view.child_count == UINT32_C(3)) &&
+                valid = !aggregate.is_repr_c && (child_view.child_count >= UINT32_C(3)) &&
                         r_ast_ref_child(context, child, UINT32_C(2), &argument_ref) &&
                         r_ast_ref_view(context, argument_ref, &argument_view) &&
                         (argument_view.kind == R_SYNTAX_TYPE) &&
                         r_ast_direct_token(context, argument_ref, UINT32_C(0), NULL, &argument) &&
                         (argument.kind == R_TOKEN_IDENTIFIER) &&
                         r_semantic_token_text_equal_owned(context, &argument, "C");
+                /* R-FFI-0061 (B9.3): `packed` and `align = N` after `C`, each at most once. */
+                for (uint32_t part = 3U; valid && (part < child_view.child_count); ++part) {
+                    RAstRef part_ref;
+                    RAstTokenView word;
+                    valid = r_ast_ref_child(context, child, part, &part_ref);
+                    if (valid && r_ast_ref_view(context, part_ref, &argument_view) &&
+                        (argument_view.kind == R_SYNTAX_TYPE)) {
+                        valid = !aggregate.is_packed &&
+                                r_ast_direct_token(context, part_ref, 0U, NULL, &word) &&
+                                (word.kind == R_TOKEN_IDENTIFIER) &&
+                                (argument_view.child_count == 1U) &&
+                                r_semantic_token_text_equal_owned(context, &word, "packed");
+                        aggregate.is_packed = true;
+                    } else if (valid && r_ast_ref_token(context, part_ref, &word)) {
+                        uint64_t value = 0U;
+                        valid = (aggregate.align_attribute == 0U) &&
+                                (word.kind == R_TOKEN_IDENTIFIER) &&
+                                r_semantic_token_text_equal_owned(context, &word, "align") &&
+                                (part + 2U < child_view.child_count) &&
+                                r_semantic_alignment_argument(context, child, part + 1U, &value);
+                        aggregate.align_attribute = valid ? (uint32_t)value : 1U;
+                        part += 2U;
+                    } else {
+                        valid = false;
+                    }
+                }
                 if (valid) {
                     aggregate.is_repr_c = true;
                 } else {
@@ -9959,7 +10044,8 @@ static bool r_semantic_append_aggregate_header(RFrontendContext *context,
                                                    "R-DIAG-FFI-003",
                                                    "R-FFI-0004",
                                                    "aggregate representation must be specified "
-                                                   "once as @repr(C)",
+                                                   "once as @repr(C), @repr(C, packed) or "
+                                                   "@repr(C, align = N)",
                                                    child_view.span)) {
                         return false;
                     }
@@ -9997,6 +10083,32 @@ static bool r_semantic_append_aggregate_header(RFrontendContext *context,
             return false;
         }
     }
+    if ((aggregate.is_packed || (aggregate.align_attribute != 0U)) &&
+        (kind != R_SEMANTIC_AGGREGATE_STRUCT)) {
+        aggregate.poisoned = true;
+        if (!r_semantic_add_diagnostic(context,
+                                       "R-DIAG-FFI-003",
+                                       "R-FFI-0061",
+                                       "packed and align apply to a struct or union",
+                                       name.span)) {
+            return false;
+        }
+    }
+    if (aggregate.is_union) {
+        /* R-AGG-0014: a union is a C form: @repr(C), not generic, no derived implementation. */
+        const char *problem = !aggregate.is_repr_c               ? "a union requires @repr(C)"
+                              : (aggregate.generic_schema != 0U) ? "a union cannot be generic"
+                              : (aggregate.derived != 0U)        ? "a union takes no @derive"
+                                                                 : NULL;
+
+        if (problem != NULL) {
+            aggregate.poisoned = true;
+            if (!r_semantic_add_diagnostic(
+                    context, "R-DIAG-FFI-003", "R-AGG-0014", problem, name.span)) {
+                return false;
+            }
+        }
+    }
     if (extern_block != NULL) {
         /* R-FFI-0017: complete aggregate declared inside an extern "C" block. */
         const bool is_struct = kind == R_SEMANTIC_AGGREGATE_STRUCT;
@@ -10008,12 +10120,10 @@ static bool r_semantic_append_aggregate_header(RFrontendContext *context,
         aggregate.is_protected = block_protected;
         if (!aggregate.is_repr_c || !have_c_type) {
             problem = "complete C aggregate requires @repr(C) and @c_type";
-        } else if (aggregate.c_type_kind == R_C_TYPE_KIND_UNION) {
-            rule = "R-FFI-0016";
-            problem = "complete C union requires wrapper functions";
         } else if ((aggregate.c_type_kind != R_C_TYPE_KIND_TYPEDEF) &&
-                   (aggregate.c_type_kind !=
-                    (is_struct ? R_C_TYPE_KIND_STRUCT : R_C_TYPE_KIND_ENUM))) {
+                   (aggregate.c_type_kind != (aggregate.is_union ? R_C_TYPE_KIND_UNION
+                                              : is_struct        ? R_C_TYPE_KIND_STRUCT
+                                                                 : R_C_TYPE_KIND_ENUM))) {
             rule = "R-FFI-0016";
             problem = "@c_type kind disagrees with the aggregate declaration";
         } else if (r_semantic_c_name_class(context, aggregate.c_name_intern_id) ==
@@ -10142,6 +10252,71 @@ static bool r_semantic_field_has_protected(const RFrontendContext *context, RAst
 #include "json_attributes.inc"
 
 #include "attributes.inc"
+
+/* R-FFI-0062 (B9.3): `T name : W;` in a @repr(C) struct, T a C ABI integer type or c_bool and W
+   an unsuffixed integer literal from one to the width of T. */
+static bool r_semantic_bit_field_width(RFrontendContext *context,
+                                       RSemanticAggregate *aggregate,
+                                       RAstRef field_ref,
+                                       RSemanticField *field) {
+    RAstNodeView view;
+    RAstRef width_ref = {0};
+    bool found = false;
+    RToken literal = {0};
+    uint32_t token_count = 0U;
+    uint64_t width = 0U;
+    uint64_t size = 0U;
+    uint64_t alignment = 0U;
+    RTokenKind suffix = R_TOKEN_INVALID;
+    const RSemanticType *type;
+    const char *problem = NULL;
+
+    if (!r_ast_ref_view(context, field_ref, &view)) {
+        return false;
+    }
+    /* The width is the field declaration's direct expression (an initializer has a node of its
+       own). */
+    found = r_ast_find_direct_child(context, field_ref, R_SYNTAX_EXPRESSION, &width_ref);
+    if (!found) {
+        return true;
+    }
+    type = r_semantic_type(context, r_semantic_value_type(context, field->type));
+    if (!aggregate->is_repr_c || aggregate->is_union) {
+        problem = "a bit-field belongs to a @repr(C) struct";
+    } else if ((type == NULL) || (type->kind != R_SEMANTIC_TYPE_C_ABI_NUMERIC) ||
+               ((RTokenKind)type->length == R_TOKEN_KW_C_FLOAT) ||
+               ((RTokenKind)type->length == R_TOKEN_KW_C_DOUBLE) ||
+               ((RTokenKind)type->length == R_TOKEN_KW_C_LONG_DOUBLE)) {
+        problem = "a bit-field has a C ABI integer type or c_bool";
+    } else if (!r_semantic_single_integer_token(context, width_ref, 0U, &literal, &token_count) ||
+               (token_count != 1U) ||
+               (r_semantic_parse_integer_token(context, &literal, &width, &suffix) !=
+                R_INTEGER_TOKEN_VALID) ||
+               (suffix != R_TOKEN_INVALID) || (width == 0U) ||
+               !r_generic_layout(context, field->type, &size, &alignment, 0U) ||
+               (width > (((RTokenKind)type->length == R_TOKEN_KW_C_BOOL) ? 1U : size * 8U))) {
+        problem = "a bit-field width is an integer literal from one to the width of its type";
+    } else if (field->initializer.node != 0U) {
+        problem = "a bit-field takes no initializer";
+    }
+    if (problem != NULL) {
+        aggregate->poisoned = true;
+        return r_semantic_add_diagnostic(
+            context, "R-DIAG-FFI-003", "R-FFI-0062", problem, view.span);
+    }
+    field->bit_width = (uint32_t)width;
+    return true;
+}
+
+static bool r_semantic_aggregate_has_bit_field(const RFrontendContext *context,
+                                               const RSemanticAggregate *aggregate) {
+    for (uint32_t index = 0U; index < aggregate->field_count; ++index) {
+        if (context->semantic_fields[aggregate->first_field + index].bit_width != 0U) {
+            return true;
+        }
+    }
+    return false;
+}
 
 static bool r_semantic_collect_struct_fields(RFrontendContext *context,
                                              uint32_t aggregate_id,
@@ -10302,11 +10477,66 @@ static bool r_semantic_collect_struct_fields(RFrontendContext *context,
                 context, field_ref, R_SYNTAX_INITIALIZER, &field.initializer)) {
             field.initializer.node = 0U;
         }
+        if (!r_semantic_bit_field_width(context, aggregate, field_ref, &field)) {
+            return false;
+        }
+        if (aggregate->is_union && (field.initializer.node != 0U)) {
+            /* R-AGG-0014: a union is initialized by one field or by zero bytes. */
+            aggregate->poisoned = true;
+            if (!r_semantic_add_diagnostic(context,
+                                           "R-DIAG-FFI-003",
+                                           "R-AGG-0014",
+                                           "a union field takes no initializer",
+                                           field_view.span)) {
+                return false;
+            }
+        }
         if (!r_json_collect_field_attributes(context, field_ref, &field, aggregate))
             return false;
         context->semantic_fields[context->semantic_field_count] = field;
         context->semantic_field_count += 1U;
         aggregate->field_count += UINT32_C(1);
+    }
+    aggregate->c_layout =
+        aggregate->is_union || aggregate->is_packed || (aggregate->align_attribute != 0U);
+    for (uint32_t index = 0U; index < aggregate->field_count; ++index) {
+        const RSemanticField *member = &context->semantic_fields[aggregate->first_field + index];
+        aggregate->c_layout =
+            aggregate->c_layout || (member->bit_width != 0U) || (member->align_attribute != 0U);
+        if ((member->bit_width != 0U) && (member->align_attribute != 0U)) {
+            aggregate->poisoned = true;
+            if (!r_semantic_add_diagnostic(context,
+                                           "R-DIAG-FFI-003",
+                                           "R-FFI-0062",
+                                           "a bit-field takes no @align",
+                                           member->name_span)) {
+                return false;
+            }
+        }
+    }
+    if (aggregate->c_layout && !aggregate->is_union &&
+        (aggregate->is_packed || r_semantic_aggregate_has_bit_field(context, aggregate)) &&
+        ((aggregate->generic_schema != 0U) || (aggregate->derived != 0U))) {
+        /* R-FFI-0061, R-FFI-0062: a packed aggregate or one with a bit-field is a C form. */
+        aggregate->poisoned = true;
+        if (!r_semantic_add_diagnostic(context,
+                                       "R-DIAG-FFI-003",
+                                       aggregate->is_packed ? "R-FFI-0061" : "R-FFI-0062",
+                                       "a packed struct or one with a bit-field is not generic "
+                                       "and takes no @derive",
+                                       aggregate->name_span)) {
+            return false;
+        }
+    }
+    if (aggregate->is_union && (aggregate->field_count == 0U)) {
+        aggregate->poisoned = true;
+        if (!r_semantic_add_diagnostic(context,
+                                       "R-DIAG-FFI-003",
+                                       "R-AGG-0014",
+                                       "a union requires at least one field",
+                                       aggregate->name_span)) {
+            return false;
+        }
     }
     return true;
 }
@@ -11578,6 +11808,7 @@ static bool r_semantic_collect_aggregate_members(RFrontendContext *context) {
             }
         }
     }
+    context->semantic_copy_known = true;
     for (aggregate_index = 0U; aggregate_index < context->semantic_aggregate_count;
          ++aggregate_index) {
         RSemanticAggregate *aggregate = &context->semantic_aggregates[aggregate_index];
@@ -12371,7 +12602,7 @@ static bool r_semantic_extern_block_attribute(RFrontendContext *context,
                             context,
                             "R-DIAG-LINK-001",
                             "R-FFI-0029",
-                            "link kind shall be static, dynamic, framework or system",
+                            "link kind shall be static, dynamic, framework, system or loadable",
                             arguments[index + 1U].span)) {
                         return false;
                     }
@@ -13331,6 +13562,18 @@ static bool r_semantic_collect_c_object(RFrontendContext *context,
         return false;
     }
     is_thread_local = r_ast_has_direct_token(context, declaration, R_TOKEN_KW_THREAD_LOCAL);
+    if (block->has_link && (block->link_kind == R_LINK_KIND_LOADABLE)) {
+        /* R-FFI-0063 (B9.3): only functions are obtained from a library opened at run time. */
+        supported = false;
+        if (!r_semantic_add_diagnostic(context,
+                                       "R-DIAG-FFI-003",
+                                       "R-FFI-0063",
+                                       "a loadable library provides functions only; an object "
+                                       "of it has no address before the program opens it",
+                                       name_token.span)) {
+            return false;
+        }
+    }
     for (child_index = UINT32_C(0); child_index < view.child_count; ++child_index) {
         RAstRef child;
         RAstNodeView child_view;
@@ -13996,6 +14239,16 @@ static bool r_semantic_collect_extern_block(RFrontendContext *context,
         if (r_ast_ref_view(context, child, &child_view) &&
             (child_view.kind == R_SYNTAX_C_DECLARATION)) {
             declaration_count += UINT32_C(1);
+            /* B10-2: an opaque struct records its block too, whose headers declare it (the C
+               header of a library includes them, R-FFI-0065). */
+            for (size_t aggregate_index = 0U; aggregate_index < context->semantic_aggregate_count;
+                 ++aggregate_index) {
+                RSemanticAggregate *aggregate = &context->semantic_aggregates[aggregate_index];
+                if (aggregate->is_opaque && (aggregate->module_source == source_id) &&
+                    (aggregate->declaration_ast == child.node)) {
+                    aggregate->extern_block = attributes.block_index;
+                }
+            }
         }
     }
     {
@@ -14773,6 +15026,93 @@ bool r_semantic_type_layout(const RFrontendContext *context,
     return r_generic_layout(context, type_id, size, alignment, UINT32_C(0));
 }
 
+bool r_semantic_aggregate_layout(const RFrontendContext *context,
+                                 const RSemanticAggregate *aggregate,
+                                 uint32_t wanted,
+                                 RSemanticFieldPlace *place,
+                                 uint64_t *size,
+                                 uint64_t *alignment) {
+    return (aggregate != NULL) && aggregate->complete && !aggregate->is_tagged &&
+           (aggregate->kind != R_SEMANTIC_AGGREGATE_ENUM) &&
+           r_generic_aggregate_layout(
+               context, aggregate, wanted, place, size, alignment, UINT32_C(0));
+}
+
+bool r_semantic_field_without_address(const RFrontendContext *context,
+                                      const RSemanticField *field) {
+    const RSemanticAggregate *aggregate;
+    RSemanticFieldPlace place;
+    uint64_t size, alignment, natural;
+
+    if ((field == NULL) || (field->aggregate == 0U) ||
+        ((size_t)field->aggregate > context->semantic_aggregate_count)) {
+        return false;
+    }
+    aggregate = &context->semantic_aggregates[field->aggregate - 1U];
+    if (!aggregate->c_layout || (field->bit_width != 0U)) {
+        return field->bit_width != 0U;
+    }
+    /* R-FFI-0061: only a packed aggregate lowers the alignment of a field. */
+    return aggregate->is_packed &&
+           r_generic_layout(context, field->type, &size, &natural, UINT32_C(0)) &&
+           r_semantic_aggregate_layout(
+               context, aggregate, field->layout_index, &place, &size, &alignment) &&
+           (place.alignment < natural);
+}
+
+bool r_semantic_bit_field_value_fits(const RFrontendContext *context,
+                                     const RSemanticField *field,
+                                     uint64_t bits) {
+    bool is_signed = false;
+    uint32_t width = 0U;
+    uint64_t size = 0U;
+    uint64_t alignment = 0U;
+
+    if (field->bit_width == 0U) {
+        return true;
+    }
+    if (!r_semantic_integer_properties(
+            r_semantic_integer_representation(context, field->type), &is_signed, &width)) {
+        /* c_bool: an unsigned byte. */
+        is_signed = false;
+        width = r_generic_layout(context, field->type, &size, &alignment, 0U)
+                    ? (uint32_t)(size * 8U)
+                    : 64U;
+    }
+    if (field->bit_width >= width) {
+        return true;
+    }
+    if (width < 64U) {
+        bits &= (UINT64_C(1) << width) - 1U;
+    }
+    if (is_signed) {
+        const int64_t limit = INT64_C(1) << (field->bit_width - 1U);
+        int64_t value = (int64_t)bits;
+        if ((width < 64U) && ((bits >> (width - 1U)) != 0U)) {
+            value = (int64_t)(bits | ~((UINT64_C(1) << width) - 1U));
+        }
+        return (value >= -limit) && (value < limit);
+    }
+    return (bits >> field->bit_width) == 0U;
+}
+
+bool r_semantic_aggregate_has_unplaced_fields(const RFrontendContext *context,
+                                              const RSemanticAggregate *aggregate) {
+    if ((aggregate == NULL) || !aggregate->c_layout) {
+        return false;
+    }
+    if (aggregate->is_union) {
+        return true;
+    }
+    for (uint32_t index = 0U; index < aggregate->field_count; ++index) {
+        if (r_semantic_field_without_address(
+                context, &context->semantic_fields[aggregate->first_field + index])) {
+            return true;
+        }
+    }
+    return false;
+}
+
 RSemanticTypeKind r_semantic_integer_representation(const RFrontendContext *context,
                                                     RTypeId type_id) {
     const RSemanticType *type = r_semantic_type(context, r_semantic_value_type(context, type_id));
@@ -15529,6 +15869,48 @@ static bool r_body_append_node(RBodyContext *body,
                                const RHirVector *children,
                                RHirNodeId *node_id);
 
+/* R-FFI-0061, R-FFI-0062 (B9.3): a borrow or slice of a place that lies in a packed field below
+   the alignment of its type, or in a bit-field, without a dereference between, has no address. */
+static bool
+r_body_reject_unaddressed_place(RBodyContext *body, const RHirVector *children, RSourceSpan span) {
+    const RFrontendContext *context = body->frontend;
+
+    for (size_t index = 0U; index < children->count; ++index) {
+        RHirNodeId current = children->items[index];
+        for (uint32_t depth = 0U; depth <= r_frontend_tree_depth_limit(context); ++depth) {
+            const RHirNode *node;
+            if ((current == R_HIR_NODE_ID_INVALID) || ((size_t)current > context->hir_node_count)) {
+                break;
+            }
+            node = &context->hir_nodes[current - 1U];
+            if ((node->kind != R_HIR_FIELD_PLACE) && (node->kind != R_HIR_INDEX_PLACE)) {
+                break;
+            }
+            if ((node->kind == R_HIR_FIELD_PLACE) && (node->aggregate_member != 0U) &&
+                ((size_t)node->aggregate_member <= context->semantic_field_count)) {
+                const RSemanticField *field =
+                    &context->semantic_fields[node->aggregate_member - 1U];
+                if (r_semantic_field_without_address(context, field)) {
+                    return r_body_diagnostic(body,
+                                             "R-DIAG-FFI-003",
+                                             field->bit_width != 0U ? "R-FFI-0062" : "R-FFI-0061",
+                                             field->bit_width != 0U
+                                                 ? "a bit-field has no address to borrow"
+                                                 : "a packed field below the alignment of its "
+                                                   "type has no address to borrow",
+                                             span);
+                }
+            }
+            if ((node->child_count == 0U) ||
+                ((size_t)node->first_child >= context->hir_child_count)) {
+                break;
+            }
+            current = context->hir_children[node->first_child];
+        }
+    }
+    return true;
+}
+
 /* L39 (R-ERR-0005): the node kinds whose lowering can begin a panic or observe one: calls, checked
    arithmetic and conversions, bounds checks, allocations, awaits and the drop of a replaced value.
    A drop node is excluded here: the drops of a scope run in a batch whose order the exit of each
@@ -15877,6 +16259,10 @@ static bool r_body_append_node(RBodyContext *body,
     node.operation = operation;
     node.integer_value = integer_value;
     node.is_place = is_place;
+    if (((kind == R_HIR_BORROW) || (kind == R_HIR_SLICE)) && (children != NULL) &&
+        !r_body_reject_unaddressed_place(body, children, span)) {
+        return false;
+    }
     if (body->panic_exits && (body->panic_exit_suspend == 0U) &&
         (r_hir_kind_can_panic(kind) ||
          /* `move value as void` destroys the value at once. */
@@ -20549,6 +20935,60 @@ r_body_constant_scalar(RBodyContext *body, RHirNodeId node_id, RBodyConstantValu
     return true;
 }
 
+/* R-FFI-0062, R-EXPR-0016 (B9.3): a static object is laid out during translation, so a constant
+   bit-field value outside the field's range is a translation error where the same store would
+   panic at run time. */
+static bool r_body_check_static_bit_fields(RBodyContext *body, RHirNodeId node_id, uint32_t depth) {
+    RFrontendContext *context = body->frontend;
+    const RHirNode *node = r_body_hir_node(body, node_id);
+
+    if ((node == NULL) || (depth > r_frontend_tree_depth_limit(context))) {
+        return true;
+    }
+    if ((node->kind == R_HIR_FIELD_INIT) && (node->aggregate_member != 0U) &&
+        ((size_t)node->aggregate_member <= context->semantic_field_count) &&
+        (context->semantic_fields[node->aggregate_member - 1U].bit_width != 0U) &&
+        (node->child_count == 1U)) {
+        RBodyConstantValue constant = {0};
+        RHirNodeId value_id = context->hir_children[node->first_child];
+        const RHirNode *value = r_body_hir_node(body, value_id);
+        bool is_signed = false;
+        uint32_t width = 0U;
+        if ((value != NULL) && (value->kind == R_HIR_CAST) && (value->child_count == 1U) &&
+            (r_semantic_value_kind(context, value->type) == R_SEMANTIC_TYPE_C_ABI_NUMERIC)) {
+            /* The constant folding reads R integers: take the operand of `n as c_type`. */
+            value_id = context->hir_children[value->first_child];
+        }
+        if (r_body_constant_scalar(body, value_id, &constant) && constant.valid &&
+            r_semantic_integer_properties(constant.kind, &is_signed, &width) && is_signed &&
+            (width < 64U) && (((constant.bits >> (width - 1U)) & 1U) != 0U)) {
+            constant.bits |= ~((UINT64_C(1) << width) - 1U);
+        }
+        if (constant.valid &&
+            !r_semantic_bit_field_value_fits(
+                context, &context->semantic_fields[node->aggregate_member - 1U], constant.bits)) {
+            return r_body_diagnostic(body,
+                                     "R-DIAG-CONST-001",
+                                     "R-FFI-0062",
+                                     "a constant bit-field value is outside the range of the field",
+                                     node->span);
+        }
+        return true;
+    }
+    if ((node->kind != R_HIR_AGGREGATE_INIT) && (node->kind != R_HIR_ARRAY_INIT) &&
+        (node->kind != R_HIR_FIELD_INIT) && (node->kind != R_HIR_VARIANT)) {
+        return true;
+    }
+    for (uint32_t index = 0U; index < node->child_count; ++index) {
+        if (!r_body_check_static_bit_fields(
+                body, context->hir_children[node->first_child + index], depth + 1U)) {
+            return false;
+        }
+        node = r_body_hir_node(body, node_id);
+    }
+    return true;
+}
+
 static bool r_body_constant_bool(RBodyContext *body, RHirNodeId node_id, bool *value) {
     RBodyConstantValue constant;
     if ((value == NULL) || !r_body_constant_scalar(body, node_id, &constant) || !constant.valid ||
@@ -21286,6 +21726,8 @@ static bool r_json_operation(
     RBodyContext *, RAstRef, RAstRef, RSourceSpan, RTypeId, bool *, RExpressionResult *);
 static bool r_format_string_operation(
     RBodyContext *, RAstRef, RAstRef, RSourceSpan, bool *, RExpressionResult *);
+static bool
+r_dl_operation(RBodyContext *, RAstRef, RAstRef, RSourceSpan, bool *, RExpressionResult *);
 
 static bool r_body_lower_call_bounded_value(RBodyContext *body,
                                             RAstRef expression,
@@ -41104,6 +41546,16 @@ static bool r_body_lower_resolved_call(RBodyContext *body,
         RSourceSpan span = primary_view.span;
 
         span.end = suffix_view.span.end;
+        if (function_symbol->link_kind == R_LINK_KIND_LOADABLE) {
+            /* R-FFI-0063 (B9.3): the program obtains the function from the opened library. */
+            success = r_body_diagnostic(body,
+                                        "R-DIAG-FFI-003",
+                                        "R-FFI-0063",
+                                        "a function of a loadable library is called through the "
+                                        "pointer std.dl::resolve returns",
+                                        name.span);
+            goto cleanup;
+        }
         if (body->unsafe_depth == 0U) {
             success = r_body_diagnostic(body,
                                         "R-DIAG-UNSAFE-001",
@@ -42326,6 +42778,13 @@ static bool r_body_lower_call(RBodyContext *body,
             if (handled)
                 return true;
             if (!r_format_string_operation(body, name_ref, argument_list, span, &handled, result)) {
+                return false;
+            }
+            if (handled) {
+                return true;
+            }
+            /* R-FFI-0063 (B9.3): std.dl::resolve takes an import as its second argument. */
+            if (!r_dl_operation(body, name_ref, argument_list, span, &handled, result)) {
                 return false;
             }
             if (handled) {
@@ -45259,6 +45718,19 @@ static bool r_body_lower_postfix_core(RBodyContext *body,
                                    "R-DIAG-NAME-001",
                                    "R-NAME-0003",
                                    "protected struct field is not visible",
+                                   field_name.span)) {
+                return false;
+            }
+            *result = current;
+            return true;
+        }
+        if (aggregate->is_union && (body->unsafe_depth == 0U)) {
+            /* R-AGG-0014: which field of a union holds a valid value is the program's to know. */
+            current.valid = false;
+            if (!r_body_diagnostic(body,
+                                   "R-DIAG-UNSAFE-001",
+                                   "R-AGG-0014",
+                                   "access to a union field requires an unsafe context",
                                    field_name.span)) {
                 return false;
             }
@@ -48762,6 +49234,96 @@ static bool r_body_lower_aggregate_initializer(RBodyContext *body,
             }
         }
     }
+    if (aggregate->is_union && valid) {
+        /* R-AGG-0014: a union is initialized by one field or none, over zero bytes. The zero of
+           its largest field covers every byte a field reaches, and comes first. */
+        uint32_t explicit_count = 0U;
+        uint32_t largest = 0U;
+        uint64_t largest_size = 0U;
+
+        for (child_index = 0U; child_index < aggregate->field_count; ++child_index) {
+            uint64_t field_size = 0U;
+            uint64_t field_alignment = 0U;
+
+            explicit_count += seen[child_index] != 0U ? 1U : 0U;
+            if (r_semantic_type_layout(
+                    body->frontend,
+                    body->frontend->semantic_fields[(size_t)aggregate->first_field + child_index]
+                        .type,
+                    &field_size,
+                    &field_alignment) &&
+                (field_size > largest_size)) {
+                largest_size = field_size;
+                largest = child_index;
+            }
+        }
+        if ((explicit_count > 1U) || has_base) {
+            valid = false;
+            if (!r_body_diagnostic(body,
+                                   "R-DIAG-INIT-002",
+                                   "R-AGG-0014",
+                                   "a union initializer sets one field at most and takes no base",
+                                   view.span)) {
+                goto cleanup;
+            }
+        } else if (seen[largest] == 0U) {
+            const RTypeId largest_type = r_semantic_value_type(
+                body->frontend,
+                body->frontend->semantic_fields[(size_t)aggregate->first_field + largest].type);
+            RHirNodeId zero_id;
+            RHirNodeId zero_init_id;
+            RHirNodeId zero_storage[1];
+            RHirVector zero_children;
+            RHirNode *zero_init;
+            size_t position;
+
+            if (!r_body_append_node(body,
+                                    R_HIR_DEFAULT_VALUE,
+                                    view.span,
+                                    largest_type,
+                                    R_SYMBOL_ID_INVALID,
+                                    R_TOKEN_INVALID,
+                                    UINT64_C(0),
+                                    false,
+                                    NULL,
+                                    &zero_id)) {
+                goto cleanup;
+            }
+            zero_storage[0] = zero_id;
+            zero_children.items = zero_storage;
+            zero_children.count = 1U;
+            zero_children.capacity = 1U;
+            if (!r_body_append_node(body,
+                                    R_HIR_FIELD_INIT,
+                                    view.span,
+                                    largest_type,
+                                    R_SYMBOL_ID_INVALID,
+                                    R_TOKEN_INVALID,
+                                    UINT64_C(0),
+                                    false,
+                                    &zero_children,
+                                    &zero_init_id)) {
+                goto cleanup;
+            }
+            zero_init = r_body_hir_node(body, zero_init_id);
+            if ((zero_init == NULL) || !r_hir_vector_push(body->frontend,
+                                                          &aggregate_state.field_initializers,
+                                                          zero_init_id)) {
+                body->frontend->resource_status = R_FRONTEND_INTERNAL_ERROR;
+                goto cleanup;
+            }
+            zero_init->aggregate_member = aggregate->first_field + largest + UINT32_C(1);
+            for (position = aggregate_state.field_initializers.count - 1U; position > 0U;
+                 --position) {
+                aggregate_state.field_initializers.items[position] =
+                    aggregate_state.field_initializers.items[position - 1U];
+            }
+            aggregate_state.field_initializers.items[0] = zero_init_id;
+        }
+        for (child_index = 0U; child_index < aggregate->field_count; ++child_index) {
+            seen[child_index] = 1U;
+        }
+    }
     if (has_base && valid) {
         /* R-INIT-0004 (L37.4): after the explicit values, `...base` is evaluated once into a
            hidden object; each omitted field moves or copies out of it in declaration order, each
@@ -51117,6 +51679,10 @@ static bool r_body_lower_local(RBodyContext *body,
                                       view.span)) {
             return false;
         }
+    }
+    if (has_storage_modifier && initial_value.valid &&
+        !r_body_check_static_bit_fields(body, initial_value.node, 0U)) {
+        return false;
     }
     return r_body_declare_local(
         body,
@@ -59660,6 +60226,16 @@ static bool r_hir_build_module_object_initializer(RFrontendContext *context, RSy
         success = true;
         goto cleanup;
     }
+    diagnostic_count = context->diagnostic_count;
+    if (!r_body_check_static_bit_fields(&body, value.node, 0U)) {
+        goto cleanup;
+    }
+    symbol = &context->semantic_symbols[(size_t)symbol_id - 1U];
+    if (context->diagnostic_count != diagnostic_count) {
+        symbol->poisoned = true;
+        success = true;
+        goto cleanup;
+    }
     if (r_body_constant_scalar(&body, value.node, &constant) && constant.valid) {
         symbol->integer_value = constant.bits;
     }
@@ -59822,6 +60398,8 @@ static bool r_reflection_spell_type(RFrontendContext *, RTypeId, RReflectionText
 /* R-REFL-0001..0004: static reflection intrinsics. */
 #include "packs.inc"
 #include "reflection.inc"
+
+#include "dynamic_loading.inc"
 /* R-STMT-0023 (L44): translation-time loops. */
 #include "constexpr_loops.inc"
 

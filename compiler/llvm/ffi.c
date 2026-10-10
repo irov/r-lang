@@ -2,7 +2,6 @@
 
 #include "link_manifest.h"
 
-#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -17,10 +16,10 @@
    as the address of its memory. A call sets the C floating-point environment aside around the
    C code (R-FFI-0058), and a value that comes from C is checked before it becomes an R value
    (R-FFI-0056): a null non-null pointer or an enum value naming no variant is a contract
-   violation, which ends the process. An import that names a reserved or typedef C spelling is
-   reached through the bridge C17 writes for it (`r_bridge_<c>`); one that passes an R-declared
-   struct by value through `r_bridge_<c>_<symbol>` with the struct by address, and a thunk with
-   the import's own prototype where its address is taken (R-CMAP-0026). */
+   violation, which ends the process. Every import is reached by its C name, whatever its
+   spelling in the header (a reserved identifier, a typedef or a tag of its types): the types
+   are lowered by their layouts, which the ABI record proves for an R-declared struct
+   (R-FFI-0041), and the declaration was verified against the header by libclang (B9.1). */
 
 enum {
     R_LLVM_C_MAX_PARAMETERS = 62
@@ -41,8 +40,6 @@ typedef struct RLlvmCSignature {
     RLlvmAbiValue result;
     RTypeId result_type;
     uint32_t result_index;
-    /* The bridge of an import that marshals returns its struct through a leading pointer. */
-    bool out_result;
     uint32_t count;
     RLlvmAbiValue parameters[R_LLVM_C_MAX_PARAMETERS];
     uint32_t parameter_indexes[R_LLVM_C_MAX_PARAMETERS];
@@ -239,8 +236,7 @@ static bool r_llvm_c_type(RLlvmEmitter *emitter, RTypeId id, uint32_t depth, uin
                 depth + 1U,
                 &members[member]);
         }
-        entry.kind = aggregate->c_type_kind == R_C_TYPE_KIND_UNION ? R_LLVM_SURFACE_UNION
-                                                                   : R_LLVM_SURFACE_STRUCT;
+        entry.kind = aggregate->is_union ? R_LLVM_SURFACE_UNION : R_LLVM_SURFACE_STRUCT;
         entry.first = types->field_count;
         entry.count = aggregate->field_count;
         for (member = 0U; built && (member < aggregate->field_count); ++member) {
@@ -264,45 +260,12 @@ static bool r_llvm_c_type(RLlvmEmitter *emitter, RTypeId id, uint32_t depth, uin
 
 /* ---- signatures ---- */
 
-/* An R-declared @repr(C) struct passed by value to or from an import (R-FFI-0021). */
-static bool r_llvm_c_r_struct(RLlvmEmitter *emitter, RTypeId id) {
-    const RSemanticAggregate *aggregate =
-        r_llvm_value_kind(emitter, id) == R_SEMANTIC_TYPE_STRUCT
-            ? r_llvm_aggregate(emitter, r_llvm_value_type(emitter, id))
-            : NULL;
-    return (aggregate != NULL) && aggregate->is_repr_c && !aggregate->is_opaque &&
-           !aggregate->is_c_declared;
-}
-
-static bool r_llvm_c_marshals(RLlvmEmitter *emitter, const RSemanticSymbol *symbol) {
-    uint32_t index;
-
-    if (!symbol->is_import || !symbol->passes_r_struct ||
-        (symbol->kind != R_SEMANTIC_SYMBOL_FUNCTION)) {
-        return false;
-    }
-    if (r_llvm_c_r_struct(emitter, symbol->return_type)) {
-        return true;
-    }
-    for (index = 0U; index < symbol->parameter_count; ++index) {
-        if (r_llvm_c_r_struct(
-                emitter,
-                emitter->frontend
-                    ->semantic_parameter_types[symbol->first_parameter_type + index])) {
-            return true;
-        }
-    }
-    return false;
-}
-
-/* Classifies the result and the parameters and builds the LLVM function type. With `marshal`,
-   an R-declared struct passes by address and returns through a leading pointer. */
+/* Classifies the result and the parameters and builds the LLVM function type. */
 static bool r_llvm_c_signature(RLlvmEmitter *emitter,
                                RTypeId result,
                                const RTypeId *parameters,
                                uint32_t count,
                                bool variadic,
-                               bool marshal,
                                RLlvmCSignature *signature) {
     const RLlvmTypeTable *table;
     RLlvmTypeTable built;
@@ -317,7 +280,6 @@ static bool r_llvm_c_signature(RLlvmEmitter *emitter,
     signature->result_type = result;
     signature->count = count;
     signature->variadic = variadic;
-    signature->out_result = marshal && r_llvm_c_r_struct(emitter, result);
     if (!r_llvm_c_type(emitter, result, 0U, &signature->result_index)) {
         return false;
     }
@@ -329,26 +291,15 @@ static bool r_llvm_c_signature(RLlvmEmitter *emitter,
     }
     built = r_llvm_c_table(emitter);
     table = &built;
-    if (signature->out_result) {
-        signature->result.abi_class = R_LLVM_ABI_IGNORE;
+    if (!r_llvm_abi_classify_result(table, signature->result_index, &signature->result)) {
+        return r_llvm_unsupported(emitter, "a C result the C ABI cannot return");
+    }
+    if (signature->result.abi_class == R_LLVM_ABI_INDIRECT) {
         lowered[lowered_count++] = r_llvm_pointer(emitter);
-    } else {
-        if (!r_llvm_abi_classify_result(table, signature->result_index, &signature->result)) {
-            return r_llvm_unsupported(emitter, "a C result the C ABI cannot return");
-        }
-        if (signature->result.abi_class == R_LLVM_ABI_INDIRECT) {
-            lowered[lowered_count++] = r_llvm_pointer(emitter);
-        }
     }
     for (index = 0U; index < count; ++index) {
         RLlvmAbiValue *value = &signature->parameters[index];
-        if (marshal && r_llvm_c_r_struct(emitter, parameters[index])) {
-            (void)memset(value, 0, sizeof(*value));
-            value->abi_class = R_LLVM_ABI_DIRECT;
-            value->element = R_LLVM_ABI_ELEMENT_POINTER;
-            value->count = 1U;
-        } else if (!r_llvm_abi_classify_argument(
-                       table, signature->parameter_indexes[index], value)) {
+        if (!r_llvm_abi_classify_argument(table, signature->parameter_indexes[index], value)) {
             return r_llvm_unsupported(emitter, "a C parameter the C ABI cannot pass");
         }
         lowered[lowered_count++] = value->abi_class == R_LLVM_ABI_INDIRECT
@@ -368,7 +319,6 @@ static bool r_llvm_c_signature(RLlvmEmitter *emitter,
 
 static bool r_llvm_c_symbol_signature(RLlvmEmitter *emitter,
                                       const RSemanticSymbol *symbol,
-                                      bool marshal,
                                       RLlvmCSignature *signature) {
     return r_llvm_c_signature(
         emitter,
@@ -376,7 +326,6 @@ static bool r_llvm_c_symbol_signature(RLlvmEmitter *emitter,
         &emitter->frontend->semantic_parameter_types[symbol->first_parameter_type],
         symbol->parameter_count,
         symbol->is_variadic,
-        marshal,
         signature);
 }
 
@@ -405,7 +354,6 @@ r_llvm_c_function_type_signature(RLlvmEmitter *emitter, RTypeId id, RLlvmCSignat
                               parameters,
                               count,
                               (type->flags & R_SEMANTIC_TYPE_FLAG_VARIADIC) != 0U,
-                              false,
                               signature);
 }
 
@@ -413,8 +361,7 @@ static void r_llvm_c_attributes(RLlvmEmitter *emitter,
                                 const RLlvmCSignature *signature,
                                 LLVMValueRef target,
                                 bool call_site) {
-    const unsigned first =
-        ((signature->result.abi_class == R_LLVM_ABI_INDIRECT) || signature->out_result) ? 2U : 1U;
+    const unsigned first = (signature->result.abi_class == R_LLVM_ABI_INDIRECT) ? 2U : 1U;
     uint32_t index;
 
     if (signature->result.abi_class == R_LLVM_ABI_INDIRECT) {
@@ -515,7 +462,7 @@ static LLVMValueRef r_llvm_c_call(RLlvmEmitter *emitter,
         (void)r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
         return NULL;
     }
-    if ((signature->result.abi_class == R_LLVM_ABI_INDIRECT) || signature->out_result) {
+    if (signature->result.abi_class == R_LLVM_ABI_INDIRECT) {
         if (result_memory == NULL) {
             (void)r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
             return NULL;
@@ -556,9 +503,7 @@ static LLVMValueRef r_llvm_c_call(RLlvmEmitter *emitter,
     r_llvm_c_attributes(emitter, signature, call, true);
     for (index = signature->count; index < argument_count; ++index) {
         const unsigned position =
-            index + (((signature->result.abi_class == R_LLVM_ABI_INDIRECT) || signature->out_result)
-                         ? 2U
-                         : 1U);
+            index + ((signature->result.abi_class == R_LLVM_ABI_INDIRECT) ? 2U : 1U);
         r_llvm_add_extension(emitter, call, position, extra_values[index].extend, true);
     }
     if (signature->result.abi_class == R_LLVM_ABI_COERCE) {
@@ -584,8 +529,7 @@ static bool r_llvm_c_receive(RLlvmEmitter *emitter,
                              const RLlvmCSignature *signature,
                              LLVMValueRef function,
                              LLVMValueRef *values) {
-    const unsigned first =
-        ((signature->result.abi_class == R_LLVM_ABI_INDIRECT) || signature->out_result) ? 1U : 0U;
+    const unsigned first = (signature->result.abi_class == R_LLVM_ABI_INDIRECT) ? 1U : 0U;
     uint32_t index;
 
     for (index = 0U; index < signature->count; ++index) {
@@ -614,18 +558,6 @@ static bool r_llvm_c_return(RLlvmEmitter *emitter,
                             const RLlvmCSignature *signature,
                             LLVMValueRef function,
                             LLVMValueRef value) {
-    if (signature->out_result) {
-        const uint32_t size = r_llvm_c_size(emitter, signature->result_index);
-        const uint32_t align = r_llvm_c_align(emitter, signature->result_index);
-        (void)LLVMBuildMemCpy(emitter->builder,
-                              LLVMGetParam(function, 0U),
-                              align,
-                              value,
-                              align,
-                              r_llvm_u64(emitter, size));
-        (void)LLVMBuildRetVoid(emitter->builder);
-        return true;
-    }
     switch (signature->result.abi_class) {
     case R_LLVM_ABI_IGNORE:
         (void)LLVMBuildRetVoid(emitter->builder);
@@ -831,7 +763,7 @@ bool r_llvm_ffi_ingress(RLlvmEmitter *emitter, RTypeId type, LLVMValueRef value,
     return r_llvm_ingress(emitter, type, scalar ? value : NULL, scalar ? NULL : value, span, 0U);
 }
 
-/* ---- C names, imports and thunks ---- */
+/* ---- C names and imports ---- */
 
 static bool
 r_llvm_c_name(RLlvmEmitter *emitter, const RSemanticSymbol *symbol, char *buffer, size_t capacity) {
@@ -864,107 +796,21 @@ r_llvm_c_name(RLlvmEmitter *emitter, const RSemanticSymbol *symbol, char *buffer
                : r_llvm_unsupported(emitter, "a C name of this length");
 }
 
-static LLVMValueRef r_llvm_c_bridge_marshal(RLlvmEmitter *emitter,
-                                            RSymbolId id,
-                                            const RSemanticSymbol *symbol,
-                                            RLlvmCSignature *signature) {
-    char c_name[256];
-    char name[320];
-
-    if (!r_llvm_c_name(emitter, symbol, c_name, sizeof(c_name)) ||
-        !r_llvm_c_symbol_signature(emitter, symbol, true, signature)) {
-        return NULL;
-    }
-    (void)snprintf(name, sizeof(name), "r_bridge_%s_%08" PRIu32, c_name, (uint32_t)id);
-    return r_llvm_c_declare(emitter, name, signature, false);
-}
-
-/* The C function a call of an import reaches directly, with its signature: the import itself,
-   its bridge, or for one that marshals the bridge with structs by address. */
+/* The C function a call of an import reaches: the import itself, by its C name. */
 static LLVMValueRef
 r_llvm_c_import_callee(RLlvmEmitter *emitter, RSymbolId id, RLlvmCSignature *signature) {
     const RSemanticSymbol *symbol = &emitter->frontend->semantic_symbols[(size_t)id - 1U];
     char c_name[256];
-    char name[320];
 
     if (symbol->poisoned) {
         (void)r_llvm_unsupported(emitter, "a poisoned C import");
         return NULL;
     }
-    if (r_llvm_c_marshals(emitter, symbol)) {
-        return r_llvm_c_bridge_marshal(emitter, id, symbol, signature);
-    }
     if (!r_llvm_c_name(emitter, symbol, c_name, sizeof(c_name)) ||
-        !r_llvm_c_symbol_signature(emitter, symbol, false, signature)) {
+        !r_llvm_c_symbol_signature(emitter, symbol, signature)) {
         return NULL;
     }
-    if (symbol->passes_r_struct) {
-        (void)snprintf(name, sizeof(name), "r_bridge_%s_%08" PRIu32, c_name, (uint32_t)id);
-    } else {
-        (void)snprintf(name, sizeof(name), "%s%s", symbol->uses_bridge ? "r_bridge_" : "", c_name);
-    }
-    return r_llvm_c_declare(emitter, name, signature, false);
-}
-
-/* The thunk with the import's own prototype that forwards to its marshalling bridge. */
-static LLVMValueRef r_llvm_c_thunk(RLlvmEmitter *emitter, RSymbolId id) {
-    const RSemanticSymbol *symbol = &emitter->frontend->semantic_symbols[(size_t)id - 1U];
-    RLlvmCSignature own;
-    RLlvmCSignature bridge;
-    LLVMValueRef bridge_function;
-    LLVMValueRef thunk;
-    LLVMValueRef saved_function = emitter->function;
-    LLVMBasicBlockRef saved_block = LLVMGetInsertBlock(emitter->builder);
-    LLVMValueRef saved_frame = emitter->frame;
-    LLVMValueRef values[R_LLVM_C_MAX_PARAMETERS];
-    LLVMValueRef result = NULL;
-    char c_name[256];
-    char name[320];
-    uint32_t size = 0U;
-    uint32_t align = 0U;
-    bool success;
-
-    if (!r_llvm_c_name(emitter, symbol, c_name, sizeof(c_name)) ||
-        !r_llvm_c_symbol_signature(emitter, symbol, false, &own)) {
-        return NULL;
-    }
-    (void)snprintf(name, sizeof(name), "r_thunk_%s_%08" PRIu32, c_name, (uint32_t)id);
-    thunk = LLVMGetNamedFunction(emitter->module, name);
-    if (thunk != NULL) {
-        return thunk;
-    }
-    bridge_function = r_llvm_c_bridge_marshal(emitter, id, symbol, &bridge);
-    if (bridge_function == NULL) {
-        return NULL;
-    }
-    thunk = r_llvm_c_declare(emitter, name, &own, true);
-    emitter->function = thunk;
-    emitter->frame = NULL;
-    LLVMPositionBuilderAtEnd(emitter->builder,
-                             LLVMAppendBasicBlockInContext(emitter->context, thunk, "entry"));
-    success = r_llvm_c_receive(emitter, &own, thunk, values);
-    if (success && !r_llvm_type_is_void(emitter, symbol->return_type) &&
-        (r_llvm_scalar_type(emitter, symbol->return_type) == NULL)) {
-        success = r_llvm_layout(emitter, symbol->return_type, &size, &align);
-        result = success ? r_llvm_entry_alloca(emitter, size, align, "result") : NULL;
-    }
-    if (success) {
-        LLVMValueRef call = r_llvm_c_call(
-            emitter, &bridge, bridge_function, values, own.parameter_types, own.count, result);
-        success = (call != NULL) &&
-                  r_llvm_c_return(
-                      emitter,
-                      &own,
-                      thunk,
-                      (result != NULL) || r_llvm_type_is_void(emitter, symbol->return_type) ? result
-                                                                                            : call);
-    }
-    emitter->function = saved_function;
-    emitter->frame = saved_frame;
-    if (saved_block != NULL) {
-        LLVMPositionBuilderAtEnd(emitter->builder, saved_block);
-    }
-    return success ? thunk : NULL;
+    return r_llvm_c_declare(emitter, c_name, signature, false);
 }
 
 /* The export wrapper of an extern "C" definition, declared; its body is written after the
@@ -979,7 +825,7 @@ static LLVMValueRef r_llvm_c_export(RLlvmEmitter *emitter, RSymbolId id) {
     }
     if (symbol->is_async || (symbol->effect_carrier_type != R_TYPE_ID_INVALID) ||
         !r_llvm_c_name(emitter, symbol, name, sizeof(name)) ||
-        !r_llvm_c_symbol_signature(emitter, symbol, false, &signature)) {
+        !r_llvm_c_symbol_signature(emitter, symbol, &signature)) {
         return (emitter->status == R_FRONTEND_OK)
                    ? (r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR), NULL)
                    : NULL;
@@ -1004,9 +850,7 @@ bool r_llvm_ffi_function_address(RLlvmEmitter *emitter, const RMirInstruction *i
         return r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
     }
     if (symbol->is_import) {
-        function = r_llvm_c_marshals(emitter, symbol)
-                       ? r_llvm_c_thunk(emitter, instruction->symbol)
-                       : r_llvm_c_import_callee(emitter, instruction->symbol, &signature);
+        function = r_llvm_c_import_callee(emitter, instruction->symbol, &signature);
     } else {
         function = r_llvm_c_export(emitter, instruction->symbol);
     }
@@ -1159,7 +1003,7 @@ static bool r_llvm_c_export_body(RLlvmEmitter *emitter, RSymbolId id) {
                            (r_llvm_scalar_type(emitter, symbol->return_type) == NULL);
 
     if ((wrapper == NULL) || (emitter->functions[id] == NULL) ||
-        !r_llvm_c_symbol_signature(emitter, symbol, false, &signature)) {
+        !r_llvm_c_symbol_signature(emitter, symbol, &signature)) {
         return (emitter->status == R_FRONTEND_OK) ? r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR)
                                                   : false;
     }
@@ -1277,12 +1121,11 @@ bool r_llvm_emit_c_exports(RLlvmEmitter *emitter) {
 
 /* ---- imported objects ---- */
 
-/* R-FFI-0022: the address of an imported C object: its extern global, or the address the
-   bridge accessor returns for this thread. */
+/* R-FFI-0022: the address of an imported C object: its extern global, thread-local for a
+   thread_local object. */
 LLVMValueRef r_llvm_ffi_object(RLlvmEmitter *emitter, RSymbolId id) {
     const RSemanticSymbol *symbol = &emitter->frontend->semantic_symbols[(size_t)id - 1U];
     char c_name[256];
-    char name[300];
     uint32_t size = 0U;
     uint32_t align = 0U;
     LLVMValueRef global;
@@ -1293,20 +1136,6 @@ LLVMValueRef r_llvm_ffi_object(RLlvmEmitter *emitter, RSymbolId id) {
             (void)r_llvm_unsupported(emitter, "a poisoned C object");
         }
         return NULL;
-    }
-    if (symbol->uses_bridge || symbol->passes_r_struct) {
-        LLVMTypeRef type = LLVMFunctionType(r_llvm_pointer(emitter), NULL, 0U, 0);
-        LLVMValueRef accessor;
-        if (symbol->passes_r_struct) {
-            (void)snprintf(name, sizeof(name), "r_bridge_%s_%08" PRIu32, c_name, (uint32_t)id);
-        } else {
-            (void)snprintf(name, sizeof(name), "r_bridge_%s", c_name);
-        }
-        accessor = LLVMGetNamedFunction(emitter->module, name);
-        if (accessor == NULL) {
-            accessor = LLVMAddFunction(emitter->module, name, type);
-        }
-        return LLVMBuildCall2(emitter->builder, type, accessor, NULL, 0U, "");
     }
     global = LLVMGetNamedGlobal(emitter->module, c_name);
     if (global == NULL) {

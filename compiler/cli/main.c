@@ -16,15 +16,31 @@ typedef enum REmitKind {
     R_EMIT_LINK_PLAN,
     R_EMIT_BUNDLE,
     R_EMIT_ABI_VERIFIER,
-    R_EMIT_C17_BRIDGE,
     R_EMIT_ABI_INVENTORY,
+    R_EMIT_ABI_RECORD,
+    R_EMIT_BINDINGS,
     R_EMIT_LLVM_IR,
-    R_EMIT_OBJECT
+    R_EMIT_OBJECT,
+    /* B10.1: the exported symbols of a library and the library linked as a shared library. */
+    R_EMIT_EXPORT_LIST,
+    R_EMIT_SHARED_LIBRARY,
+    /* B10.2: the C header of a library and its ABI baseline. */
+    R_EMIT_C_HEADER,
+    R_EMIT_ABI_BASELINE
 } REmitKind;
 
-/* The artifacts that are a whole program: LLVM IR or an object from the LLVM emitter. */
+/* The artifacts that are a whole program: LLVM IR or an object from the LLVM emitter, and the
+   artifacts of a library built from them. */
 static bool r_cli_emits_program(REmitKind emit) {
-    return (emit == R_EMIT_LLVM_IR) || (emit == R_EMIT_OBJECT);
+    return (emit == R_EMIT_LLVM_IR) || (emit == R_EMIT_OBJECT) || (emit == R_EMIT_EXPORT_LIST) ||
+           (emit == R_EMIT_SHARED_LIBRARY) || (emit == R_EMIT_C_HEADER) ||
+           (emit == R_EMIT_ABI_BASELINE);
+}
+
+/* The artifacts of a library. */
+static bool r_cli_emits_library(REmitKind emit) {
+    return (emit == R_EMIT_EXPORT_LIST) || (emit == R_EMIT_SHARED_LIBRARY) ||
+           (emit == R_EMIT_C_HEADER) || (emit == R_EMIT_ABI_BASELINE);
 }
 
 typedef enum RDiagnosticsKind {
@@ -102,6 +118,23 @@ typedef struct RCliOptions {
     /* --coverage PREFIX (B8.2): line coverage of the R source. */
     const char *coverage_prefix;
     bool coverage_seen;
+    /* --sysroot DIR (B9.1): the SDK the headers of imports are parsed in. */
+    const char *sysroot;
+    bool sysroot_seen;
+    /* --library NAME (B10.1): the program is a library with this name. */
+    const char *library_name;
+    bool library_seen;
+    /* --emit=shared-library (B10.1): the result, the linker, its inputs, the versions and the
+       install name of the library. */
+    const char *output;
+    const char *linker;
+    const char *link_inputs[256];
+    size_t link_input_count;
+    const char *library_version;
+    const char *compatibility_version;
+    const char *install_name;
+    /* --abi-baseline FILE (B10.2): the ABI baseline of an earlier build of the library. */
+    const char *abi_baseline;
 } RCliOptions;
 
 /* One line of a bitcode catalog, "SYMBOL<TAB>PATH": the bitcode module at PATH defines the C
@@ -129,40 +162,87 @@ typedef struct RCliBitcodeCatalog {
 } RCliBitcodeCatalog;
 
 static bool r_cli_status_is_resource_failure(RFrontendStatus status);
+static RFrontendStatus r_cli_link_library(RFrontendContext *context,
+                                          const struct RCliOptions *options,
+                                          const RFrontendArtifactOptions *artifact_options);
+static int r_cli_check_abi_baseline(RFrontendContext *context,
+                                    const struct RCliOptions *options,
+                                    const RFrontendArtifactOptions *artifact_options);
+
+/* B10.1 (R-FFI-0064): a library name prefixes the C identifiers NAME_initialize and
+   NAME_shutdown, so it is an ASCII identifier outside the reserved classes of C (no leading
+   underscore) and no C keyword. */
+static bool r_cli_library_name_valid(const char *name) {
+    static const char *const keywords[] = {
+        "auto",           "break",        "case",     "char",     "const",      "continue",
+        "default",        "do",           "double",   "else",     "enum",       "extern",
+        "float",          "for",          "goto",     "if",       "inline",     "int",
+        "long",           "register",     "restrict", "return",   "short",      "signed",
+        "sizeof",         "static",       "struct",   "switch",   "typedef",    "union",
+        "unsigned",       "void",         "volatile", "while",    "_Alignas",   "_Alignof",
+        "_Atomic",        "_Bool",        "_Complex", "_Generic", "_Imaginary", "_Noreturn",
+        "_Static_assert", "_Thread_local"};
+    size_t index;
+
+    if ((name == NULL) || (name[0] == '\0') || (name[0] == '_') ||
+        !(((name[0] >= 'a') && (name[0] <= 'z')) || ((name[0] >= 'A') && (name[0] <= 'Z')))) {
+        return false;
+    }
+    for (index = 1U; name[index] != '\0'; ++index) {
+        const char c = name[index];
+        if (!(((c >= 'a') && (c <= 'z')) || ((c >= 'A') && (c <= 'Z')) ||
+              ((c >= '0') && (c <= '9')) || (c == '_'))) {
+            return false;
+        }
+    }
+    for (index = 0U; index < sizeof(keywords) / sizeof(keywords[0]); ++index) {
+        if (strcmp(name, keywords[index]) == 0) {
+            return false;
+        }
+    }
+    return true;
+}
 
 static void r_cli_usage(FILE *stream) {
     (void)fprintf(stream,
                   "usage: r-front "
                   "[--emit=tokens|cst|ast|hir|mir|interface|link-plan|bundle|llvm-ir|object|"
-                  "abi-verifier|c17-bridge|abi-inventory] "
+                  "abi-verifier|abi-inventory|abi-record|bindings|export-list|shared-library|"
+                  "c-header|abi-baseline] "
                   "[--diagnostics=text|json] [--module-map FILE] [--library-map FILE] "
                   "[--entry MODULE[::FUNCTION]] "
                   "[--profile freestanding|allocation|hosted|hosted-thread|"
                   "hosted-native-async] [--deny-panic-alloc] [--test] [--target-manifest FILE] "
                   "[--link-manifest FILE] [--abi-record FILE] [--abi-header-dir DIR]... "
+                  "[--sysroot DIR] "
                   "[--rename-symbol OLD=NEW]... [--all-functions] [--opt-level=0|1|2|3] "
                   "[--bitcode-catalog FILE] [--profile-generate | --profile-use FILE] "
-                  "[--sanitize=address|thread] [--debug-info] [--coverage PREFIX] [--version] "
-                  "[FILE ...]\n");
+                  "[--sanitize=address|thread] [--debug-info] [--coverage PREFIX] "
+                  "[--library NAME] [--output FILE] [--linker CC] [--link-input FILE]... "
+                  "[--library-version X.Y.Z] [--compatibility-version X.Y.Z] "
+                  "[--install-name NAME] [--abi-baseline FILE] [--version] [FILE ...]\n");
 }
 
 /* The compiler and its backend; the backend check fails when the linked LLVM or its target
    machine disagrees with the target manifest (LLVM transition B0). */
 static bool r_cli_print_version(void) {
     char version[32];
+    char header_version[32];
     char message[512] = "LLVM version is unavailable";
 
     if (!r_frontend_backend_version(version, sizeof(version)) ||
-        !r_frontend_backend_verify(message, sizeof(message))) {
+        !r_frontend_backend_verify(message, sizeof(message)) ||
+        !r_frontend_header_version(header_version, sizeof(header_version))) {
         (void)fprintf(stderr, "r-front: backend check failed: %s\n", message);
         return false;
     }
-    (void)printf("r-front %s (Core %s)\nLLVM %s %s %s\n",
+    (void)printf("r-front %s (Core %s)\nLLVM %s %s %s\nlibclang %s\n",
                  R_FRONTEND_VERSION,
                  R_FRONTEND_CORE_REVISION,
                  version,
                  r_frontend_backend_triple(),
-                 r_frontend_backend_cpu());
+                 r_frontend_backend_cpu(),
+                 header_version);
     return true;
 }
 
@@ -305,8 +385,56 @@ static bool r_cli_take_option_value(
     return true;
 }
 
+/* B10.1: a version of a Mach-O dylib, X[.Y[.Z]] with X <= 65535 and Y, Z <= 255. */
+static bool r_cli_dylib_version_valid(const char *text) {
+    static const unsigned long limits[3] = {65535UL, 255UL, 255UL};
+    size_t part = 0U;
+    const char *cursor = text;
+
+    while (true) {
+        unsigned long value = 0UL;
+        size_t digits = 0U;
+        while ((*cursor >= '0') && (*cursor <= '9') && (digits < 6U)) {
+            value = value * 10UL + (unsigned long)(*cursor - '0');
+            cursor += 1;
+            digits += 1U;
+        }
+        if ((digits == 0U) || (value > limits[part])) {
+            return false;
+        }
+        part += 1U;
+        if (*cursor == '\0') {
+            return true;
+        }
+        if ((*cursor != '.') || (part == 3U)) {
+            return false;
+        }
+        cursor += 1;
+    }
+}
+
+/* An option NAME VALUE or NAME=VALUE given at most once: sets *recognized when the argument
+   is the option; false after a reported error. */
+static bool r_cli_take_single_option(int argc,
+                                     char **argv,
+                                     int *index,
+                                     const char *argument,
+                                     const char *name,
+                                     const char **value,
+                                     bool *recognized) {
+    if ((strcmp(argument, name) != 0) && (r_cli_option_value(argument, name) == NULL)) {
+        return true;
+    }
+    if (*value != NULL) {
+        return r_cli_option_error("duplicate option", name);
+    }
+    *recognized = true;
+    return r_cli_take_option_value(argc, argv, index, argument, name, value);
+}
+
 static bool r_cli_parse_arguments(int argc, char **argv, RCliOptions *options) {
     int index;
+    bool recognized = false;
     (void)memset(options, 0, sizeof(*options));
     options->emit = R_EMIT_AST;
     options->diagnostics = R_DIAGNOSTICS_TEXT;
@@ -357,8 +485,28 @@ static bool r_cli_parse_arguments(int argc, char **argv, RCliOptions *options) {
             if (!r_cli_set_emit(options, R_EMIT_ABI_VERIFIER)) {
                 return false;
             }
-        } else if (strcmp(argument, "--emit=c17-bridge") == 0) {
-            if (!r_cli_set_emit(options, R_EMIT_C17_BRIDGE)) {
+        } else if (strcmp(argument, "--emit=bindings") == 0) {
+            if (!r_cli_set_emit(options, R_EMIT_BINDINGS)) {
+                return false;
+            }
+        } else if (strcmp(argument, "--emit=export-list") == 0) {
+            if (!r_cli_set_emit(options, R_EMIT_EXPORT_LIST)) {
+                return false;
+            }
+        } else if (strcmp(argument, "--emit=shared-library") == 0) {
+            if (!r_cli_set_emit(options, R_EMIT_SHARED_LIBRARY)) {
+                return false;
+            }
+        } else if (strcmp(argument, "--emit=c-header") == 0) {
+            if (!r_cli_set_emit(options, R_EMIT_C_HEADER)) {
+                return false;
+            }
+        } else if (strcmp(argument, "--emit=abi-baseline") == 0) {
+            if (!r_cli_set_emit(options, R_EMIT_ABI_BASELINE)) {
+                return false;
+            }
+        } else if (strcmp(argument, "--emit=abi-record") == 0) {
+            if (!r_cli_set_emit(options, R_EMIT_ABI_RECORD)) {
                 return false;
             }
         } else if (strcmp(argument, "--emit=abi-inventory") == 0) {
@@ -399,6 +547,16 @@ static bool r_cli_parse_arguments(int argc, char **argv, RCliOptions *options) {
             }
             options->abi_header_dirs[options->abi_header_dir_count] = directory;
             options->abi_header_dir_count += 1U;
+        } else if ((strcmp(argument, "--sysroot") == 0) ||
+                   (r_cli_option_value(argument, "--sysroot") != NULL)) {
+            if (options->sysroot_seen) {
+                return r_cli_option_error("duplicate option", "--sysroot");
+            }
+            options->sysroot_seen = true;
+            if (!r_cli_take_option_value(
+                    argc, argv, &index, argument, "--sysroot", &options->sysroot)) {
+                return false;
+            }
         } else if (strcmp(argument, "--diagnostics=text") == 0) {
             if (!r_cli_set_diagnostics(options, R_DIAGNOSTICS_TEXT)) {
                 return false;
@@ -536,6 +694,67 @@ static bool r_cli_parse_arguments(int argc, char **argv, RCliOptions *options) {
                     argc, argv, &index, argument, "--coverage", &options->coverage_prefix)) {
                 return false;
             }
+        } else if ((strcmp(argument, "--library") == 0) ||
+                   (r_cli_option_value(argument, "--library") != NULL)) {
+            if (options->library_seen) {
+                return r_cli_option_error("duplicate option", "--library");
+            }
+            options->library_seen = true;
+            if (!r_cli_take_option_value(
+                    argc, argv, &index, argument, "--library", &options->library_name)) {
+                return false;
+            }
+            if (!r_cli_library_name_valid(options->library_name)) {
+                return r_cli_option_error("a library name is an ASCII C identifier that is no C "
+                                          "keyword and does not begin with an underscore",
+                                          options->library_name);
+            }
+        } else if ((strcmp(argument, "--link-input") == 0) ||
+                   (r_cli_option_value(argument, "--link-input") != NULL)) {
+            const char *input = NULL;
+            if (options->link_input_count ==
+                sizeof(options->link_inputs) / sizeof(options->link_inputs[0])) {
+                return r_cli_option_error("too many link inputs", "--link-input");
+            }
+            if (!r_cli_take_option_value(argc, argv, &index, argument, "--link-input", &input)) {
+                return false;
+            }
+            options->link_inputs[options->link_input_count++] = input;
+        } else if (!r_cli_take_single_option(
+                       argc, argv, &index, argument, "--output", &options->output, &recognized) ||
+                   !r_cli_take_single_option(
+                       argc, argv, &index, argument, "--linker", &options->linker, &recognized) ||
+                   !r_cli_take_single_option(argc,
+                                             argv,
+                                             &index,
+                                             argument,
+                                             "--library-version",
+                                             &options->library_version,
+                                             &recognized) ||
+                   !r_cli_take_single_option(argc,
+                                             argv,
+                                             &index,
+                                             argument,
+                                             "--compatibility-version",
+                                             &options->compatibility_version,
+                                             &recognized) ||
+                   !r_cli_take_single_option(argc,
+                                             argv,
+                                             &index,
+                                             argument,
+                                             "--install-name",
+                                             &options->install_name,
+                                             &recognized) ||
+                   !r_cli_take_single_option(argc,
+                                             argv,
+                                             &index,
+                                             argument,
+                                             "--abi-baseline",
+                                             &options->abi_baseline,
+                                             &recognized)) {
+            return false;
+        } else if (recognized) {
+            recognized = false;
         } else if (strcmp(argument, "--debug-info") == 0) {
             if (options->debug_info) {
                 return r_cli_option_error("duplicate option", "--debug-info");
@@ -577,6 +796,29 @@ static bool r_cli_parse_arguments(int argc, char **argv, RCliOptions *options) {
     if (((options->emit == R_EMIT_LINK_PLAN) || (options->emit == R_EMIT_BUNDLE)) &&
         (options->entry == NULL)) {
         return r_cli_option_error("--entry is required for selected emit", NULL);
+    }
+    if ((r_cli_emits_library(options->emit) || (options->abi_baseline != NULL)) &&
+        (options->library_name == NULL)) {
+        return r_cli_option_error("--library is required for selected emit", NULL);
+    }
+    if ((options->abi_baseline != NULL) && !r_cli_emits_library(options->emit)) {
+        return r_cli_option_error("--abi-baseline requires a library emit", NULL);
+    }
+    if ((options->emit == R_EMIT_C_HEADER) && (options->sysroot == NULL)) {
+        return r_cli_option_error("--emit=c-header requires --sysroot", NULL);
+    }
+    if ((options->emit == R_EMIT_SHARED_LIBRARY) &&
+        ((options->output == NULL) || (options->linker == NULL) || (options->sysroot == NULL))) {
+        return r_cli_option_error("--emit=shared-library requires --output, --linker and --sysroot",
+                                  NULL);
+    }
+    if (((options->library_version != NULL) &&
+         !r_cli_dylib_version_valid(options->library_version)) ||
+        ((options->compatibility_version != NULL) &&
+         !r_cli_dylib_version_valid(options->compatibility_version))) {
+        return r_cli_option_error("a library version is X[.Y[.Z]] with X at most 65535 and Y and Z "
+                                  "at most 255",
+                                  NULL);
     }
     if ((options->source_count == 0U) && (options->module_map == NULL)) {
         return r_cli_option_error("no input sources", NULL);
@@ -1401,8 +1643,8 @@ static int r_cli_run(RFrontendContext *context, RCliOptions *options) {
             if ((emit == R_EMIT_AST) || (emit == R_EMIT_HIR) || (emit == R_EMIT_MIR) ||
                 (emit == R_EMIT_INTERFACE) || (emit == R_EMIT_LINK_PLAN) ||
                 (emit == R_EMIT_BUNDLE) || r_cli_emits_program(emit) ||
-                (emit == R_EMIT_ABI_VERIFIER) || (emit == R_EMIT_C17_BRIDGE) ||
-                (emit == R_EMIT_ABI_INVENTORY)) {
+                (emit == R_EMIT_ABI_VERIFIER) || (emit == R_EMIT_ABI_INVENTORY) ||
+                (emit == R_EMIT_ABI_RECORD) || (emit == R_EMIT_BINDINGS)) {
                 RAstNodeId ast_root;
                 status = r_frontend_lower_ast(context, source_id, &ast_root);
                 if (r_cli_status_is_resource_failure(status)) {
@@ -1414,8 +1656,8 @@ static int r_cli_run(RFrontendContext *context, RCliOptions *options) {
     }
     if ((emit == R_EMIT_HIR) || (emit == R_EMIT_MIR) || (emit == R_EMIT_INTERFACE) ||
         (emit == R_EMIT_LINK_PLAN) || (emit == R_EMIT_BUNDLE) || r_cli_emits_program(emit) ||
-        (emit == R_EMIT_ABI_VERIFIER) || (emit == R_EMIT_C17_BRIDGE) ||
-        (emit == R_EMIT_ABI_INVENTORY)) {
+        (emit == R_EMIT_ABI_VERIFIER) || (emit == R_EMIT_ABI_INVENTORY) ||
+        (emit == R_EMIT_ABI_RECORD) || (emit == R_EMIT_BINDINGS)) {
         RFrontendStatus status = r_frontend_analyze(context);
         if (r_cli_status_is_resource_failure(status)) {
             return 2;
@@ -1424,7 +1666,8 @@ static int r_cli_run(RFrontendContext *context, RCliOptions *options) {
                          (status == R_FRONTEND_NOT_LOWERABLE);
         if ((r_cli_emits_program(emit) || (emit == R_EMIT_LINK_PLAN) || (emit == R_EMIT_BUNDLE) ||
              (emit == R_EMIT_INTERFACE) || (emit == R_EMIT_ABI_VERIFIER) ||
-             (emit == R_EMIT_C17_BRIDGE) || (emit == R_EMIT_ABI_INVENTORY)) &&
+             (emit == R_EMIT_ABI_INVENTORY) || (emit == R_EMIT_ABI_RECORD) ||
+             (emit == R_EMIT_BINDINGS)) &&
             !source_failure) {
             if ((options->library_map != NULL) && r_frontend_uses_library_natives(context) &&
                 !r_cli_merge_library_links(options)) {
@@ -1442,8 +1685,7 @@ static int r_cli_run(RFrontendContext *context, RCliOptions *options) {
             }
         }
         if ((r_cli_emits_program(emit) || (emit == R_EMIT_LINK_PLAN) || (emit == R_EMIT_BUNDLE) ||
-             (emit == R_EMIT_INTERFACE) || (emit == R_EMIT_ABI_VERIFIER) ||
-             (emit == R_EMIT_C17_BRIDGE)) &&
+             (emit == R_EMIT_INTERFACE) || (emit == R_EMIT_ABI_VERIFIER)) &&
             !source_failure) {
             /* R-FFI-0041: complete C aggregates are proven against the loaded ABI records. */
             if (options->abi_record != NULL) {
@@ -1478,6 +1720,84 @@ static int r_cli_run(RFrontendContext *context, RCliOptions *options) {
                     return 2;
                 }
             }
+            if (!source_failure && (options->sysroot != NULL)) {
+                /* R-FFI-0042 (B9.1): the headers of the imports, parsed by libclang. */
+                RFrontendHeaderOptions header_options;
+
+                header_options.sysroot = options->sysroot;
+                header_options.roots = options->abi_header_dirs;
+                header_options.root_count = options->abi_header_dir_count;
+                status = r_frontend_verify_headers(context, &header_options);
+                if (status == R_FRONTEND_INVALID_ARGUMENT) {
+                    (void)fprintf(stderr,
+                                  "r-front: --sysroot is not the SDK of the target manifest, or "
+                                  "libclang is not its C compiler release: %s\n",
+                                  options->sysroot);
+                    return 2;
+                }
+                if (status == R_FRONTEND_INVALID_SOURCE) {
+                    source_failure = true;
+                } else if (status != R_FRONTEND_OK) {
+                    return 2;
+                }
+            }
+        }
+        if ((emit == R_EMIT_BINDINGS) && !source_failure &&
+            (r_frontend_diagnostic_count(context) == 0U)) {
+            /* B9.2: the declarations of a stub module's headers, as R source to review. */
+            RFrontendHeaderOptions header_options;
+
+            if (options->sysroot == NULL) {
+                (void)fprintf(stderr, "r-front: --emit=bindings requires --sysroot\n");
+                return 2;
+            }
+            header_options.sysroot = options->sysroot;
+            header_options.roots = options->abi_header_dirs;
+            header_options.root_count = options->abi_header_dir_count;
+            status = r_frontend_emit_bindings(context, &header_options, r_file_writer, stdout);
+            if (status == R_FRONTEND_INVALID_ARGUMENT) {
+                (void)fprintf(stderr,
+                              "r-front: --sysroot is not the SDK of the target manifest, or "
+                              "libclang is not its C compiler release: %s\n",
+                              options->sysroot);
+                return 2;
+            }
+            if (status == R_FRONTEND_INVALID_SOURCE) {
+                source_failure = true;
+            } else if (status != R_FRONTEND_OK) {
+                return 2;
+            }
+        }
+        if ((emit == R_EMIT_ABI_RECORD) && !source_failure &&
+            (r_frontend_diagnostic_count(context) == 0U)) {
+            /* B9.1: the ABI records of the program's @abi blocks, derived by libclang. */
+            RFrontendArtifactOptions record_options;
+            RFrontendHeaderOptions header_options;
+
+            if (options->sysroot == NULL) {
+                (void)fprintf(stderr, "r-front: --emit=abi-record requires --sysroot\n");
+                return 2;
+            }
+            (void)memset(&record_options, 0, sizeof(record_options));
+            record_options.target_manifest = options->target_manifest;
+            record_options.target_manifest_length = options->target_manifest_length;
+            header_options.sysroot = options->sysroot;
+            header_options.roots = options->abi_header_dirs;
+            header_options.root_count = options->abi_header_dir_count;
+            status = r_frontend_emit_abi_record(
+                context, &record_options, &header_options, r_file_writer, stdout);
+            if (status == R_FRONTEND_INVALID_ARGUMENT) {
+                (void)fprintf(stderr,
+                              "r-front: --sysroot is not the SDK of the target manifest, or "
+                              "libclang is not its C compiler release: %s\n",
+                              options->sysroot);
+                return 2;
+            }
+            if (status == R_FRONTEND_INVALID_SOURCE) {
+                source_failure = true;
+            } else if (status != R_FRONTEND_OK) {
+                return 2;
+            }
         }
         if ((emit == R_EMIT_ABI_INVENTORY) && !source_failure &&
             (r_frontend_diagnostic_count(context) == 0U)) {
@@ -1498,7 +1818,7 @@ static int r_cli_run(RFrontendContext *context, RCliOptions *options) {
                 return 2;
             }
         }
-        if (((emit == R_EMIT_ABI_VERIFIER) || (emit == R_EMIT_C17_BRIDGE)) && !source_failure &&
+        if ((emit == R_EMIT_ABI_VERIFIER) && !source_failure &&
             (r_frontend_diagnostic_count(context) == 0U)) {
             RFrontendArtifactOptions artifact_options;
 
@@ -1510,10 +1830,7 @@ static int r_cli_run(RFrontendContext *context, RCliOptions *options) {
             artifact_options.link_manifest = options->link_manifest;
             artifact_options.link_manifest_length = options->link_manifest_length;
             status =
-                emit == R_EMIT_ABI_VERIFIER
-                    ? r_frontend_emit_abi_verifier(
-                          context, &artifact_options, r_file_writer, stdout)
-                    : r_frontend_emit_c17_bridge(context, &artifact_options, r_file_writer, stdout);
+                r_frontend_emit_abi_verifier(context, &artifact_options, r_file_writer, stdout);
             if (status == R_FRONTEND_NOT_LOWERABLE) {
                 return 1;
             }
@@ -1527,7 +1844,13 @@ static int r_cli_run(RFrontendContext *context, RCliOptions *options) {
             RCliBitcodeCatalog bitcode_catalog;
 
             (void)memset(&bitcode_catalog, 0, sizeof(bitcode_catalog));
-            if (r_frontend_entry_point_count(context) != 1U) {
+            if ((options->library_name != NULL) && (r_frontend_entry_point_count(context) != 0U)) {
+                (void)fprintf(stderr,
+                              "r-front: R-DIAG-FLOW-001 [R-FUNC-0008]: a library has no main; "
+                              "its exports are its entry points (R-FFI-0064)\n");
+                return 1;
+            }
+            if ((options->library_name == NULL) && (r_frontend_entry_point_count(context) != 1U)) {
                 (void)fprintf(stderr,
                               "r-front: R-DIAG-FLOW-001 [R-FUNC-0008]: a program requires exactly "
                               "one exported entry point: i32 main(), i32 main(const str[] args) "
@@ -1571,6 +1894,7 @@ static int r_cli_run(RFrontendContext *context, RCliOptions *options) {
             artifact_options.sanitizer = options->sanitizer;
             artifact_options.debug_info = options->debug_info;
             artifact_options.coverage_prefix = options->coverage_prefix;
+            artifact_options.library_name = options->library_name;
             if ((options->profile_generate || (options->profile_use_path != NULL)) &&
                 ((artifact_options.optimization_level == 0U) ||
                  (options->profile_generate && (options->profile_use_path != NULL)))) {
@@ -1580,12 +1904,84 @@ static int r_cli_run(RFrontendContext *context, RCliOptions *options) {
                               "and --opt-level=0\n");
                 return 2;
             }
-            status = r_frontend_emit_llvm(context,
-                                          &artifact_options,
-                                          emit == R_EMIT_LLVM_IR ? R_FRONTEND_LLVM_IR
-                                                                 : R_FRONTEND_LLVM_OBJECT,
-                                          r_file_writer,
-                                          stdout);
+            if ((options->library_name != NULL) &&
+                (r_frontend_library_conflict(context, options->library_name) != NULL)) {
+                r_cli_bitcode_destroy(&bitcode_catalog);
+                (void)fprintf(stderr,
+                              "r-front: R-DIAG-FFI-003 [R-FFI-0064]: an export of the program is "
+                              "named %s%s, which the library defines itself\n",
+                              options->library_name,
+                              r_frontend_library_conflict(context, options->library_name));
+                return 1;
+            }
+            if ((options->library_name != NULL) &&
+                ((emit == R_EMIT_C_HEADER) || (emit == R_EMIT_ABI_BASELINE) ||
+                 (options->abi_baseline != NULL))) {
+                /* R-FFI-0065, R-FFI-0066: the header and the baseline need an API C declares. */
+                char problem[512];
+                if (r_frontend_library_api_problem(
+                        context, options->library_name, problem, sizeof(problem)) != NULL) {
+                    r_cli_bitcode_destroy(&bitcode_catalog);
+                    (void)fprintf(stderr, "r-front: R-DIAG-FFI-003 [R-FFI-0065]: %s\n", problem);
+                    return 1;
+                }
+            }
+            if (options->abi_baseline != NULL) {
+                const int verdict = r_cli_check_abi_baseline(context, options, &artifact_options);
+                if (verdict != 0) {
+                    r_cli_bitcode_destroy(&bitcode_catalog);
+                    return verdict;
+                }
+            }
+            if (emit == R_EMIT_EXPORT_LIST) {
+                status =
+                    r_frontend_emit_export_list(context, &artifact_options, r_file_writer, stdout);
+            } else if (emit == R_EMIT_C_HEADER) {
+                RFrontendHeaderOptions header_options;
+
+                header_options.sysroot = options->sysroot;
+                header_options.roots = options->abi_header_dirs;
+                header_options.root_count = options->abi_header_dir_count;
+                status = r_frontend_emit_c_header(context,
+                                                  &artifact_options,
+                                                  &header_options,
+                                                  options->library_version,
+                                                  r_file_writer,
+                                                  stdout);
+                if (status == R_FRONTEND_INVALID_SOURCE) {
+                    r_cli_bitcode_destroy(&bitcode_catalog);
+                    (void)fprintf(stderr,
+                                  "r-front: R-DIAG-FFI-003 [R-FFI-0065]: the C header of the "
+                                  "library does not compile for the target\n");
+                    return 1;
+                }
+                if (status == R_FRONTEND_INVALID_ARGUMENT) {
+                    r_cli_bitcode_destroy(&bitcode_catalog);
+                    (void)fprintf(
+                        stderr,
+                        "r-front: --sysroot is not the SDK of the target manifest, or the "
+                        "linked libclang is not its C compiler release\n");
+                    return 2;
+                }
+            } else if (emit == R_EMIT_ABI_BASELINE) {
+                status = r_frontend_emit_abi_baseline(
+                    context,
+                    &artifact_options,
+                    options->library_version != NULL ? options->library_version : "1.0.0",
+                    options->compatibility_version != NULL ? options->compatibility_version
+                                                           : "1.0.0",
+                    r_file_writer,
+                    stdout);
+            } else if (emit == R_EMIT_SHARED_LIBRARY) {
+                status = r_cli_link_library(context, options, &artifact_options);
+            } else {
+                status = r_frontend_emit_llvm(context,
+                                              &artifact_options,
+                                              emit == R_EMIT_LLVM_IR ? R_FRONTEND_LLVM_IR
+                                                                     : R_FRONTEND_LLVM_OBJECT,
+                                              r_file_writer,
+                                              stdout);
+            }
             r_cli_bitcode_destroy(&bitcode_catalog);
             if (status == R_FRONTEND_NOT_LOWERABLE) {
                 (void)fprintf(stderr,
@@ -1794,7 +2190,129 @@ int main(int argc, char **argv) {
     } else {
         r_cli_dump_text_diagnostics(context);
     }
+    {
+        /* B9.1: what libclang said about the headers of the imports. */
+        size_t report_length = 0U;
+        const char *report = r_frontend_header_report(context, &report_length);
+
+        if ((report != NULL) && ((fputs("r-front: header verification:\n", stderr) == EOF) ||
+                                 (fwrite(report, 1U, report_length, stderr) != report_length))) {
+            result = 2;
+        }
+    }
     r_frontend_destroy(context);
     r_cli_destroy_options(&options);
     return result;
+}
+
+/* B10.2 (R-FFI-0066): the library against the ABI baseline of an earlier build. A build with the
+   compatibility version of the baseline keeps every export and type the baseline records; a
+   higher one may break them; a lower one is refused. 0 when the build may proceed. */
+static int r_cli_check_abi_baseline(RFrontendContext *context,
+                                    const RCliOptions *options,
+                                    const RFrontendArtifactOptions *artifact_options) {
+    const char *compatibility =
+        options->compatibility_version != NULL ? options->compatibility_version : "1.0.0";
+    RFrontendAbiBaselineResult result;
+    RFrontendStatus status;
+    uint8_t *baseline = NULL;
+    size_t length = 0U;
+
+    if (!r_cli_read_file_bytes("--abi-baseline", options->abi_baseline, &baseline, &length)) {
+        return 2;
+    }
+    status = r_frontend_check_abi_baseline(
+        context,
+        artifact_options,
+        options->library_version != NULL ? options->library_version : "1.0.0",
+        compatibility,
+        baseline,
+        length,
+        &result);
+    r_cli_deallocate(baseline);
+    if (status != R_FRONTEND_OK) {
+        return 2;
+    }
+    switch (result.verdict) {
+    case R_FRONTEND_ABI_BASELINE_KEPT:
+    case R_FRONTEND_ABI_BASELINE_ADMITTED:
+        return 0;
+    case R_FRONTEND_ABI_BASELINE_FOREIGN:
+        (void)fprintf(stderr,
+                      "r-front: R-DIAG-FFI-004 [R-FFI-0066]: %s is no ABI baseline of the library "
+                      "%s for this target\n",
+                      options->abi_baseline,
+                      options->library_name);
+        return 1;
+    case R_FRONTEND_ABI_BASELINE_OLDER:
+        (void)fprintf(stderr,
+                      "r-front: R-DIAG-FFI-004 [R-FFI-0066]: the compatibility version %s is lower "
+                      "than that of the ABI baseline %s\n",
+                      compatibility,
+                      options->abi_baseline);
+        return 1;
+    case R_FRONTEND_ABI_BASELINE_REMOVED:
+    case R_FRONTEND_ABI_BASELINE_CHANGED:
+    default:
+        (void)fprintf(stderr,
+                      "r-front: R-DIAG-FFI-004 [R-FFI-0066]: the %s %s of the ABI baseline %s %s "
+                      "at compatibility version %s; a build that breaks it raises "
+                      "--compatibility-version\n",
+                      result.subject_is_type ? "type" : "export",
+                      result.subject,
+                      options->abi_baseline,
+                      result.verdict == R_FRONTEND_ABI_BASELINE_REMOVED ? "is gone" : "changed",
+                      compatibility);
+        return 1;
+    }
+}
+
+/* B10.1 (R-FFI-0064, R-CMAP-0031): the library linked by the toolchain's C compiler driver, with
+   its versions and install name (by default @rpath/libNAME.dylib), and its exported symbols
+   checked. */
+static RFrontendStatus r_cli_link_library(RFrontendContext *context,
+                                          const RCliOptions *options,
+                                          const RFrontendArtifactOptions *artifact_options) {
+    RFrontendLibraryLink link;
+    RFrontendLibraryLinkResult result;
+    RFrontendStatus status;
+    char *install_name = NULL;
+
+    (void)memset(&link, 0, sizeof(link));
+    link.linker = options->linker;
+    link.sysroot = options->sysroot;
+    link.output = options->output;
+    link.inputs = options->link_inputs;
+    link.input_count = options->link_input_count;
+    link.current_version = options->library_version != NULL ? options->library_version : "1.0.0";
+    link.compatibility_version =
+        options->compatibility_version != NULL ? options->compatibility_version : "1.0.0";
+    if (options->install_name != NULL) {
+        link.install_name = options->install_name;
+    } else {
+        const size_t length = strlen(options->library_name) + 20U;
+        install_name = r_cli_allocate(length);
+        if (install_name == NULL) {
+            return R_FRONTEND_OUT_OF_MEMORY;
+        }
+        (void)snprintf(install_name, length, "@rpath/lib%s.dylib", options->library_name);
+        link.install_name = install_name;
+    }
+    status = r_frontend_link_library(context, artifact_options, &link, &result);
+    if (result.linker_unproved) {
+        (void)fprintf(stderr,
+                      "r-front: --linker is not the C compiler of the target manifest "
+                      "(toolchain.c_compiler_build)\n");
+    } else if (result.link_failed) {
+        (void)fprintf(stderr, "r-front: the link of the library failed\n");
+    } else if (result.missing || result.extra) {
+        (void)fprintf(stderr,
+                      result.missing ? "r-front: R-DIAG-LINK-003 [R-CMAP-0031]: the linked library "
+                                       "does not export %s\n"
+                                     : "r-front: R-DIAG-LINK-003 [R-CMAP-0031]: the linked library "
+                                       "exports %s, which is no export of the program\n",
+                      result.symbol);
+    }
+    r_cli_deallocate(install_name);
+    return status;
 }

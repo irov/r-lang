@@ -58,6 +58,7 @@ typedef struct RDeriveDeclaration {
     bool is_enum;
     bool is_generic;
     bool has_pack;
+    bool packed;
     bool valid;
     /* The fields of a parent error could not be read; its generated declarations are omitted
        and the semantic check reports why. */
@@ -187,6 +188,10 @@ static bool r_derive_read_fields(RFrontendContext *context,
                 depth -= 1U;
             } else if ((depth == 0U) && (kind == R_TOKEN_EQUAL)) {
                 initializer = true;
+            } else if ((depth == 0U) && !initializer && (kind == R_TOKEN_COLON)) {
+                /* R-FFI-0062: a struct with a bit-field derives nothing; the semantic analysis
+                   reports the request. */
+                declaration->valid = false;
             } else if ((depth == 0U) && !initializer && (kind == R_TOKEN_IDENTIFIER)) {
                 name = index;
             }
@@ -514,6 +519,15 @@ static bool r_derive_read(RFrontendContext *context,
             index = r_derive_next(source, close);
             continue;
         }
+        if (r_derive_token_is(source, attribute, "repr") &&
+            (r_scan_kind(source, following) == R_TOKEN_LPAREN)) {
+            /* R-FFI-0061: a packed struct derives nothing either. */
+            const size_t close = r_derive_close(source, following);
+            for (size_t argument = following; argument < close;
+                 argument = r_derive_next(source, argument)) {
+                declaration->packed = declaration->packed || r_derive_token_is(source, argument, "packed");
+            }
+        }
         if (r_derive_token_is(source, attribute, "generic") &&
             (r_scan_kind(source, following) == R_TOKEN_LESS)) {
             generic_open = following;
@@ -550,7 +564,7 @@ static bool r_derive_read(RFrontendContext *context,
     }
     if (r_scan_kind(source, keyword) == R_TOKEN_KW_STRUCT) {
         size_t close;
-        if (r_scan_kind(source, after) != R_TOKEN_LBRACE) {
+        if ((r_scan_kind(source, after) != R_TOKEN_LBRACE) || declaration->packed) {
             declaration->valid = false;
             return true;
         }

@@ -33,6 +33,33 @@
           "binding": "strong"
         }
       ]
+    },
+    {
+      "logical_name": "system.loader",
+      "available": true,
+      "kind": "loadable",
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "apple-clang-system-runtime",
+      "link_artifact_identity": "libSystem.B.dylib",
+      "header_roots": [
+        "system-sdk"
+      ],
+      "abi_record_roots": [
+        "darwin-arm64-c17"
+      ],
+      "library_version": "target-sdk",
+      "dependencies": [],
+      "feature_test_definitions": [
+        "_DARWIN_C_SOURCE"
+      ],
+      "symbols": [
+        {
+          "c_identifier": "labs",
+          "kind": "function",
+          "binding": "strong"
+        }
+      ]
     }
   ]
 }

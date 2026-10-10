@@ -70,6 +70,20 @@ bool r_frontend_backend_verify(char *message, size_t capacity) {
                               version,
                               r_target_llvm_version);
     }
+    /* B9.1: the headers of imports are parsed by the libclang of the pinned C compiler. */
+    if (!r_frontend_header_version(version, sizeof(version))) {
+        return r_llvm_message(message, capacity, "libclang version is unavailable", "", "");
+    }
+    if (strcmp(version, r_target_c_compiler_version) != 0) {
+        return r_llvm_message(message,
+                              capacity,
+                              "linked libclang differs from toolchain.c_compiler_version",
+                              version,
+                              r_target_c_compiler_version);
+    }
+    if (!r_frontend_backend_version(version, sizeof(version))) {
+        return r_llvm_message(message, capacity, "LLVM version is unavailable", "", "");
+    }
     r_llvm_initialize_targets();
     if (LLVMGetTargetFromTriple(r_target_llvm_triple, &target, &error) != 0) {
         (void)r_llvm_message(message,
@@ -124,4 +138,21 @@ cleanup:
 
 uint64_t r_llvm_target_entry_budget(void) {
     return r_target_llvm_entry_budget_bytes;
+}
+
+const char *r_frontend_target_c_compiler_version(void) {
+    return r_target_c_compiler_version;
+}
+
+const char *r_frontend_target_sdk_version(void) {
+    return r_target_sdk_version;
+}
+
+const char *r_frontend_target_c_compiler_build(void) {
+    return r_target_c_compiler_build;
+}
+
+const char *r_frontend_target_global_prefix(void) {
+    /* The Mach-O mangling of the data layout prefixes every global symbol with an underscore. */
+    return strstr(r_target_llvm_data_layout, "-m:o-") != NULL ? "_" : "";
 }

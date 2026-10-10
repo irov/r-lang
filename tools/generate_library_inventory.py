@@ -2754,6 +2754,20 @@ for _json_operation in ("marshal", "unmarshal", "marshal_with_options", "unmarsh
         }
     }
 
+# B9.3: a function of a loadable block obtained from an opened library (R-SLIB-DL-0004, Core
+# R-FFI-0063); the rest of std.dl is written in R.
+STD_DL_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
+    "std.dl::resolve": {
+        "item_kind": "operation_schema",
+        "source_signature": "std.dl::resolve(const std.dl::library* opened, F import) -> raw fn?(P...) -> R",
+        "implementation": {
+            "kind": "generated",
+            "generator": "compiler/semantic/dynamic_loading.inc",
+            "generator_contract": "The semantic pass takes the import named by the second argument, a function of a block whose link kind is loadable verified against its headers, and lowers the call to std.dl::symbol(opened, C name) converted to the nullable raw C function pointer of the verified prototype.",
+        },
+    },
+}
+
 # M32.6: the JSON Schema of the automatic conversion of a type (R-SLIB-JSON-0002).
 STD_JSON_IMPLEMENTATIONS["std.json::schema"] = {
     "item_kind": "operation_schema",
@@ -7198,6 +7212,7 @@ def canonical_implementation_for(item_id: str) -> dict[str, Any] | None:
         STD_C_IMPLEMENTATIONS,
         STD_FORMAT_IMPLEMENTATIONS,
         STD_JSON_IMPLEMENTATIONS,
+        STD_DL_IMPLEMENTATIONS,
         STD_TIME_IMPLEMENTATIONS,
         STD_THREAD_IMPLEMENTATIONS,
         STD_ASYNC_IMPLEMENTATIONS,

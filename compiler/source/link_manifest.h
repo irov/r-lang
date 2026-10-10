@@ -11,7 +11,9 @@ typedef enum RLinkKind {
     R_LINK_KIND_STATIC,
     R_LINK_KIND_DYNAMIC,
     R_LINK_KIND_FRAMEWORK,
-    R_LINK_KIND_SYSTEM
+    R_LINK_KIND_SYSTEM,
+    /* R-FFI-0063 (B9.3): a shared library the program opens itself (std.dl), never linked. */
+    R_LINK_KIND_LOADABLE
 } RLinkKind;
 
 typedef enum RLinkSymbolKind {

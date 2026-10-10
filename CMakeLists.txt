@@ -41,12 +41,23 @@ execute_process(COMMAND "${R_LLVM_CONFIG}" --includedir
 execute_process(COMMAND "${R_LLVM_CONFIG}" --libdir
     OUTPUT_VARIABLE R_LLVM_LIBRARY_DIR OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
 find_library(R_LLVM_LIBRARY NAMES LLVM PATHS "${R_LLVM_LIBRARY_DIR}" NO_DEFAULT_PATH REQUIRED)
+# B9.1: the headers of extern "C" imports are parsed in process by the libclang of the same
+# release (compiler/clang); r-front checks its version against toolchain.c_compiler_version.
+find_library(R_CLANG_LIBRARY NAMES clang PATHS "${R_LLVM_LIBRARY_DIR}" NO_DEFAULT_PATH REQUIRED)
+# libclang does not find the compiler's own headers (stddef.h, stdarg.h) by itself; r-front passes
+# the resource directory of the release it links.
+string(REGEX MATCH "^[0-9]+" R_LLVM_VERSION_MAJOR "${R_LLVM_VERSION}")
+set(R_CLANG_RESOURCE_DIR "${R_LLVM_LIBRARY_DIR}/clang/${R_LLVM_VERSION_MAJOR}")
+if(NOT EXISTS "${R_CLANG_RESOURCE_DIR}/include/stdarg.h")
+    message(FATAL_ERROR "the clang resource directory ${R_CLANG_RESOURCE_DIR} has no include/stdarg.h")
+endif()
 
 add_library(r_frontend STATIC
     compiler/source/frontend.c
     compiler/source/link_manifest.c
     compiler/source/link_resolve.c
     compiler/source/abi_record.c
+    compiler/source/shared_library.c
     compiler/source/named_standard_copy_abi.c
     compiler/source/named_standard_move_abi.c
     compiler/source/standard_error_erasures.c
@@ -54,6 +65,9 @@ add_library(r_frontend STATIC
     compiler/source/unicode.c
     compiler/source/unicode_data.c
     compiler/source/target_manifest.c
+    compiler/clang/headers.c
+    compiler/clang/bindings.c
+    compiler/clang/record.c
     compiler/lexer/lexer.c
     compiler/lexer/lexer_generated.c
     compiler/parser/parser.c
@@ -62,7 +76,7 @@ add_library(r_frontend STATIC
     compiler/semantic/semantic.c
     compiler/hir/hir.c
     compiler/mir/mir.c
-    compiler/codegen/c_abi_bridge.c
+    compiler/codegen/c_abi_verifier.c
     compiler/llvm/abi.c
     compiler/llvm/async.c
     compiler/llvm/atomics.c
@@ -110,7 +124,9 @@ target_include_directories(r_frontend
 # Only the llvm-c headers are used; the include directory also holds C++ and system-like headers,
 # so it is a private system directory of the compiler library.
 target_include_directories(r_frontend SYSTEM PRIVATE "${R_LLVM_INCLUDE_DIR}")
-target_link_libraries(r_frontend PUBLIC "${R_LLVM_LIBRARY}")
+target_link_libraries(r_frontend PUBLIC "${R_LLVM_LIBRARY}" "${R_CLANG_LIBRARY}")
+set_source_files_properties(compiler/clang/headers.c PROPERTIES
+    COMPILE_DEFINITIONS "R_CLANG_RESOURCE_DIR=\"${R_CLANG_RESOURCE_DIR}\"")
 
 # Native layout facts are compiled from the same pinned ABI headers the program is linked with.
 file(GLOB R_STANDARD_LAYOUT_INCLUDE_DIRS LIST_DIRECTORIES true

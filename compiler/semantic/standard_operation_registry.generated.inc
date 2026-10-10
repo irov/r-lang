@@ -159,6 +159,7 @@ static const RStandardOperationRegistryEntry r_standard_operation_registry[] = {
     {"std", "dict", "remove", false},
     {"std", "dict", "reserve", false},
     {"std", "dict", "with_capacity", false},
+    {"std", "dl", "resolve", false},
     {"std", "env", "arguments", false},
     {"std", "env", "as_error", false},
     {"std", "env", "get", false},

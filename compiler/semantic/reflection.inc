@@ -11,6 +11,11 @@
 
 #include "target_identity.generated.inc"
 
+/* The target triple of the target manifest (core::target, the ABI baseline of a library). */
+const char *r_semantic_target_triple(void) {
+    return r_target_identity_triple;
+}
+
 typedef enum RReflectionTypeOperation {
     R_REFLECTION_TYPE_INVALID = 0,
     R_REFLECTION_TYPE_ENUM_COUNT,
@@ -1556,6 +1561,15 @@ static bool r_reflection_field_of_place(RBodyContext *body,
                                  "R-DIAG-TYPE-001",
                                  rule_id,
                                  "core::field takes `&place` or a pointer to a struct or tuple",
+                                 call_span);
+    }
+    if (r_semantic_aggregate_has_unplaced_fields(context, aggregate)) {
+        /* R-AGG-0014, R-FFI-0061, R-FFI-0062: not every field has a borrow. */
+        return r_body_diagnostic(body,
+                                 "R-DIAG-FFI-003",
+                                 rule_id,
+                                 "core::field cannot borrow the fields of a union, a packed field "
+                                 "or a bit-field",
                                  call_span);
     }
     if (!r_reflection_index_operand(

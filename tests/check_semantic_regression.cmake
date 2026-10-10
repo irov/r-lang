@@ -48,9 +48,6 @@ elseif(DEFINED ABI_INVENTORY AND ABI_INVENTORY)
     include("${CMAKE_CURRENT_LIST_DIR}/abi_record_support.cmake")
     r_abi_generate_record(
         FRONT "${R_FRONT_EXECUTABLE}"
-        PYTHON "${PYTHON_EXECUTABLE}"
-        TOOL "${ABI_RECORD_TOOL}"
-        CC "${C_COMPILER}"
         OUTPUT_PREFIX "${OUTPUT_PREFIX}"
         ARGUMENTS_VARIABLE R_ABI_ARGUMENTS
         INCLUDE_FLAGS ${R_ABI_INCLUDE_FLAGS})

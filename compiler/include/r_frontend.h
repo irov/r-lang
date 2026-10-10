@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define R_FRONTEND_VERSION "0.1.0"
-#define R_FRONTEND_CORE_REVISION "0.1.0-draft.105"
+#define R_FRONTEND_CORE_REVISION "0.1.0-draft.107"
 
 typedef uint32_t RSourceId;
 typedef uint32_t RTokenId;
@@ -149,6 +149,10 @@ typedef struct RFrontendArtifactOptions {
        PREFIX.gcda when it ends (linked with the profile runtime of the toolchain). Implies
        debug_info, whose lines the counts refer to. */
     const char *coverage_prefix;
+    /* A library (B10.1, R-FFI-0064): the program has no main; its exports are its API, and the
+       emitter defines NAME_initialize and NAME_shutdown, which start and stop the runtime and
+       the program's static state. NULL for a program with a main. */
+    const char *library_name;
 } RFrontendArtifactOptions;
 
 RFrontendOptions r_frontend_default_options(void);
@@ -242,8 +246,8 @@ RFrontendStatus r_frontend_resolve_links(RFrontendContext *context,
                                          const uint8_t *link_manifest,
                                          size_t link_manifest_length);
 /*
- * Loads one ABI record document (schema r-abi-record-0.1) produced by
- * tools/generate_c_abi_record.py. A malformed document returns R_FRONTEND_INVALID_ARGUMENT.
+ * Loads one ABI record document (schema r-abi-record-0.1) written by
+ * r_frontend_emit_abi_record. A malformed document returns R_FRONTEND_INVALID_ARGUMENT.
  */
 RFrontendStatus r_frontend_load_abi_records(RFrontendContext *context,
                                             const uint8_t *document,
@@ -359,6 +363,91 @@ typedef enum RFrontendLlvmOutput {
     R_FRONTEND_LLVM_IR = 0,
     R_FRONTEND_LLVM_OBJECT
 } RFrontendLlvmOutput;
+/* B10.1 (R-FFI-0064): the link of a library into a shared library of the target. linker is the
+   C compiler driver of the target manifest's toolchain (its digest is checked), inputs the
+   archives and objects of the runtime and the library, the versions "X[.Y[.Z]]". */
+typedef struct RFrontendLibraryLink {
+    const char *linker;
+    const char *sysroot;
+    const char *output;
+    const char *install_name;
+    const char *current_version;
+    const char *compatibility_version;
+    const char *const *inputs;
+    size_t input_count;
+} RFrontendLibraryLink;
+
+typedef struct RFrontendLibraryLinkResult {
+    bool linker_unproved;
+    bool link_failed;
+    /* R-CMAP-0031: an export the result lacks, or a symbol it exports that is no export. */
+    bool missing;
+    bool extra;
+    char symbol[256];
+} RFrontendLibraryLinkResult;
+
+/* The exported symbols of a library, with the target's global prefix, one per line. */
+RFrontendStatus r_frontend_emit_export_list(const RFrontendContext *context,
+                                            const RFrontendArtifactOptions *options,
+                                            RFrontendWriteFn writer,
+                                            void *user_data);
+/* The suffix (_initialize or _shutdown) that an export of the program takes from the library
+   NAME, or NULL. */
+const char *r_frontend_library_conflict(const RFrontendContext *context, const char *name);
+RFrontendStatus r_frontend_link_library(RFrontendContext *context,
+                                        const RFrontendArtifactOptions *options,
+                                        const RFrontendLibraryLink *link,
+                                        RFrontendLibraryLinkResult *result);
+
+/* B10.2 (R-FFI-0065): what keeps the API of the library NAME from a C declaration (a type
+   without one, a keyword of C or C++, a name declared twice), described in buffer; NULL when
+   nothing does. Requires the semantic analysis. */
+const char *r_frontend_library_api_problem(const RFrontendContext *context,
+                                           const char *name,
+                                           char *buffer,
+                                           size_t capacity);
+
+/* B10.2 (R-FFI-0066): the ABI baseline of a library (schema r-abi-baseline-0.1): its name,
+   target and versions, each export's C prototype and each R-declared type's layout. */
+RFrontendStatus r_frontend_emit_abi_baseline(const RFrontendContext *context,
+                                             const RFrontendArtifactOptions *options,
+                                             const char *version,
+                                             const char *compatibility_version,
+                                             RFrontendWriteFn writer,
+                                             void *user_data);
+
+/* The verdict of a build of a library on an earlier ABI baseline (R-FFI-0066). */
+typedef enum RFrontendAbiBaselineVerdict {
+    /* The compatibility versions are equal and every export and type of the baseline is kept. */
+    R_FRONTEND_ABI_BASELINE_KEPT = 0,
+    /* The compatibility version is higher than the baseline's: the build may break it. */
+    R_FRONTEND_ABI_BASELINE_ADMITTED,
+    /* The document is no baseline of this library and target. */
+    R_FRONTEND_ABI_BASELINE_FOREIGN,
+    /* The compatibility version is lower than the baseline's. */
+    R_FRONTEND_ABI_BASELINE_OLDER,
+    /* An export or type of the baseline is gone, or changed its prototype or layout. */
+    R_FRONTEND_ABI_BASELINE_REMOVED,
+    R_FRONTEND_ABI_BASELINE_CHANGED
+} RFrontendAbiBaselineVerdict;
+
+typedef struct RFrontendAbiBaselineResult {
+    RFrontendAbiBaselineVerdict verdict;
+    /* The export, or with subject_is_type the type, a REMOVED or CHANGED verdict names. */
+    char subject[256];
+    bool subject_is_type;
+} RFrontendAbiBaselineResult;
+
+/* Compares the library with the baseline document of an earlier build; a malformed document is
+   the FOREIGN verdict, not a failure of the call. */
+RFrontendStatus r_frontend_check_abi_baseline(const RFrontendContext *context,
+                                              const RFrontendArtifactOptions *options,
+                                              const char *version,
+                                              const char *compatibility_version,
+                                              const uint8_t *baseline,
+                                              size_t baseline_length,
+                                              RFrontendAbiBaselineResult *result);
+
 RFrontendStatus r_frontend_emit_llvm(const RFrontendContext *context,
                                      const RFrontendArtifactOptions *options,
                                      RFrontendLlvmOutput output,
@@ -377,14 +466,79 @@ RFrontendStatus r_frontend_emit_abi_verifier(const RFrontendContext *context,
                                              void *user_data);
 
 /*
- * Bridge translation unit of R-CMAP-0026: for every reserved-class import it includes the
- * verified headers and defines the private r_bridge_<identifier> forwarding function that the
- * generated program calls. It is linked with the program. Requires r_frontend_resolve_links.
+ * The C headers of the program's imports are parsed in process by libclang for the target
+ * manifest's LLVM triple (B9.1): sysroot is the system root of the pinned SDK, roots the header
+ * roots of the providers (the -I directories of a C build).
  */
-RFrontendStatus r_frontend_emit_c17_bridge(const RFrontendContext *context,
-                                           const RFrontendArtifactOptions *options,
+typedef struct RFrontendHeaderOptions {
+    const char *sysroot;
+    const char *const *roots;
+    size_t root_count;
+} RFrontendHeaderOptions;
+
+/*
+ * The release of the linked libclang ("22.1.8"); false when it reports none or the buffer is
+ * too small.
+ */
+bool r_frontend_header_version(char *buffer, size_t capacity);
+
+/*
+ * R-FFI-0042 in process: parses the verifier translation unit of r_frontend_emit_abi_verifier
+ * with libclang, with the C17 options and warnings as errors of the generated-C contract, against
+ * the providers' feature-test definitions and the blocks' headers. A disagreement is
+ * R-DIAG-FFI-004 on the R declaration whose probe failed and returns R_FRONTEND_INVALID_SOURCE;
+ * libclang's own diagnostics are kept as the header report. A sysroot that is not the SDK the
+ * target manifest pins, or a libclang of another release, returns R_FRONTEND_INVALID_ARGUMENT.
+ * Requires r_frontend_resolve_links and r_frontend_verify_abi_records.
+ */
+RFrontendStatus r_frontend_verify_headers(RFrontendContext *context,
+                                          const RFrontendHeaderOptions *options);
+
+/*
+ * B10.2 (R-FFI-0065): writes the C header of a library (artifact options with library_name):
+ * NAME_initialize and NAME_shutdown, the exports, and the R-declared types they reach with
+ * assertions of their layout, version the optional NAME_VERSION. The header is parsed by libclang
+ * for the target with the options of the generated-C contract before it is written; its
+ * diagnostics are the header report and return R_FRONTEND_INVALID_SOURCE. An API without a C
+ * declaration (r_frontend_library_api_problem) returns R_FRONTEND_NOT_LOWERABLE.
+ */
+RFrontendStatus r_frontend_emit_c_header(RFrontendContext *context,
+                                         const RFrontendArtifactOptions *artifact_options,
+                                         const RFrontendHeaderOptions *options,
+                                         const char *version,
+                                         RFrontendWriteFn writer,
+                                         void *user_data);
+
+/*
+ * Writes the ABI records (schema r-abi-record-0.1) of every extern "C" block that names one with
+ * @abi, derived by libclang from the block's headers for the target (R-FFI-0040, R-FFI-0041):
+ * the inventories and layouts of the requested C types, the C types of the imports that pass
+ * R-declared @repr(C) structs and the inventories reached from them. A record that cannot be
+ * derived returns R_FRONTEND_INVALID_SOURCE with the reason in the header report. Requires
+ * r_frontend_resolve_links.
+ */
+RFrontendStatus r_frontend_emit_abi_record(RFrontendContext *context,
+                                           const RFrontendArtifactOptions *artifact_options,
+                                           const RFrontendHeaderOptions *options,
                                            RFrontendWriteFn writer,
                                            void *user_data);
+
+/*
+ * B9.2 (R-FFI-0009): writes the program's only module that has one empty extern "C" block with
+ * @header, with the block filled with the declarations of what its headers declare themselves,
+ * parsed by libclang for the target: structs (complete when the block names an @abi record),
+ * enumerations, integer constants of macros and enumerators, objects and functions, and a
+ * comment for each declaration R cannot express. The output is source to review. A module
+ * without such a block returns R_FRONTEND_INVALID_SOURCE with the reason in the header report.
+ */
+RFrontendStatus r_frontend_emit_bindings(RFrontendContext *context,
+                                         const RFrontendHeaderOptions *options,
+                                         RFrontendWriteFn writer,
+                                         void *user_data);
+
+/* The diagnostics of the last r_frontend_verify_headers or r_frontend_emit_abi_record, or NULL. */
+const char *r_frontend_header_report(const RFrontendContext *context, size_t *length);
+
 RFrontendStatus r_frontend_reconstruct_source(const RFrontendContext *context,
                                               RSourceId source_id,
                                               RFrontendWriteFn writer,

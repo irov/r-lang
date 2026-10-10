@@ -89,6 +89,42 @@ static bool r_json_collect_field_attributes(RFrontendContext *context,
                 return false;
             continue;
         }
+        if (r_ast_direct_token(context, attribute, 1U, NULL, &name) &&
+            r_semantic_token_text_equal_owned(context, &name, "align")) {
+            /* R-FFI-0061 (B9.3): `@align(N)` raises the alignment of a field of a @repr(C)
+               struct or union, N an unsuffixed power of two from 1 to 4096. */
+            RAstRef part;
+            RAstTokenView number;
+            RToken literal = {0};
+            RTokenKind suffix = R_TOKEN_INVALID;
+            uint64_t value = 0U;
+            bool valid = aggregate->is_repr_c && (field->align_attribute == 0U) &&
+                         (view.child_count == 3U) &&
+                         r_ast_ref_child(context, attribute, 2U, &part) &&
+                         r_ast_ref_token(context, part, &number) &&
+                         (number.kind == R_TOKEN_INTEGER_LITERAL);
+            if (valid) {
+                literal.kind = number.kind;
+                literal.span = number.span;
+                literal.intern_id = number.intern_id;
+                valid = (r_semantic_parse_integer_token(context, &literal, &value, &suffix) ==
+                         R_INTEGER_TOKEN_VALID) &&
+                        (suffix == R_TOKEN_INVALID) && (value >= 1U) && (value <= 4096U) &&
+                        ((value & (value - 1U)) == 0U);
+            }
+            field->align_attribute = valid ? (uint32_t)value : 1U;
+            if (!valid) {
+                aggregate->poisoned = true;
+                if (!r_semantic_add_diagnostic(context,
+                                               "R-DIAG-FFI-003",
+                                               "R-FFI-0061",
+                                               "@align(N) of a field of a @repr(C) struct or union "
+                                               "takes a power of two from 1 to 4096, once",
+                                               view.span))
+                    return false;
+            }
+            continue;
+        }
         if (!r_ast_direct_token(context, attribute, 1U, NULL, &name) ||
             !r_semantic_token_text_equal_owned(context, &name, "json")) {
             /* A field takes only @json; an FFI attribute has its closed scopes (R-FFI-0050). */
@@ -112,7 +148,8 @@ static bool r_json_collect_field_attributes(RFrontendContext *context,
             if (!r_semantic_add_diagnostic(context,
                                            ffi ? "R-DIAG-FFI-003" : "R-DIAG-SYN-002",
                                            ffi ? "R-FFI-0050" : "R-GRAM-0007",
-                                           "a struct field accepts only the @json attribute",
+                                           "a struct field accepts only the @json and @align "
+                                           "attributes",
                                            view.span))
                 return false;
             continue;

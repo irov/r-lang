@@ -395,6 +395,22 @@ RLlvmRecoveringKind r_llvm_recovering_error(const RLlvmEmitter *emitter, RTypeId
 bool r_llvm_recovering_members(RLlvmEmitter *emitter, RTypeId id, RLlvmRecoveringMembers *members);
 /* The offset of a field (one-based field id) in its struct. */
 bool r_llvm_field_offset(RLlvmEmitter *emitter, uint32_t field_id, uint32_t *offset);
+/* Where a field lies (r_semantic_aggregate_layout), its alignment there and bit-field bits. */
+bool r_llvm_field_place(RLlvmEmitter *emitter, uint32_t field_id, RSemanticFieldPlace *place);
+/* R-FFI-0062: the value of a bit-field at `address`, the byte of its first bit. */
+LLVMValueRef r_llvm_load_bits(RLlvmEmitter *emitter,
+                              RTypeId type,
+                              LLVMValueRef address,
+                              const RSemanticFieldPlace *place);
+/* R-FFI-0062: writes `value` into a bit-field; a value outside its range panics with
+   invalid_conversion (R-EXPR-0016) at `span`. */
+bool r_llvm_store_bits(RLlvmEmitter *emitter,
+                       RTypeId type,
+                       LLVMValueRef value,
+                       LLVMValueRef address,
+                       const RSemanticFieldPlace *place,
+                       RSourceSpan span,
+                       RMirBlockId panic_target);
 
 /* Values and places of the function being lowered (values.c). */
 bool r_llvm_type_requires_drop(RLlvmEmitter *emitter, RTypeId id);
@@ -669,6 +685,8 @@ LLVMValueRef r_llvm_unwinding(RLlvmEmitter *emitter);
 /* The hosted entry `main` (hosted_main.c) and the R entry it calls. */
 RSymbolId r_llvm_entry(RLlvmEmitter *emitter);
 bool r_llvm_emit_hosted_main(RLlvmEmitter *emitter);
+/* B10.1 (R-FFI-0064): NAME_initialize and NAME_shutdown of a library. */
+bool r_llvm_emit_library_entries(RLlvmEmitter *emitter);
 
 /* Stack bounds (stack.c): the bound of an entry as a value at the insertion point, and the
    measurement that sets every bound once the module is complete. */

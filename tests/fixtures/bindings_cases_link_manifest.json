@@ -1,0 +1,88 @@
+{
+  "schema": "r-link-manifest-0.1",
+  "links": [
+    {
+      "logical_name": "bindings",
+      "available": true,
+      "kind": "static",
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "bindings_cases.c",
+      "link_artifact_identity": "bindings_cases.c",
+      "header_roots": [
+        "tests/fixtures/ffi"
+      ],
+      "abi_record_roots": [],
+      "library_version": "1",
+      "dependencies": [],
+      "feature_test_definitions": [],
+      "symbols": [
+        {
+          "c_identifier": "bind_close",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "bind_format",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "bind_middle",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "bind_names",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "bind_open",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "bind_raise",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "bind_flags_count",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "bind_value_real",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "bind_walk",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "move",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "bind_counter",
+          "kind": "data",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "bind_size",
+          "kind": "data",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "bind_slot",
+          "kind": "tls",
+          "binding": "strong"
+        }
+      ]
+    }
+  ]
+}

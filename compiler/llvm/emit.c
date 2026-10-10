@@ -2164,8 +2164,11 @@ static bool r_llvm_reachable_functions(RLlvmEmitter *emitter) {
     const RSymbolId entry = r_llvm_entry(emitter);
     bool success = false;
 
-    if (entry == R_SYMBOL_ID_INVALID) {
-        /* A program is emitted from its entry; a module without one is no program. */
+    const bool library =
+        (emitter->artifact_options != NULL) && (emitter->artifact_options->library_name != NULL);
+
+    if ((entry == R_SYMBOL_ID_INVALID) != library) {
+        /* A program is emitted from its entry, a library from its exports (R-FFI-0064). */
         return r_llvm_fail(emitter, R_FRONTEND_INVALID_ARGUMENT);
     }
     by_symbol =
@@ -2182,8 +2185,10 @@ static bool r_llvm_reachable_functions(RLlvmEmitter *emitter) {
             by_symbol[mir->symbol] = mir;
         }
     }
-    emitter->reachable[entry] = 1U;
-    work[count++] = entry;
+    if (!library) {
+        emitter->reachable[entry] = 1U;
+        work[count++] = entry;
+    }
     /* Every extern "C" definition is an export C code may call (R-FFI-0012); with all_functions
        every function is a root. */
     for (index = 0U; index < context->mir_function_count; ++index) {
@@ -2757,7 +2762,10 @@ RFrontendStatus r_frontend_emit_llvm(const RFrontendContext *context,
             goto cleanup;
         }
     }
-    if (!r_llvm_emit_thread_locals(&emitter) || !r_llvm_emit_hosted_main(&emitter) ||
+    if (!r_llvm_emit_thread_locals(&emitter) ||
+        ((options != NULL) && (options->library_name != NULL)
+             ? !r_llvm_emit_library_entries(&emitter)
+             : !r_llvm_emit_hosted_main(&emitter)) ||
         !r_llvm_emit_thread_entries(&emitter) || !r_llvm_emit_sync_initializers(&emitter) ||
         !r_llvm_emit_clone_glue(&emitter) || !r_llvm_emit_json_encoders(&emitter) ||
         !r_llvm_emit_json_streams(&emitter) || !r_llvm_emit_json_decoders(&emitter) ||

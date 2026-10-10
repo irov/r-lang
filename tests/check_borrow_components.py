@@ -61,7 +61,7 @@ i32 main() {
             return result.stdout
 
         interface = emit('interface', [api, app])
-        assert '(interface version=34 ' in interface
+        assert '(interface version=35 ' in interface
         assert interface == emit('interface', [app, api])
         assert emit('llvm-ir', [api, app]) == emit('llvm-ir', [app, api])
         views = next(line for line in interface.splitlines()

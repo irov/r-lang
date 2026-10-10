@@ -83,7 +83,7 @@ async i32 main() {
         interface = emit('interface', [provider, consumer])
         assert interface == emit('interface', [consumer, provider])
         assert interface.endswith(')\n')
-        assert '(interface version=34 ' in interface
+        assert '(interface version=35 ' in interface
         for mode in ('shared', 'mut', 'once'):
             assert '(callable mode=' + mode in interface
         assert 'async=true' in interface

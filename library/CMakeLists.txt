@@ -53,6 +53,7 @@ add_subdirectory(native/sqlite)
 add_subdirectory(native/alloc)
 add_subdirectory(native/log)
 add_subdirectory(native/fs)
+add_subdirectory(native/dl)
 
 add_library(r_stdlib_0_1 INTERFACE)
 target_link_libraries(r_stdlib_0_1 INTERFACE

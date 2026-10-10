@@ -88,8 +88,8 @@ int probe_marker_visit(int (*visit)(probe_marker), int mode);
 int probe_node_total(const struct probe_node *head);
 enum probe_mode probe_mode_raw(int value);
 
-/* Objects of such structs and a reserved-name object reached through the accessor bridge
-   (R-FFI-0022, R-FFI-0057), and an enum object whose representation C may corrupt. */
+/* Objects of such structs and a reserved-name object (R-FFI-0022, R-FFI-0057), and an enum
+   object whose representation C may corrupt. */
 extern struct probe_point probe_corner;
 extern struct probe_node *probe_chain;
 extern int total_count;

@@ -170,15 +170,15 @@ class LibraryInventoryTests(unittest.TestCase):
 
         layout = run_tool(str(LAYOUT_CHECKER), "--root", str(REPOSITORY_ROOT))
         self.assertEqual(layout.returncode, 0, layout.stderr)
-        self.assertIn("70 modules", layout.stdout)
+        self.assertIn("71 modules", layout.stdout)
         inventory = json.loads(INVENTORY.read_text(encoding="utf-8"))
         r_modules = [
             module
             for module in inventory["modules"]
             if module.get("implementation_language") == "r"
         ]
-        self.assertEqual(len(inventory["modules"]), 70)
-        self.assertEqual(len(r_modules), 39)
+        self.assertEqual(len(inventory["modules"]), 71)
+        self.assertEqual(len(r_modules), 40)
         for module in r_modules:
             self.assertTrue((REPOSITORY_ROOT / module["source"]).is_file(), module)
             self.assertIn(

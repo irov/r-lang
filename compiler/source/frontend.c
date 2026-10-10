@@ -301,6 +301,7 @@ void r_frontend_destroy(RFrontendContext *context) {
     for (index = 0U; index < context->abi_type_count; ++index) {
         r_context_free(context, context->abi_types[index].c_name);
         r_context_free(context, context->abi_types[index].underlying);
+        r_context_free(context, context->abi_types[index].tag_name);
     }
     for (index = 0U; index < context->abi_member_count; ++index) {
         r_context_free(context, context->abi_members[index].name);
@@ -332,6 +333,7 @@ void r_frontend_destroy(RFrontendContext *context) {
     r_context_free(context, context->abi_symbols);
     r_context_free(context, context->c_import_slots);
     r_context_free(context, context->c_repr_pairs);
+    r_context_free(context, context->header_report);
     r_context_free(context, context->extern_blocks);
     r_context_free(context, context->extern_headers);
     r_context_free(context, context->link_providers);
@@ -1292,6 +1294,7 @@ const char *r_token_kind_name(RTokenKind kind) {
                                                           "u32",
                                                           "u64",
                                                           "unsafe",
+                                                          "union",
                                                           "usize",
                                                           "variant",
                                                           "void",

@@ -1,4 +1,5 @@
 module example.c_bridge.native;
+import std.dl;
 import example.calculator.common::{Usage};
 
 @link(name = "system.libc", kind = "system")
@@ -6,6 +7,15 @@ import example.calculator.common::{Usage};
 extern "C" {
     @safety("BRIDGE-STRLEN", "The argument is a live NUL-terminated std.c string")
     c_size strlen(raw const c_char* text);
+}
+
+// A library the program opens itself: the link step names it nowhere, and its functions are
+// reached through std.dl::resolve with the prototype that <stdlib.h> verifies.
+@link(name = "system.loader", kind = "loadable")
+@header("stdlib.h")
+extern "C" {
+    @safety("BRIDGE-LABS", "The argument is not the most negative c_long")
+    c_long labs(c_long value);
 }
 
 struct Packet { u8[256] data; usize length; constexpr str failure; };
@@ -205,5 +215,22 @@ std.string::string attachment_status() throws std.alloc::alloc_error {
             constexpr str name = error.name();
             return f"attachment rejected: {name}\n";
         }
+    }
+}
+
+// Opens the shared library at path, calls its labs through the verified prototype and reports
+// whether it also defines strlen. A library the loader refuses is reported by the caller.
+std.string::string load(str path) throws std.dl::dl_error, std.alloc::alloc_error {
+    std.dl::library opened = std.dl::open(path);
+    raw fn?(c_long) -> c_long absolute = std.dl::resolve(&opened, labs);
+    i64 value = -42i64;
+    unsafe {
+        bool missing = absolute == null;
+        bool has_strlen = std.dl::symbol(&opened, "strlen") != null;
+        if (missing == true) {
+            return f"labs=missing strlen={has_strlen}\n";
+        }
+        i64 result = absolute(value as c_long) as i64;
+        return f"labs({value})={result} strlen={has_strlen}\n";
     }
 }

@@ -1,5 +1,4 @@
 if(NOT DEFINED R_FRONT_EXECUTABLE OR
-   NOT DEFINED C_COMPILER OR
    NOT DEFINED SOURCE OR
    NOT DEFINED LINK_MANIFEST OR
    NOT DEFINED EXPECTATION OR
@@ -24,48 +23,45 @@ elseif(DEFINED ABI_INVENTORY AND ABI_INVENTORY)
     include("${CMAKE_CURRENT_LIST_DIR}/abi_record_support.cmake")
     r_abi_generate_record(
         FRONT "${R_FRONT_EXECUTABLE}"
-        PYTHON "${PYTHON_EXECUTABLE}"
-        TOOL "${ABI_RECORD_TOOL}"
-        CC "${C_COMPILER}"
         OUTPUT_PREFIX "${OUTPUT_C}"
         ARGUMENTS_VARIABLE R_ABI_FRONT_ARGUMENTS
         INCLUDE_FLAGS ${R_ABI_INCLUDE_FLAGS})
 endif()
 
+# B9.1: r-front parses the verifier translation unit with libclang in the SDK and writes it only
+# when every probe compiles; a disagreement is R-DIAG-FFI-004 on the R declaration, followed by
+# what libclang reported.
+execute_process(
+    COMMAND xcrun --sdk macosx --show-sdk-path
+    RESULT_VARIABLE R_SDK_PATH_RESULT
+    OUTPUT_VARIABLE R_SDK_PATH
+    ERROR_VARIABLE R_SDK_PATH_ERROR
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+if(NOT R_SDK_PATH_RESULT EQUAL 0 OR R_SDK_PATH STREQUAL "")
+    message(FATAL_ERROR "could not resolve the macOS SDK path (${R_SDK_PATH_RESULT}):\n"
+                        "${R_SDK_PATH_ERROR}")
+endif()
+list(APPEND R_ABI_FRONT_ARGUMENTS --sysroot "${R_SDK_PATH}")
+if(DEFINED TARGET_MANIFEST AND NOT TARGET_MANIFEST STREQUAL "")
+    list(APPEND R_ABI_FRONT_ARGUMENTS --target-manifest "${TARGET_MANIFEST}")
+endif()
+if(NOT (DEFINED ABI_RECORD AND NOT ABI_RECORD STREQUAL ""))
+    foreach(R_ABI_DIR IN LISTS HEADER_INCLUDE_DIRS)
+        list(APPEND R_ABI_FRONT_ARGUMENTS --abi-header-dir "${R_ABI_DIR}")
+    endforeach()
+endif()
 execute_process(
     COMMAND "${R_FRONT_EXECUTABLE}" ${R_ABI_FRONT_ARGUMENTS}
-    RESULT_VARIABLE R_EMIT_RESULT
-    OUTPUT_FILE "${OUTPUT_C}"
-    ERROR_VARIABLE R_EMIT_ERROR
-)
-if(NOT R_EMIT_RESULT EQUAL 0)
-    message(FATAL_ERROR "r-front --emit=abi-verifier failed (${R_EMIT_RESULT}): ${R_EMIT_ERROR}")
-endif()
-
-execute_process(
-    COMMAND "${C_COMPILER}"
-        -std=c17
-        -pedantic-errors
-        -Wall
-        -Wextra
-        -Werror
-        -Wconversion
-        -Wsign-conversion
-        -Wshadow
-        -Wstrict-prototypes
-        -Wmissing-prototypes
-        ${R_ABI_INCLUDE_FLAGS}
-        -fsyntax-only
-        "${OUTPUT_C}"
     RESULT_VARIABLE R_VERIFY_RESULT
-    OUTPUT_VARIABLE R_VERIFY_OUTPUT
+    OUTPUT_FILE "${OUTPUT_C}"
     ERROR_VARIABLE R_VERIFY_ERROR
 )
 if(EXPECTATION STREQUAL "pass")
     if(NOT R_VERIFY_RESULT EQUAL 0)
         message(FATAL_ERROR
             "R-DIAG-FFI-004 [R-FFI-0042]: header verification rejected a correct import set:\n"
-            "${R_VERIFY_OUTPUT}${R_VERIFY_ERROR}")
+            "${R_VERIFY_ERROR}")
     endif()
 elseif(EXPECTATION STREQUAL "fail")
     # The rejection shall come from the probe itself: an incompatible prototype or pointer
@@ -73,8 +69,14 @@ elseif(EXPECTATION STREQUAL "fail")
     if(NOT DEFINED FAIL_PATTERN OR FAIL_PATTERN STREQUAL "")
         set(FAIL_PATTERN "incompatible")
     endif()
-    if(R_VERIFY_RESULT EQUAL 0)
-        message(FATAL_ERROR "header verification accepted a mismatched import set")
+    if(NOT R_VERIFY_RESULT EQUAL 1)
+        message(FATAL_ERROR
+            "header verification did not reject a mismatched import set (${R_VERIFY_RESULT}):\n"
+            "${R_VERIFY_ERROR}")
+    endif()
+    if(NOT R_VERIFY_ERROR MATCHES "error R-DIAG-FFI-004 \\[R-(FFI|CMAP)-00[0-9][0-9]\\]: ")
+        message(FATAL_ERROR
+            "header verification did not report R-DIAG-FFI-004 on a declaration:\n${R_VERIFY_ERROR}")
     endif()
     if(NOT R_VERIFY_ERROR MATCHES "${FAIL_PATTERN}")
         message(FATAL_ERROR

@@ -318,6 +318,11 @@
           "c_identifier": "strlen",
           "kind": "function",
           "binding": "strong"
+        },
+        {
+          "c_identifier": "realpath",
+          "kind": "function",
+          "binding": "strong"
         }
       ]
     },

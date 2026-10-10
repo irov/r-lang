@@ -15,7 +15,7 @@
 |Поле |Значение
 |Документ |R Core Language Specification
 |Версия языка |0.1
-|Редакция документа |0.1.0-draft.105
+|Редакция документа |0.1.0-draft.107
 |Статус |Перевод нормативного черновика; не является стабильным стандартом R 1.0
 |Язык документа |Русский перевод; ключевые нормативные термины приведены на английском
 |Целевой backend |ISO/IEC 9899:2018 (C17)
@@ -275,7 +275,11 @@ quiescence drain R-AM-0013; destruction static R objects в обратном п�
 required dynamic providers и проверка required-symbol readiness по R-FFI-0037, затем,
 только при успехе этой phase, native argument conversion и reservation startup snapshot
 по R-FUNC-0008. Failure одной phase завершает launch и предотвращает каждую последующую
-phase, поэтому один launch сообщает только самую раннюю failure category.
+phase, поэтому один launch сообщает только самую раннюю failure category. Библиотека
+(R-FFI-0064) выполняет фазы до инициализации статических объектов R включительно в
+`+NAME_initialize+`, без native arguments, а quiescence drain, уничтожение статических объектов R и
+завершение runtime, но не процесса, — в `+NAME_shutdown+`; `+main+`, который нужно вызвать или
+ожидать, у неё нет.
 
 [[R-AM-0003]]
 *R-AM-0003* — Observable behavior включает volatile и atomic accesses, обращения
@@ -442,7 +446,7 @@ identifiers:
 alignof ai8 ai16 ai32 ai64 aisize arc array as async atomic au8 au16 au32 au64 ausize auto await bool break case catch char const constexpr continue default dict drop dyn else enum extern finally
 f32 f64 false fallthrough fn for i8 i16 i32 i64 if import in isize module move never
 impl list new null null_t o own panic protected raw rc return Self sizeof static str struct switch task this throw throws trait variant
-thread_scope thread_local true try u8 u16 u32 u64 unsafe usize void weak while
+thread_scope thread_local true try u8 u16 u32 u64 union unsafe usize void weak while
 c_char c_schar c_uchar c_short c_ushort c_int c_uint c_long c_ulong c_llong
 c_ullong c_bool c_wchar c_wint c_int8 c_uint8 c_int16 c_uint16 c_int32 c_uint32
 c_int64 c_uint64 c_intptr c_uintptr c_intmax c_uintmax c_float c_double
@@ -574,8 +578,10 @@ belong to type rather than identifier. One `+object-declaration+` binds exactly 
 identifier; несколько objects записываются отдельными declarations.
 
 [[R-GRAM-0007]]
-*R-GRAM-0007* — Встроенный attribute set R 0.1 is closed: `+@repr(C)+` on struct/fieldless enum,
-`+@safety+` on unsafe or C-boundary function, `+@deny_panic_alloc+` on a module
+*R-GRAM-0007* — Встроенный attribute set R 0.1 is closed: `+@repr(C)+` on struct, union and
+fieldless enum, с аргументами `+packed+` и `+align = N+` из R-FFI-0061 у struct и union,
+`+@align(N)+` у поля агрегата `+@repr(C)+` (R-FFI-0061), `+@safety+` on unsafe or C-boundary
+function, `+@deny_panic_alloc+` on a module
 declaration (R-OBJ-0012), and FFI attributes/scopes from R-FFI-0050. Unknown argument,
 unknown attribute or attribute outside its allowed declaration requires `+R-DIAG-SYN-002+`
 (or more specific Annex B FFI diagnostic). `+@lending+` on trait methods is specified by
@@ -612,7 +618,7 @@ layout, Copy/Move и инициализацию. `+optional+` разрешает
 преобразования. Полный контракт преобразования задаёт R-SLIB-JSON-0001, а схему —
 R-SLIB-JSON-0002. Interface schema 5 экспортирует нормализованные контракты
 полей и fingerprints определений без изменения физического представления aggregate.
-Interface schema 34 добавляет description к экспортируемому контракту поля, а hook
+Interface schema 35 добавляет description к экспортируемому контракту поля, а hook
 `+json_schema+` — к экспортируемым hooks типа.
 
 Associated-имена `+json_marshal+`, `+json_unmarshal+`, `+json_is_zero+` и `+json_schema+`
@@ -1263,7 +1269,7 @@ trait либо модулю целевого типа. Для пары кано�
 требует `+R-DIAG-TRAIT-001+`. Такая запись в другом заголовке требует `+R-DIAG-TYPE-001+`.
 Запись не добавляет параметра в схему. Тело может применять к значениям `+P::Name+`
 операции, которые обосновывают её ограничения, а каждая инстанциация shall связывать с
-`+P::Name+` тип, доказывающий их; иначе требуется `+R-DIAG-TYPE-001+`. Interface schema 34
+`+P::Name+` тип, доказывающий их; иначе требуется `+R-DIAG-TYPE-001+`. Interface schema 35
 записывает такие записи как
 `+associated_constraints=((associated=P::Name constraints=(...)))+`.
 
@@ -1273,7 +1279,7 @@ trait либо модулю целевого типа. Для пары кано�
 generic-определении поле параметра, которое `+core::field+` или `+core::field_mut+` заимствует
 по индексу, решаемому инстанциацией, имеет методы `+Trait+` и никаких других операций
 (R-REFL-0006); определение проверяется один раз, а каждая его инстанциация — с типами своих
-полей. Interface schema 34 записывает ограничение как `+(fields Trait)+`.
+полей. Interface schema 35 записывает ограничение как `+(fields Trait)+`.
 
 [[R-TYPE-0044]]
 *R-TYPE-0044* — Generic constraint `+fn(P...) -> R+` описывает синхронный callable с
@@ -1338,7 +1344,7 @@ receiver удерживает (R-BORROW-0009): пока результат жи�
 opaque-результат — зависит от всего receiver, как от заимствованного аргумента, из
 которого сформирован результат (R-BORROW-0009), поэтому receiver остаётся заимствованным,
 пока результат жив. Реализация наследует атрибут и может его повторить; атрибут на методе,
-реализующем prototype без него, требует `+R-DIAG-TRAIT-001+`. Interface schema 34
+реализующем prototype без него, требует `+R-DIAG-TRAIT-001+`. Interface schema 35
 записывает `+lending=true+`.
 
 Связанный тип может объявлять типовые параметры, например
@@ -1357,7 +1363,7 @@ generic trait или реализации; иначе требуется `+R-DIA
 которые дают ограничения его связанного типа; после неё это выбранное связывание с
 аргументами, подставленными вместо параметров. Generic-параметр не выводится из
 применения. Связанный тип с параметрами не фиксируется равенством opaque-результата или
-dyn-интерфейса (R-TYPE-0048, R-TYPE-0051). Interface schema 34 записывает параметры
+dyn-интерфейса (R-TYPE-0048, R-TYPE-0051). Interface schema 35 записывает параметры
 связанного типа, а связывание с параметрами — как
 `+(type_function parameters=(...) body=...)+`.
 
@@ -1460,7 +1466,7 @@ generic argument, рекурсивно по поддерживаемым фор�
 (R-TYPE-0036). Ожидаемый результат не участвует. Copy/Move, заимствования, checked errors,
 запуск async и cleanup сохраняют обычные правила.
 
-Interface schema 34 записывает константные параметры с `+constant_type=usize+`, закрытые
+Interface schema 35 записывает константные параметры с `+constant_type=usize+`, закрытые
 аргументы с типом и значением, зависимые выражения и fingerprints определений. Callable
 constraints schema 11 остаются структурными. Импорт определений по-прежнему требует
 исходники; сериализация generic bodies не вводится.
@@ -1526,7 +1532,7 @@ Generic-тело проверяется до инстанцирования. В�
 необработанный член передаётся наружу. Именованные catch, bare rethrow и finally сохраняют
 обычные правила. Происхождение заимствований консервативно сохраняется через абстрактные
 вызовы и именованные catch; подстановка набора не продлевает жизнь payload. Ошибки
-async-start остаются отдельными от выводимого набора completion-errors. Interface schema 34 записывает вид параметра `+errors+`, структурные callable-эффекты и канонические
+async-start остаются отдельными от выводимого набора completion-errors. Interface schema 35 записывает вид параметра `+errors+`, структурные callable-эффекты и канонические
 аргументы наборов. Определения по-прежнему импортируются из исходников.
 
 [[R-TYPE-0050]]
@@ -1560,7 +1566,7 @@ async-start остаются отдельными от выводимого на
 объявление уровня модуля, использующее её до проверки реализаций, получает значение,
 вычисленное разведочным проходом (R-EXPR-0032).
 
-Interface schema 34 перечисляет константы каждого trait с их типом и признаком значения по
+Interface schema 35 перечисляет константы каждого trait с их типом и признаком значения по
 умолчанию и записывает зависимую константу как её trait, имя и владельца; fingerprint
 определения реализации покрывает её значения. Импорт определений по-прежнему требует
 исходники.
@@ -1616,7 +1622,7 @@ borrow-контракт, must-use и ресурсные атрибуты — а�
 форматированием (R-TYPE-0046); его выбор форматирует значение этим форматированием.
 Загрузка новых реализаций во время работы программы, восстановление типа члена
 и сам интерфейс как generic-аргумент в эту редакцию не входят; владельцы интерфейсов
-следуют R-TYPE-0055. Interface schema 34 записывает тип как `+(dyn "dyn(...)")+` с
+следуют R-TYPE-0055. Interface schema 35 записывает тип как `+(dyn "dyn(...)")+` с
 каноническим контрактом интерфейса.
 
 [[R-TYPE-0052]]
@@ -1634,7 +1640,7 @@ layout, классификацию Copy и Move, порядок очистки �
 значений элементов. `+value.N+` выбирает элемент `+N+` как поле (R-AGG-0002), а шаблон
 match разбирает кортеж полями `+.0+`, `+.1+`, ... (R-EXPR-0031). Элементы держат views как
 поля; последующее использование `+value.N+` сохраняет живыми views этого элемента.
-`+core::type_name+` записывает кортеж как `+(A, B)+`, а interface schema 34 — как
+`+core::type_name+` записывает кортеж как `+(A, B)+`, а interface schema 35 — как
 `+(tuple A B)+`.
 
 [[R-TYPE-0053]]
@@ -1681,7 +1687,7 @@ spread значения типа `+P+`. Spread не последним аргу�
 каждую длину и завершается там, где ветвь не выбрана.
 
 Инстанциация заменяет каждый пакет его кортежем, поэтому у инстанса только обычные
-параметры и прямые вызовы. Interface schema 34 записывает `+pack=true+` с ограничениями
+параметры и прямые вызовы. Interface schema 35 записывает `+pack=true+` с ограничениями
 каждого элемента, пакет из префикса и элементов другого пакета — как
 `+(pack prefix=(...) base=... from=k)+`, а раскрытие в callable-сигнатуре — как
 `+(expand P)+`.
@@ -1734,7 +1740,7 @@ generic-функции; это множество конечно и извест
 каждое преобразование к типу её доказало.
 
 Значение-функция представлено номером обозначаемой функции; вызов — выбор по целям его
-типа с прямым вызовом каждой либо async-запуск выбранной функции. Interface schema 34
+типа с прямым вызовом каждой либо async-запуск выбранной функции. Interface schema 35
 записывает тип функции как `+(fn parameters=(...) return=R throws=(...))+`, добавляя
 `+async=true+`, `+noalloc=true+` и `+nonblocking=true+` для имеющихся формы и гарантий.
 Значения-функции, захватывающие состояние, упорядочение значений-функций и типы функций в
@@ -1789,7 +1795,7 @@ capability и равенство связанных типов контракт�
 
 Владелец интерфейса представлен владельцем своего члена и тегом члена; его уничтожение
 выбирает уничтожение члена по тегу, а сужение перенумеровывает тег по таблице двух
-интерфейсов. Interface schema 34 записывает его как владельца типа интерфейса, например
+интерфейсов. Interface schema 35 записывает его как владельца типа интерфейса, например
 `+(own (dyn "dyn(...)"))+` или `+(weak_rc (dyn "dyn(...)"))+`. Исключительный доступ к
 члену разделяемого владельца, восстановление типа члена, сам интерфейс как
 generic-аргумент и владельцы интерфейсов в C-объявлениях в эту редакцию не входят.
@@ -1985,7 +1991,7 @@ struct — значение `+Type {}+`: инициализаторы и зна�
 `+core::take+` (R-OWN-0019) и необязательное поле JSON (R-JSON-0001); его вычисление может
 бросать checked errors вычисляемых им инициализаторов. Атрибут `+@default+` стоит перед
 одним вариантом enum или error enum; второй `+@default+` в одном enum требует
-`+R-DIAG-NAME-002+`, а иной атрибут у варианта — `+R-DIAG-SYN-002+`. Interface schema 34
+`+R-DIAG-NAME-002+`, а иной атрибут у варианта — `+R-DIAG-SYN-002+`. Interface schema 35
 записывает `+initializer=true+` у поля с инициализатором и `+default=true+` у варианта
 `+@default+`.
 
@@ -2316,7 +2322,7 @@ Copy, может бросить только `+std.alloc::alloc_error+`: при 
 требует `+R-DIAG-STACK-001+`; статический граф вызовов (R-FUNC-0004) и ресурсные контракты
 (R-FUNC-0019) включают каждый хук клонирования, который вызывает копируемая структура.
 Клонирование значения, которое не Copy, выделяет память и не имеет доказательства
-`+@noalloc+` и `+@nonblocking+`. Interface schema 34 записывает хук `+clone+` типа и
+`+@noalloc+` и `+@nonblocking+`. Interface schema 35 записывает хук `+clone+` типа и
 ограничение `+clone+` generic-параметра.
 
 [[borrowing-lifetimes]]
@@ -2428,7 +2434,7 @@ usize both(const u8[] data) {
 }
 ----
 
-Interface schema 34 экспортирует `+borrow_contract+` для обычного результата и каждой
+Interface schema 35 экспортирует `+borrow_contract+` для обычного результата и каждой
 номинальной checked error, включая generic-определения и закрытые инстанциации.
 Происхождение — `+none+` (заимствований нет), `+static+`, точный набор нулевых индексов
 входных параметров, где `+held=(...)+` перечисляет входы, от которых оно зависит только
@@ -3764,7 +3770,7 @@ Receiver метода следует R-FUNC-0014. Выбор не вычисля
 borrows или checked effects: понижается только выбранный вызов, один раз, с его ошибками.
 Generic-тела выбирают объявление при проверке определения по constraints; инстанциация
 сохраняет этот выбор. Имена из разных импортируемых модулей остаются неоднозначными. Члены
-перегрузки имеют детерминированную каноническую идентичность в interface schema 34 и в
+перегрузки имеют детерминированную каноническую идентичность в interface schema 35 и в
 порядке генерируемых символов функций. Static call graph функций R программы, включая drop
 hooks, достижимые через owned storage, initializers
 `+std.sync::call_once+`/`+get_or_init+` и asynchronous starts, shall быть acyclic, кроме
@@ -3835,8 +3841,8 @@ async-start и ребро статического графа вызовов. С
 R-LIB-0010/R-LIB-0015. Тип raw C-функции никогда не содержит checked errors.
 
 [[R-FUNC-0008]]
-*R-FUNC-0008* — Hosted program shall define exactly one exported entry point одной
-из forms `+i32 main()+`, `+i32 main(const str[] args)+`, `+async i32 main()+` либо
+*R-FUNC-0008* — Hosted program, кроме библиотеки (R-FFI-0064), у которой её нет, shall define
+exactly one exported entry point одной из forms `+i32 main()+`, `+i32 main(const str[] args)+`, `+async i32 main()+` либо
 `+async i32 main(const str[] args)+`. Asynchronous forms требуют profile
 `+hosted-native-async+`. В тестовом режиме точку входа добавляет реализация (R-FUNC-0025). Runtime создаёт process executor и предоставляет owned
 immutable argument snapshot до запуска asynchronous root. После успешной проверки
@@ -4120,7 +4126,7 @@ Generic thread entry выводится структурно из value argument
 по R-EXPR-0020. Создание и синхронный вызов closure не вводят indirect call, function pointer или heap
 allocation; captures и body сохраняют собственные эффекты. Async-вызов имеет обычные
 эффекты выделения task и cleanup.
-Interface schema 34 записывает callable constraints структурно: режим, типы параметров
+Interface schema 35 записывает callable constraints структурно: режим, типы параметров
 и результат; synthetic callable traits и implementations не экспортируются как trait records.
 
 [[R-FUNC-0018]]
@@ -4191,7 +4197,7 @@ thread-local cleanup включается в доказательство отс
 
 Неудачное доказательство требует `+R-DIAG-RESOURCE-001+` для `+@noalloc+` либо
 `+R-DIAG-RESOURCE-002+` для `+@nonblocking+` с цепочкой вызова или cleanup.
-Interface schema 34 экспортирует `+noalloc=true/false+` и
+Interface schema 35 экспортирует `+noalloc=true/false+` и
 `+nonblocking=true/false+` у функций и generic-схем и включает их в fingerprints.
 Флаги описывают объявленные контракты, а не выведенные обещания неаннотированного
 кода. Бинарный ABI и C-символы стандартной библиотеки не меняются.
@@ -4242,7 +4248,7 @@ Await подтверждает использование task и создаёт
 обёртки. Атрибут не переносится через стёртую raw function signature. Copy/Move,
 проверка borrow и правила разрешения task остаются обязательными. R-INIT-0014
 независимо запрещает безусловную замену локального значения.
-Interface schema 34 записывает `+must_use=true+`; отсутствие означает false.
+Interface schema 35 записывает `+must_use=true+`; отсутствие означает false.
 
 [[R-FUNC-0021]]
 *R-FUNC-0021* — Атрибут без аргументов `+@discardable+` помечает результат именованной функции
@@ -4265,7 +4271,7 @@ checking, Copy/Move и разрешение effectful task сохраняют с
 отбрасывает ни одной task. Разрешение не следует за значением в local, операнд оператора,
 условное выражение, callable-ограничение или raw function signature; они остаются под
 R-STMT-0001 и R-EXPR-0023, а local, инициализированный из `+@discardable+`-вызова, —
-обычный local. Interface schema 34 записывает `+discardable=true+`; отсутствие означает false.
+обычный local. Interface schema 35 записывает `+discardable=true+`; отсутствие означает false.
 
 [[R-FUNC-0022]]
 *R-FUNC-0022* — `+out T name+` объявляет выходной параметр синхронной функции R.
@@ -4304,7 +4310,7 @@ runtime-индексов; чтение или явное отбрасывани�
 
 При именованном вызове `+@discardable+` разрешает игнорировать выходы; это разрешение
 не переносится через function item, opaque callable или callable constraint. Оно не
-может отменить `+@must_use+` типа выхода. Interface schema 34 представляет режим как
+может отменить `+@must_use+` типа выхода. Interface schema 35 представляет режим как
 `+(out T)+`. Обычный изменяемый указатель не имеет контракта out. R-ERR-0003 по-прежнему
 запрещает ошибку, покидающую finally.
 
@@ -4353,7 +4359,7 @@ pointers, atomic и volatile access, callable values, tasks, `+await+`, threads,
 другие стандартные операции; вызов run-time функции действует так же. При трансляции
 allocation не отказывает: её ограничивают лимиты R-IDB-010, поэтому ветвь catch ошибки
 allocation там не выполняется, а capacity owner, которая следует политике роста во время
-выполнения, не наблюдается. Evaluability — свойство всей цепочки вызовов; interface schema 34 экспортирует его как `+consteval=true+` (R-MOD-0006).
+выполнения, не наблюдается. Evaluability — свойство всей цепочки вызовов; interface schema 35 экспортирует его как `+consteval=true+` (R-MOD-0006).
 
 [[R-FUNC-0024]]
 *R-FUNC-0024* — Атрибут без аргументов `+@chain+` помечает метод, вызов которого может
@@ -4375,7 +4381,7 @@ function item, требует `+R-DIAG-SYN-001+`; receiver в скобках `+(
 prototype. Атрибут не меняет ни сигнатуру, checked errors, borrow contract и владение
 метода, ни обязательства R-FUNC-0020. В асинхронном кадре временный consuming receiver
 вычисляется в скрытый объект кадра, как любой argument, а последний вызов цепочки может
-быть awaited (R-STMT-0012). Interface schema 34 записывает `+chain=true+`; отсутствие
+быть awaited (R-STMT-0012). Interface schema 35 записывает `+chain=true+`; отсутствие
 означает false.
 
 [[R-FUNC-0025]]
@@ -4579,7 +4585,7 @@ error читаются через такое значение; через нег
 Members family не содержат borrow, slice, runtime `+str+` или type, содержащий их; такой
 member требует `+R-DIAG-TYPE-001+`. Library error `+std.error::fault+` — корень
 стандартных ошибок (Library R-SLIB-ERR-0004): её family не имеет собственного member, и у
-неё нет полей. Interface schema 34 записывает `+parent=+` для error с parent и пишет type
+неё нет полей. Interface schema 35 записывает `+parent=+` для error с parent и пишет type
 такого значения как `+(error_family T)+`.
 
 [[R-AGG-0012]]
@@ -4602,7 +4608,7 @@ member требует `+R-DIAG-TYPE-001+`. Library error `+std.error::fault+` �
   собственным форматированием.
 
 Реализации и хуки — объявления модуля, объявившего тип: они проверяются и транслируются
-как написанные и записываются в его интерфейс, а interface schema 34 дополнительно
+как написанные и записываются в его интерфейс, а interface schema 35 дополнительно
 перечисляет способности как `+derived=+`. Generic-тип добавляет способность к каждому
 своему параметру-типу — как ограничение реализации (R-TYPE-0042) или хуков (R-FUNC-0009),
 поэтому инстанс обладает ею ровно тогда, когда её доказывают его аргументы. Error с parent
@@ -4640,7 +4646,7 @@ enum или error, когда его цели содержат `+type+`, пер�
 `+Enum::name+`, и оно имеет тип своего поля, целое — в его диапазоне. Значения — константы
 времени трансляции, которые читает R-REFL-0005: атрибут не меняет размещения, преобразований
 и поведения объявления, которое он помечает, и не создаёт метаданных времени выполнения.
-Interface schema 34 экспортирует цели типа атрибута и атрибуты каждого типа, поля и
+Interface schema 35 экспортирует цели типа атрибута и атрибуты каждого типа, поля и
 перечислителя.
 
 Имя встроенного атрибута (R-GRAM-0007) всегда обозначает его, и тип атрибута с таким именем
@@ -4649,6 +4655,25 @@ Interface schema 34 экспортирует цели типа атрибута 
 недостающий аргумент и `+@attribute+` без целей, с неизвестной или повторной целью. Значение
 другого типа, целое вне диапазона своего поля и поле типа, не допустимого выше, требуют
 `+R-DIAG-TYPE-001+`.
+
+[[R-AGG-0014]]
+*R-AGG-0014* — `+@repr(C) union Tag { fields };+` определяет номинальный тип объединения: каждое
+поле начинается со смещения ноль, выравнивание — наибольшее выравнивание поля, размер —
+наибольший размер поля, округлённый до этого выравнивания (R-FFI-0006, R-FFI-0061). Объединение
+требует `+@repr(C)+`, имеет хотя бы одно поле, не бывает generic и не принимает `+@derive+`; его
+поля не объявляют инициализатора и не бывают битовыми полями (R-FFI-0062), а тип каждого поля
+shall быть допустим по R-FFI-0004, поэтому объединение — Copy. `+Tag { .field = value }+`
+инициализирует это поле и обнуляет все остальные байты объединения, `+Tag {}+` обнуляет все
+байты. Каждый доступ к полю — чтение, присваивание, заимствование, сырой адрес или получатель
+метода — небезопасная операция (R-UNSAFE-0002): чтение требует, чтобы байты поля хранили
+допустимое значение его типа, как когда это поле записано последним; присваивание пишет байты
+этого поля и оставляет остальные. Создание объединения и копирование всего объединения
+безопасны. Автоматическое преобразование JSON (R-JSON-0001) и `+core::field+` (R-REFL-0006)
+объединений не принимают. Interface schema 35 записывает объединение как
+`+kind=union layout=overlapping+`. Объединение без `+@repr(C)+`, generic или производное
+объединение и инициализатор поля требуют `+R-DIAG-FFI-003+`; инициализатор, задающий больше
+одного поля или называющий `+...base+`, требует `+R-DIAG-INIT-002+`; доступ к полю вне
+небезопасного контекста требует `+R-DIAG-UNSAFE-001+`.
 
 [[arrays-slices-strings]]
 == 18. Arrays, slices and strings
@@ -4901,7 +4926,7 @@ pointer/integer conversion; borrow-to/from-raw conversion; owner-to-raw exposure
 cast between distinct raw pointer types или изменение raw constness; managed-owner
 raw-token exposure/reconstruction; construction
 borrow/slice from raw parts; access any imported external object; access mutable R
-static storage; representation transmute; volatile access; manual allocation
+static storage; access a field of a union (R-AGG-0014); representation transmute; volatile access; manual allocation
 adoption/release; assume assertion.
 
 [[R-UNSAFE-0003]]
@@ -5591,8 +5616,8 @@ object и не является managed-owner token. Каждый legitimate C p
 
 [[R-FFI-0004]]
 *R-FFI-0004* — Allowed by-value C ABI types: C ABI scalars, raw pointers, raw C
-function pointers, `+@repr(C)+` fieldless enums and `+@repr(C)+` structs recursively
-composed only of allowed types or fixed C ABI arrays. Every aggregate/enum passed
+function pointers, `+@repr(C)+` fieldless enums and `+@repr(C)+` structs and unions
+recursively composed only of allowed types or fixed C ABI arrays. Every aggregate/enum passed
 by value shall be trivially Copy, have no user drop and recursively contain no R
 destruction obligation. Top-level array parameter or return is forbidden because C
 adjusts/forbids it. Slice, ordinary `+str+`, `+constexpr str+`, own, arc, rc, weak owner,
@@ -5622,14 +5647,15 @@ borrow, unique или managed owning form и drop opaque type требуют
 *R-FFI-0016* — `+@c_type(name = "CName", kind = "typedef")+` maps R aggregate type name to C typedef.
 Kinds `+"struct"+`, `+"union"+` and `+"enum"+` map to corresponding C tag name. CName
 shall be one ASCII C identifier, shall not be a C17 keyword and is additionally
-governed by R-FFI-0057. `+"union"+` is allowed only for opaque R declaration; a
-complete C union requires wrapper functions.
+governed by R-FFI-0057. `+"union"+` называет объединение C: непрозрачное объявление R или
+полное объединение `+@repr(C)+` (R-AGG-0014).
 
 [[R-FFI-0017]]
-*R-FFI-0017* — Complete struct/fieldless enum declared inside `+extern "C"+` shall
+*R-FFI-0017* — Complete struct, union or fieldless enum declared inside `+extern "C"+` shall
 carry `+@repr(C)+` and `+@c_type+`, use only types permitted by R-FFI-0004 and match
-verified C declaration. Struct field name, count, order, type, qualifiers, size,
-alignment and offset shall match a complete normalized member inventory; layout
+verified C declaration. Struct or union field name, count, order, type, qualifiers, size,
+alignment, offset и, для битового поля, битовое смещение и ширина shall match a complete
+normalized member inventory; layout
 assertions alone are insufficient because an omitted C member may occupy apparent
 R padding. For fieldless enum, underlying representation and every R-declared
 variant name and value shall correspond one-for-one to a complete normalized C
@@ -5656,10 +5682,10 @@ constants require target-generated ABI accessor support or an external C functio
 shim and are not `+@c_constant+` forms in R 0.1.
 
 [[R-FFI-0019]]
-*R-FFI-0019* — C bit-fields, flexible array members, packed/anonymous aggregate
-members, vector/complex types, variable-length arrays, complete unions, C `+_Atomic+`,
-variadic function-pointer types, `+restrict+` and `+volatile+`-qualified ABI types are
-not directly expressible. Library integration shall expose opaque type plus C
+*R-FFI-0019* — C безымянные битовые поля и поля нулевой ширины, flexible array members,
+anonymous aggregate members, vector/complex types, variable-length arrays, C `+_Atomic+`,
+variadic function-pointer types, `+restrict+` and `+volatile+`-qualified ABI types are not
+directly expressible. Library integration shall expose opaque type plus C
 wrapper/verified bridge or a separately standardized ABI type rather than guess
 layout or erase qualifier.
 
@@ -5717,10 +5743,22 @@ R borrow with shorter lifetime shall not be passed; owner transfer requires
 explicit release/adoption protocol.
 
 [[R-FFI-0027]]
-*R-FFI-0027* — Weak imports, symbol interposition promises, versioned symbol
-syntax and runtime `+dlopen+`/`+dlsym+` are not part of `+extern "C"+` R 0.1. Missing
-required symbol shall not be represented by null function pointer; optional APIs
-need a separately specified dynamic-loading wrapper.
+*R-FFI-0027* — Weak imports, symbol interposition promises and versioned symbol syntax are
+not part of `+extern "C"+` R 0.1. Отсутствующий символ связанного импорта не представляется
+нулевым указателем на функцию; библиотека, открываемая во время выполнения, — вид связи
+loadable из R-FFI-0063, чьи разрешённые функции допускают null по типу.
+
+[[R-FFI-0063]]
+*R-FFI-0063* — Блок `+extern "C"+`, вид `+@link+` которого `+"loadable"+`, называет разделяемую
+библиотеку, которую программа открывает сама во время работы (Library R-SLIB-DL-0002), и никогда
+— ту, что называет шаг связывания. Его функции проверяются по заголовкам блока и перечисляются в
+инвентаре символов поставщика, как каждый импорт (R-FFI-0036..R-FFI-0044), но вызов такой
+функции требует `+R-DIAG-FFI-003+`: программа получает её через `+std.dl::resolve+` (Library
+R-SLIB-DL-0004), результат которого — допускающий null сырой указатель на функцию C проверенного
+прототипа, null, когда открытая библиотека не определяет такого символа; вызов через него
+небезопасен (R-FUNC-0007). Объект или объект `+thread_local+` в таком блоке требует
+`+R-DIAG-FFI-003+`, как и resolve, второй аргумент которого не называет функцию такого блока, и
+resolve вариадической функции.
 
 === 23.4 External library binding and link manifest
 
@@ -5740,8 +5778,9 @@ HYPHEN-MINUS. Каждый сегмент начинается со строчн
 [[R-FFI-0029]]
 *R-FFI-0029* — Link kind shall be one of: `+"static"+` (archive incorporated at
 link), `+"dynamic"+` (load-time shared library plus any import library),
-`+"framework"+` (target framework exporting C ABI) or `+"system"+` (toolchain-owned
-stable system library). Unsupported kind/target combination requires diagnostic.
+`+"framework"+` (target framework exporting C ABI), `+"system"+` (toolchain-owned
+stable system library) или `+"loadable"+` (разделяемая библиотека, которую программа открывает
+во время выполнения, R-FFI-0063). Unsupported kind/target combination requires diagnostic.
 
 [[R-FFI-0030]]
 *R-FFI-0030* — Absence of `+@link+` selects exactly the target manifest's implicit
@@ -5872,8 +5911,43 @@ but generated output is reviewed/versioned source subject to the same rules.
 
 [[R-FFI-0006]]
 *R-FFI-0006* — `+@repr(C)+` struct shall match field order, size, alignment and
-padding of equivalent C17 struct on selected target. Bit-fields, flexible array
-members, anonymous members and packed layout are not expressible in R 0.1.
+padding of equivalent C17 struct on selected target, включая упакованные и выровненные формы
+R-FFI-0061 и битовые поля R-FFI-0062; объединение имеет размещение R-AGG-0014. Flexible array
+members and anonymous members are not expressible in R 0.1.
+
+[[R-FFI-0061]]
+*R-FFI-0061* — `+@repr(C, packed)+` у struct или union даёт каждому полю выравнивание один, как
+`+__attribute__((packed))+` целевой реализации C; `+@repr(C, align = N)+` поднимает выравнивание
+агрегата как минимум до N, как `+__attribute__((aligned(N)))+` агрегата; оба аргумента могут стоять
+вместе. Атрибут поля `+@align(N)+` агрегата `+@repr(C)+` поднимает выравнивание одного поля как
+минимум до N, как `+_Alignas(N)+`, в том числе в упакованном агрегате. N — целый литерал без
+суффикса, степень двойки от 1 до 4096. Размер — конец последнего поля, или размер наибольшего
+поля объединения, округлённый до выравнивания агрегата. У поля упакованного агрегата, чьё
+выравнивание там ниже выравнивания его типа, нет адреса: заимствование, срез, сырой адрес,
+получатель метода или `+core::field+` от него или от места внутри него, достигнутого без
+разыменования, требует `+R-DIAG-FFI-003+`; чтение и присваивание по значению допустимы.
+Упакованная структура не бывает generic и не принимает `+@derive+`. Interface schema 35
+записывает `+packed=true+` и `+align=N+` у агрегата и `+align=N+` у поля. Неверный, повторный или
+неуместный аргумент требует `+R-DIAG-FFI-003+`.
+
+[[R-FFI-0062]]
+*R-FFI-0062* — В struct `+@repr(C)+` запись `+T name : W;+` объявляет битовое поле: T — целый тип C
+ABI из R-FFI-0002 или `+c_bool+`, W — целый литерал без суффикса от одного до ширины T (один для
+`+c_bool+`). Битовые поля размещаются так, как их размещает C ABI цели (AAPCS64 для
+`+arm64-apple-darwin+`): битовое поле продолжается со следующего свободного бита, если не
+пересекает границу единицы хранения своего типа, выровненной по выравниванию этого типа, иначе
+начинается со следующей такой единицы; в упакованной структуре оно всегда продолжается со
+следующего свободного бита. Тип битового поля вносит своё выравнивание в структуру, как обычное
+поле. Чтение даёт значение T, расширенное нулями для беззнакового T и знаком для знакового.
+Запись значения, которое W битов знаковости T не представляют, вызывает панику
+`+invalid_conversion+` (R-EXPR-0016); вычисление времени трансляции, записывающее его, паникует
+(R-EXPR-0032), а такая константа в инициализаторе статического объекта требует
+`+R-DIAG-CONST-001+`. У битового поля нет адреса: заимствование, сырой адрес, получатель метода
+или `+core::field+` от него требует `+R-DIAG-FFI-003+`; инициализатор агрегата и присваивание
+задают его, как любое поле. Битовое поле в объединении или в struct без `+@repr(C)+`, другого
+типа, ширины или формы, с инициализатором или `+@align+`, а также generic или производная struct
+с битовым полем требуют `+R-DIAG-FFI-003+`. Interface schema 35 записывает `+bits=W+` у битового
+поля.
 
 [[R-FFI-0007]]
 *R-FFI-0007* — `+@link_name("symbol")+` selects imported C identifier;
@@ -5894,12 +5968,70 @@ Windows decoration guessing is performed.
 
 [[R-FFI-0046]]
 *R-FFI-0046* — R 0.1 exports C functions only. Exported global objects, TLS,
-linker aliases and symbol-version scripts require a later ABI extension or C shim.
+linker aliases and symbol-version scripts require a later ABI extension or C shim. Библиотека
+(R-FFI-0064) версионируется целиком текущей версией и версией совместимости, которые на
+`+arm64-apple-darwin+` являются версиями её образа Mach-O: версионированных символов у цели нет.
 
 [[R-FFI-0008]]
 *R-FFI-0008* — Exported function shall not let panic cross C boundary; runtime
 shall abort per R-ERR-0006. It shall not expose R-owned lifetime unless API uses
 paired raw handle functions with documented ownership contract.
+
+[[R-FFI-0064]]
+*R-FFI-0064* — Hosted-программа, транслированная как библиотека с именем NAME — идентификатором C
+из ASCII, который не начинается с подчёркивания и не является ключевым словом C17, — не имеет
+`+main+` (R-FUNC-0008): точки входа — её экспортируемые функции `+extern "C"+` (R-FFI-0007), а
+реализация определяет ещё две функции C, `+int32_t NAME_initialize(void)+` и
+`+void NAME_shutdown(void)+`. `+NAME_initialize+` выполняет инициализацию runtime и инициализацию
+статических объектов R по R-AM-0002 и возвращает 0; неудачная инициализация runtime возвращает
+её статус запуска (125, 126 или 127) и оставляет библиотеку неинициализированной, так что
+следующий вызов пробует снова; вызов после вернувшего 0 возвращает 1 и ничего не делает, в том
+числе после завершения. `+NAME_shutdown+` один раз после инициализации, вернувшей 0, выполняет
+quiescence drain по R-AM-0013, уничтожает статические объекты R в обратном порядке и завершает
+runtime; любой другой вызов ничего не делает. Завершённая библиотека не инициализируется снова,
+пока остаётся загруженной. Хост не вызывает ни одну из этих функций, пока идёт вызов другой, её
+самой или экспорта. Экспорт, в который вошли в любом потоке до инициализации, вернувшей 0, или
+после начала завершения, заканчивает процесс паникой `+contract_violation+` (R-ERR-0006).
+Экспортируемые символы разделяемой библиотеки — ровно экспорты и эти две функции
+(R-CMAP-0031); она несёт текущую версию и версию совместимости `+X[.Y[.Z]]+`, где X не больше
+65535, а Y и Z не больше 255, по умолчанию 1.0.0, и на `+arm64-apple-darwin+` install name
+`+@rpath/libNAME.dylib+`, если не задано другое. `+main+` в библиотеке требует
+`+R-DIAG-FLOW-001+`; экспорт с именем `+NAME_initialize+` или `+NAME_shutdown+` требует
+`+R-DIAG-FFI-003+`.
+
+[[R-FFI-0065]]
+*R-FFI-0065* — Заголовок C библиотеки объявляет её API для C17 и C++: защиту от повторного
+включения `+NAME_H+` с NAME в верхнем регистре; `+<stdbool.h>+`, `+<stddef.h>+`, `+<stdint.h>+` и
+заголовки блоков extern, чьи объявленные в C типы достигает API (R-FFI-0017); макрос
+`+NAME_VERSION+` с текущей версией, когда она задана; `+NAME_initialize+` и `+NAME_shutdown+`; каждый
+объявленный в R тип `+@repr(C)+`, которого достигает сигнатура экспорта — непосредственно, как
+член или за указателем, — под его именем R; и прототип каждого экспорта с именами его параметров
+R или без имён, когда одно из них было бы ключевым словом или идентификатором области файла
+заголовка. Перечисление без полей — typedef его базового типа C с одним макросом `+Enum_variant+`
+на каждый перечислитель (R-AGG-0005); struct или union — typedef и определение с упаковкой,
+выравниваниями и ширинами битовых полей по R-FFI-0061 и R-FFI-0062, стоящее после каждого типа,
+который он содержит по значению, и за которым следуют статические проверки его размера,
+выравнивания и смещения каждого члена, не являющегося битовым полем. Реализация транслирует
+заголовок для цели с параметрами генерируемого C, прежде чем записать его, так что проверяемая
+им раскладка — раскладка цели. API, заголовок которого объявил бы один идентификатор дважды (два
+типа одного имени из разных модулей либо экспорт или тип с именем макроса перечислителя),
+объявил бы ключевое слово C или C++, имя этих трёх стандартных заголовков или имя, которое
+резервирует реализация C (R-FFI-0057), либо объявил бы член с именем такого ключевого слова,
+требует `+R-DIAG-FFI-003+`.
+
+[[R-FFI-0066]]
+*R-FFI-0066* — Базовая линия ABI библиотеки — документ JSON схемы `+r-abi-baseline-0.1+`: имя
+библиотеки, тройка цели из манифеста цели, текущая версия и версия совместимости, имя и прототип
+C без имён параметров каждого экспорта и каждый объявленный в R тип по R-FFI-0065 с его видом,
+размером, выравниванием и упаковкой и его членами (имя, тип C, смещение в байтах, смещение в
+битах, ширина в битах, выравнивание) или перечислителями (имя, значение). Сборка библиотеки,
+проверяемая по базовой линии более ранней сборки, сравнивает версии совместимости по X, затем Y,
+затем Z: когда они равны, каждый экспорт базовой линии должен существовать с тем же прототипом и
+каждый её тип — с той же раскладкой, а экспорты и типы, которых базовая линия не перечисляет,
+можно добавлять; более высокая версия совместимости допускает любое изменение. Удалённый или
+изменённый экспорт или тип при той же версии совместимости, более низкая версия совместимости и
+документ, не являющийся базовой линией этой библиотеки и цели, требуют `+R-DIAG-FFI-004+`, который
+называет первый отличающийся экспорт или тип.
 
 === 23.7 Unsafe boundary and safe wrappers
 
@@ -6138,7 +6270,7 @@ strategy, atomic lock-free properties, C compiler/ABI identity, selected profile
 
 Эталонный компилятор понижает checked и async closures, замыкания внутри generic-функций
 и синхронные generic-представления с заимствованиями через обычные HIR, MIR и C17.
-Interface schema 34 записывает ресурсные контракты, значимость и отбрасываемость результата
+Interface schema 35 записывает ресурсные контракты, значимость и отбрасываемость результата
 и происхождение заимствований. Обычный результат и каждая checked error имеют отдельные границы регионов;
 вложенные projections консервативно используют соответствующее объединение.
 
@@ -6165,7 +6297,7 @@ mutex-based executor свободными от аллокаций и блоки�
 уровня модуля продолжают прибавляться после 32 проходов, требует `+R-DIAG-LIMIT-001+`.
 `+long double+` цели, формат которого не binary64, остаётся run-time значением, а
 dictionary с ключами с плавающей точкой или `+std.string::string+` не замораживается в
-образ программы. Interface schema 34 записывает значение экспортируемого объекта
+образ программы. Interface schema 35 записывает значение экспортируемого объекта
 каноническим термом его проверенного инициализатора, поэтому изменение экспортируемого
 const-значения (R-MOD-0005) меняет интерфейс.
 
@@ -6335,14 +6467,17 @@ json-default        = [ "-" ], ( integer-literal | floating-literal )
                     | character-literal | string-literal | "true" | "false"
                     | identifier | qualified-name ;
 
-aggregate-declaration = struct-declaration | enum-declaration | error-declaration ;
+aggregate-declaration = struct-declaration | union-declaration | enum-declaration
+                      | error-declaration ;
 error-declaration   = "error", identifier, [ ":", aggregate-type-name ], "{",
                       { field-declaration }, "}", ";"
                     | "error", identifier, [ ":", enum-underlying-type ], "{",
                       enum-variant, { ",", enum-variant }, [ "," ], "}", ";" ;
 struct-declaration  = "struct", identifier, "{", { field-declaration }, "}", ";" ;
+union-declaration   = "union", identifier, "{", field-declaration, { field-declaration },
+                      "}", ";" ;
 field-declaration   = { attribute }, [ "protected" ], type, identifier,
-                      [ "=", initializer ], ";" ;
+                      [ ":", integer-literal ], [ "=", initializer ], ";" ;
 
 enum-declaration    = "enum", identifier, [ ":", enum-underlying-type ], "{",
                       enum-variant, { ",", enum-variant }, [ "," ], "}", ";" ;
@@ -6418,7 +6553,7 @@ extern-block        = "extern", string-literal, "{", { c-declaration }, "}" ;
 c-declaration       = { attribute },
                       ( c-function-declaration | c-object-declaration
                       | c-constant-declaration | c-opaque-declaration
-                      | struct-declaration | enum-declaration ) ;
+                      | struct-declaration | union-declaration | enum-declaration ) ;
 c-function-declaration = [ "unsafe" ], type, identifier, "(",
                          c-parameter-list, ")", ";" ;
 c-object-declaration = [ "thread_local" ], type, identifier, ";" ;
@@ -7461,7 +7596,10 @@ represented by portable C17.
 Required visibility/rooting of every exported `+extern "C"+` symbol shall therefore be a
 verified target build/link-manifest property or be supplied by external shim; the
 backend shall not insert an unverified compiler attribute. Missing export in final
-typed symbol inventory requires `+R-DIAG-LINK-003+`.
+typed symbol inventory requires `+R-DIAG-LINK-003+`. Когда реализация сама связывает библиотеку
+(R-FFI-0064), она называет экспортируемыми символами связывания ровно экспорты,
+`+NAME_initialize+` и `+NAME_shutdown+`, а затем читает определённые внешние символы результата:
+отсутствие одного из них или экспорт любого другого символа требует `+R-DIAG-LINK-003+`.
 
 === F.7 Reference counting, threads, tasks и synchronization
 

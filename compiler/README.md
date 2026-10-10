@@ -1,7 +1,7 @@
 # R Frontend Parser 0.1
 
 This directory contains the bootstrap frontend for the normative English R Core
-Specification `0.1.0-draft.105`.
+Specification `0.1.0-draft.107`.
 
 ```text
 UTF-8 source
@@ -23,8 +23,9 @@ The current implementation covers whole-program module, name, visibility, and
 function-signature analysis; canonical scalar, atomic, aggregate, pointer, owner,
 container, option, checked-error, and task types; deterministic typed HIR; typed basic-block
 MIR; reproducible compiler-interface artifacts; and an executable LLVM backend
-(`compiler/llvm/`, *LLVM emitter*). Stage B6 removed the C17 program emitter; `compiler/codegen/`
-keeps only the C ABI bridge of C imports (*C imports*). The backend supports the declarations,
+(`compiler/llvm/`, *LLVM emitter*). Stage B6 removed the C17 program emitter and B9 the C bridge
+of imports: `compiler/codegen/` keeps the ABI verifier unit of C imports, which libclang parses in
+`compiler/clang/` (*C imports*, *C headers through libclang*). The backend supports the declarations,
 expressions, statements, checked operations, aggregate initialization, ownership transfers,
 and Standard Library calls used by the complete `examples/unzip` program.
 
@@ -237,17 +238,16 @@ an import or of a `raw fn` value sets the floating-point environment aside aroun
 (`r_runtime_c_call_begin`/`end`, R-FFI-0058), checks a nullable callee and every value that
 comes back (R-FFI-0056: a null non-null pointer, an enum value naming no variant, through
 `@repr(C)` fields and array elements), ends the process when a `never` import returns, and runs
-no unwind test, since a panic cannot cross back from C. An import with a reserved or typedef C
-spelling is reached through `r_bridge_<c>` and one that passes an R-declared struct through
-`r_bridge_<c>_<symbol>`, both written by `--emit=c17-bridge`; where such a bridge takes the
-struct by address, calls pass its memory and a raw fn value is a thunk with the import's own
-prototype. Every `extern "C"` definition is an R function plus an export wrapper under its C
+no unwind test, since a panic cannot cross back from C. Every import is called by its C name,
+whatever its header spells (a reserved identifier, a typedef or a tag of its types): a spelling is
+a matter of C declarations, which libclang verifies (*C headers through libclang*), not of the
+object. Every `extern "C"` definition is an R function plus an export wrapper under its C
 name that attaches the thread (`r_runtime_c_entry_begin`), checks its arguments, requires the
 stack bound of its body, calls it and ends the process on a panic that reaches the boundary
 (`r_runtime_unwind_terminate`). A call through a `raw fn` value is marked `r.stack.indirect`
 and names the callbacks it may reach as stack edges (R-FUNC-0007). An imported object is its
-extern global (thread-local where declared) or the address its bridge accessor returns, and
-reads through it are checked like call results. `std.c::link_available` reads a constant table
+extern global (thread-local where declared), and reads through it are checked like call
+results. `std.c::link_available` reads a constant table
 of the link manifest sorted by logical name.
 
 A function that switches the floating-point environment (a call of C or an export wrapper) is
@@ -331,8 +331,8 @@ headers the program is compiled against). The driver passes the same renames to
 NEW in place of OLD, and names its `main` NEW where OLD is `main`) and compiles the inline shims
 with them; the functions a wrapper renames to have external linkage, since the object calls
 them. The wrapper reaches the program only through `main`, its C exports and the entries it
-renames. Facts about the program come from the symbols of the object (`llvm-nm`): the bridges
-of native providers of the library (`r_bridge_r_std_*_native_*`), the absence of `setjmp` and
+renames. Facts about the program come from the symbols of the object (`llvm-nm`): the imports
+of native providers of the library (`r_std_*_native_*`), the absence of `setjmp` and
 `longjmp`, and the library dependencies of a `HASH_ONLY` program. `STACK_FRAME_LIMIT` bounds
 every frame through `!r.stack.frames`, and `STACK_REPORT` keeps the IR next to the executable as
 `<exe>.ll` for drivers that read the bounds (the calculator example checks its `@recursion`
@@ -599,7 +599,7 @@ destructor drops what is still initialized, as after a cancellation. A user drop
 panic is pending, as for the rest of a value whose earlier drop panicked, runs inside cleanup
 (`r_llvm_user_drop` in `glue.c`). A function compiled for an unwinding profile is never
 `noreturn`: a `never` function returns with its panic pending. The MIR dump writes the block as
-` panic=bbN` (interface schema 34).
+` panic=bbN` (interface schema 35).
 
 At the boundaries the task runtime completes a panicked task with its report. An `await` makes the
 panic pending again in the awaiting task (`R_RUNTIME_TASK_EXECUTION_AWAIT_PANICKED`); a report that
@@ -943,7 +943,7 @@ defaults, `@default` variants and fixed arrays build ordinary `aggregate_init`, 
 `array_init` nodes, so MIR and the backend need nothing new; omitted array elements and `core::take`
 (lowered as a replacement with the evaluated default) use the same builder. An optional JSON
 field without `default` maps a literal or `factory()` initializer to the existing JSON default
-(`r_json_default_from_initializer`). Interface schema 34 writes `initializer=true` on such fields
+(`r_json_default_from_initializer`). Interface schema 35 writes `initializer=true` on such fields
 and `default=true` on the default variant. See `tests/fixtures/codegen_field_defaults.r`,
 `codegen_async_field_defaults.r`, `codegen_json_field_defaults.r`,
 `codegen_field_defaults_failures.r` with its allocation-failure wrapper,
@@ -1002,7 +1002,7 @@ directly or through a supertrait, declares `Name`) and adds the capabilities and
 holder to the projection parameter, so the body may compare, copy or add its values.
 `r_generic_validate_projections` substitutes the projection with the arguments of every
 instantiation, dependent ones included as for ordinary constraints, and validates the result
-against the holder. Interface schema 34 writes the entries as
+against the holder. Interface schema 35 writes the entries as
 `associated_constraints=((associated="P"::"Name" constraints=(...)))`. Defect M19-1: the first
 holders had no name, and `--emit=hir` of any program importing `std.iter` read the intern table
 at index -1; the source-surface audit found it.
@@ -1185,7 +1185,7 @@ constants, folds body uses and layouts, and reuses the ordinary monomorphization
 No runtime arguments or metadata are added. Core draft.58 admits every integer type and `bool`
 as a constant-parameter type: a literal `CONSTANT_EXPR` keeps its type keyword in `flags` and
 its value bits in `length`, an argument of another type is rejected rather than converted,
-and the identity of an instance includes each constant's type. Interface schema 34 carries
+and the identity of an instance includes each constant's type. Interface schema 35 carries
 `constant_type=u32`, typed constant arguments such as `(constant u32 15)` and dependent
 formulas. The preflight `frame` example uses this for a bounded
 wire frame with checked `@noalloc @nonblocking` packing and checksum helpers.
@@ -1248,7 +1248,7 @@ available and injects them by AST node, repeating while new values appear. Docum
 (R-IDB-010): 4000000 steps and 64 MiB of values per evaluation, at most 32 discovery passes
 (a program whose module-scope values still grow after them gets `R-DIAG-LIMIT-001`),
 and at most 256 scalar elements substituted inside a function body (a module constant holds a
-larger value as one static initializer). Interface schema 34 marks
+larger value as one static initializer). Interface schema 35 marks
 evaluable exported functions `consteval=true` and records source dependencies whenever a
 translation-time value was computed. The [tables example](../examples/tables/README.md)
 builds a CRC-32 table, a frame size used by a module-scope struct, enumerator values and a
@@ -1308,7 +1308,7 @@ with an associated `T T::clone(const T* value)` hook. The glue builds the copy i
 storage, destroys every built component on failure and reports `std.alloc::alloc_error` through
 the call's carrier; a clone that cannot fail (Copy, shared owners, hooks without errors) has no
 checked effect. The static call graph adds an edge to every hook the copied structure reaches, so a
-hook that clones its own type through an owner is a recursive call chain. Interface schema 34
+hook that clones its own type through an owner is a recursive call chain. Interface schema 35
 records the `clone` hook and the `clone` constraint. See `tests/fixtures/codegen_swap_clone.r`,
 `codegen_async_swap_clone.r`, the failure sweep `codegen_clone_failures.r` and
 `examples/tournament`.
@@ -1345,7 +1345,7 @@ also in the clone of a generic body, is refused when that instance breaks them.
 parameters. The backend represents a function value as the `u32` symbol number of its target
 (`types.c`); a synchronous dispatcher switches on it with a direct call of each target
 (`dispatch.c`), and an async start selects and starts the target like a dyn dispatcher, with the
-arguments after the receiver. Interface schema 34 writes the type as
+arguments after the receiver. Interface schema 35 writes the type as
 `(fn parameters=(...) return=R throws=(...))` with `async=true`, `noalloc=true` and
 `nonblocking=true` when they apply.
 
@@ -1366,7 +1366,7 @@ an implicit `import std.cmp;` during the interface scan. `clone` generates nothi
 `clone_derived`, which makes the structural clone glue of `compiler/llvm/clone.c` apply.
 `compiler/semantic/derive.inc` records the capabilities, rejects unknown, repeated and misplaced
 derivations and errors with descendants, and checks that every field or payload proves the
-capability, naming the first that does not and silencing its region. Interface schema 34 writes
+capability, naming the first that does not and silencing its region. Interface schema 35 writes
 `derived=(...)` on the aggregate.
 
 The generated text relies on three general mechanisms. An implementation whose target is a
@@ -1391,7 +1391,7 @@ addresses are evaluated once in argument order; overlapping outputs are rejected
 
 Outputs currently require synchronous R functions and complete unborrowed value types.
 The mode survives generics, traits, callable constraints (`fn(out i32) -> void`),
-function items, opaque and module interface schema 34 (`(out i32)`). Async/C boundaries
+function items, opaque and module interface schema 35 (`(out i32)`). Async/C boundaries
 and variadic outputs are rejected. The existing ban on errors escaping `finally` remains.
 
 Each output write to local storage must be used before an overlapping overwrite or normal
@@ -1431,7 +1431,7 @@ to that method during monomorphization, keeping direct calls and the static call
 Creation and synchronous invocation add no heap allocation; async calls use normal task starts.
 Callable constraints may carry `@noalloc @nonblocking` after `fn` and an exact
 `throws(E1, E2)` suffix; async constraints start with `async fn`. Resource guarantees may
-be forgotten, never silently added. Interface schema 34 serializes mode, parameters, result,
+be forgotten, never silently added. Interface schema 35 serializes mode, parameters, result,
 resource promises, checked errors and async status and excludes synthetic traits.
 
 Stored non-void call and await results are significant by default. `@must_use` additionally
@@ -1589,8 +1589,8 @@ slice's region (`r_body_held_shared_slice_elements`, R-BORROW-0021), and a store
 parameter of a borrow of the storage it designates is rejected (R-BORROW-0019). Walks of the AST
 and HIR trees admit four times the parser's nesting limit (`r_frontend_tree_depth_limit`),
 because one level of source nesting becomes at most three tree levels; a limit exhausted after
-the parser is diagnosed `R-DIAG-LIMIT-001`. The ABI verifier and the C bridge spell declarations
-into buffers that grow on the context allocator.
+the parser is diagnosed `R-DIAG-LIMIT-001`. The ABI verifier spells declarations into buffers that
+grow on the context allocator.
 
 Core draft.67 (L15) extends the inferred contracts of R-BORROW-0009 without region syntax
 (interface schema 21). A borrow or slice input whose every contribution to an output is what
@@ -1716,7 +1716,7 @@ fields of the error are read through a shared borrow of the payload of variant z
 common initial sequence every member shares. `std.error::fault` names the family of the
 standard errors of the main boundary (`r_semantic_standard_fault_family`, built on first use),
 and `std.error::from_fault` is an erasure without a runtime symbol that the emitter expands from
-the main-boundary table (`r_llvm_fault_portable` in `hosted_main.c`). Interface schema 34 writes
+the main-boundary table (`r_llvm_fault_portable` in `hosted_main.c`). Interface schema 35 writes
 `parent=` and `(error_family T)`.
 
 Core draft.74 (L22) widens translation-time evaluation (`compiler/semantic/consteval.inc`,
@@ -2030,7 +2030,7 @@ that is not a constant stay `R_HIR_STANDARD_CALL` selections with one operand
 emitter writes at the call site a `switch` over the field index or the enumerator that
 assigns the `o::some` payload field by field from the constants, and gives none or the empty
 string to any other operand.
-Interface schema 34 writes `attribute_targets=(...)` on an attribute type and
+Interface schema 35 writes `attribute_targets=(...)` on an attribute type and
 `attributes=((type=A values=(...)) ...)` on each marked type, field and enumerator.
 `examples/arena` reads the table and key of its rows and the help of its commands this way.
 
@@ -2084,7 +2084,7 @@ analysis there treats such a field borrow as a borrow of the whole place. The co
 `fields_constraint`) is a pending trait constraint marked `fields`: it adds the trait to the
 field traits of the parameter, not to the parameter, and `r_generic_validate_against` checks at
 every application that the argument is a struct or tuple whose every field proves the trait.
-Interface schema 34 writes it as `(fields Trait)` in the constraint list. The fixtures are
+Interface schema 35 writes it as `(fields Trait)` in the constraint list. The fixtures are
 `codegen_field_access`, `codegen_generic_field_access` and their async twins; `examples/binary`
 writes and reads its packet header this way.
 
@@ -2164,7 +2164,7 @@ the normative diagnostic (unknown type names, `void` fields, aggregate attribute
 non-functions, non-numeric `as` operands, `await` into borrows, `drop` of views). Since Core
 draft.65 (L13) specification section 25.1 lists no valid form that the compiler rejects; the
 remaining slice sites (`tools/audit_semantic_slices.py`) and the not-lowerable branches of MIR,
-the LLVM emitter and the C ABI bridge (`tools/audit_lowering_rejections.py`, L14.2) are guards,
+the LLVM emitter and the ABI verifier (`tools/audit_lowering_rejections.py`, L14.2) are guards,
 and a valid program that reaches one is an implementation defect rather than a documented
 boundary. Direct users of the internal C API call `r_frontend_lower_mir` before
 `r_frontend_emit_llvm`, which requires it; the CLI performs this phase automatically. A successful
@@ -2274,13 +2274,9 @@ The other declaration forms of a block are:
   object. Every read or write needs an `unsafe` context (`R-DIAG-UNSAFE-001 [R-FFI-0023]`).
   The program declares the object as an external global of its C identifier (thread-local
   for `thread_local`) and names it directly; there is no mirrored storage. An object whose C
-  name is reserved (R-FFI-0057) or whose type names an R-declared struct is reached through
-  the accessor bridge instead: the bridge defines
-  `TYPE *r_bridge_<identifier>(void) { return &identifier; }` (with a cast to the bridge's
-  private spelling) and the program reads and writes through the address it returns,
-  so every access still reaches the actual object, and the calling thread's instance of a
-  `thread_local` one; its block needs `@header` (`R-DIAG-FFI-003 [R-FFI-0057]`). The
-  manifest inventory must list the object as `data`, or `tls` for `thread_local`
+  name is reserved (R-FFI-0057) or whose type names an R-declared struct is declared the same
+  way; its block needs `@header`, against which the object is verified
+  (`R-DIAG-FFI-003 [R-FFI-0057]`). The manifest inventory must list the object as `data`, or `tls` for `thread_local`
   (`R-DIAG-LINK-003`).
 - `R name(P fixed, ...);` (R-FFI-0005) imports a variadic function. At least one fixed
   parameter is required by the grammar, the call passes the fixed arguments exactly and every
@@ -2288,11 +2284,12 @@ The other declaration forms of a block are:
   `c_ulong`, `c_llong`, `c_ullong`, `c_double` or a raw pointer (`R-DIAG-FFI-002
   [R-FFI-0005]`). The raw function type of a variadic import carries an internal variadic
   flag (`variadic` in HIR and MIR dumps), so the program calls it as a variadic C function.
-- `@repr(C) @c_type(name = "CName", kind = "struct" | "enum" | "typedef") struct/enum ...`
-  (R-FFI-0017) declares a complete C aggregate whose member or enumerator inventory is proven
-  one-for-one against an ABI record (R-FFI-0040/0041). The block must name the record with
+- `@repr(C) @c_type(name = "CName", kind = "struct" | "union" | "enum" | "typedef")
+  struct/union/enum ...` (R-FFI-0017) declares a complete C aggregate whose member or
+  enumerator inventory is proven one-for-one against an ABI record (R-FFI-0040/0041), bit
+  offsets and widths of bit-fields included. The block must name the record with
   `@abi("record-name")`; a complete aggregate without `@abi`, without `@repr(C)` or `@c_type`,
-  with a `union` spelling or with a kind that disagrees with the declaration is rejected
+  or with a kind that disagrees with the declaration is rejected
   (`R-DIAG-FFI-004`, `R-DIAG-FFI-003`). Such aggregates may pass by value, by raw pointer and
   as imported objects. Struct fields keep their C member names; an enum lists every C
   enumerator with its value and names the compatible integer type as its underlying type.
@@ -2302,55 +2299,50 @@ The other declaration forms of a block are:
   the verifier's prototype assignment proves the header's enum compatible with it, and a
   value entering R is checked against its variants. A struct names no C type, so the C
   type at its position comes from the ABI record: the block needs `@abi`
-  (`R-DIAG-FFI-004 [R-FFI-0041]`) and `@header` for the bridge (`R-DIAG-FFI-003
+  (`R-DIAG-FFI-004 [R-FFI-0041]`) and `@header` for the verification (`R-DIAG-FFI-003
   [R-FFI-0057]`), and the record carries the import's C type as the compiler resolved it.
   The frontend walks the R prototype against that tree and proves each R-declared struct
   against the C struct at its position one-for-one: member count, names, order, member
   types (recursively for nested structs, pointers to structs, arrays and enums), offsets,
   size and alignment (`R-DIAG-FFI-004 [R-FFI-0041]`); a pointer or value where C has the
-  other, or a union or an inexpressible C struct at such a position, is `R-DIAG-FFI-004
-  [R-FFI-0021]`/`[R-FFI-0019]`. One R struct may correspond to different C structs in
-  different imports. Every such import goes through its own bridge function
-  `r_bridge_<identifier>_<symbol>`, which never defines the R struct: a struct passed by
-  value travels by address and is copied into the header's type with `memcpy` after the
-  layouts were proven identical, a result returns through a leading out-pointer, and a
-  pointer or C function pointer is cast to the header's spelling. The program reaches such
-  a bridge through a private thunk `r_thunk_<identifier>_<symbol>` with the import's own
-  prototype, so calls and `raw fn` values of the import stay unchanged. A variadic import
-  cannot pass an R-declared struct (`R-DIAG-FFI-003 [R-FFI-0057]`).
+  other, a struct where C has a union or the reverse, or an inexpressible C aggregate at such a
+  position, is `R-DIAG-FFI-004 [R-FFI-0021]`/`[R-FFI-0019]`. One R struct may correspond to different C structs in
+  different imports. The program calls such an import directly: the struct passes by value
+  as the C ABI classifies its members, whose layout the record proved identical to the C
+  struct's. A variadic import cannot pass an R-declared struct (`R-DIAG-FFI-003
+  [R-FFI-0057]`).
 
-The program uses the direct declaration path of R-CMAP-0017 for an ordinary identifier: an
-external function of the actual C identifier, classified by the C ABI of `compiler/llvm/abi.c`,
-and no definition. Pointers to opaque and complete C types are plain pointers there, a complete
-struct is classified by its verified members (R-CMAP-0018), and a complete enum is its compatible
-integer type, which ISO C makes compatible with the header's `enum CName`. An identifier in the
-C library or implementation reserved classes (`abs`, `strlen`, `mem*`, `r_runtime_*`, ...) is
-never declared by the program (R-FFI-0057); its block needs at least one `@header`, and the
-program calls the private `r_bridge_<identifier>` forwarding function of the bridge translation
-unit instead. The same bridge carries every import whose signature mentions an opaque type
-spelled by a header-owned `typedef` or by a reserved tag (R-CMAP-0018): the bridge declares it
-with a private incomplete tag `struct r_aNNNNNNNN` and converts each such pointer to the header
-spelling and back. A typedef-spelled complete struct has a private definition
-`struct r_aNNNNNNNN { ... }` in the bridge, which copies a by-value argument or result between
-the private and the header type with `memcpy` after the layouts were proven identical. A
-variadic import cannot use the bridge.
+The program declares every import as an external function or global of its actual C
+identifier, classified by the C ABI of `compiler/llvm/abi.c`, and defines none. Pointers to
+opaque and complete C types are plain pointers there, a complete struct is classified by its
+verified members (R-CMAP-0018), and a complete enum is its compatible integer type, which ISO C
+makes compatible with the header's `enum CName`. The declaration paths of R-CMAP-0017 and
+R-CMAP-0026 (a C declaration of the identifier, or a bridge translation unit that includes the
+header for a reserved identifier or a header-owned spelling) describe C source, which no part of
+a program is since B9: an identifier in the C library or implementation reserved classes (`abs`,
+`strlen`, `mem*`, `r_std_*`, ...), a typedef-spelled opaque type and a typedef-spelled complete
+struct need their `@header` for the verification only (R-FFI-0057), and a variadic import still
+may not use one of them. A header that binds an import to another symbol than its C name, as an
+asm label does (`realpath` is `realpath$DARWIN_EXTSN`), is `R-DIAG-FFI-004 [R-CMAP-0026]`: the
+program supplies a shim with the default C ABI instead. Annex F, which still describes the C
+paths, is rewritten in B15.
 
-ABI records are produced outside the compiler by `tools/generate_c_abi_record.py`:
-`--emit=abi-inventory` writes the request (schema `r-abi-inventory-request-0.1`) listing,
-per block that names an `@abi` record, its provider, feature-test definitions, headers, the
-C types to inventory and the `symbols` (functions and objects) whose type passes an
-R-declared struct; the tool compiles the headers with the target C compiler and derives the
-member inventory and layouts from `-ast-dump=json` and `-fdump-record-layouts-complete`,
-and the compatible integer type of each enumeration from `_Generic` static-assertion
-probes, without executing anything on the host (R-CMAP-0024). The C type of each requested
-symbol is read from a `__typeof__` probe of the tool's own translation unit and recorded as
-a type tree of pointers, functions, arrays, scalars and struct, union and enumeration
-leaves; every struct and enumeration reached from such a tree, directly or through members,
-is inventoried with a type tree per member and a layout read from `sizeof`, `_Alignof` and
-`offsetof` constant expressions, or marked `inexpressible` (bit-field, anonymous member,
-union, incomplete type). The resulting document (schema `r-abi-record-0.1`, one entry per
-record name with its compiler identity, options, definitions, header digests, `types[]`
-and `symbols[]`) is passed back with `--abi-record FILE`. Before emission the frontend proves every C-declared aggregate against
+ABI records are produced by the compiler: `--emit=abi-inventory` writes the request (schema
+`r-abi-inventory-request-0.1`) listing, per block that names an `@abi` record, its provider,
+feature-test definitions, headers, the C types to inventory and the `symbols` (functions and
+objects) whose type passes an R-declared struct, and `--emit=abi-record` (with `--sysroot`)
+writes the record of that request (`compiler/clang/record.c`). Blocks that name one record share
+it. libclang parses the block's headers with the provider's definitions for the target, and the
+record takes the member inventory, the offsets, sizes and alignments and the compatible integer
+type of each enumeration from the compiler's own declarations and record layouts, without
+executing anything on the host (R-CMAP-0024). The C type of each requested symbol is its
+declaration's type, recorded as a type tree of pointers, functions, arrays, scalars and struct,
+union and enumeration leaves; every struct and enumeration reached from such a tree, directly or
+through members, is inventoried with a type tree per member (a bit-field with its
+`bit_offset` and `bit_width`), or marked `inexpressible` (an unnamed or zero-width bit-field, an
+anonymous member, a nested aggregate, an incomplete type). The resulting document
+(schema `r-abi-record-0.1`, one entry per record name with its compiler identity, options,
+definitions, header digests, `types[]` and `symbols[]`) is passed back with `--abi-record FILE`. Before emission the frontend proves every C-declared aggregate against
 it: member count, names, order, type spelling (`type` or `desugared_type`), offsets, size and
 alignment for structs; the compatible integer type and every enumerator name and value for
 enums, rejecting aliased enumerators. Any disagreement, a missing record or a missing type
@@ -2380,7 +2372,8 @@ in `docs/ffi-conformance-g009.md`.
 
 Two more artifacts accompany the object of `--emit=object` for a program with imports:
 
-- `--emit=abi-verifier` writes the R-FFI-0042 verifier translation unit: the providers'
+- `--emit=abi-verifier` writes the R-FFI-0042 verifier translation unit, for inspection: the
+  unit libclang parses when the build verifies the headers (below). It holds the providers'
   `feature_test_definitions` as `#define` lines, every block's `@header` spellings as
   `#include <...>` in source order (a repeated spelling once), one
   `R (*const r_verify_NNNNNNNN)(P...) = identifier;` assignment per function import (with
@@ -2394,25 +2387,107 @@ Two more artifacts accompany the object of `--emit=object` for a program with im
   R-declared struct gets the same struct probes against the C struct its record position
   names, and the prototype spells that C struct at the position, so a record that names the
   wrong C type fails there. Opaque and complete types are spelled as
-  `struct CName`, `enum CName` or the typedef name. The build compiles
-  the unit for the target with the options of the project's C (`-std=c17 -pedantic-errors`
-  and the warnings as errors) and `-fsyntax-only`; a prototype,
-  object type, tag kind or constant that disagrees with the header fails to compile, which
-  is the `R-DIAG-FFI-004` outcome. The unit is never executed.
-- `--emit=c17-bridge` writes the R-CMAP-0026 bridge translation unit: the same macros and
-  headers, the private tags of typedef-spelled opaque types, and
-  `R r_bridge_<identifier>(P a0, ...) { return identifier(a0, ...); }` for every bridged
-  function import, deduplicated by identifier, with pointer casts between the private tag
-  and the header spelling where needed. The build compiles and links it with the program.
-  Both units contain only C ABI spellings and no R runtime header.
+  `struct CName`, `enum CName` or the typedef name. The unit is never executed.
+
+### C headers through libclang
+
+`r-front` links the libclang of the pinned toolchain (`compiler/clang`, B9.1); `--version` names
+its release, which shall be `toolchain.c_compiler_version`. With `--sysroot DIR`, the system root
+of the SDK the target manifest pins (`toolchain.sdk`, read from the SDK's `SDKSettings.json`), the
+compiler verifies the headers of a program's imports itself before it emits anything
+(`r_frontend_verify_headers`, R-FFI-0042): libclang parses the verifier translation unit from
+memory for the manifest's LLVM triple, with the resource directory of the linked libclang, the
+header roots given with `--abi-header-dir DIR` and the C17 options of the generated-C contract
+(`-std=c17 -pedantic-errors -Wall -Wextra -Werror -Wconversion -Wsign-conversion -Wshadow
+-Wstrict-prototypes -Wmissing-prototypes`). Before the probes of each import and each aggregate
+the writer marks the R declaration they prove, so a probe that does not compile is
+`R-DIAG-FFI-004` on that declaration, with the rule of the probe (`R-FFI-0021` for a prototype,
+`R-FFI-0022` an object, `R-FFI-0018` a constant, `R-FFI-0017`/`R-FFI-0041` an aggregate,
+`R-FFI-0042` a header that does not compile); libclang's own diagnostics follow the R
+diagnostics on standard error as the header report. The same parse checks the symbol of every
+import: one that the header binds to a decorated name is `R-DIAG-FFI-004 [R-CMAP-0026]`. A
+sysroot of another SDK, or a libclang of another release, is a usage error (exit 2). Without
+`--sysroot` the headers are not verified; the test drivers always pass it.
+
+The member types of a C-declared struct are compared with the ABI record as C types (B9-3): when
+the R spelling of a field differs from the header's (a typedef of a scalar such as
+`sqlite3_int64`, a struct spelled by its tag where R names its typedef), the field is matched
+against the member's type tree, which the record carries for every member: a scalar by the
+`canonical_c_type` of the target manifest (`target_c_abi_canonical.generated.inc`), a pointer by
+its pointee and the qualification of a `raw const T*`, a function pointer by its result and
+parameters, a struct or enumeration by the tag or typedef its `@c_type` names. The verifier's
+member probes prove the same in C.
+
+Bindings (`compiler/clang/bindings.c`, B9.2, R-FFI-0009). `--emit=bindings` reads a module with
+one empty `extern "C"` block that names its link provider, its headers and, for complete
+aggregates, an `@abi` record, and writes the module with the block filled with what the headers
+declare themselves (not what they include): the types, then integer constants, objects and
+functions, then a comment for each declaration left out and why. The output is source to review
+and keep under version control, not a build product; every function carries
+`@safety("NAME", "Not reviewed: the header states no contract")`. A struct or union is complete
+(`@repr(C)` with its members) when the block names an `@abi` record and every member has an R
+form, else opaque with the reason (a member R cannot name, a `volatile` pointee, an alignment
+that is no integer literal); a packed aggregate gets `@repr(C, packed)`, one whose alignment
+exceeds its members' `align = N`, a member written with `_Alignas(N)` or `aligned(N)` the field
+attribute `@align(N)`, and a bit-field its width. An enumeration whose values are unique becomes an R enum of its integer type
+when the block names a record, else its enumerators become `@c_constant`s of the type C gives
+them (`int`); object-like macros that expand to an integer constant are evaluated by libclang
+into `@c_constant`s. A type the headers name by a typedef is spelled by it, as members and
+prototypes spell it; an opaque type by its tag. Names that are R keywords get a suffix and
+`@link_name`, unnamed parameters `aN`. Left out are inline and static functions (R-FFI-0020),
+functions the header binds to a decorated symbol (R-CMAP-0026), functions without a prototype,
+variadic functions with a typedef or reserved spelling (R-FFI-0057), structs by value that are
+opaque, and types R has no form for. `tests/check_bindings.cmake` compares the bindings of
+`tests/fixtures/bindings_cases.r` and `bindings_probe.r` with `tests/golden/` and verifies them
+against their headers through `--emit=abi-record` and the libclang verification; the bindings of
+SQLite's `sqlite3.h` (299 functions, 504 constants) verify the same way.
+
+C layouts (B9.3, R-AGG-0014, R-FFI-0061, R-FFI-0062). A `union`, a packed or aligned aggregate
+(`@repr(C, packed)`, `@repr(C, align = N)`, a field's `@align(N)`) and a struct with bit-fields
+(`T name : W;`) are laid out by one function, `r_semantic_aggregate_layout`
+(`compiler/semantic/generic_constants.inc`), which every other layout consults: the semantic
+sizes, the emitter's `r_llvm_layout` and `r_llvm_field_offset` for an aggregate marked
+`c_layout`, the verifier's `offsetof` probes and the comparison with the ABI record. It counts
+positions in bits and allocates bit-fields as AAPCS64 does (a bit-field that would cross a unit
+of its type, aligned at the type's alignment, starts at the next one; a packed struct packs them
+tightly), so `tests/fixtures/codegen_c_layouts.r` compares sizes, offsets and bytes with clang's
+for the same declarations. A field without an address (`r_semantic_field_without_address`: a
+bit-field, or a packed field below its type's alignment) is rejected as the operand of a borrow
+or slice when the HIR node is appended (`r_body_reject_unaddressed_place`), including places
+inside it reached without a dereference; JSON conversion and `core::field` reject such
+aggregates and unions as a whole. The emitter reads and writes a bit-field through the bytes
+that hold its bits as one little-endian integer (`r_llvm_load_bits`, `r_llvm_store_bits`, never
+touching bytes of other fields), checks a stored value against the field's range
+(`invalid_conversion`), and gives an access through a path with an under-aligned packed field
+the alignment one; members of a C layout are never built in place, so a union initializer
+stores the zero of its largest field before the field it names. Static images insert bit-field
+values at their bits; an out-of-range constant there is `R-DIAG-CONST-001 [R-FFI-0062]`, and a
+translation-time evaluation that stores one panics. A union field access needs `unsafe`
+(`R-DIAG-UNSAFE-001 [R-AGG-0014]`); `@derive` skips packed structs and structs with bit-fields,
+which the semantic pass then rejects. Interface schema 35 writes `kind=union
+layout=overlapping`, `packed=true`, `align=N` and a field's `bits=W` and `align=N`; DWARF
+describes unions and bit-field members. `tests/check_c_layouts.py` checks every rejection.
+
+Libraries opened at run time (B9.3, R-FFI-0063, Library R-SLIB-DL-0001..0004). A block with
+`@link(kind = "loadable")` names a library the link step never sees: its imports are verified
+against the headers and listed in the provider's inventory like others, but a direct call is
+`R-DIAG-FFI-003 [R-FFI-0063]` and so is an object. `std.dl` (`library/r/std/dl.r` over the
+native provider `std.dl.native`, `dlopen`/`dlsym`, libraries never closed) opens the library,
+and `std.dl::resolve(&library, import)` (`compiler/semantic/dynamic_loading.inc`) lowers to a
+call of `std.dl::symbol(library, "c_name")` whose `raw void*?` the compiler converts to the
+nullable `raw fn?(...)` of the import's verified prototype, a conversion R source cannot write
+(R-EXPR-0019). `tests/check_dynamic_loading.py` checks the rejections; the fixtures
+`codegen_dynamic_loading.r`, `codegen_async_dynamic_loading.r`, `library/r/tests/dl.r` and the
+`loadable` command of `examples/c_bridge` open the system library and call through resolved
+functions.
 
 Header roots and include paths stay in the build manifest (R-FFI-0032): the test driver
 passes `-I` for the provider's `header_roots`. Providers that are used together shall not
 disagree on one feature-test macro (`R-DIAG-FFI-004 [R-FFI-0043]`).
 
 Linking is resolved before emission by `r_frontend_resolve_links`, which the CLI runs for
-`llvm-ir`, `object`, `link-plan`, `bundle`, `interface`, `abi-verifier`, `c17-bridge` and
-`abi-inventory`. The link manifest names each provider with
+`llvm-ir`, `object`, `link-plan`, `bundle`, `interface`, `abi-verifier`, `abi-inventory` and
+`abi-record`. The link manifest names each provider with
 `logical_name`, `kind`, `available`, an optional `implicit_c_runtime` flag for blocks
 without `@link`, and a `symbols` inventory of `{c_identifier, kind, binding}` objects.
 Unknown providers, unavailable artifacts, kind disagreement and symbols missing from the
@@ -2422,16 +2497,16 @@ constant selects its provider for header evidence only. The executable fixtures
 `codegen_ffi_import`, `codegen_async_ffi_import`, `codegen_ffi_bridge`, `codegen_ffi_types`,
 `codegen_async_ffi_types` and `codegen_ffi_records` link `tests/fixtures/ffi/probe_library.c`;
 the last generates its ABI record at test time (`tests/abi_record_support.cmake`) and passes
-a tag struct, a typedef struct through the bridge, an unsigned and a signed enum and a struct
+a tag struct, a typedef struct, an unsigned and a signed enum and a struct
 object; the third reaches `abs` and
-`strlen` through the bridge, and the last exercises an opaque struct tag, a typedef-spelled
-opaque type through the bridge, four verified constants (including a negative macro, an
+`strlen`, and the last exercises an opaque struct tag, a typedef-spelled
+opaque type, four verified constants (including a negative macro, an
 unsigned macro and an enumerator), a mutable, a `const` and a `thread_local` object and a
 variadic call. `tests/check_abi_verifier.cmake` proves that a mismatched prototype
 (`ffi_verify_mismatch`), a wrong tag kind (`ffi_verify_opaque_mismatch`), a wrong object
 type (`ffi_verify_object_mismatch`) and a wrong constant value or type
-(`ffi_verify_constant_mismatch`, `ffi_verify_constant_type_mismatch`) are rejected by the
-verifier, and that a record whose claims disagree with the header (`ffi_verify_record_claim`)
+(`ffi_verify_constant_mismatch`, `ffi_verify_constant_type_mismatch`) and a decorated symbol
+(`ffi_verify_decorated`) are rejected by the verification, and that a record whose claims disagree with the header (`ffi_verify_record_claim`)
 fails its layout probes, as does a record that names the wrong C struct at the position of an
 R-declared struct (`ffi_verify_r_struct_claim`). The `r_frontend_abi_record_*` tests reject an
 omitted member, a wrong member type, a missing enumerator and a wrong enumeration
@@ -2443,6 +2518,88 @@ as results, inside callbacks and as imported objects (including a reserved-name 
 the `*_ingress` fixtures panic on an invalid enum result, on an invalid enum and a null
 pointer member of a struct result, on an invalid imported enum object (also in an async
 frame) and, at the C-origin entry, on an invalid enum member of a struct argument.
+
+### Libraries with an exported ABI
+
+`--library NAME` (B10, R-FFI-0064) translates the program as a library: NAME is an ASCII C
+identifier without a leading underscore and no C keyword, the program has no `main`
+(`R-DIAG-FLOW-001 [R-FUNC-0008]`) and its `extern "C"` definitions are its API. The emitter lowers
+every export instead of the functions a `main` reaches and writes two more C functions
+(`r_llvm_emit_library_entries`, `compiler/llvm/hosted_main.c`) around an internal state word
+(0 new, 1 running, 2 shut down, changed by compare-and-swap):
+
+- `int32_t NAME_initialize(void)` takes the word from 0 to 1, initializes the stack of the calling
+  thread, starts the runtime with no arguments (`r_runtime_hosted_start(0, NULL)`), installs the
+  thread-local cleanup and initializes the static images, and returns 0; a refused start returns
+  its status (125, 126, 127) and puts the word back to 0; a call that finds the word taken
+  returns 1.
+- `void NAME_shutdown(void)` takes the word from 1 to 2 and then drains the tasks, drops the
+  static objects in reverse order, drains again and ends the runtime
+  (`r_runtime_hosted_finish(0)`), which leaves the process running; any other call returns.
+  Static images are not restored, so a library is initialized once per load.
+
+An export entered before the start or after the shutdown fails to attach its thread with
+`R_RUNTIME_THREAD_ATTACH_RUNTIME_STOPPING`, and `r_runtime_c_entry_begin` reports the
+`contract_violation` panic instead of a bare abort. An export named `NAME_initialize` or
+`NAME_shutdown` is `R-DIAG-FFI-003 [R-FFI-0064]`.
+
+`--emit=export-list` writes the exported symbols with the target's global prefix
+(`_NAME_initialize`, `_NAME_shutdown`, then the exports in declaration order).
+`--emit=shared-library --output FILE --linker CC --sysroot DIR [--link-input ARG]...
+[--library-version X.Y.Z] [--compatibility-version X.Y.Z] [--install-name NAME]` links the library
+itself (`r_frontend_link_library`, `compiler/source/shared_library.c`): the object and the export
+list are written to a temporary directory, the C compiler driver of the toolchain — accepted only when its
+SHA-256 is `toolchain.c_compiler_build` — links them with `-dynamiclib`,
+`-Wl,-exported_symbols_list`, `-Wl,-dead_strip`, the install name (`@rpath/libNAME.dylib` by
+default), the current and compatibility versions (1.0.0 by default; X at most 65535, Y and Z at
+most 255) and the flags of `--sanitize`, `--coverage` and `--profile-generate`, and then the
+toolchain's `llvm-nm` reads the defined external symbols of the result: a missing export or any
+other exported symbol is `R-DIAG-LINK-003 [R-CMAP-0031]`. The link inputs are the archives and
+objects of the runtime and the library and options of the driver's link (the address-sanitizer
+presets add `-fsanitize=undefined` for the checks their C carries). Darwin has no versioned
+symbols; the library's versions are those of its Mach-O image (R-FFI-0046).
+
+`--emit=c-header --sysroot DIR` (R-FFI-0065, `compiler/codegen/c_library_header.inc`, which
+uses the C speller of the ABI verifier with R-declared types named by their R names) writes the
+header for C17 and C++: the guard `NAME_H`, `<stdbool.h>`, `<stddef.h>`, `<stdint.h>` and the
+headers of the extern blocks whose complete or opaque C types the API reaches (B10-2), `NAME_VERSION` from
+`--library-version`, the two functions, then the R-declared `@repr(C)` types the signatures reach
+(by value, as members or behind pointers): enums as a typedef of the underlying type with a macro
+`Enum_variant` per enumerator, then a forward typedef of every struct and union, then their
+definitions — a type after every type it holds by value, one reached only through a pointer after
+the walk that reached it — with `__attribute__((packed))`/`aligned(N)`, `NAME_ALIGNAS(N)` members
+and bit-field widths, each followed by `NAME_STATIC_ASSERT` checks of its size, its alignment
+and every non-bit-field offset as `r_semantic_aggregate_layout` computes them (the macros spell
+`_Static_assert`/`_Alignof`/`_Alignas` in C and `static_assert`/`alignof`/`alignas` in C++), and
+finally the export prototypes with their R parameter names, or without names when one would be a
+keyword or a file-scope name of the header. Before writing it, `r_frontend_emit_c_header`
+(`compiler/clang/headers.c`) parses the header with the in-process libclang and the options of
+the generated-C contract; a failure is `R-DIAG-FFI-003 [R-FFI-0065]` with libclang's report. An
+API the header cannot declare — two types of one name, a name that collides with an enumerator
+macro or the library's own names, a C or C++ keyword or reserved name, a member named by a
+keyword — is `R-DIAG-FFI-003 [R-FFI-0065]` before anything is written
+(`r_frontend_library_api_problem`). R-FFI-0004 keeps every other type out of an export's
+signature; a handle of an R type passes as `void *` (R-FFI-0008).
+
+`--emit=abi-baseline` (R-FFI-0066) writes the baseline, schema `r-abi-baseline-0.1`: library,
+target (`arm64-apple-darwin`), version, compatibility version, the exports with their prototypes
+without parameter names and the types with kind, size, alignment, packing and members (C type,
+offset, bit offset, bit width, alignment) or enumerator values. `--abi-baseline FILE` with any
+library emit compares the build with an earlier baseline before anything is emitted
+(`r_frontend_check_abi_baseline`; `r_abi_baseline_compare` in `compiler/source/abi_record.c`
+parses both with the record parser): with the same compatibility version every export and type
+of the baseline must exist and compare equal, new ones may be added; a higher compatibility
+version admits every change; a lower one, a removed or changed export or type and a document
+of another library or target are `R-DIAG-FFI-004 [R-FFI-0066]` naming the first difference.
+
+`tests/check_shared_library.py` (test `r_frontend_shared_library`, in every preset with the
+preset's sanitizer) builds `tests/fixtures/library_geometry.r`: the export list, the header (also
+compiled as C++17), the shared library with its versions and exactly its symbols, the C program
+`tests/fixtures/ffi/library_geometry_host.c` against the header — structs, a union, an enum, bit-
+fields, a nested homogeneous aggregate, a pointer cycle, a packed struct inside an aligned one, a
+`void *` handle, five threads — and a variant that opens the library with `dlopen`, the
+`contract_violation` of an export called before the initialization and after the shutdown, every
+baseline verdict and the rejections of the library options and of APIs C cannot declare.
 
 ## Build and test
 
@@ -2496,8 +2653,7 @@ and with its entry stack bounds already computed on the optimized code (*LLVM em
 bounds; *Optimization*); `r-front` does not call the linker itself yet (B10). The object
 is linked as `tests/check_codegen_program.cmake` links it: with the runtime, the inline shims
 (`r_runtime_inline_shims`), the `r_core` and `r_std_*` archives, the archives of the native
-providers it imports and, for a program whose C imports need it, the bridge unit of
-`--emit=c17-bridge`. `--emit=llvm-ir` writes the same module as text for inspection and for the
+providers it imports. `--emit=llvm-ir` writes the same module as text for inspection and for the
 checks that read its `!r.stack.*` metadata.
 
 Conditional expressions (`condition ? a : b`) lower to a typed HIR value and MIR

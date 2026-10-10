@@ -194,6 +194,51 @@ cleanup:
 static bool r_llvm_static_fill(
     RLlvmEmitter *emitter, RLlvmStaticImage *image, uint32_t offset, RHirNodeId id, uint32_t depth);
 
+/* R-FFI-0062 (B9.3): a bit-field of a static value: the initializer's value, evaluated into an
+   image of its own, inserted at its bits. A value outside the field's range does not reach here:
+   the translation-time evaluation of the initializer rejects it. */
+static bool r_llvm_static_bits(RLlvmEmitter *emitter,
+                               RLlvmStaticImage *image,
+                               uint32_t offset,
+                               const RSemanticFieldPlace *place,
+                               RHirNodeId id,
+                               uint32_t depth) {
+    const RHirNode *node = r_llvm_hir(emitter, id);
+    RLlvmStaticImage value;
+    uint32_t size = 0U;
+    uint32_t align = 0U;
+    uint64_t bits = 0U;
+    uint64_t position;
+    uint32_t index;
+    bool filled;
+
+    if ((node == NULL) || !r_llvm_layout(emitter, node->type, &size, &align) || (size > 8U) ||
+        !r_llvm_image_create(emitter, &value, size)) {
+        return r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+    }
+    filled = r_llvm_static_fill(emitter, &value, 0U, id, depth);
+    for (index = 0U; filled && (index < size); ++index) {
+        bits |= (uint64_t)value.bytes[index] << (8U * index);
+    }
+    r_llvm_image_free(emitter, &value);
+    if (!filled) {
+        return false;
+    }
+    position = ((uint64_t)offset + place->offset) * 8U + place->bit_offset;
+    if ((position + place->bit_width) > (uint64_t)image->size * 8U) {
+        return r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+    }
+    for (index = 0U; index < place->bit_width; ++index, ++position) {
+        const uint8_t mask = (uint8_t)(1U << (position % 8U));
+        if (((bits >> index) & 1U) != 0U) {
+            image->bytes[position / 8U] |= mask;
+        } else {
+            image->bytes[position / 8U] &= (uint8_t)~mask;
+        }
+    }
+    return true;
+}
+
 /* A program string as { data, length } at the offset; the data of an empty string is not null. */
 static bool r_llvm_image_string(RLlvmEmitter *emitter,
                                 RLlvmStaticImage *image,
@@ -1201,10 +1246,12 @@ static bool r_llvm_static_fill(RLlvmEmitter *emitter,
         for (index = 0U; index < node->child_count; ++index) {
             const RHirNodeId child = r_llvm_hir_child(emitter, node, index);
             const RHirNode *field = r_llvm_hir(emitter, child);
-            uint32_t field_offset = 0U;
-            if ((field == NULL) ||
-                !r_llvm_field_offset(emitter, field->aggregate_member, &field_offset) ||
-                !r_llvm_static_fill(emitter, image, offset + field_offset, child, depth + 1U)) {
+            RSemanticFieldPlace place;
+            if ((field == NULL) || !r_llvm_field_place(emitter, field->aggregate_member, &place) ||
+                ((place.bit_width != 0U)
+                     ? !r_llvm_static_bits(emitter, image, offset, &place, child, depth + 1U)
+                     : !r_llvm_static_fill(
+                           emitter, image, offset + (uint32_t)place.offset, child, depth + 1U))) {
                 return false;
             }
         }

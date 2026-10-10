@@ -1916,6 +1916,8 @@ static int test_borrowed_random_shared_write_success_and_fd_ownership(void) {
 
 static int test_borrowed_random_shared_write_cancel(void) {
     const size_t payload_size = 32U * 1024U * 1024U;
+    bool cancelled = false;
+    bool expired = false;
     char path[] = "/tmp/r-dispatch-borrowed-cancel-XXXXXX";
     RRuntimeAllocator allocator;
     RRuntimeDarwinIoPrepareResult preparation;
@@ -1939,15 +1941,25 @@ static int test_borrowed_random_shared_write_cancel(void) {
     CHECK(cleanup.semaphore != NULL);
     atomic_init(&cleanup.call_count, 0U);
     atomic_init(&cleanup.native_error, 0);
+    /* B10-3: the transfer is held before its system call, so the cancellation is recorded before
+       it could enter pwrite; an entered call is not preempted and would complete the whole
+       payload (R-SLIB-ASYNC-0019). */
+    r_runtime_darwin_io_testing_hold_file_transfers();
     submission = r_runtime_darwin_io_prepared_bind_activate_borrowed_random_shared_write(
         &preparation.prepared, descriptor, observe_handle_cleanup, &cleanup);
+    if (submission.status == R_RUNTIME_DARWIN_IO_START_OK) {
+        r_runtime_darwin_io_testing_wait_for_held_file_transfers(1U);
+        cancelled = r_runtime_darwin_io_request_cancel(submission.request);
+        expired = r_runtime_darwin_io_request_deadline_expired(submission.request);
+    }
+    r_runtime_darwin_io_testing_release_file_transfers();
     CHECK(submission.status == R_RUNTIME_DARWIN_IO_START_OK);
-    CHECK(r_runtime_darwin_io_request_cancel(submission.request));
-    CHECK(!r_runtime_darwin_io_request_deadline_expired(submission.request));
+    CHECK(cancelled);
+    CHECK(!expired);
     result = r_runtime_darwin_io_request_wait(submission.request);
     CHECK(result.terminal_event == R_RUNTIME_DARWIN_IO_TERMINAL_CANCELLED);
     CHECK(result.native_error == 0);
-    CHECK(result.bytes_transferred < payload_size);
+    CHECK(result.bytes_transferred == 0U);
     CHECK(result.bytes_remaining == payload_size - result.bytes_transferred);
     CHECK(result.cleanup_acknowledged);
     r_runtime_darwin_io_request_release(submission.request);
@@ -1965,6 +1977,8 @@ static int test_borrowed_random_shared_write_cancel(void) {
 
 static int test_borrowed_random_shared_write_deadline(void) {
     const size_t payload_size = 32U * 1024U * 1024U;
+    bool cancelled = false;
+    bool expired = false;
     char path[] = "/tmp/r-dispatch-borrowed-deadline-XXXXXX";
     RRuntimeAllocator allocator;
     RRuntimeDarwinIoPrepareResult preparation;
@@ -1988,15 +2002,23 @@ static int test_borrowed_random_shared_write_deadline(void) {
     CHECK(cleanup.semaphore != NULL);
     atomic_init(&cleanup.call_count, 0U);
     atomic_init(&cleanup.native_error, 0);
+    /* B10-3: held before its system call, as in the cancellation above. */
+    r_runtime_darwin_io_testing_hold_file_transfers();
     submission = r_runtime_darwin_io_prepared_bind_activate_borrowed_random_shared_write(
         &preparation.prepared, descriptor, observe_handle_cleanup, &cleanup);
+    if (submission.status == R_RUNTIME_DARWIN_IO_START_OK) {
+        r_runtime_darwin_io_testing_wait_for_held_file_transfers(1U);
+        expired = r_runtime_darwin_io_request_deadline_expired(submission.request);
+        cancelled = r_runtime_darwin_io_request_cancel(submission.request);
+    }
+    r_runtime_darwin_io_testing_release_file_transfers();
     CHECK(submission.status == R_RUNTIME_DARWIN_IO_START_OK);
-    CHECK(r_runtime_darwin_io_request_deadline_expired(submission.request));
-    CHECK(!r_runtime_darwin_io_request_cancel(submission.request));
+    CHECK(expired);
+    CHECK(!cancelled);
     result = r_runtime_darwin_io_request_wait(submission.request);
     CHECK(result.terminal_event == R_RUNTIME_DARWIN_IO_TERMINAL_TIMED_OUT);
     CHECK(result.native_error == 0);
-    CHECK(result.bytes_transferred < payload_size);
+    CHECK(result.bytes_transferred == 0U);
     CHECK(result.bytes_remaining == payload_size - result.bytes_transferred);
     CHECK(result.cleanup_acknowledged);
     r_runtime_darwin_io_request_release(submission.request);

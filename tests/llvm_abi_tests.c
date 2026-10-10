@@ -175,8 +175,60 @@ static void r_abi_test_surface_functions(void) {
     R_ABI_CHECK(mismatches == 0U);
 }
 
+/* B10-1: nested aggregates. segment {point from, to} (point {double x, y}) is a homogeneous
+   aggregate of four doubles, passed in d0-d3 as clang passes it; {point, float} is not one. */
+static const RLlvmSurfaceType r_abi_test_types[] = {
+    {R_LLVM_SURFACE_FLOAT, 0U, 8U, 8U, 0U, 0U, 0U, "double"},
+    {R_LLVM_SURFACE_STRUCT, 0U, 16U, 8U, 0U, 2U, 0U, "point"},
+    {R_LLVM_SURFACE_STRUCT, 0U, 32U, 8U, 0U, 2U, 2U, "segment"},
+    {R_LLVM_SURFACE_FLOAT, 0U, 4U, 4U, 0U, 0U, 0U, "float"},
+    {R_LLVM_SURFACE_STRUCT, 0U, 24U, 8U, 0U, 2U, 4U, "mixed"},
+};
+static const RLlvmSurfaceField r_abi_test_fields[] = {
+    {"x", 0U, 1U},
+    {"y", 8U, 1U},
+    {"from", 0U, 2U},
+    {"to", 16U, 2U},
+    {"point", 0U, 2U},
+    {"weight", 16U, 4U},
+};
+
+static const RLlvmSurfaceType *r_abi_test_type(const void *context, uint32_t index) {
+    (void)context;
+    return ((index >= 1U) && (index <= sizeof(r_abi_test_types) / sizeof(r_abi_test_types[0])))
+               ? &r_abi_test_types[index - 1U]
+               : NULL;
+}
+
+static const RLlvmSurfaceField *r_abi_test_field(const void *context, uint32_t index) {
+    (void)context;
+    return (index < sizeof(r_abi_test_fields) / sizeof(r_abi_test_fields[0]))
+               ? &r_abi_test_fields[index]
+               : NULL;
+}
+
+static void r_abi_test_nested_homogeneous(void) {
+    RLlvmTypeTable table;
+    RLlvmAbiValue value;
+
+    table.type = r_abi_test_type;
+    table.field = r_abi_test_field;
+    table.parameter = NULL;
+    table.context = NULL;
+    R_ABI_CHECK(r_llvm_abi_classify_argument(&table, 2U, &value) && value.homogeneous &&
+                (value.count == 2U) && (value.element == R_LLVM_ABI_ELEMENT_DOUBLE));
+    R_ABI_CHECK(r_llvm_abi_classify_argument(&table, 3U, &value) && value.homogeneous &&
+                (value.abi_class == R_LLVM_ABI_COERCE) && (value.count == 4U) &&
+                (value.element == R_LLVM_ABI_ELEMENT_DOUBLE));
+    R_ABI_CHECK(r_llvm_abi_classify_result(&table, 3U, &value) && value.homogeneous &&
+                (value.count == 4U));
+    R_ABI_CHECK(r_llvm_abi_classify_argument(&table, 5U, &value) && !value.homogeneous &&
+                (value.abi_class == R_LLVM_ABI_INDIRECT));
+}
+
 int main(void) {
     r_abi_test_surface_functions();
+    r_abi_test_nested_homogeneous();
     if (failures != 0) {
         (void)fprintf(stderr, "%d C ABI checks failed\n", failures);
         return 1;

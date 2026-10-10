@@ -15,7 +15,7 @@
 |Поле |Значение
 |Документ |R Standard Library Specification
 |Версия языка |0.1
-|Редакция документа |0.1.0-draft.74
+|Редакция документа |0.1.0-draft.75
 |Статус |Перевод нормативного черновика; не является стабильным стандартом R 1.0
 |Язык документа |Русский перевод; ключевые нормативные термины приведены на английском
 |Требуемый стандарт языка |R Core Language Specification 0.1
@@ -4521,7 +4521,7 @@ implementation предоставляет на C, может иметь R-час
 `+std.slice+` и `+std.text+` (`+freestanding+`), `+std.iter+`, `+std.set+`, `+std.deque+`,
 `+std.heap+`, `+std.sorted+`, `+std.deflate+`, `+std.xml+`, `+std.arena+` и R-часть `+std.alloc+` (`+allocation+`),
 `+std.regex+`, `+std.encoding+`, `+std.uuid+`, `+std.args+`, `+std.url+`, `+std.mime+`, `+std.cbor+`,
-`+std.crypto+`, `+std.cose+`, `+std.jwt+` и R-части `+std.bytes+`,
+`+std.crypto+`, `+std.cose+`, `+std.jwt+`, `+std.dl+` и R-части `+std.bytes+`,
 `+std.string+`, `+std.hash+`, `+std.random+`, `+std.test+` и `+std.time+` (`+hosted+`), а также
 `+std.service+`, `+std.stream+`, `+std.bufio+`, `+std.console+`, `+std.log+`, `+std.config+`,
 `+std.tls+`, `+std.http+`, `+std.dns+`, `+std.websocket+`, `+std.jsonrpc+`, `+std.mcp+`,
@@ -8349,6 +8349,40 @@ API отверг токен из кэша. Запросы одного исто�
 раз, а сменившийся токен обновления подхватывается; источник сервисного аккаунта каждый раз
 подписывает новое утверждение для своей области и субъекта.
 
+=== 21.35 Разделяемые библиотеки, открываемые во время выполнения: `+std.dl+`
+
+[[R-SLIB-DL-0001]]
+*R-SLIB-DL-0001* — `+std.dl+` — стандартный модуль на R в профиле `+hosted+` поверх нативного
+поставщика `+std.dl.native+` (R-SLIB-RSRC-0003): программа открывает разделяемую библиотеку во
+время работы и получает из неё функции блока `+extern "C"+`, вид связи которого `+"loadable"+`
+(Core R-FFI-0063). Открытая библиотека остаётся загруженной до конца программы, поэтому каждый
+полученный из неё адрес остаётся действительным. `+std.dl::error_code+` — Copy fieldless enum
+ровно с `+not_loaded+` и `+invalid_path+`, а `+std.dl::dl_error+` — ошибка модуля с полем
+`+std.dl::error_code code+`.
+
+[[R-SLIB-DL-0002]]
+*R-SLIB-DL-0002* — `+std.dl::library+` — Copy, Send+Sync struct без публичных полей: открытая
+библиотека; её копии называют ту же библиотеку.
+`+std.dl::open(str path) -> std.dl::library throws std.dl::dl_error+` открывает разделяемую
+библиотеку по пути path или ту, которую динамический загрузчик цели находит по этому имени, если в
+нём нет косой черты, связывая все символы сразу и не делая их видимыми другим библиотекам;
+повторное открытие возвращает ту же библиотеку. Путь, который загрузчик не открывает, —
+`+not_loaded+`, а пустой путь или путь с байтом NUL — `+invalid_path+`.
+
+[[R-SLIB-DL-0003]]
+*R-SLIB-DL-0003* — `+std.dl::symbol(const std.dl::library* opened, str name) -> raw void*?+` —
+адрес символа name в открытой библиотеке или null, если библиотека его не определяет либо имя
+пусто или содержит байт NUL. Использование адреса — преобразование вызывающего, которого Core
+R-EXPR-0019 не допускает для сырых указателей на функции.
+
+[[R-SLIB-DL-0004]]
+*R-SLIB-DL-0004* — `+std.dl::resolve(const std.dl::library* opened, F import) -> raw fn?(P...) -> R+`,
+где import называет функцию `+R name(P...)+` блока `+extern "C"+` вида связи `+"loadable"+`, — адрес
+символа C этой функции в открытой библиотеке как допускающий null сырой указатель на функцию C её
+прототипа, проверенного заголовками блока (Core R-FFI-0042), или null, если библиотека такого
+символа не определяет. Компилятор понижает его до `+std.dl::symbol+`, и модуль shall быть
+импортирован. Вызов через указатель небезопасен (Core R-FUNC-0007).
+
 == Приложение A — Нормативный inventory public API
 
 [[R-SLIB-API-A001]]
@@ -8594,6 +8628,13 @@ R-SLIB-SET-0001, R-SLIB-DEQUE-0001, R-SLIB-HEAP-0001, R-SLIB-SORTED-0001..0002
 `+std.alloc::alloc_error+`
 |Только Core arithmetic и bounds panics тел items
 |R source, транслируемый с программой (R-SLIB-RSRC-0001); нет C symbol
+|`+std.dl+`: R-SLIB-DL-0001..0004
+|Copy, Send+Sync дескрипторы библиотек; пути и имена call-bounded; разрешённые функции —
+допускающие null сырые указатели на функции C
+|Отказанные пути — `+std.dl::dl_error+`; отсутствующий символ — null; открытие выделяет в загрузчике
+|Только Core arithmetic и bounds panics тел items; загрузчик потокобезопасен
+|R source, транслируемый с программой поверх нативного поставщика `+std.dl.native+` (`+dlopen+`,
+`+dlsym+`)
 |===
 
 === A.2 Асинхронные APIs
