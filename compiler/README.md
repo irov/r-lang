@@ -250,6 +250,13 @@ extern global (thread-local where declared) or the address its bridge accessor r
 reads through it are checked like call results. `std.c::link_available` reads a constant table
 of the link manifest sorted by logical name.
 
+A function that switches the floating-point environment (a call of C or an export wrapper) is
+`strictfp`, with its calls marked and its floating-point operations constrained intrinsics
+(`fenv.c`): LLVM otherwise assumes the default environment everywhere and moves an operation of R
+across the switch into the environment of C (B8-3). LLVM converts the operations of an R function it
+inlines into such a function in the same way and never inlines a `strictfp` function into one that
+is not; `tests/check_fenv_order.py` checks the order in the optimized IR.
+
 Async functions (`async.c`, frame mode of `emit.c`). An async function is a step
 `RRuntimeTaskStepStatus (execution, payload, result)` over its frame in the task payload
 (`module::name$step`), with a frame initializer (`$initialize`), a frame drop (`$drop`) and the
@@ -467,6 +474,57 @@ pipeline: both see the module as the emitter wrote it, so functions and control 
 options need a level above 0 and exclude each other. `tests/check_pgo_program.cmake` builds the
 loop fixture with a profile of its own runs and checks the profile summary and branch weights of
 its IR.
+
+### Debugging, coverage and sanitizers
+
+Debug information (`debug.c`, B8.1). `--debug-info` (`RFrontendArtifactOptions.debug_info`) gives
+the object DWARF 5: one compile unit, a file per R source, a subprogram per function of the program
+named by its R name (`module::function`, the step of an async function `module::function$step`), the
+source line and column of every MIR instruction, and the parameters and locals of each function
+declared at their storage (a stack slot, a slot of an async frame, the memory of a parameter passed
+in memory, or a member of other storage, through `DW_OP_plus_uconst`) with their R types: integers,
+`bool`, `char`, floats, pointers, structs with their fields, fixed arrays, views `{data, length}`,
+`std.string::string` as its bytes, and every other type as a structure of its size named by its R
+spelling. DWARF has no code for R; the unit says C11, so a debugger prints values by their layout
+and evaluates expressions in C syntax. Types are described from the layouts the emitter computed and
+never computed anew. Functions without R source (glue, helpers, the C entry) have no subprogram, and
+an instruction built for one while the builder stood in an R function loses its location when the
+module is finished. A line that an `await` splits gets one breakpoint location in a debugger.
+`tests/check_debug_info.py` checks the subprograms, variables and locations of a sync and an async
+fixture and `llvm-dwarfdump --verify` of their objects; `tests/check_debug_session.cmake` stops a
+program in `lldb` at a line of its R source and reads its frames and an owned string. It debugs a
+copy of the program in the temporary directory, started there: macOS does not let `debugserver`
+launch a program stored in, or started from, the Desktop, Documents or Downloads folder without a
+permission a batch session never gets, and the copy finds its DWARF in the objects of the build
+tree through its debug map.
+
+Line coverage (B8.2). `--coverage PREFIX` (`RFrontendArtifactOptions.coverage_prefix`, implies debug
+information) runs LLVM's gcov pass over the module as the emitter wrote it, before any optimization,
+so that the counts follow the lines of the source: the notes go to `PREFIX.gcno` when the program is
+emitted (the named metadata `llvm.gcov`), the counts to `PREFIX.gcda` when the program ends, through
+the profile runtime of the toolchain it is linked with (`lib/darwin/libclang_rt.profile_osx.a`).
+`llvm-cov gcov -o PREFIX.gcno -t SOURCE.r` reports the counts by the lines of each R source
+(`tests/check_coverage_program.cmake`).
+
+Mutation testing (B8.2). `tools/mutate_r.py` changes one operator or literal of an R source at a
+time (comparisons, binary `+` and `-`, `&&` and `||`, `true` and `false`, integer literals) and
+builds and runs each mutant with the command of a CTest test of the build, the fixture or the
+library module (through a copy of the library map) replaced; a gcov report limits the mutants to the
+lines that ran. The target `mutation-report` runs it for the module `R_MUTATION_MODULE` against its
+`@test` functions; `tests/check_mutation_tool.py` checks the mutants and the outcome on
+`codegen_mutation_target.r`.
+
+Sanitizers (B8.3). `--sanitize=address|thread` (`RFrontendArtifactOptions.sanitizer`) marks every
+function the object defines with the sanitizer's attribute and runs its pass
+(`asan<use-after-scope>`, or `tsan-module` and `tsan`) after the optimizer and before the stack
+bounds are measured, so the bounds hold for the instrumented frames. The pass of the address
+sanitizer replaces a global it instruments with one that carries a redzone, so the bound of an entry
+is written to the global of its name, into the first member of such a struct
+(`r_llvm_stack_write_bound`). The sanitizer presets build every program this way
+(`tests/check_codegen_program.cmake` checks that the object refers to the sanitizer's runtime); R
+code needs no undefined-behaviour sanitizer, since its checks are explicit.
+`codegen_sanitized_heap_overflow.r` reads past heap storage through an unsafe view whose length
+lies, which the address sanitizer reports.
 
 ### Hosted main error boundary
 

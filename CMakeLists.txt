@@ -78,7 +78,9 @@ add_library(r_frontend STATIC
     compiler/llvm/json_decode.c
     compiler/llvm/json_encode.c
     compiler/llvm/json_stream.c
+    compiler/llvm/debug.c
     compiler/llvm/dicts.c
+    compiler/llvm/fenv.c
     compiler/llvm/direct.c
     compiler/llvm/import.c
     compiler/llvm/keys.c
@@ -289,6 +291,24 @@ if(Python3_Interpreter_FOUND)
             --output
             "${CMAKE_CURRENT_BINARY_DIR}/library-source-surface-audit.json"
         DEPENDS r-front verify_library_inventory
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        VERBATIM
+    )
+    # B8.2: mutation testing of an R-source library module against its @test functions
+    # (tools/mutate_r.py): cmake -DR_MUTATION_MODULE=std.uuid build/debug, then the target.
+    set(R_MUTATION_MODULE "std.uuid" CACHE STRING "The R-source library module mutation-report mutates")
+    string(REGEX REPLACE "^std[.]" "" R_MUTATION_NAME "${R_MUTATION_MODULE}")
+    string(REPLACE "." "_" R_MUTATION_TEST "${R_MUTATION_NAME}")
+    string(REPLACE "." "/" R_MUTATION_PATH "${R_MUTATION_MODULE}")
+    add_custom_target(mutation-report
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/mutate_r.py"
+            --build "${CMAKE_CURRENT_BINARY_DIR}"
+            --ctest "${CMAKE_CTEST_COMMAND}"
+            --test "r_frontend_codegen_rtest_${R_MUTATION_TEST}"
+            --source "${CMAKE_CURRENT_SOURCE_DIR}/library/r/${R_MUTATION_PATH}.r"
+            --module "${R_MUTATION_MODULE}"
+            --jobs 8
+            --output "${CMAKE_CURRENT_BINARY_DIR}/mutation-report.json"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         VERBATIM
     )

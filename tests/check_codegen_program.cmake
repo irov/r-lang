@@ -153,17 +153,21 @@ if(DEFINED FRONTEND_EXTRA_ARGUMENTS AND NOT FRONTEND_EXTRA_ARGUMENTS STREQUAL ""
     list(APPEND R_FRONTEND_ARGUMENTS ${FRONTEND_EXTRA_ARGUMENTS})
 endif()
 
+# B8.3: the program's object is instrumented by r-front with the LLVM pass of the sanitizer the C
+# parts are compiled with; R code needs no undefined-behaviour sanitizer.
 set(R_CODEGEN_SANITIZER_FLAGS)
 if(DEFINED ENABLE_SANITIZERS AND ENABLE_SANITIZERS)
     list(APPEND R_CODEGEN_SANITIZER_FLAGS
         -fsanitize=address,undefined
         -fno-omit-frame-pointer
     )
+    list(APPEND R_FRONTEND_ARGUMENTS --sanitize=address)
 elseif(DEFINED ENABLE_THREAD_SANITIZER AND ENABLE_THREAD_SANITIZER)
     set(R_CODEGEN_SANITIZER_FLAGS
         -fsanitize=thread
         -fno-omit-frame-pointer
     )
+    list(APPEND R_FRONTEND_ARGUMENTS --sanitize=thread)
 endif()
 
 set(R_CODEGEN_EXTRA_C_SOURCES)
@@ -281,6 +285,14 @@ if(HASH_ONLY)
     endif()
     # The executable must link successfully with no bytes library on the command line.
     set(R_STD_BYTES_LIBRARY "")
+endif()
+# B8.3: the object of every program is instrumented for the sanitizer of the preset.
+if(DEFINED ENABLE_SANITIZERS AND ENABLE_SANITIZERS AND
+   NOT R_CODEGEN_IMPORTS MATCHES "(^|\n)___asan_")
+    message(FATAL_ERROR "the program object carries no address sanitizer instrumentation")
+elseif(DEFINED ENABLE_THREAD_SANITIZER AND ENABLE_THREAD_SANITIZER AND
+       NOT R_CODEGEN_IMPORTS MATCHES "(^|\n)___tsan_")
+    message(FATAL_ERROR "the program object carries no thread sanitizer instrumentation")
 endif()
 if(R_CODEGEN_IMPORTS MATCHES "(^|\n)_+(sig)?(setjmp|longjmp)(\n|$)")
     message(FATAL_ERROR "the program uses a forbidden setjmp/longjmp checked-error primitive")

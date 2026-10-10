@@ -176,6 +176,11 @@ as finished. The matrix records their results per stage.
   runtime and library entries it renames: each `#define OLD NEW` before
   `#include R_TEST_PROGRAM_PRELUDE` becomes `--rename-symbol OLD=NEW` of the object; declare
   hooks with prototypes before the include and define them non-static after it.
+- `--debug-info` gives a program DWARF by its R source (a debugger stops at `file.r:line` and
+  reads locals), `--coverage PREFIX` counts the lines it runs in the gcov format (`llvm-cov gcov`),
+  and `--sanitize=address|thread` instruments it; the sanitizer presets build every program with
+  the sanitizer of the preset (compiler/README.md, *Debugging, coverage and sanitizers*).
+  `tools/mutate_r.py` and the target `mutation-report` mutate an R source against a CTest test.
 - A wrapper that hooks `r_runtime_task_execution_await` sees no await of a body that runs as a
   direct call: it renames `r_runtime_task_direct_begin` to a function that returns 0 where the
   test needs the await (`tests/codegen_scoped_cancel_wrapper.c`).

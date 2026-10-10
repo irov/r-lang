@@ -100,15 +100,28 @@ static _Bool completes(RRuntimeTask *task) {
     return 1;
 }
 
-/* A task that stays pending for a while has not been handed the resource. */
+/* A task that stays pending for a while has not been handed the resource. The while is 2000
+   yields or 1 ms, whichever ends first: on a loaded machine every yield waits for a time slice,
+   and the backpressure test, which checks 2000 messages, took minutes (B8-4). */
 static _Bool stays_pending(RRuntimeTask *task) {
+    struct timespec start;
+    struct timespec now;
+
+    if (clock_gettime(CLOCK_MONOTONIC, &start) != 0) {
+        return 0;
+    }
     for (unsigned attempt = 0U; attempt < 2000U; ++attempt) {
         if (r_runtime_task_state(task) == R_RUNTIME_TASK_COMPLETED) {
             return 0;
         }
         (void)sched_yield();
+        if ((clock_gettime(CLOCK_MONOTONIC, &now) != 0) ||
+            ((now.tv_sec - start.tv_sec) * 1000000000L + (now.tv_nsec - start.tv_nsec) >
+             1000000L)) {
+            break;
+        }
     }
-    return 1;
+    return r_runtime_task_state(task) != R_RUNTIME_TASK_COMPLETED;
 }
 
 static int test_mutex(RRuntimeAllocator *allocator) {

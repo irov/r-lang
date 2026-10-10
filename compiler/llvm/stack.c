@@ -24,6 +24,33 @@
    by llvm.compiler.used, so none of them is deleted under it. */
 
 static bool r_llvm_holds_indirect_calls(LLVMValueRef function);
+
+/* Writes the bound of an entry into its global. The address sanitizer's pass replaces a global it
+   instruments by one of a struct type, the value followed by its redzone, and redirects every
+   use to the value; the bound goes into that first member (B8.3). */
+static bool
+r_llvm_stack_write_bound(RLlvmEmitter *emitter, const RLlvmStackEntry *entry, uint64_t bound) {
+    LLVMValueRef global = LLVMGetNamedGlobal(emitter->module, entry->name);
+    LLVMTypeRef type = global == NULL ? NULL : LLVMGlobalGetValueType(global);
+    LLVMValueRef members[2];
+
+    if (type == NULL) {
+        return r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+    }
+    if (LLVMGetTypeKind(type) == LLVMIntegerTypeKind) {
+        LLVMSetInitializer(global, r_llvm_u64(emitter, bound));
+        return true;
+    }
+    if ((LLVMGetTypeKind(type) != LLVMStructTypeKind) ||
+        (LLVMCountStructElementTypes(type) != 2U) ||
+        (LLVMStructGetTypeAtIndex(type, 0U) != r_llvm_int(emitter, 64U))) {
+        return r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+    }
+    members[0] = r_llvm_u64(emitter, bound);
+    members[1] = LLVMConstNull(LLVMStructGetTypeAtIndex(type, 1U));
+    LLVMSetInitializer(global, LLVMConstNamedStruct(type, members, 2U));
+    return true;
+}
 static bool r_llvm_guarded_call_marked(RLlvmEmitter *emitter, LLVMValueRef call);
 
 /* A function the object defines: an imported available_externally body is never emitted, so a
@@ -70,6 +97,7 @@ static LLVMValueRef r_llvm_stack_bound(RLlvmEmitter *emitter, RSymbolId symbol, 
                        sizeof(name),
                        direct ? "r_stack_entry.%" PRIu32 ".direct" : "r_stack_entry.%" PRIu32,
                        r_llvm_symbol_key(emitter, symbol));
+        (void)memcpy(entry->name, name, sizeof(entry->name));
         entry->global = LLVMAddGlobal(emitter->module, r_llvm_int(emitter, 64U), name);
         LLVMSetLinkage(entry->global, LLVMPrivateLinkage);
         LLVMSetGlobalConstant(entry->global, 1);
@@ -828,7 +856,9 @@ bool r_llvm_measure_stack(RLlvmEmitter *emitter) {
             (void)r_llvm_fail(emitter, R_FRONTEND_LIMIT_EXCEEDED);
             goto cleanup;
         }
-        LLVMSetInitializer(entry->global, r_llvm_u64(emitter, bound));
+        if (!r_llvm_stack_write_bound(emitter, entry, bound)) {
+            goto cleanup;
+        }
         r_llvm_stack_report(emitter, "r.stack.entries", node->function, &bound, 1U);
     }
     success = true;

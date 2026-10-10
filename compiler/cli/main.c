@@ -95,6 +95,13 @@ typedef struct RCliOptions {
     bool profile_generate;
     const char *profile_use_path;
     bool profile_use_seen;
+    /* --sanitize=address|thread (B8.3): the sanitizer the program is instrumented for. */
+    RFrontendSanitizer sanitizer;
+    /* --debug-info (B8.1): DWARF of the program. */
+    bool debug_info;
+    /* --coverage PREFIX (B8.2): line coverage of the R source. */
+    const char *coverage_prefix;
+    bool coverage_seen;
 } RCliOptions;
 
 /* One line of a bitcode catalog, "SYMBOL<TAB>PATH": the bitcode module at PATH defines the C
@@ -135,7 +142,8 @@ static void r_cli_usage(FILE *stream) {
                   "[--link-manifest FILE] [--abi-record FILE] [--abi-header-dir DIR]... "
                   "[--rename-symbol OLD=NEW]... [--all-functions] [--opt-level=0|1|2|3] "
                   "[--bitcode-catalog FILE] [--profile-generate | --profile-use FILE] "
-                  "[--version] [FILE ...]\n");
+                  "[--sanitize=address|thread] [--debug-info] [--coverage PREFIX] [--version] "
+                  "[FILE ...]\n");
 }
 
 /* The compiler and its backend; the backend check fails when the linked LLVM or its target
@@ -517,6 +525,33 @@ static bool r_cli_parse_arguments(int argc, char **argv, RCliOptions *options) {
             if (!r_cli_take_option_value(
                     argc, argv, &index, argument, "--profile-use", &options->profile_use_path)) {
                 return false;
+            }
+        } else if ((strcmp(argument, "--coverage") == 0) ||
+                   (r_cli_option_value(argument, "--coverage") != NULL)) {
+            if (options->coverage_seen) {
+                return r_cli_option_error("duplicate option", "--coverage");
+            }
+            options->coverage_seen = true;
+            if (!r_cli_take_option_value(
+                    argc, argv, &index, argument, "--coverage", &options->coverage_prefix)) {
+                return false;
+            }
+        } else if (strcmp(argument, "--debug-info") == 0) {
+            if (options->debug_info) {
+                return r_cli_option_error("duplicate option", "--debug-info");
+            }
+            options->debug_info = true;
+        } else if (strncmp(argument, "--sanitize=", 11U) == 0) {
+            const char *name = argument + 11U;
+            if (options->sanitizer != R_FRONTEND_SANITIZER_NONE) {
+                return r_cli_option_error("duplicate option", "--sanitize");
+            }
+            if (strcmp(name, "address") == 0) {
+                options->sanitizer = R_FRONTEND_SANITIZER_ADDRESS;
+            } else if (strcmp(name, "thread") == 0) {
+                options->sanitizer = R_FRONTEND_SANITIZER_THREAD;
+            } else {
+                return r_cli_option_error("expected address or thread", argument);
             }
         } else if (strncmp(argument, "--opt-level=", 12U) == 0) {
             const char *level = argument + 12U;
@@ -1533,6 +1568,9 @@ static int r_cli_run(RFrontendContext *context, RCliOptions *options) {
             }
             artifact_options.profile_generate = options->profile_generate;
             artifact_options.profile_use = options->profile_use_path;
+            artifact_options.sanitizer = options->sanitizer;
+            artifact_options.debug_info = options->debug_info;
+            artifact_options.coverage_prefix = options->coverage_prefix;
             if ((options->profile_generate || (options->profile_use_path != NULL)) &&
                 ((artifact_options.optimization_level == 0U) ||
                  (options->profile_generate && (options->profile_use_path != NULL)))) {

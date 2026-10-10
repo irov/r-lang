@@ -98,6 +98,16 @@ typedef struct RFrontendContext RFrontendContext;
  * and shall remain valid for the duration of the dump call. Manifest contents are never
  * interpreted as host paths, keeping emitted artifacts independent of checkout location.
  */
+/* The sanitizer an emitted program is instrumented for (B8.3): the LLVM pass of the sanitizer
+   runs over every function the object defines after the optimizer and before the stack bounds
+   are measured, and the program links the sanitizer's runtime. R code needs no undefined-behaviour
+   sanitizer: its checks are explicit (R-EXPR-0005, R-EXPR-0021). */
+typedef enum RFrontendSanitizer {
+    R_FRONTEND_SANITIZER_NONE = 0,
+    R_FRONTEND_SANITIZER_ADDRESS,
+    R_FRONTEND_SANITIZER_THREAD
+} RFrontendSanitizer;
+
 typedef struct RFrontendArtifactOptions {
     const char *entry;
     const char *profile;
@@ -130,6 +140,15 @@ typedef struct RFrontendArtifactOptions {
        profile names the same file. */
     bool profile_generate;
     const char *profile_use;
+    RFrontendSanitizer sanitizer;
+    /* DWARF of the program (B8.1): files, functions with their R names, source lines and
+       columns, parameters and locals with their R types. */
+    bool debug_info;
+    /* Line coverage of the R source (B8.2): the program counts the lines it runs in the gcov
+       format; the notes are written to PREFIX.gcno when the program is emitted, the counts to
+       PREFIX.gcda when it ends (linked with the profile runtime of the toolchain). Implies
+       debug_info, whose lines the counts refer to. */
+    const char *coverage_prefix;
 } RFrontendArtifactOptions;
 
 RFrontendOptions r_frontend_default_options(void);

@@ -6,6 +6,7 @@
 #include "surface.h"
 
 #include <llvm-c/Core.h>
+#include <llvm-c/DebugInfo.h>
 #include <llvm-c/Target.h>
 #include <llvm-c/TargetMachine.h>
 
@@ -63,6 +64,9 @@ typedef struct RLlvmStackEntry {
     RSymbolId symbol;
     LLVMValueRef global; /* the bound, an i64 constant global set after measurement */
     bool direct;         /* the bound of the direct twin of the async function (direct.c) */
+    /* The name of the global: the address sanitizer's pass replaces a global it instruments, so
+       the bound is written to the global of that name (B8.3). */
+    char name[64];
 } RLlvmStackEntry;
 
 typedef struct RLlvmEmitter {
@@ -100,6 +104,14 @@ typedef struct RLlvmEmitter {
     /* The hash and equality functions of std.dict keys, per key type (glue.c). */
     LLVMValueRef *key_hashes;
     LLVMValueRef *key_equals;
+    /* DWARF (debug.c): the builder, the compile unit, the file of each source, the type of each
+       value type, and the subprogram and source of the function being emitted. */
+    LLVMDIBuilderRef debug_builder;
+    LLVMMetadataRef debug_unit;
+    LLVMMetadataRef *debug_files;
+    LLVMMetadataRef *debug_types;
+    LLVMMetadataRef debug_scope;
+    RSourceId debug_source;
     /* The probe and the lookup of std.dict per key type (dicts.c). */
     LLVMValueRef *dict_probes;
     LLVMValueRef *dict_lookups;
@@ -603,6 +615,23 @@ LLVMValueRef r_llvm_type_info(RLlvmEmitter *emitter, RTypeId type);
 /* The hash (`uint64_t (*)(const void *)`) or equality (`_Bool (*)(const void *, const void *)`)
    function of a std.dict key type, as the C17 emitter's r_core_key_hash and r_core_key_equal. */
 LLVMValueRef r_llvm_key_function(RLlvmEmitter *emitter, RTypeId key, bool hash);
+/* Makes every function that switches the floating-point environment at the boundary with C
+   strictfp, with its floating-point operations constrained (fenv.c, B8-3). */
+bool r_llvm_strict_fp(RLlvmEmitter *emitter);
+/* DWARF (debug.c, B8.1). begin creates the compile unit when the options ask for debug
+   information; function gives the function being emitted its subprogram and the location of its
+   declaration, location moves the builder to a span, variables declares the parameters and
+   locals after their storage exists, leave ends the function; finish completes the module before
+   its verification and release frees what begin made. */
+bool r_llvm_debug_begin(RLlvmEmitter *emitter, RSourceId unit_source);
+void r_llvm_debug_function(RLlvmEmitter *emitter,
+                           LLVMValueRef function,
+                           const RSemanticSymbol *symbol);
+void r_llvm_debug_location(RLlvmEmitter *emitter, RSourceSpan span);
+void r_llvm_debug_variables(RLlvmEmitter *emitter);
+void r_llvm_debug_leave(RLlvmEmitter *emitter);
+void r_llvm_debug_finish(RLlvmEmitter *emitter);
+void r_llvm_debug_release(RLlvmEmitter *emitter);
 /* `ptr r_dict_lookup.K(ptr dict, ptr key)`: the value of a key in a std.dict, or null. */
 LLVMValueRef r_llvm_dict_lookup(RLlvmEmitter *emitter, RTypeId key);
 /* An insertion into a std.dict that needs no growth, written in the program: it stores the

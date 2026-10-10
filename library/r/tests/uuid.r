@@ -122,6 +122,36 @@ void serves_as_a_dictionary_key()
     }
 }
 
+/* Key equality looks at every byte (Core R-FUNC-0009): identifiers that differ in one byte are
+   different keys. */
+@test
+void compares_keys_by_every_byte() throws std.test::failure, std.alloc::alloc_error {
+    std.uuid::uuid base = std.uuid::nil();
+    for (usize index = 0usize; index < 16usize; index += 1usize) {
+        std.uuid::uuid other = std.uuid::nil();
+        other.bytes[index] = 1u8;
+        bool same = core::key_equal(&base, &other);
+        std.test::check(same == false, "identifiers differing in one byte");
+    }
+    std.uuid::uuid copy = std.uuid::nil();
+    bool equal = core::key_equal(&base, &copy);
+    std.test::check(equal == true, "equal identifiers");
+}
+
+/* The version and variant bits replace the random ones whatever they were (R-SLIB-UUID-0002). */
+@test
+void sets_the_version_and_variant_bits() throws std.test::failure, std.alloc::alloc_error {
+    u8[16] zeros = {};
+    std.uuid::uuid low = std.uuid::from_random_v4(zeros);
+    std.string::string low_text = f"{low}";
+    std.test::equal_text(low_text, "00000000-0000-4000-8000-000000000000");
+    u8[16] ones = {};
+    for (usize index = 0usize; index < 16usize; index += 1usize) { ones[index] = 255u8; }
+    std.uuid::uuid high = std.uuid::from_random_v4(ones);
+    std.string::string high_text = f"{high}";
+    std.test::equal_text(high_text, "ffffffff-ffff-4fff-bfff-ffffffffffff");
+}
+
 @test
 void draws_fresh_identifiers()
     throws std.test::failure, std.alloc::alloc_error, std.time::time_error {
@@ -161,6 +191,8 @@ void reports_parse_errors() throws std.test::failure, std.alloc::alloc_error {
     expect_error("", std.convert::parse_error_code::empty, 0usize);
     expect_error("017f22e2_79b0-7cc3-98c4-dc0c0c07398f", digit, 8usize);
     expect_error("017f22g2-79b0-7cc3-98c4-dc0c0c07398f", digit, 6usize);
+    // The character after 9 is no digit.
+    expect_error(":17f22e2-79b0-7cc3-98c4-dc0c0c07398f", digit, 0usize);
     expect_error("017f22e2-79b0-7cc3-98c4-dc0c0c07398", digit, 35usize);
     expect_error("017f", digit, 4usize);
     expect_error("017f22e2-79b0-7cc3-98c4-dc0c0c07398f0", trailing, 36usize);

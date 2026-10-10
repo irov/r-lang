@@ -7,6 +7,7 @@
 #include <llvm-c/Transforms/PassBuilder.h>
 
 #include <inttypes.h>
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -1766,6 +1767,7 @@ static bool r_llvm_emit_blocks(RLlvmEmitter *emitter) {
         emitter->current_block = block_index;
         for (index = 0U; index < block->instruction_count; ++index) {
             const RMirInstruction *instruction = r_llvm_instruction(emitter, block, index);
+            r_llvm_debug_location(emitter, instruction->span);
             if (r_llvm_is_terminator(instruction->kind)) {
                 emitter->block_ends[block_index] = LLVMGetInsertBlock(emitter->builder);
             }
@@ -1962,6 +1964,7 @@ static bool r_llvm_define_async_function(RLlvmEmitter *emitter,
     }
     invalid = LLVMAppendBasicBlockInContext(emitter->context, step, "");
     LLVMPositionBuilderAtEnd(emitter->builder, entry);
+    r_llvm_debug_function(emitter, step, symbol);
     /* The state is the first member of the frame. */
     (void)r_llvm_frame_reserve(emitter, 4U, 4U);
     if (symbol->effect_carrier_type != R_TYPE_ID_INVALID) {
@@ -1972,6 +1975,7 @@ static bool r_llvm_define_async_function(RLlvmEmitter *emitter,
     if (!r_llvm_prepare_places(emitter) || !r_llvm_prepare_finally(emitter)) {
         goto cleanup;
     }
+    r_llvm_debug_variables(emitter);
     /* r_async_step_gate_N: the bound of the step on this stack. */
     arguments[0] = r_llvm_stack_entry(emitter, id);
     arguments[1] = r_llvm_span(emitter, symbol->name_span);
@@ -1997,6 +2001,7 @@ static bool r_llvm_define_async_function(RLlvmEmitter *emitter,
         !r_llvm_emit_blocks(emitter)) {
         goto cleanup;
     }
+    r_llvm_debug_leave(emitter);
     /* The runtime drops the frame after the step returns, at this depth of the stack. */
     if (!r_llvm_add_stack_edge(emitter, step, emitter->async_drops[id]) ||
         !r_llvm_emit_frame_drop(emitter, id, step_frame) ||
@@ -2007,6 +2012,7 @@ static bool r_llvm_define_async_function(RLlvmEmitter *emitter,
     success = emitter->status == R_FRONTEND_OK;
 
 cleanup:
+    r_llvm_debug_leave(emitter);
     emitter->frame = NULL;
     emitter->execution = NULL;
     emitter->step_result = NULL;
@@ -2081,6 +2087,7 @@ static bool r_llvm_define_sync(RLlvmEmitter *emitter,
             LLVMAppendBasicBlockInContext(emitter->context, emitter->function, "");
     }
     LLVMPositionBuilderAtEnd(emitter->builder, entry);
+    r_llvm_debug_function(emitter, function, symbol);
     if (symbol->effect_carrier_type != R_TYPE_ID_INVALID) {
         emitter->effect_out = LLVMGetParam(emitter->function, 0U);
     } else if (r_llvm_result_in_memory(emitter, symbol)) {
@@ -2089,6 +2096,7 @@ static bool r_llvm_define_sync(RLlvmEmitter *emitter,
     if (!r_llvm_prepare_places(emitter) || !r_llvm_prepare_finally(emitter)) {
         goto cleanup;
     }
+    r_llvm_debug_variables(emitter);
     (void)LLVMBuildBr(emitter->builder, emitter->blocks[0]);
     if (!r_llvm_emit_blocks(emitter) || !r_llvm_complete_phis(emitter)) {
         goto cleanup;
@@ -2096,6 +2104,7 @@ static bool r_llvm_define_sync(RLlvmEmitter *emitter,
     success = emitter->status == R_FRONTEND_OK;
 
 cleanup:
+    r_llvm_debug_leave(emitter);
     r_llvm_release_function_state(emitter);
     return success;
 }
@@ -2380,6 +2389,7 @@ static void r_llvm_dispose(RLlvmEmitter *emitter) {
     r_llvm_free(emitter, emitter->strings);
     r_llvm_free(emitter, emitter->functions);
     r_llvm_free(emitter, emitter->function_types);
+    r_llvm_debug_release(emitter);
     if (emitter->builder != NULL) {
         LLVMDisposeBuilder(emitter->builder);
     }
@@ -2446,6 +2456,47 @@ static bool r_llvm_set_options(RLlvmEmitter *emitter, const char *profile) {
     return true;
 }
 
+/* B8.2: line coverage of the R source in the gcov format, by LLVM's gcov pass over the module as
+   the emitter wrote it, so that the counts follow the lines of the source rather than the code
+   the optimizer makes of them. The notes and counts go to the files of the prefix (the named
+   metadata llvm.gcov), the counts when the program ends through the profile runtime. */
+static bool r_llvm_cover(RLlvmEmitter *emitter) {
+    const RFrontendArtifactOptions *artifact = emitter->artifact_options;
+    LLVMMetadataRef operands[3];
+    LLVMPassBuilderOptionsRef options;
+    LLVMErrorRef error;
+    char notes[PATH_MAX];
+    char data[PATH_MAX];
+
+    if ((artifact == NULL) || (artifact->coverage_prefix == NULL)) {
+        return true;
+    }
+    if ((emitter->debug_unit == NULL) ||
+        (snprintf(notes, sizeof(notes), "%s.gcno", artifact->coverage_prefix) >=
+         (int)sizeof(notes)) ||
+        (snprintf(data, sizeof(data), "%s.gcda", artifact->coverage_prefix) >= (int)sizeof(data))) {
+        return r_llvm_fail(emitter, R_FRONTEND_INVALID_ARGUMENT);
+    }
+    operands[0] = LLVMMDStringInContext2(emitter->context, notes, strlen(notes));
+    operands[1] = LLVMMDStringInContext2(emitter->context, data, strlen(data));
+    operands[2] = emitter->debug_unit;
+    LLVMAddNamedMetadataOperand(
+        emitter->module,
+        "llvm.gcov",
+        LLVMMetadataAsValue(emitter->context,
+                            LLVMMDNodeInContext2(emitter->context, operands, 3U)));
+    options = LLVMCreatePassBuilderOptions();
+    error = LLVMRunPasses(emitter->module, "insert-gcov-profiling", emitter->machine, options);
+    LLVMDisposePassBuilderOptions(options);
+    if (error != NULL) {
+        char *message = LLVMGetErrorMessage(error);
+        (void)fprintf(stderr, "r-front: the LLVM coverage pass failed: %s\n", message);
+        LLVMDisposeErrorMessage(message);
+        return r_llvm_fail(emitter, R_FRONTEND_IO_ERROR);
+    }
+    return true;
+}
+
 static bool r_llvm_optimize(RLlvmEmitter *emitter, uint32_t level) {
     /* After the default pipeline, inductive range check elimination splits a loop whose index
        checks the optimizer bounded (a constant trip count, or nuw arithmetic it inferred) into a
@@ -2460,7 +2511,7 @@ static bool r_llvm_optimize(RLlvmEmitter *emitter, uint32_t level) {
     LLVMErrorRef error;
     int written;
 
-    if (!r_llvm_unswitch_versions(emitter, level > 1U)) {
+    if (!r_llvm_cover(emitter) || !r_llvm_unswitch_versions(emitter, level > 1U)) {
         return false;
     }
     if (level == 0U) {
@@ -2488,6 +2539,50 @@ static bool r_llvm_optimize(RLlvmEmitter *emitter, uint32_t level) {
     if (error != NULL) {
         char *message = LLVMGetErrorMessage(error);
         (void)fprintf(stderr, "r-front: the LLVM optimizer failed: %s\n", message);
+        LLVMDisposeErrorMessage(message);
+        return r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+    }
+    return true;
+}
+
+/* B8.3: the sanitizer's pass over every function the object defines (each marked with the
+   sanitizer's attribute, which the pass requires), after the optimizer as in the pipelines of
+   clang and before the stack measurement, so that the measured frames hold the sanitizer's
+   redzones and the bounds hold for the instrumented code. Calls of the sanitizer's runtime are
+   calls of functions the object does not define, which keep their own budget like the runtime's
+   (stack.c). */
+static bool r_llvm_sanitize(RLlvmEmitter *emitter) {
+    const RFrontendArtifactOptions *artifact = emitter->artifact_options;
+    const bool address =
+        (artifact != NULL) && (artifact->sanitizer == R_FRONTEND_SANITIZER_ADDRESS);
+    const char *attribute = address ? "sanitize_address" : "sanitize_thread";
+    LLVMPassBuilderOptionsRef options;
+    LLVMErrorRef error;
+    LLVMValueRef function;
+    unsigned kind;
+
+    if ((artifact == NULL) || (artifact->sanitizer == R_FRONTEND_SANITIZER_NONE)) {
+        return true;
+    }
+    kind = LLVMGetEnumAttributeKindForName(attribute, strlen(attribute));
+    for (function = LLVMGetFirstFunction(emitter->module); function != NULL;
+         function = LLVMGetNextFunction(function)) {
+        if ((LLVMCountBasicBlocks(function) != 0U) &&
+            (LLVMGetLinkage(function) != LLVMAvailableExternallyLinkage)) {
+            LLVMAddAttributeAtIndex(function,
+                                    (LLVMAttributeIndex)LLVMAttributeFunctionIndex,
+                                    LLVMCreateEnumAttribute(emitter->context, kind, 0U));
+        }
+    }
+    options = LLVMCreatePassBuilderOptions();
+    error = LLVMRunPasses(emitter->module,
+                          address ? "asan<use-after-scope>" : "tsan-module,function(tsan)",
+                          emitter->machine,
+                          options);
+    LLVMDisposePassBuilderOptions(options);
+    if (error != NULL) {
+        char *message = LLVMGetErrorMessage(error);
+        (void)fprintf(stderr, "r-front: the LLVM sanitizer pass failed: %s\n", message);
         LLVMDisposeErrorMessage(message);
         return r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
     }
@@ -2525,7 +2620,8 @@ RFrontendStatus r_frontend_emit_llvm(const RFrontendContext *context,
           (options->optimization_level > 3U) ||
           ((options->profile_generate || (options->profile_use != NULL)) &&
            (options->optimization_level == 0U)) ||
-          (options->profile_generate && (options->profile_use != NULL))))) {
+          (options->profile_generate && (options->profile_use != NULL)) ||
+          (options->sanitizer > R_FRONTEND_SANITIZER_THREAD)))) {
         return R_FRONTEND_INVALID_ARGUMENT;
     }
     (void)memset(&emitter, 0, sizeof(emitter));
@@ -2585,6 +2681,9 @@ RFrontendStatus r_frontend_emit_llvm(const RFrontendContext *context,
     emitter.json_ordinaries = r_llvm_allocate(
         &emitter, (context->semantic_type_count + 1U) * sizeof(*emitter.json_ordinaries));
     emitter.artifact_options = options;
+    if (!r_llvm_debug_begin(&emitter, (RSourceId)1U)) {
+        goto cleanup;
+    }
     emitter.c_functions = r_llvm_allocate(
         &emitter, (context->semantic_symbol_count + 1U) * sizeof(*emitter.c_functions));
     emitter.json_streams = r_llvm_allocate(
@@ -2666,6 +2765,10 @@ RFrontendStatus r_frontend_emit_llvm(const RFrontendContext *context,
         !r_llvm_emit_pending_glue(&emitter)) {
         goto cleanup;
     }
+    if (!r_llvm_strict_fp(&emitter)) {
+        goto cleanup;
+    }
+    r_llvm_debug_finish(&emitter);
     {
         char *message = NULL;
         if (LLVMVerifyModule(emitter.module, LLVMReturnStatusAction, &message) != 0) {
@@ -2679,7 +2782,7 @@ RFrontendStatus r_frontend_emit_llvm(const RFrontendContext *context,
     if (!r_llvm_set_options(&emitter, options == NULL ? NULL : options->profile_use) ||
         !r_llvm_check_indirect_calls(&emitter) ||
         !r_llvm_optimize(&emitter, options == NULL ? 0U : options->optimization_level) ||
-        !r_llvm_measure_stack(&emitter)) {
+        !r_llvm_sanitize(&emitter) || !r_llvm_measure_stack(&emitter)) {
         goto cleanup;
     }
     if (output == R_FRONTEND_LLVM_IR) {

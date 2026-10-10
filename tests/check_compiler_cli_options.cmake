@@ -253,3 +253,40 @@ if(NOT profile_generate_result EQUAL 0 OR
             "--profile-generate did not instrument the program "
             "(${profile_generate_result}): ${profile_generate_stderr}")
 endif()
+
+# B8: --sanitize names a sanitizer once, --debug-info and --coverage are given once, and the
+# instrumented or described module still lowers.
+foreach(cli_case
+        "sanitize_invalid|--sanitize=memory|r-front: expected address or thread: --sanitize=memory"
+        "sanitize_duplicate|--sanitize=address,--sanitize=thread|r-front: duplicate option: --sanitize"
+        "debug_duplicate|--debug-info,--debug-info|r-front: duplicate option: --debug-info"
+        "coverage_duplicate|--coverage,a,--coverage,b|r-front: duplicate option: --coverage")
+    string(REPLACE "|" ";" cli_fields "${cli_case}")
+    list(GET cli_fields 0 cli_name)
+    list(GET cli_fields 1 cli_arguments)
+    list(GET cli_fields 2 cli_message)
+    string(REPLACE "," ";" cli_arguments "${cli_arguments}")
+    execute_process(
+        COMMAND "${R_FRONT_EXECUTABLE}" --emit=llvm-ir ${cli_arguments} "${SOURCE_FILE}"
+        RESULT_VARIABLE cli_result
+        OUTPUT_VARIABLE cli_stdout
+        ERROR_VARIABLE cli_stderr
+    )
+    if(NOT cli_result EQUAL 2 OR NOT cli_stderr MATCHES "${cli_message}")
+        message(FATAL_ERROR "${cli_name} was not rejected (${cli_result}): ${cli_stderr}")
+    endif()
+endforeach()
+foreach(cli_arguments "--sanitize=address" "--sanitize=thread" "--debug-info")
+    execute_process(
+        COMMAND "${R_FRONT_EXECUTABLE}" --emit=llvm-ir ${cli_arguments} "${SOURCE_FILE}"
+        RESULT_VARIABLE cli_result
+        OUTPUT_VARIABLE cli_ir
+        ERROR_VARIABLE cli_stderr
+    )
+    if(NOT cli_result EQUAL 0 OR
+       (cli_arguments STREQUAL "--sanitize=address" AND NOT cli_ir MATCHES "__asan_") OR
+       (cli_arguments STREQUAL "--sanitize=thread" AND NOT cli_ir MATCHES "__tsan_") OR
+       (cli_arguments STREQUAL "--debug-info" AND NOT cli_ir MATCHES "DISubprogram"))
+        message(FATAL_ERROR "${cli_arguments} did not lower as expected (${cli_result}): ${cli_stderr}")
+    endif()
+endforeach()

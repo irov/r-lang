@@ -3884,6 +3884,8 @@ if(NOT MSVC)
             ${R_EXAMPLE_CASES}
             ${R_LIBRARY_R_TEST_CASES}
             pgo_loop_versions
+            debug_session
+            coverage_dict_paths
             main_error_cleanup
             main_domain_allocation
             async_process_exit
@@ -4247,6 +4249,8 @@ if(NOT MSVC)
             async_alloc_into_value
             dict_paths
             async_dict_paths
+            sanitized_heap_overflow
+            mutation_target
             field_access_instances
             user_attributes
             async_user_attributes
@@ -5534,7 +5538,7 @@ if(NOT MSVC)
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_EXPECTED_PANIC "")
-        elseif(R_CODEGEN_CASE MATCHES "^(async_arc_last_release|string_place_views|async_string_place_views|string_view_owners|async_string_view_owners|field_destructuring|field_access|async_field_access|field_access_instances|core_bits|async_core_bits|switch_dispatch|async_switch_dispatch|tagged_switch_break|async_tagged_switch_break|alloc_into_value|async_alloc_into_value|dict_paths|async_dict_paths|generic_field_access|async_generic_field_access|user_attributes|async_user_attributes|async_owner_shapes|async_owner_matrix|null_type|async_null_type|explicit_generics|async_explicit_generics|consteval|async_consteval|consteval_checked|async_consteval_checked|consteval_floats|async_consteval_floats|consteval_owners|consteval_frozen|async_consteval_frozen|deadline_blocks|budget_blocks|recursion_bounds|async_for|expression_forms|async_channels|group_detach|group_vacancy|group_capacity|effect_relay|swap_clone|async_swap_clone|derive|async_derive|cmp_impls|function_values|static_values|async_static_values|computed_bounds|async_computed_bounds|typed_constants|async_typed_constants|associated_constants|async_associated_constants|dyn_interfaces|async_dyn_interfaces|dyn_owners|async_dyn_owners|async_locks|async_broadcast|async_reserve|async_blocking|async_blocking_start|core_format|async_core_format|field_defaults|async_field_defaults|json_field_defaults|overloads|dict_custom_keys|common_error_fields|sync_initializer_cleanup_growth|fs_metadata_fields|string_outcomes|async_parameter_reassignment|process_outcome_records|async_math_records|numeric_error_codes|regex|async_regex|regex_oom|regex_driver|regex_example|regex_captures|library_text|library_encoding|library_iter_reductions|library_byte_cursor|async_library_text|library_text_oom|encoding_driver|json_schema_driver|json_schema_generics|async_json_schema_generics|library_random|library_uuid|library_hmac|async_library_tokens|hash_driver|hash_digest_values|hash_operations|hash_independent|async_hash_independent|library_time_formats|library_time_interval|standard_record_constructors|time_driver|cbor_driver|crypto_driver|jwt_driver|zone_driver|cose_driver|sqlite_driver|dead_new_helpers|library_signal|library_net_connect|library_net_options|library_net_unix|library_args|library_config|library_log|library_async_task_id|library_task_id_outside|async_direct_calls|arc_clone_only|async_arc_clone_only|test_mode|string_keys)$")
+        elseif(R_CODEGEN_CASE MATCHES "^(async_arc_last_release|string_place_views|async_string_place_views|string_view_owners|async_string_view_owners|field_destructuring|field_access|async_field_access|field_access_instances|core_bits|async_core_bits|switch_dispatch|async_switch_dispatch|tagged_switch_break|async_tagged_switch_break|alloc_into_value|async_alloc_into_value|dict_paths|async_dict_paths|mutation_target|generic_field_access|async_generic_field_access|user_attributes|async_user_attributes|async_owner_shapes|async_owner_matrix|null_type|async_null_type|explicit_generics|async_explicit_generics|consteval|async_consteval|consteval_checked|async_consteval_checked|consteval_floats|async_consteval_floats|consteval_owners|consteval_frozen|async_consteval_frozen|deadline_blocks|budget_blocks|recursion_bounds|async_for|expression_forms|async_channels|group_detach|group_vacancy|group_capacity|effect_relay|swap_clone|async_swap_clone|derive|async_derive|cmp_impls|function_values|static_values|async_static_values|computed_bounds|async_computed_bounds|typed_constants|async_typed_constants|associated_constants|async_associated_constants|dyn_interfaces|async_dyn_interfaces|dyn_owners|async_dyn_owners|async_locks|async_broadcast|async_reserve|async_blocking|async_blocking_start|core_format|async_core_format|field_defaults|async_field_defaults|json_field_defaults|overloads|dict_custom_keys|common_error_fields|sync_initializer_cleanup_growth|fs_metadata_fields|string_outcomes|async_parameter_reassignment|process_outcome_records|async_math_records|numeric_error_codes|regex|async_regex|regex_oom|regex_driver|regex_example|regex_captures|library_text|library_encoding|library_iter_reductions|library_byte_cursor|async_library_text|library_text_oom|encoding_driver|json_schema_driver|json_schema_generics|async_json_schema_generics|library_random|library_uuid|library_hmac|async_library_tokens|hash_driver|hash_digest_values|hash_operations|hash_independent|async_hash_independent|library_time_formats|library_time_interval|standard_record_constructors|time_driver|cbor_driver|crypto_driver|jwt_driver|zone_driver|cose_driver|sqlite_driver|dead_new_helpers|library_signal|library_net_connect|library_net_options|library_net_unix|library_args|library_config|library_log|library_async_task_id|library_task_id_outside|async_direct_calls|arc_clone_only|async_arc_clone_only|test_mode|string_keys)$")
             set(R_CODEGEN_SOURCE_1
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
             set(R_CODEGEN_SOURCE_2 "")
@@ -6119,6 +6123,23 @@ if(NOT MSVC)
         elseif(R_CODEGEN_CASE STREQUAL "audit_std_fs_sync_start")
             set(R_CODEGEN_SOURCE_1 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/audit_std_fs_sync_start.r")
             set(R_CODEGEN_EXPECTED_PANIC "")
+        elseif(R_CODEGEN_CASE STREQUAL "coverage_dict_paths")
+            # B8.2: line counts of the R source (check_coverage_program.cmake).
+            set(R_CODEGEN_SOURCE_1 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_dict_paths.r")
+            set(R_CODEGEN_SOURCE_2 "")
+            set(R_CODEGEN_EXPECTED_PANIC "")
+            set(R_CODEGEN_CHECK_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/check_coverage_program.cmake")
+        elseif(R_CODEGEN_CASE STREQUAL "debug_session")
+            # B8.1: the debugger stops the program at a line of its R source and reads its
+            # frames and locals (check_debug_session.cmake); it needs a debugger on the machine.
+            find_program(R_LLDB_EXECUTABLE lldb)
+            if(NOT R_LLDB_EXECUTABLE)
+                continue()
+            endif()
+            set(R_CODEGEN_SOURCE_1 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_dict_paths.r")
+            set(R_CODEGEN_SOURCE_2 "")
+            set(R_CODEGEN_EXPECTED_PANIC "")
+            set(R_CODEGEN_CHECK_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/check_debug_session.cmake")
         elseif(R_CODEGEN_CASE STREQUAL "pgo_loop_versions")
             # B7.2: built with a profile of its own runs (check_pgo_program.cmake).
             set(R_CODEGEN_SOURCE_1 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_loop_versions.r")
@@ -6385,6 +6406,17 @@ if(NOT MSVC)
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
             set(R_CODEGEN_SOURCE_2 "")
             set(R_CODEGEN_EXPECTED_PANIC "bounds")
+        elseif(R_CODEGEN_CASE STREQUAL "sanitized_heap_overflow")
+            # B8.3: the address sanitizer reports a read of R code past the heap storage of an
+            # unsafe view; without the sanitizer that read is undefined, so the case runs in the
+            # sanitizers preset only.
+            if(NOT R_FRONTEND_ENABLE_SANITIZERS)
+                continue()
+            endif()
+            set(R_CODEGEN_SOURCE_1
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
+            set(R_CODEGEN_SOURCE_2 "")
+            set(R_CODEGEN_EXPECTED_PANIC "AddressSanitizer: heap-buffer-overflow")
         elseif(R_CODEGEN_CASE MATCHES
                "^(division_by_zero|modulo_by_zero|u32_division_by_zero|u32_modulo_by_zero|core_bits_division_by_zero)$")
             set(R_CODEGEN_SOURCE_1
@@ -6536,6 +6568,7 @@ if(NOT MSVC)
                 -DENABLE_THREAD_SANITIZER=${R_FRONTEND_ENABLE_THREAD_SANITIZER}
                 -DR_RUNTIME_INLINE_SHIMS_LIBRARY=$<TARGET_FILE:r_runtime_inline_shims>
                 -DBITCODE_CATALOG=${R_BITCODE_CATALOG}
+                -DLLDB_EXECUTABLE=${R_LLDB_EXECUTABLE}
                 -P ${R_CODEGEN_CHECK_SCRIPT}
         )
         if(R_CODEGEN_CASE MATCHES "^async_io_close_(input|output)$" OR
@@ -7010,6 +7043,30 @@ if(NOT MSVC)
             "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_async_index_proofs.r"
             "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_index_proofs_static_bounds.r")
     set_tests_properties(r_frontend_index_proofs PROPERTIES LABELS "codegen;bounds")
+    # B8-3: floating-point operations of R stay inside the default environment of R.
+    add_test(NAME r_frontend_fenv_order
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/check_fenv_order.py"
+            --front $<TARGET_FILE:r-front>
+            --fixture "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/audit_std_c_raw_fn.r")
+    set_tests_properties(r_frontend_fenv_order PROPERTIES LABELS "codegen;ffi")
+    # B8.1: the DWARF of a program.
+    get_filename_component(R_DEBUG_TOOL_DIRECTORY "${CMAKE_C_COMPILER}" DIRECTORY)
+    add_test(NAME r_frontend_debug_info
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/check_debug_info.py"
+            --front $<TARGET_FILE:r-front>
+            --library-map "${PROJECT_SOURCE_DIR}/library/r/library.map"
+            --dwarfdump "${R_DEBUG_TOOL_DIRECTORY}/llvm-dwarfdump"
+            --sync-fixture "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_dict_paths.r"
+            --async-fixture "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_async_dict_paths.r")
+    set_tests_properties(r_frontend_debug_info PROPERTIES LABELS "codegen;debug")
+    # B8.2: mutation testing of R source.
+    add_test(NAME r_tooling_mutation
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/check_mutation_tool.py"
+            --tool "${PROJECT_SOURCE_DIR}/tools/mutate_r.py"
+            --build "${PROJECT_BINARY_DIR}"
+            --ctest "${CMAKE_CTEST_COMMAND}"
+            --fixture "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_mutation_target.r")
+    set_tests_properties(r_tooling_mutation PROPERTIES LABELS "tooling;mutation" TIMEOUT 1500)
     add_test(NAME r_frontend_direct_calls
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/check_direct_calls.py"
             --front $<TARGET_FILE:r-front>
