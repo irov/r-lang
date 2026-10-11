@@ -1,4 +1,5 @@
 example.registers.main = src/main.r
 example.registers.operations = src/atomic.r
 example.registers.device = src/device.r
+example.registers.machine = src/machine.r
 example.calculator.common = ../calculator/src/common.r

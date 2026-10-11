@@ -6,7 +6,7 @@ Normative draft of the R programming language
 | --- | --- |
 | Document | R Core Language Specification |
 | Language version | 0.1 |
-| Document revision | 0.1.0-draft.107 |
+| Document revision | 0.1.0-draft.108 |
 | Status | Normative draft; not a stable R 1.0 standard |
 | Document language | English; normative original |
 | Target backend | ISO/IEC 9899:2018 (C17) |
@@ -402,7 +402,7 @@ The punctuator list is closed; a source character sequence not matching any Anne
 
 <a id="R-GRAM-0007"></a>
 
-**R-GRAM-0007** — The built-in attribute set of R 0.1 is closed: `@repr(C)` on struct, union and fieldless enum, with the `packed` and `align = N` arguments of R-FFI-0061 on struct and union, `@align(N)` on a field of an `@repr(C)` aggregate (R-FFI-0061), `@safety` on unsafe or C-boundary function, `@json` on fields (R-JSON-0001), `@deny_panic_alloc` on a module declaration (R-OBJ-0012), and FFI attributes/scopes from R-FFI-0050. Unknown argument, unknown attribute or attribute outside its allowed declaration requires `R-DIAG-SYN-002` (or more specific Annex B FFI diagnostic). The function attributes `@noalloc` and `@nonblocking` are specified by R-FUNC-0019; `@must_use` is specified by R-FUNC-0020, `@discardable` by R-FUNC-0021, `@lending` on trait methods by R-TYPE-0045, `@chain` on methods by R-FUNC-0024, `@test` on functions by R-FUNC-0025, `@recursion` on synchronous functions by R-FUNC-0026, `@derive` on struct, enum and error declarations by R-AGG-0012, `@attribute` on struct declarations by R-AGG-0013 and `@default` on an enum variant by R-INIT-0005. A program adds attributes only as the attribute types of R-AGG-0013. After an argument-free attribute, a parenthesized group with a comma or `...` at its top level is not an argument list: it begins the tuple type of the declaration (R-TYPE-0052).
+**R-GRAM-0007** — The built-in attribute set of R 0.1 is closed: `@repr(C)` on struct, union and fieldless enum, with the `packed` and `align = N` arguments of R-FFI-0061 on struct and union, `@align(N)` on a field of an `@repr(C)` aggregate (R-FFI-0061), `@safety` on unsafe or C-boundary function, `@json` on fields (R-JSON-0001), `@deny_panic_alloc` on a module declaration (R-OBJ-0012), and FFI attributes/scopes from R-FFI-0050. Unknown argument, unknown attribute or attribute outside its allowed declaration requires `R-DIAG-SYN-002` (or more specific Annex B FFI diagnostic). The function attributes `@noalloc` and `@nonblocking` are specified by R-FUNC-0019; `@must_use` is specified by R-FUNC-0020, `@discardable` by R-FUNC-0021, `@lending` on trait methods by R-TYPE-0045, `@chain` on methods by R-FUNC-0024, `@test` on functions by R-FUNC-0025, `@recursion` on synchronous functions by R-FUNC-0026, `@derive` on struct, enum and error declarations by R-AGG-0012, `@attribute` on struct declarations by R-AGG-0013, `@default` on an enum variant by R-INIT-0005, and `@signal_safe` on a function or an import and `@signal_handler` on an `extern "C"` definition by R-FFI-0067. A program adds attributes only as the attribute types of R-AGG-0013. After an argument-free attribute, a parenthesized group with a comma or `...` at its top level is not an argument list: it begins the tuple type of the declaration (R-TYPE-0052).
 
 <a id="R-JSON-0001"></a>
 
@@ -835,6 +835,10 @@ An owner of an interface is represented by the owner of its member and the tag o
 <a id="R-OBJ-0010"></a>
 
 **R-OBJ-0010** — Module object and block `static` object constant-initialized during initialization owning module in textual source order, even if control never enters the containing block. In normal module destruction, they dropped in reverse order. Their initialization is not lazy and cannot panic.
+
+<a id="R-OBJ-0013"></a>
+
+**R-OBJ-0013** — In the initializer of a module object or a block `static` object, `&place as raw T*`, `&place as raw const T*` and their nullable forms are address constants when the place is a static object that is not `thread_local` and not imported, or a field of one or an element of one of its fixed arrays at an integer literal index, at any depth. An address constant reads, writes and borrows nothing, so it requires no unsafe context (R-OBJ-0009, R-UNSAFE-0001); it is a constant of the initializer (R-OBJ-0010) whose value is the address of that place for the whole execution. The place names an object declared before the initializer (R-NAME-0003), so an object cannot hold its own address that way. Any other conversion to a raw pointer in such an initializer keeps the rules of R-OBJ-0009 and R-UNSAFE-0001.
 
 <a id="R-OBJ-0011"></a>
 
@@ -1586,7 +1590,7 @@ The hooks of a generic K repeat the parameters of its schema and their constrain
 
 <a id="R-FUNC-0011"></a>
 
-**R-FUNC-0011** — An asynchronous frame owns every committed by-value parameter and every local whose lifetime crosses a suspension. Each such value is destroyed exactly once in the ordinary reverse-scope order after it ceases to be live, after terminal result transfer, or during cancellation cleanup. The parameter types of a user `async` function, every checked error payload and every local live across `await` shall satisfy R-BORROW-0024. A value that the `hosted-native-async` executor can transfer between threads shall be Send; its compiler-generated frame metadata records and verifies that requirement. A `std.sync` lock guard is neither Send nor unborrowed, so it shall not remain live across `await` (`R-DIAG-ASYNC-001`); the diagnostic names `std.async::mutex` or `std.async::rw_lock` of R-SLIB-ASYNC-0013, whose guards may. The runtime shall not expose a partially initialized frame or execute the body before the successful start commit.
+**R-FUNC-0011** — An asynchronous frame owns every committed by-value parameter and every local whose lifetime crosses a suspension. Each such value is destroyed exactly once in the ordinary reverse-scope order after it ceases to be live, after terminal result transfer, or during cancellation cleanup. The parameter types of a user `async` function, every checked error payload and every local live across `await` shall satisfy R-BORROW-0024. A value that the `hosted-native-async` executor can transfer between threads shall be Send; its compiler-generated frame metadata records and verifies that requirement. A `std.sync` lock guard is neither Send nor unborrowed, so it shall not remain live across `await` (`R-DIAG-ASYNC-001`); the diagnostic names `std.async::mutex` or `std.async::rw_lock` of R-SLIB-ASYNC-0013, whose guards may. The runtime shall not expose a partially initialized frame or execute the body before the successful start commit. A block-scope `static` or `thread_local` object is not a local of the frame: it keeps its own storage across suspensions, and R-OBJ-0009 governs its access.
 
 <a id="R-FUNC-0012"></a>
 
@@ -1967,7 +1971,8 @@ Every edge leaving a protected region first selects its reason, performs the dro
 - `unsafe core::slice_from_raw_parts_in_mut(A anchor, raw T*? pointer, usize length) -> T[]`;
 - `unsafe core::volatile_load(raw const T* address) -> T`;
 - `unsafe core::volatile_store(raw T* address, T value) -> void`;
-- `unsafe core::assume(bool condition) -> void`.
+- `unsafe core::assume(bool condition) -> void`;
+- `unsafe core::unreachable() -> never`.
 
 Every allocation-supporting profile additionally provides:
 
@@ -1982,7 +1987,7 @@ For either volatile operation, T is selected from the raw-pointer pointee and sh
 
 For `core::adopt` and `core::release`, T is selected from the pointer or owner and shall be an outermost-unqualified, complete, sized, inhabited non-`void` value type. Adopt accepts the non-null exact base pointer of one allocation holding one initialized T and transfers its existing drop and compatible-deallocation duty into the returned unique owner under R-SAFETY-ADOPT; it does not allocate or construct another T. Release consumes the unique owner, suppresses its R drop and returns that same base pointer with the duty transferred to the caller under R-SAFETY-RELEASE. A named owner argument therefore requires `move` under R-FUNC-0002.
 
-`core::assume` has the R-SAFETY-ASSUME effect. None of these nine operations allocates or panics; violating an applicable Annex E safety contract is UB rather than a recoverable result.
+`core::assume` has the R-SAFETY-ASSUME effect. `core::unreachable` has the R-SAFETY-UNREACHABLE effect: control never returns from it, and reaching it is UB that the optimizer may rely on. None of these ten operations allocates or panics; violating an applicable Annex E safety contract is UB rather than a recoverable result.
 
 <a id="concurrency"></a>
 
@@ -2018,7 +2023,7 @@ For `core::adopt` and `core::release`, T is selected from the pointer or owner a
 
 <a id="R-MEM-0007"></a>
 
-**R-MEM-0007** — Allowed ordering is: load — relaxed/acquire/seq\_cst; store — relaxed/release/seq\_cst; exchange/other RMW — any of five. Compare-exchange failure may be relaxed/acquire/seq\_cst, never release/acq\_rel, and shall not be stronger than success: relaxed→relaxed, acquire→relaxed|acquire, release→relaxed, acq\_rel→relaxed|acquire, seq\_cst→relaxed|acquire|seq\_cst. Invalid constant ordering requires `R-DIAG-ATOMIC-001`; runtime-selected invalid ordering panics before any atomic read or modification.
+**R-MEM-0007** — Allowed ordering is: load — relaxed/acquire/seq\_cst; store — relaxed/release/seq\_cst; exchange/other RMW — any of five. Compare-exchange failure may be relaxed/acquire/seq\_cst, never release/acq\_rel, and shall not be stronger than success: relaxed→relaxed, acquire→relaxed|acquire, release→relaxed, acq\_rel→relaxed|acquire, seq\_cst→relaxed|acquire|seq\_cst. Invalid constant ordering requires `R-DIAG-ATOMIC-001`; runtime-selected invalid ordering panics before any atomic read or modification. A fence of Library R-LIB-0028 takes acquire, release, acq\_rel or seq\_cst, never relaxed.
 
 <a id="R-MEM-0008"></a>
 
@@ -2236,7 +2241,7 @@ For `core::adopt` and `core::release`, T is selected from the pointer or owner a
 
 <a id="R-FFI-0025"></a>
 
-**R-FFI-0025** — In expected matching `raw fn(...) -> R` context, name of exported C function bearing `@callback` may convert to raw function pointer without unsafe operation. Missing `@callback`, mismatched prototype or calling convention requires `R-DIAG-FFI-005`; calling through resulting pointer remains unsafe.
+**R-FFI-0025** — In expected matching `raw fn(...) -> R` context, name of exported C function bearing `@callback` or `@signal_handler` (R-FFI-0067) may convert to raw function pointer without unsafe operation. Missing `@callback`, mismatched prototype or calling convention requires `R-DIAG-FFI-005`; calling through resulting pointer remains unsafe.
 
 <a id="R-FFI-0026"></a>
 
@@ -2368,6 +2373,10 @@ For `core::adopt` and `core::release`, T is selected from the pointer or owner a
 
 **R-FFI-0066** — The ABI baseline of a library is a JSON document of schema `r-abi-baseline-0.1`: the name of the library, the target triple of the target manifest, the current and the compatibility version, the name and the C prototype without parameter names of every export, and every R-declared type of R-FFI-0065 with its kind, size, alignment and packing and its members (name, C type, byte offset, bit offset, bit width, alignment) or its enumerators (name, value). A build of the library checked against the baseline of an earlier build compares the compatibility versions by X, then Y, then Z: when they are equal, every export of the baseline shall exist with the same prototype and every type of it with the same layout, while exports and types the baseline does not list may be added; a higher compatibility version admits every change. A removed or changed export or type at the same compatibility version, a lower compatibility version and a document that is no baseline of this library and target require `R-DIAG-FFI-004`, which names the first export or type that differs.
 
+<a id="R-FFI-0067"></a>
+
+**R-FFI-0067** — `@signal_safe` marks an R function, or an import whose C function is async-signal-safe (the declaration asserts it), as callable from a signal handler; `@signal_handler` marks an `extern "C"` definition as a signal handler and implies `@signal_safe`. A signal-safe R function shall prove `@noalloc` and `@nonblocking` (R-FUNC-0019) and, in its own body: call only signal-safe functions and imports, never through a pointer; read or write no `thread_local` object; create and drop no value whose cleanup runs code; use of the standard operations only the arithmetic families of R-LIB-0001, the bit operations of R-LIB-0027, the machine operations of R-LIB-0028, the atomic operations of R-LIB-0011 on objects of 1, 2, 4, 8 or 16 bytes, which the target performs without a lock, and the unsafe operations of R-UNSAFE-0008 other than `core::adopt` and `core::release`; and be neither async nor `@recursion`. A failed proof requires `R-DIAG-RESOURCE-003` naming the chain and the violation. A signal-safe function never unwinds: a panic in it, explicit or of a failed check, ends the process at once with a report of its category and place written to standard error (R-ERR-0006). A signal handler is entered without the attachment of R-FFI-0055 and without a stack check, and neither it nor a call of C that a signal-safe function makes switches the floating-point environment of R-FFI-0058: they run in the environment of the interrupted code. Its frames and those of its callees are measured as every frame is (R-FUNC-0004). In a matching `raw fn(...) -> R` context its name converts to a raw function pointer as an `@callback` export does (R-FFI-0025), which an import such as `sigaction` or `signal` installs. A static object the handler shares with other code is accessed under R-SAFETY-MUT-STATIC or through atomics, and `core::signal_fence` orders those accesses on one thread. Either attribute with arguments, repeated, or `@signal_handler` on a declaration other than an `extern "C"` definition or together with `@callback`, is a misplaced attribute: `R-DIAG-FFI-003` of R-FFI-0050 on a C declaration, `R-DIAG-SYN-002` otherwise.
+
 ### 23.7 Unsafe boundary and safe wrappers
 
 <a id="R-FFI-0010"></a>
@@ -2392,7 +2401,7 @@ For `core::adopt` and `core::release`, T is selected from the pointer or owner a
 
 <a id="R-FFI-0050"></a>
 
-**R-FFI-0050** — FFI attribute scopes are closed: `@link`, `@header`, `@abi` on extern block; `@link_name` on imported symbol; `@safety` on imported or exported C function; `@fenv` on imported C function; `@repr`, `@c_type` on C type; `@c_constant` on verified constant; `@export_name`, `@callback` on exported C function. `@header` is repeatable; `@link` and `@abi` are singleton per block, and every declaration-scoped FFI attribute is singleton on its declaration. Misplaced, duplicated-singleton or unknown FFI attribute requires `R-DIAG-FFI-003`.
+**R-FFI-0050** — FFI attribute scopes are closed: `@link`, `@header`, `@abi` on extern block; `@link_name` on imported symbol; `@safety` on imported or exported C function; `@fenv` on imported C function; `@repr`, `@c_type` on C type; `@c_constant` on verified constant; `@export_name`, `@callback`, `@signal_handler` on exported C function; `@signal_safe` on imported or exported C function (R-FFI-0067). `@header` is repeatable; `@link` and `@abi` are singleton per block, and every declaration-scoped FFI attribute is singleton on its declaration. Misplaced, duplicated-singleton or unknown FFI attribute requires `R-DIAG-FFI-003`.
 
 <a id="R-FFI-0051"></a>
 
@@ -2412,7 +2421,7 @@ For `core::adopt` and `core::release`, T is selected from the pointer or owner a
 
 <a id="R-FFI-0055"></a>
 
-**R-FFI-0055** — C-origin thread entering any exported `extern "C"` R function shall be attached by entry trampoline or explicit `std.c` protocol before any R execution, whether or not declaration bears `@callback`. Attachment has per-thread owner and nesting depth. Entry on already attached thread increments depth and shall not detach an outer explicit/R-created context. A trampoline-created temporary attachment detaches only after its outermost C-origin entry returns; explicit attachment persists until explicit detach. Detach at depth zero requires no live R frame/borrow/value retained by that attachment generation and performs its R thread-local drops exactly once. While runtime and module remain live, a later entry on the same C thread may create a fresh temporary attachment generation with fresh thread-local instances. Failure to establish a required temporary attachment aborts before safe R argument materialization or exported body. Provider shall stop and join future entry sources before R module destruction; entry after runtime shutdown or provider/module unload violates external contract.
+**R-FFI-0055** — C-origin thread entering any exported `extern "C"` R function shall be attached by entry trampoline or explicit `std.c` protocol before any R execution, whether or not declaration bears `@callback`; a signal handler of R-FFI-0067 is entered without attachment. Attachment has per-thread owner and nesting depth. Entry on already attached thread increments depth and shall not detach an outer explicit/R-created context. A trampoline-created temporary attachment detaches only after its outermost C-origin entry returns; explicit attachment persists until explicit detach. Detach at depth zero requires no live R frame/borrow/value retained by that attachment generation and performs its R thread-local drops exactly once. While runtime and module remain live, a later entry on the same C thread may create a fresh temporary attachment generation with fresh thread-local instances. Failure to establish a required temporary attachment aborts before safe R argument materialization or exported body. Provider shall stop and join future entry sources before R module destruction; entry after runtime shutdown or provider/module unload violates external contract.
 
 <a id="R-FFI-0056"></a>
 
@@ -3252,6 +3261,7 @@ Each line defines a stable diagnostic code. Implementation may add notes/suggest
 | `R-DIAG-USE-002` | Unconditional replacement of a local value | R-INIT-0014 |
 | `R-DIAG-RESOURCE-001` | Heap-allocation absence cannot be proved | R-FUNC-0019 |
 | `R-DIAG-RESOURCE-002` | Nonblocking execution cannot be proved | R-FUNC-0019 |
+| `R-DIAG-RESOURCE-003` | Signal safety cannot be proved | R-FFI-0067 |
 | `R-DIAG-META-001` | Unresolved static predicate or incompatible branch assumptions | R-META-0001, R-META-0002, R-META-0003 |
 | `R-DIAG-TYPE-002` | Non-Boolean operand of `!`, `&&`, or `\|\|` | R-EXPR-0010 |
 | `R-DIAG-TYPE-003` | Invalid explicit conversion, transmute or unsafe core-intrinsic type | R-EXPR-0016..0019, R-EXPR-0023, R-UNSAFE-0007..0008 |
@@ -3384,6 +3394,7 @@ This catalogue is also closed. All options remain defined and safe.
 | `R-SAFETY-SHARED-INTO-RAW` | Convert `arc T` or `rc T` strong owner into raw token | Owner is one valid initialized strong owner and is consumed exactly once. Effect suppresses that handle’s drop without changing the strong count and returns the exact non-null stable base pointer to T as `raw const (T)*`. It creates one abstract outstanding obligation for (runtime, allocation identity, family, T). Copying raw pointer bits does not copy the obligation; a raw shared read does not consume it. Each separately executed `into_raw`, including one applied to a clone, creates one obligation even when returned pointer bits are equal. An `rc` obligation remains on its originating R thread and, for a C-origin thread, its attachment generation. |
 | `R-SAFETY-SHARED-FROM-RAW` | Reconstruct `arc T` or `rc T` from raw token | Pointer is the exact base pointer returned by `into_raw` of the same family and T, possibly after a provenance-preserving object-pointer/`void`-pointer round trip; at least one unmatched obligation for that tuple exists; runtime, defining module, drop glue and allocator domain remain live. Cross-thread `arc` use additionally requires T Send+Sync and a verified transfer/synchronization contract. `rc` requires its originating R thread and, for C-origin execution, the same live explicit attachment generation. Effect consumes exactly one obligation and recreates one strong owner without changing the count. A pointer copy creates no obligation. A forged, interior, wrong-family or wrong-T pointer, over-consumption, or repetition after the last obligation violates this unsafe contract and is UB. |
 | `R-SAFETY-ASSUME` | `core::assume(condition)` | Condition is true at this execution point for all abstract-machine states. Effect supplies fact to optimizer; false is immediate UB. |
+| `R-SAFETY-UNREACHABLE` | `core::unreachable()` | Control never reaches the call on any execution. Effect supplies the fact to the optimizer; reaching the call is immediate UB. |
 | `R-SAFETY-EXTERN-CALL` | Call imported C function/function pointer | Associated library is loaded and remains loaded; symbol/function pointer is non-null and has verified compatible prototype/calling convention; all C/application preconditions, lifetimes, nullability, initialization, effective types and thread rules hold; C does not unwind/longjmp across boundary or retain data beyond declared contract; floating environment is isolated per R-FFI-0058. |
 | `R-SAFETY-EXTERN-OBJECT` | Read/write/address imported C object | Required symbol is resolved, library initialization completed, object/TLS representation is valid for declared type, access is permitted by C declaration and all external/concurrent accesses are excluded or synchronized for full operation. |
 | `R-SAFETY-EXTERN-CALLBACK` | C invokes exported R callback | Function pointer/prototype/calling convention match; R runtime is initialized; current thread is already attached or may be temporarily attached by the entry trampoline; every argument and pointed range satisfies R validity for complete callback; callback code remains loaded; no foreign unwind or longjmp crosses callback. |

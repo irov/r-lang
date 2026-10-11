@@ -712,6 +712,14 @@ typedef struct RBodyContext {
     bool atomic_object_pending;
     RSymbolId atomic_object_symbol;
     RSourceSpan atomic_object_span;
+    /* R-OBJ-0013 (B11): in the initializer of a static object an address constant `&place as
+       raw T*` of a static object needs no unsafe; the R-OBJ-0009 diagnostics of its accesses wait
+       here until the raw conversion admits them, and the rest are reported when the initializer
+       ends (r_body_flush_static_deferrals). */
+    bool address_constants;
+    uint32_t deferred_static_count;
+    RSymbolId deferred_static_symbols[16];
+    RSourceSpan deferred_static_spans[16];
     uint32_t loop_depth;
     uint32_t finally_depth;
     uint32_t finally_loop_depth;
@@ -1174,6 +1182,9 @@ _Static_assert((sizeof(r_checked_numeric_destinations) /
 
 typedef struct RFunctionModifiers {
     bool is_callback;
+    /* R-FFI-0067 (B11): @signal_safe, and @signal_handler on an extern "C" definition. */
+    bool is_signal_safe;
+    bool is_signal_handler;
     bool is_scoped;
     bool is_noalloc;
     bool is_nonblocking;
@@ -8920,8 +8931,18 @@ static bool r_semantic_external_modifiers(RFrontendContext *context,
                 modifiers->recursion_depth = valid ? (uint32_t)depth : UINT32_C(1);
                 modifiers->recursion_span = attribute.span;
             } else if (valid && r_semantic_token_text_equal_owned(context, &name, "callback")) {
-                valid = modifiers->is_extern_c && !modifiers->is_callback && count == 0U;
+                valid = modifiers->is_extern_c && !modifiers->is_callback &&
+                        !modifiers->is_signal_handler && count == 0U;
                 modifiers->is_callback = true;
+            } else if (valid && r_semantic_token_text_equal_owned(context, &name, "signal_safe")) {
+                /* R-FFI-0067: an async function or one with @recursion is checked to fail. */
+                valid = !modifiers->is_signal_safe && count == 0U;
+                modifiers->is_signal_safe = true;
+            } else if (valid &&
+                       r_semantic_token_text_equal_owned(context, &name, "signal_handler")) {
+                valid = modifiers->is_extern_c && !modifiers->is_signal_handler &&
+                        !modifiers->is_callback && count == 0U;
+                modifiers->is_signal_handler = true;
             } else if (valid && r_semantic_token_text_equal_owned(context, &name, "export_name")) {
                 valid = modifiers->is_extern_c && modifiers->c_name_span.end == 0U && count == 1U &&
                         arguments[0].kind == R_TOKEN_STRING_LITERAL;
@@ -9483,6 +9504,8 @@ static bool r_semantic_collect_function(RFrontendContext *context,
     associated.is_scoped = modifiers.is_scoped;
     associated.is_extern_c = modifiers.is_extern_c;
     associated.is_callback = modifiers.is_callback;
+    associated.is_signal_safe = modifiers.is_signal_safe || modifiers.is_signal_handler;
+    associated.is_signal_handler = modifiers.is_signal_handler;
     associated.is_noalloc = modifiers.is_noalloc;
     associated.is_nonblocking = modifiers.is_nonblocking;
     associated.is_must_use = modifiers.is_must_use;
@@ -9650,6 +9673,8 @@ static bool r_semantic_collect_function(RFrontendContext *context,
         symbol.is_scoped = modifiers.is_scoped;
         symbol.is_extern_c = modifiers.is_extern_c;
         symbol.is_callback = modifiers.is_callback;
+        symbol.is_signal_safe = modifiers.is_signal_safe || modifiers.is_signal_handler;
+        symbol.is_signal_handler = modifiers.is_signal_handler;
         symbol.is_noalloc = modifiers.is_noalloc;
         symbol.is_nonblocking = modifiers.is_nonblocking;
         symbol.is_must_use = modifiers.is_must_use;
@@ -13780,6 +13805,7 @@ static bool r_semantic_collect_c_import(RFrontendContext *context,
     bool fenv_preserve = false;
     bool is_noalloc = false;
     bool is_nonblocking = false;
+    bool is_signal_safe = false;
     bool is_must_use = false;
     bool is_discardable = false;
     bool uses_bridge = false;
@@ -13868,6 +13894,12 @@ static bool r_semantic_collect_c_import(RFrontendContext *context,
                    r_semantic_token_text_equal_owned(context, &attribute_name, "nonblocking")) {
             valid = !is_nonblocking && count == 0U;
             is_nonblocking = true;
+        } else if (valid &&
+                   r_semantic_token_text_equal_owned(context, &attribute_name, "signal_safe")) {
+            /* R-FFI-0067 (B11): the declaration asserts that the C function is
+               async-signal-safe. */
+            valid = !is_signal_safe && count == 0U;
+            is_signal_safe = true;
         } else if (valid &&
                    r_semantic_token_text_equal_owned(context, &attribute_name, "must_use")) {
             valid = !is_must_use && count == 0U;
@@ -14148,6 +14180,7 @@ static bool r_semantic_collect_c_import(RFrontendContext *context,
         symbol.fenv_preserve = fenv_preserve;
         symbol.is_noalloc = is_noalloc;
         symbol.is_nonblocking = is_nonblocking;
+        symbol.is_signal_safe = is_signal_safe;
         symbol.is_must_use = is_must_use;
         symbol.is_discardable = is_discardable;
         symbol.uses_bridge = uses_bridge;
@@ -23933,11 +23966,87 @@ static bool r_body_symbol_place(RBodyContext *body,
 /* R-OBJ-0009: the first static the object operand of an atomic operation names is its
    candidate root; every other static access keeps the unsafe requirement. */
 static bool r_body_defer_atomic_static(RBodyContext *body, RSymbolId symbol_id, RSourceSpan span) {
+    if (body->address_constants && !body->atomic_object_pending &&
+        (body->deferred_static_count < (uint32_t)(sizeof(body->deferred_static_symbols) /
+                                                  sizeof(body->deferred_static_symbols[0])))) {
+        /* R-OBJ-0013: perhaps an address constant; decided by the raw conversion. */
+        body->deferred_static_symbols[body->deferred_static_count] = symbol_id;
+        body->deferred_static_spans[body->deferred_static_count] = span;
+        body->deferred_static_count += 1U;
+        return true;
+    }
     if (!body->atomic_object_pending || (body->atomic_object_symbol != R_SYMBOL_ID_INVALID)) {
         return false;
     }
     body->atomic_object_symbol = symbol_id;
     body->atomic_object_span = span;
+    return true;
+}
+
+/* R-OBJ-0013 (B11): whether a borrow designates a static object that is not thread_local, or a
+   field or an element at a constant index of a fixed array inside one, without reading memory: an
+   address constant of a static image. */
+bool r_semantic_static_address(const RFrontendContext *context,
+                               RHirNodeId borrow,
+                               RSymbolId *root) {
+    const RHirNode *node =
+        ((borrow == R_HIR_NODE_ID_INVALID) || ((size_t)borrow > context->hir_node_count))
+            ? NULL
+            : &context->hir_nodes[(size_t)borrow - 1U];
+    uint32_t depth = 0U;
+
+    if ((node == NULL) || (node->kind != R_HIR_BORROW) || (node->child_count != UINT32_C(1))) {
+        return false;
+    }
+    node = &context->hir_nodes[(size_t)context->hir_children[node->first_child] - 1U];
+    while (depth <= context->options.limits.max_nesting) {
+        const RHirNode *base;
+        if (node->kind == R_HIR_PLACE) {
+            const RSemanticSymbol *symbol =
+                ((node->symbol == R_SYMBOL_ID_INVALID) ||
+                 ((size_t)node->symbol > context->semantic_symbol_count))
+                    ? NULL
+                    : &context->semantic_symbols[(size_t)node->symbol - 1U];
+            if ((symbol == NULL) || symbol->is_thread_local || symbol->is_import ||
+                ((symbol->kind != R_SEMANTIC_SYMBOL_MODULE_OBJECT) && !symbol->is_static)) {
+                return false;
+            }
+            *root = node->symbol;
+            return true;
+        }
+        if (((node->kind != R_HIR_FIELD_PLACE) && (node->kind != R_HIR_INDEX_PLACE)) ||
+            (node->child_count == UINT32_C(0))) {
+            return false;
+        }
+        base = &context->hir_nodes[(size_t)context->hir_children[node->first_child] - 1U];
+        if ((node->kind == R_HIR_INDEX_PLACE) &&
+            ((node->child_count != UINT32_C(2)) ||
+             (r_semantic_value_kind(context, base->type) != R_SEMANTIC_TYPE_FIXED_ARRAY) ||
+             (context->hir_nodes[(size_t)context->hir_children[node->first_child + 1U] - 1U].kind !=
+              R_HIR_LITERAL))) {
+            return false;
+        }
+        node = base;
+        depth += 1U;
+    }
+    return false;
+}
+
+/* R-OBJ-0013: the static accesses an address constant did not admit are R-OBJ-0009 errors. */
+static bool r_body_flush_static_deferrals(RBodyContext *body) {
+    const uint32_t count = body->deferred_static_count;
+
+    body->deferred_static_count = 0U;
+    for (uint32_t index = 0U; index < count; ++index) {
+        if (!r_body_diagnostic(body,
+                               "R-DIAG-MEM-001",
+                               "R-OBJ-0009",
+                               "direct mutable static access requires unsafe; immutable static "
+                               "access requires Sync",
+                               body->deferred_static_spans[index])) {
+            return false;
+        }
+    }
     return true;
 }
 
@@ -24981,7 +25090,22 @@ static bool r_body_core_operation(const RFrontendContext *context,
     } else if (r_semantic_token_text_equal_owned(context, &components[1], "field_mut")) {
         *operation = R_STANDARD_CALL_CORE_FIELD_MUT;
     } else {
-        return false;
+        /* Library R-LIB-0028 (B11): the machine operations of core. */
+        bool machine = false;
+        for (uint32_t index = (uint32_t)R_STANDARD_CALL_CORE_ATOMIC_FENCE;
+             !machine && (index <= (uint32_t)R_STANDARD_CALL_CORE_PREFETCH_WRITE);
+             ++index) {
+            machine = r_semantic_token_text_equal_owned(
+                context,
+                &components[1],
+                r_standard_core_machine_name((RStandardCallOperation)index) + 6U);
+            if (machine) {
+                *operation = (RStandardCallOperation)index;
+            }
+        }
+        if (!machine) {
+            return false;
+        }
     }
     if (operation_span != NULL) {
         *operation_span = components[1].span;
@@ -25779,6 +25903,14 @@ static bool r_body_lower_core_slice_from_raw_parts(RBodyContext *body,
     result->valid = true;
     return true;
 }
+
+static bool r_body_lower_core_machine(RBodyContext *body,
+                                      RAstRef argument_list,
+                                      const RAstNodeView *arguments_view,
+                                      RSourceSpan call_span,
+                                      RSourceSpan operation_span,
+                                      RStandardCallOperation operation,
+                                      RExpressionResult *result);
 
 static bool r_body_lower_core_assume(RBodyContext *body,
                                      RAstRef argument_list,
@@ -39514,8 +39646,8 @@ static bool r_body_function_address(RBodyContext *body,
     uint32_t index;
     bool matches =
         function != NULL && type != NULL && type->kind == R_SEMANTIC_TYPE_RAW_FUNCTION &&
-        function->is_extern_c && function->is_callback && function->signature_supported &&
-        function->generic_schema == 0U && !function->is_async &&
+        function->is_extern_c && (function->is_callback || function->is_signal_handler) &&
+        function->signature_supported && function->generic_schema == 0U && !function->is_async &&
         function->throws_type == R_TYPE_ID_INVALID && function->return_type == type->base &&
         function->parameter_count == type->length &&
         ((type->flags & R_SEMANTIC_TYPE_FLAG_NOALLOC) == 0U || function->is_noalloc) &&
@@ -42817,6 +42949,15 @@ static bool r_body_lower_call(RBodyContext *body,
             if (core_operation == R_STANDARD_CALL_CORE_ASSUME) {
                 return r_body_lower_core_assume(
                     body, argument_list, &arguments_view, call_span, operation_span, result);
+            }
+            if (r_standard_core_machine_operation(core_operation)) {
+                return r_body_lower_core_machine(body,
+                                                 argument_list,
+                                                 &arguments_view,
+                                                 call_span,
+                                                 operation_span,
+                                                 core_operation,
+                                                 result);
             }
             if ((core_operation == R_STANDARD_CALL_CORE_SLICE_FROM_RAW_PARTS) ||
                 (core_operation == R_STANDARD_CALL_CORE_SLICE_FROM_RAW_PARTS_MUT) ||
@@ -48082,8 +48223,30 @@ static bool r_body_lower_binary(RBodyContext *body,
                 const RSemanticType *source = r_semantic_type(
                     body->frontend, r_semantic_value_type(body->frontend, current.type));
                 const RSemanticType *target = r_semantic_type(body->frontend, target_type);
+                RSymbolId address_root = R_SYMBOL_ID_INVALID;
+                /* R-OBJ-0013 (B11): an address constant in a static initializer reads nothing
+                   and needs no unsafe; it admits the deferred access of its root. */
+                const bool address_constant =
+                    body->address_constants &&
+                    r_semantic_static_address(body->frontend, current.node, &address_root);
 
-                if ((body->unsafe_depth == UINT32_C(0)) &&
+                if (address_constant) {
+                    for (uint32_t deferred = body->deferred_static_count; deferred > 0U;
+                         --deferred) {
+                        if (body->deferred_static_symbols[deferred - 1U] == address_root) {
+                            for (uint32_t later = deferred; later < body->deferred_static_count;
+                                 ++later) {
+                                body->deferred_static_symbols[later - 1U] =
+                                    body->deferred_static_symbols[later];
+                                body->deferred_static_spans[later - 1U] =
+                                    body->deferred_static_spans[later];
+                            }
+                            body->deferred_static_count -= 1U;
+                            break;
+                        }
+                    }
+                }
+                if (!address_constant && (body->unsafe_depth == UINT32_C(0)) &&
                     !r_body_diagnostic(body,
                                        "R-DIAG-UNSAFE-001",
                                        "R-UNSAFE-0001",
@@ -51591,9 +51754,16 @@ static bool r_body_lower_local(RBodyContext *body,
     if (!format_local && !inferred_type) {
         /* A static or thread-local initializer is a required constant (R-NAME-0008). */
         const bool translation_effects = body->translation_effects;
+        const bool address_constants = body->address_constants;
         bool lowered;
         body->translation_effects = translation_effects || has_storage_modifier;
-        lowered = r_body_lower_value(body, initializer, value_type, &initial_value);
+        /* R-OBJ-0013: a static local, not a thread_local one, may hold address constants. */
+        body->address_constants =
+            has_storage_modifier &&
+            !r_ast_has_direct_token(body->frontend, declaration, R_TOKEN_KW_THREAD_LOCAL);
+        lowered = r_body_lower_value(body, initializer, value_type, &initial_value) &&
+                  (!body->address_constants || r_body_flush_static_deferrals(body));
+        body->address_constants = address_constants;
         body->translation_effects = translation_effects;
         if (!lowered) {
             return false;
@@ -60169,7 +60339,9 @@ static bool r_hir_build_module_object_initializer(RFrontendContext *context, RSy
     body.frontend = context;
     body.source = declaration.source;
     body.translation_effects = true;
-    if (!r_body_lower_value(&body, initializer, expected_type, &value)) {
+    body.address_constants = !symbol->is_thread_local;
+    if (!r_body_lower_value(&body, initializer, expected_type, &value) ||
+        !r_body_flush_static_deferrals(&body)) {
         goto cleanup;
     }
     symbol = &context->semantic_symbols[(size_t)symbol_id - 1U];
@@ -60404,6 +60576,8 @@ static bool r_reflection_spell_type(RFrontendContext *, RTypeId, RReflectionText
 #include "constexpr_loops.inc"
 
 #include "core_bits.inc"
+
+#include "core_machine.inc"
 
 #include "json_schema_text.inc"
 #include "static_conditions.inc"

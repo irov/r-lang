@@ -583,7 +583,10 @@ bool r_llvm_panic(RLlvmEmitter *emitter,
                   const char *category,
                   RSourceSpan span,
                   RMirBlockId panic_target) {
+    /* R-FFI-0067 (B11): a signal-safe function never unwinds, which would read thread state of
+       the runtime; its panic ends the process at once. */
     const bool unwinds = (panic_target != R_MIR_BLOCK_ID_INVALID) &&
+                         ((emitter->symbol == NULL) || !emitter->symbol->is_signal_safe) &&
                          (strcmp(category, "R_RUNTIME_PANIC_CONTRACT_VIOLATION") != 0);
     int64_t value = 0;
     LLVMValueRef arguments[2];

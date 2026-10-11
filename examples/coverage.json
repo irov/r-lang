@@ -1,9 +1,9 @@
 {
   "version": 4,
   "scope": "source references and resolved program operations and types; execution checked separately",
-  "total_records": 1586,
-  "covered_records": 1586,
-  "application_records": 1586,
+  "total_records": 1594,
+  "covered_records": 1594,
+  "application_records": 1594,
   "items": [
     {
       "record_id": "core::adopt#operation",
@@ -61,6 +61,18 @@
       "record_id": "core::atomic_exchange#operation",
       "required": [
         "core::atomic_exchange"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "registers"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "core::atomic_fence#operation",
+      "required": [
+        "core::atomic_fence"
       ],
       "missing": [],
       "application_missing": [],
@@ -536,6 +548,18 @@
       "resolved_type_examples": []
     },
     {
+      "record_id": "core::frame_address#operation",
+      "required": [
+        "core::frame_address"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "registers"
+      ],
+      "resolved_type_examples": []
+    },
+    {
       "record_id": "core::hash#operation",
       "required": [
         "core::hash"
@@ -626,6 +650,7 @@
       "examples": [
         "arena",
         "assistant",
+        "c_bridge",
         "http",
         "jobs",
         "offload",
@@ -636,6 +661,7 @@
       "resolved_type_examples": [
         "arena",
         "assistant",
+        "c_bridge",
         "http",
         "jobs",
         "offload",
@@ -683,6 +709,30 @@
       "resolved_type_examples": []
     },
     {
+      "record_id": "core::prefetch_read#operation",
+      "required": [
+        "core::prefetch_read"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "registers"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "core::prefetch_write#operation",
+      "required": [
+        "core::prefetch_write"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "registers"
+      ],
+      "resolved_type_examples": []
+    },
+    {
       "record_id": "core::profile_name#operation",
       "required": [
         "core::profile_name"
@@ -704,10 +754,12 @@
       "missing": [],
       "application_missing": [],
       "examples": [
-        "calculator"
+        "calculator",
+        "registers"
       ],
       "resolved_type_examples": [
-        "calculator"
+        "calculator",
+        "registers"
       ]
     },
     {
@@ -884,6 +936,18 @@
       "resolved_type_examples": []
     },
     {
+      "record_id": "core::signal_fence#operation",
+      "required": [
+        "core::signal_fence"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "c_bridge"
+      ],
+      "resolved_type_examples": []
+    },
+    {
       "record_id": "core::slice_from_raw_parts#operation",
       "required": [
         "core::slice_from_raw_parts"
@@ -928,6 +992,18 @@
       "application_missing": [],
       "examples": [
         "c_bridge"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "core::stack_pointer#operation",
+      "required": [
+        "core::stack_pointer"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "registers"
       ],
       "resolved_type_examples": []
     },
@@ -1014,6 +1090,18 @@
       "resolved_type_examples": []
     },
     {
+      "record_id": "core::trap#operation",
+      "required": [
+        "core::trap"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "registers"
+      ],
+      "resolved_type_examples": []
+    },
+    {
       "record_id": "core::type_attribute#operation",
       "required": [
         "core::type_attribute"
@@ -1036,6 +1124,18 @@
         "arena",
         "logbook",
         "reflection"
+      ],
+      "resolved_type_examples": []
+    },
+    {
+      "record_id": "core::unreachable#operation",
+      "required": [
+        "core::unreachable"
+      ],
+      "missing": [],
+      "application_missing": [],
+      "examples": [
+        "registers"
       ],
       "resolved_type_examples": []
     },
@@ -2226,6 +2326,7 @@
       "missing": [],
       "application_missing": [],
       "examples": [
+        "c_bridge",
         "offload"
       ],
       "resolved_type_examples": []
@@ -4587,6 +4688,7 @@
         "arena",
         "assistant",
         "binary",
+        "c_bridge",
         "calculator",
         "clock",
         "deflate",

@@ -65,6 +65,7 @@
       "compiler/llvm/json_stream.c",
       "compiler/llvm/keys.c",
       "compiler/llvm/library.c",
+      "compiler/llvm/machine.c",
       "compiler/llvm/outcome.c",
       "compiler/llvm/reflection.c",
       "compiler/llvm/runtime.c",

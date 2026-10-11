@@ -3738,6 +3738,8 @@ static bool r_attribute_name_is_known(const RParser *parser, const RToken *name)
         "recursion",
         "attribute",
         "align",
+        "signal_safe",
+        "signal_handler",
     };
     size_t index;
     for (index = 0U; index < (sizeof(known_names) / sizeof(known_names[0])); ++index) {
@@ -3763,6 +3765,8 @@ static bool r_attribute_is_argument_free(const RParser *parser, const RToken *na
         "chain",
         "scoped",
         "callback",
+        "signal_safe",
+        "signal_handler",
     };
     for (size_t index = 0U; index < (sizeof(names) / sizeof(names[0])); ++index) {
         if (r_parser_token_text_is(parser, name, names[index])) {

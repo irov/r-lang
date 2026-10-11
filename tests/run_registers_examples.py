@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Compare register scripts with integer arithmetic and race native ticket issuers."""
+"""Compare register scripts with integer arithmetic, race native ticket issuers, hand messages
+over through fences, measure the stack, write a static register map and halt by trap."""
 import argparse
 import random
+import signal
 import subprocess
 
 
@@ -64,12 +66,34 @@ def main():
             expected += f'before={previous} after={value}\n'
             previous = value
         run('device', initial, *writes, expected=expected)
+    for messages in [0, 1, 100, 2000, 10000] * 2:
+        run('handoff', messages, expected=f'messages={messages} sum={3 * messages * (messages + 1) // 2}\n')
+    for depth in [0, 1, 17, 200]:
+        run('stack', depth, expected=f'depth={depth} grows_down=true frame_above_stack=true\n')
+    names = ['control', 'status', 'data', 'scratch']
+    for words in [[5], [5, 2**30 + 7, 2**31 + 9, 3 * 2**30 + 5, 9], [2**32 - 1, 2**30, 0]]:
+        registers = [0, 1, 0, 0]
+        expected = ''
+        for word in words:
+            index, value = word >> 30, word & (2**30 - 1)
+            expected += f'{names[index]} before={registers[index]} after={value}\n'
+            registers[index] = value
+        expected += ' '.join(f'{name}={value}' for name, value in zip(names, registers)) + '\n'
+        run('map', *words, expected=expected)
+    for limit, values in [(10, [1, 2, 3]), (0, []), (6, [1, 2, 3]), (2**32 - 1, [2**32 - 1])]:
+        run('watchdog', limit, *values, expected=f'total={sum(values)} limit={limit}\n')
+    for limit, values in [(5, [1, 2, 3]), (0, [1]), (2**32 - 1, [2**32 - 1, 1])]:
+        run('watchdog', limit, *values, status=-signal.SIGTRAP, expected='')
     for args in [('script',), ('script', 0, 'add'), ('script', 0, 'cas', 0),
-                 ('script', 0, 'bad', 1), ('race', 100001), ('race', 1, 2), ('bad', 1)]:
+                 ('script', 0, 'bad', 1), ('race', 100001), ('race', 1, 2), ('bad', 1),
+                 ('handoff', 10001), ('handoff', 1, 2), ('stack', 201), ('stack', 1, 2), ('map',),
+                 ('watchdog',)]:
         run(*args, status=64)
-    for args in [('script', -1), ('script', 0, 'add', 2**32), ('device', 0, 'bad')]:
+    for args in [('script', -1), ('script', 0, 'add', 2**32), ('device', 0, 'bad'), ('map', 'bad'),
+                 ('watchdog', 1, 'bad')]:
         run(*args, status=65)
-    print(f'Registers: {count} script, CAS, wrapping, ticket race, volatile and validation checks passed')
+    print(f'Registers: {count} script, CAS, wrapping, ticket race, volatile, fence handoff, stack, '
+          'register map, trap and validation checks passed')
 
 
 if __name__ == '__main__':

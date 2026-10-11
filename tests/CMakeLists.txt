@@ -4680,6 +4680,17 @@ if(NOT MSVC)
             ffi_c_layouts
             dynamic_loading
             async_dynamic_loading
+            machine_operations
+            async_machine_operations
+            machine_fence_order_panic
+            machine_trap
+            static_addresses
+            async_static_addresses
+            signal_handler
+            async_signal_handler
+            signal_handler_panic
+            pending_phi_returns
+            async_pending_phi_returns
             library_native_merge
             audit_aggregate_slice_field
             audit_std_library_schema_calls
@@ -6347,6 +6358,37 @@ if(NOT MSVC)
             set(R_CODEGEN_EXPECTED_PANIC "")
             set(R_CODEGEN_LINK_MANIFEST
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_dynamic_loading_link_manifest.json")
+        elseif(R_CODEGEN_CASE MATCHES "^(async_)?(machine_operations|static_addresses|pending_phi_returns)$")
+            # Library R-LIB-0028, Core R-UNSAFE-0008, R-OBJ-0013 (B11): fences, the stack pointer
+            # and frame record, prefetches, core::unreachable and address constants of statics;
+            # B11-2: short-circuit results returned through a finally block.
+            set(R_CODEGEN_SOURCE_1
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
+            set(R_CODEGEN_SOURCE_2 "")
+            set(R_CODEGEN_EXPECTED_PANIC "")
+        elseif(R_CODEGEN_CASE STREQUAL "machine_fence_order_panic")
+            set(R_CODEGEN_SOURCE_1
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
+            set(R_CODEGEN_SOURCE_2 "")
+            set(R_CODEGEN_EXPECTED_PANIC "contract_violation")
+        elseif(R_CODEGEN_CASE STREQUAL "machine_trap")
+            # core::trap ends the process with the trap instruction, without a panic report.
+            set(R_CODEGEN_SOURCE_1
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
+            set(R_CODEGEN_SOURCE_2 "")
+            set(R_CODEGEN_EXPECTED_PANIC "")
+            set(R_CODEGEN_EXPECTED_EXIT_STATUS "SIGTRAP")
+        elseif(R_CODEGEN_CASE MATCHES "^((async_)?signal_handler|signal_handler_panic)$")
+            # R-FFI-0067 (B11): R functions installed as C signal handlers.
+            set(R_CODEGEN_SOURCE_1
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
+            set(R_CODEGEN_SOURCE_2 "")
+            set(R_CODEGEN_EXPECTED_PANIC "")
+            if(R_CODEGEN_CASE STREQUAL "signal_handler_panic")
+                set(R_CODEGEN_EXPECTED_PANIC "bounds")
+            endif()
+            set(R_CODEGEN_LINK_MANIFEST
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_signal_handler_link_manifest.json")
         elseif(R_CODEGEN_CASE STREQUAL "ffi_wide_declarations")
             # R-LIMIT-0001, R-FFI-0042 (L14-N3): a declaration spelled longer than two
             # kilobytes and a member name longer than sixty-three bytes pass the header
@@ -7154,6 +7196,12 @@ if(NOT MSVC)
             --front "$<TARGET_FILE:r-front>"
             --library-map "${PROJECT_SOURCE_DIR}/library/r/library.map")
     set_tests_properties(r_frontend_c_layouts PROPERTIES LABELS "semantic;ffi")
+    add_test(NAME r_frontend_machine_operations
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/check_machine_operations.py"
+            --front "$<TARGET_FILE:r-front>"
+            --library-map "${PROJECT_SOURCE_DIR}/library/r/library.map"
+            --fixtures "${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+    set_tests_properties(r_frontend_machine_operations PROPERTIES LABELS "semantic;ffi")
     add_test(NAME r_frontend_dynamic_loading
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/check_dynamic_loading.py"
             --front "$<TARGET_FILE:r-front>"

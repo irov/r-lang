@@ -194,6 +194,46 @@ cleanup:
 static bool r_llvm_static_fill(
     RLlvmEmitter *emitter, RLlvmStaticImage *image, uint32_t offset, RHirNodeId id, uint32_t depth);
 
+/* R-OBJ-0013 (B11): an address constant `&place as raw T*` of a static object: the global of its
+   root plus the offset of the fields and constant elements that the place selects. The root is
+   declared before the object whose image refers to it (R-NAME-0003), so its image never waits
+   for this one. */
+static bool r_llvm_static_address(RLlvmEmitter *emitter,
+                                  RLlvmStaticImage *image,
+                                  uint32_t offset,
+                                  RHirNodeId borrow) {
+    const RHirNode *node =
+        r_llvm_hir(emitter, r_llvm_hir_child(emitter, r_llvm_hir(emitter, borrow), 0U));
+    uint64_t addend = 0U;
+    RSymbolId root = R_SYMBOL_ID_INVALID;
+    LLVMValueRef target;
+
+    if (!r_semantic_static_address(emitter->frontend, borrow, &root)) {
+        return r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+    }
+    while ((node != NULL) && (node->kind != R_HIR_PLACE)) {
+        if (node->kind == R_HIR_FIELD_PLACE) {
+            RSemanticFieldPlace place;
+            if (!r_llvm_field_place(emitter, node->aggregate_member, &place)) {
+                return false;
+            }
+            addend += place.offset;
+        } else {
+            const RHirNode *index = r_llvm_hir(emitter, r_llvm_hir_child(emitter, node, 1U));
+            uint32_t element_size = 0U;
+            uint32_t element_align = 0U;
+            if ((index == NULL) ||
+                !r_llvm_layout(emitter, node->type, &element_size, &element_align)) {
+                return r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+            }
+            addend += index->integer_value * (uint64_t)element_size;
+        }
+        node = r_llvm_hir(emitter, r_llvm_hir_child(emitter, node, 0U));
+    }
+    target = r_llvm_static_global(emitter, root);
+    return (target != NULL) && r_llvm_image_address(emitter, image, offset, target, addend);
+}
+
 /* R-FFI-0062 (B9.3): a bit-field of a static value: the initializer's value, evaluated into an
    image of its own, inserted at its bits. A value outside the field's range does not reach here:
    the translation-time evaluation of the initializer rejects it. */
@@ -1281,6 +1321,17 @@ static bool r_llvm_static_fill(RLlvmEmitter *emitter,
         const RHirNode *operand = r_llvm_hir(emitter, r_llvm_hir_child(emitter, node, 0U));
         if (operand == NULL) {
             return r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+        }
+        if ((operand->kind == R_HIR_BORROW) &&
+            (r_llvm_value_kind(emitter, node->type) == R_SEMANTIC_TYPE_RAW)) {
+            return r_llvm_static_address(
+                emitter, image, offset, r_llvm_hir_child(emitter, node, 0U));
+        }
+        /* A raw pointer as a nullable or const one keeps its address. */
+        if ((r_llvm_value_kind(emitter, node->type) == R_SEMANTIC_TYPE_RAW) &&
+            (r_llvm_value_kind(emitter, operand->type) == R_SEMANTIC_TYPE_RAW)) {
+            return r_llvm_static_fill(
+                emitter, image, offset, r_llvm_hir_child(emitter, node, 0U), depth + 1U);
         }
         /* A string literal as a str view, or a cast that keeps the representation. */
         if ((operand->kind == R_HIR_STRING_LITERAL) &&

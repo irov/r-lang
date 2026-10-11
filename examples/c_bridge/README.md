@@ -14,6 +14,7 @@ build-debug/tests/codegen_example_c_bridge release 'Hello, C'
 build-debug/tests/codegen_example_c_bridge bytes 68656c6c6f00ff
 build-debug/tests/codegen_example_c_bridge cstring 68656c6c6f
 build-debug/tests/codegen_example_c_bridge loadable libSystem.B.dylib
+build-debug/tests/codegen_example_c_bridge signal 5
 ```
 
 `inspect` creates an owning NUL-terminated C string, obtains bounded and raw views,
@@ -42,6 +43,19 @@ the link kind `loadable`, so the link step never names the library, and `<stdlib
 prototype the resolved function pointer carries. It prints `labs(-42)=42 strlen=true` for the
 system library (`std.dl::symbol` finds `strlen` as well); a library the loader refuses exits with
 69 (`library not loaded`), an empty path with 64.
+
+`signal COUNT` installs `on_user_signal`, an `extern "C"` function with `@signal_handler`, for
+SIGUSR1 with the imported `signal`, and raises the signal COUNT times. The compiler proves the
+handler and the `@signal_safe` function it calls: no allocation, no blocking, no `thread_local`
+or runtime state, no value with cleanup, and only imports marked `@signal_safe` (`raise`). A
+panic there would end the process with its report instead of unwinding through the interrupted
+code. The raising runs on a thread of the blocking pool (`std.async::blocking`): the threads of
+an async program start with the signal blocked, so this one unblocks SIGUSR1 with
+`pthread_sigmask` and restores its mask afterwards. Each `raise` then runs the handler on the same
+thread before it returns. The handler writes two plain mutable statics and ends with
+`core::signal_fence(release)`; the raising thread reads them after
+`core::signal_fence(acquire)`, which orders a thread with its own signal handlers. It prints
+`raised=N handled=N synchronous=N signal=30` (SIGUSR1 is 30 on the target) for counts up to 1000.
 
 The raw-pointer contracts describe allocation, length, alignment and lifetime.
 `core::assume` repeats a bound already enforced before creating the packet; it does

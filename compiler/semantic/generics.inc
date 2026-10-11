@@ -6310,9 +6310,18 @@ r_generic_constant_initializer(const RFrontendContext *context, RHirNodeId id, u
     case R_HIR_FIELD_INIT:
     case R_HIR_UNARY:
     case R_HIR_BINARY:
-    case R_HIR_CAST:
     case R_HIR_CONDITIONAL:
         break;
+    case R_HIR_CAST: {
+        /* R-OBJ-0013 (B11): the raw address of a static object is a constant of the image. */
+        RSymbolId root = R_SYMBOL_ID_INVALID;
+        if ((node->child_count == 1U) &&
+            (r_semantic_value_kind(context, node->type) == R_SEMANTIC_TYPE_RAW) &&
+            r_semantic_static_address(context, context->hir_children[node->first_child], &root)) {
+            return true;
+        }
+        break;
+    }
     case R_HIR_FUNCTION_ADDRESS:
         /* R-TYPE-0054 (L28): a function value is the constant number of its target. */
         if (r_semantic_value_kind(context, node->type) != R_SEMANTIC_TYPE_FUNCTION) {

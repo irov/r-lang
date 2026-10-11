@@ -1107,6 +1107,10 @@ typedef struct RSemanticSymbol {
     /* R-FUNC-0019: independent, transitive resource contracts. */
     bool is_noalloc;
     bool is_nonblocking;
+    /* R-FFI-0067 (B11): a function a signal handler may run, checked for an R function and
+       asserted for an import; a handler is an extern "C" export entered without attachment. */
+    bool is_signal_safe;
+    bool is_signal_handler;
     bool is_must_use;
     /* R-FUNC-0021: the result may be ignored at a direct call in statement position. */
     bool is_discardable;
@@ -2017,8 +2021,48 @@ typedef enum RStandardCallOperation {
     R_STANDARD_CALL_CORE_WIDENING_MUL,
     R_STANDARD_CALL_CORE_CARRYING_ADD,
     R_STANDARD_CALL_CORE_BORROWING_SUB,
-    R_STANDARD_CALL_CORE_NARROWING_DIV
+    R_STANDARD_CALL_CORE_NARROWING_DIV,
+    /* Library R-LIB-0028 and Core R-UNSAFE-0008 (B11): the machine operations of core, in this
+       order; r_standard_core_machine_operation tests the range. */
+    R_STANDARD_CALL_CORE_ATOMIC_FENCE,
+    R_STANDARD_CALL_CORE_SIGNAL_FENCE,
+    R_STANDARD_CALL_CORE_TRAP,
+    R_STANDARD_CALL_CORE_UNREACHABLE,
+    R_STANDARD_CALL_CORE_FRAME_ADDRESS,
+    R_STANDARD_CALL_CORE_STACK_POINTER,
+    R_STANDARD_CALL_CORE_PREFETCH_READ,
+    R_STANDARD_CALL_CORE_PREFETCH_WRITE
 } RStandardCallOperation;
+
+/* Library R-LIB-0028 (B11): whether an operation is a machine operation of core, its qualified
+   name and its operand count (an order for a fence, an address for a prefetch, none otherwise). */
+static inline bool r_standard_core_machine_operation(RStandardCallOperation operation) {
+    return (operation >= R_STANDARD_CALL_CORE_ATOMIC_FENCE) &&
+           (operation <= R_STANDARD_CALL_CORE_PREFETCH_WRITE);
+}
+
+static inline const char *r_standard_core_machine_name(RStandardCallOperation operation) {
+    static const char *const names[] = {"core::atomic_fence",
+                                        "core::signal_fence",
+                                        "core::trap",
+                                        "core::unreachable",
+                                        "core::frame_address",
+                                        "core::stack_pointer",
+                                        "core::prefetch_read",
+                                        "core::prefetch_write"};
+    return r_standard_core_machine_operation(operation)
+               ? names[(uint32_t)operation - (uint32_t)R_STANDARD_CALL_CORE_ATOMIC_FENCE]
+               : NULL;
+}
+
+static inline uint32_t r_standard_core_machine_operand_count(RStandardCallOperation operation) {
+    return ((operation == R_STANDARD_CALL_CORE_ATOMIC_FENCE) ||
+            (operation == R_STANDARD_CALL_CORE_SIGNAL_FENCE) ||
+            (operation == R_STANDARD_CALL_CORE_PREFETCH_READ) ||
+            (operation == R_STANDARD_CALL_CORE_PREFETCH_WRITE))
+               ? UINT32_C(1)
+               : UINT32_C(0);
+}
 
 /* Library R-LIB-0027 (L45): whether an operation is one of the bit and wide integer operations of
    core, its name without the type suffix, and its operand count: a value; a value and a rotation
@@ -2956,6 +3000,10 @@ bool r_semantic_aggregate_layout(const RFrontendContext *context,
                                  RSemanticFieldPlace *place,
                                  uint64_t *size,
                                  uint64_t *alignment);
+
+/* R-OBJ-0013 (B11): whether a borrow node designates a static object that is not thread_local,
+   or a field or a constant-index element of a fixed array inside one; *root is that object. */
+bool r_semantic_static_address(const RFrontendContext *context, RHirNodeId borrow, RSymbolId *root);
 
 /* Whether the field lies below the alignment of its type (a packed aggregate, R-FFI-0061) or is
    a bit-field (R-FFI-0062): it has no address of its own. */

@@ -15,7 +15,7 @@ Normative draft of the R programming language
 |Field |Value
 |Document|R Core Language Specification
 |Language version|0.1
-|Document revision|0.1.0-draft.107
+|Document revision|0.1.0-draft.108
 |Status|Normative draft; not a stable R 1.0 standard
 |Document language|English; normative original
 |Target backend|ISO/IEC 9899:2018 (C17)
@@ -577,7 +577,8 @@ function attributes `+@noalloc+` and `+@nonblocking+` are specified by R-FUNC-00
 on trait methods by R-TYPE-0045, `+@chain+` on methods by R-FUNC-0024, `+@test+` on
 functions by R-FUNC-0025, `+@recursion+` on synchronous functions by R-FUNC-0026, `+@derive+`
 on struct, enum and error declarations by R-AGG-0012, `+@attribute+` on struct declarations
-by R-AGG-0013 and `+@default+` on an enum variant by R-INIT-0005. A program adds attributes
+by R-AGG-0013, `+@default+` on an enum variant by R-INIT-0005, and `+@signal_safe+` on a function or
+an import and `+@signal_handler+` on an `+extern "C"+` definition by R-FFI-0067. A program adds attributes
 only as the attribute types of R-AGG-0013. After an argument-free attribute, a
 parenthesized group with a comma or `+...+` at its top level is not an argument list: it
 begins the tuple type of the declaration (R-TYPE-0052).
@@ -1877,6 +1878,17 @@ static `+rc+` or `+weak rc+` handle cannot be reached from safe spawned-thread c
 initialization owning module in textual source order, even if control never enters the
 containing block. In normal module destruction, they dropped in reverse order. Their
 initialization is not lazy and cannot panic.
+
+[[R-OBJ-0013]]
+*R-OBJ-0013* — In the initializer of a module object or a block `+static+` object, `+&place as raw
+T*+`, `+&place as raw const T*+` and their nullable forms are address constants when the place is
+a static object that is not `+thread_local+` and not imported, or a field of one or an element of
+one of its fixed arrays at an integer literal index, at any depth. An address constant reads,
+writes and borrows nothing, so it requires no unsafe context (R-OBJ-0009, R-UNSAFE-0001); it is a
+constant of the initializer (R-OBJ-0010) whose value is the address of that place for the whole
+execution. The place names an object declared before the initializer (R-NAME-0003), so an object
+cannot hold its own address that way. Any other conversion to a raw pointer in such an
+initializer keeps the rules of R-OBJ-0009 and R-UNSAFE-0001.
 
 [[R-OBJ-0011]]
 *R-OBJ-0011* — A reference-counted allocation contains storage for exactly one T, one
@@ -3982,7 +3994,8 @@ requirement. A `+std.sync+` lock guard is neither Send nor unborrowed, so it sha
 remain live across `+await+` (`+R-DIAG-ASYNC-001+`); the diagnostic names
 `+std.async::mutex+` or `+std.async::rw_lock+` of R-SLIB-ASYNC-0013, whose guards may. The
 runtime shall not expose a partially initialized frame or execute the body before the
-successful start commit.
+successful start commit. A block-scope `+static+` or `+thread_local+` object is not a local of
+the frame: it keeps its own storage across suspensions, and R-OBJ-0009 governs its access.
 
 [[R-FUNC-0012]]
 *R-FUNC-0012* — `+await move task_name+` or `+await function(arguments)+` waits logically for the task without blocking
@@ -4962,7 +4975,8 @@ operations as closed intrinsic families:
 * `+unsafe core::slice_from_raw_parts_in_mut(A anchor, raw T*? pointer, usize length) -> T[]+`;
 * `+unsafe core::volatile_load(raw const T* address) -> T+`;
 * `+unsafe core::volatile_store(raw T* address, T value) -> void+`;
-* `+unsafe core::assume(bool condition) -> void+`.
+* `+unsafe core::assume(bool condition) -> void+`;
+* `+unsafe core::unreachable() -> never+`.
 
 Every allocation-supporting profile additionally provides:
 
@@ -5011,8 +5025,10 @@ the duty transferred to the caller under R-SAFETY-RELEASE. A named owner argumen
 therefore requires `+move+` under R-FUNC-0002.
 
 `+core::assume+`
-has the R-SAFETY-ASSUME effect. None of these nine operations allocates or panics;
-violating an applicable Annex E safety contract is UB rather than a recoverable result.
+has the R-SAFETY-ASSUME effect. `+core::unreachable+` has the R-SAFETY-UNREACHABLE effect: control
+never returns from it, and reaching it is UB that the optimizer may rely on. None of these ten
+operations allocates or panics; violating an applicable Annex E safety contract is UB rather than a
+recoverable result.
 
 [[concurrency]]
 == 21. Concurrency and memory model
@@ -5078,7 +5094,8 @@ be relaxed/acquire/seq_cst, never release/acq_rel, and shall not be stronger tha
 success: relaxed→relaxed, acquire→relaxed|acquire, release→relaxed,
 acq_rel→relaxed|acquire, seq_cst→relaxed|acquire|seq_cst. Invalid constant ordering
 requires `+R-DIAG-ATOMIC-001+`; runtime-selected invalid ordering panics before any atomic read or
-modification.
+modification. A fence of Library R-LIB-0028 takes acquire, release, acq_rel or seq_cst, never
+relaxed.
 
 [[R-MEM-0008]]
 *R-MEM-0008* — Atomic operations are indivisible for the atomic object and shall not cause
@@ -5693,7 +5710,8 @@ contracts for all raw arguments. Panic at this boundary aborts per R-ERR-0006.
 
 [[R-FFI-0025]]
 *R-FFI-0025* — In expected matching `+raw fn(...) -> R+` context, name of exported C function bearing
-`+@callback+` may convert to raw function pointer without unsafe operation. Missing `+@callback+`,
+`+@callback+` or `+@signal_handler+` (R-FFI-0067) may convert to raw function pointer without unsafe
+operation. Missing `+@callback+`,
 mismatched prototype or calling convention requires `+R-DIAG-FFI-005+`; calling through resulting
 pointer remains unsafe.
 
@@ -5981,6 +5999,31 @@ removed or changed export or type at the same compatibility version, a lower com
 version and a document that is no baseline of this library and target require
 `+R-DIAG-FFI-004+`, which names the first export or type that differs.
 
+[[R-FFI-0067]]
+*R-FFI-0067* — `+@signal_safe+` marks an R function, or an import whose C function is
+async-signal-safe (the declaration asserts it), as callable from a signal handler; `+@signal_handler+`
+marks an `+extern "C"+` definition as a signal handler and implies `+@signal_safe+`. A signal-safe R
+function shall prove `+@noalloc+` and `+@nonblocking+` (R-FUNC-0019) and, in its own body: call only
+signal-safe functions and imports, never through a pointer; read or write no `+thread_local+` object;
+create and drop no value whose cleanup runs code; use of the standard operations only the
+arithmetic families of R-LIB-0001, the bit operations of R-LIB-0027, the machine operations of
+R-LIB-0028, the atomic operations of R-LIB-0011 on objects of 1, 2, 4, 8 or 16 bytes, which the
+target performs without a lock, and the unsafe operations of R-UNSAFE-0008 other than `+core::adopt+`
+and `+core::release+`; and be neither async nor `+@recursion+`. A failed proof requires
+`+R-DIAG-RESOURCE-003+` naming the chain and the violation. A signal-safe function never unwinds: a
+panic in it, explicit or of a failed check, ends the process at once with a report of its
+category and place written to standard error (R-ERR-0006). A signal handler is entered without
+the attachment of R-FFI-0055 and without a stack check, and neither it nor a call of C that a
+signal-safe function makes switches the floating-point environment of R-FFI-0058: they run in the
+environment of the interrupted code. Its frames and those of its callees are measured as every
+frame is (R-FUNC-0004). In a matching `+raw fn(...) -> R+` context its name
+converts to a raw function pointer as an `+@callback+` export does (R-FFI-0025), which an import
+such as `+sigaction+` or `+signal+` installs. A static object the handler shares with other code is
+accessed under R-SAFETY-MUT-STATIC or through atomics, and `+core::signal_fence+` orders those
+accesses on one thread. Either attribute with arguments, repeated, or `+@signal_handler+` on a
+declaration other than an `+extern "C"+` definition or together with `+@callback+`, is a misplaced
+attribute: `+R-DIAG-FFI-003+` of R-FFI-0050 on a C declaration, `+R-DIAG-SYN-002+` otherwise.
+
 === 23.7 Unsafe boundary and safe wrappers
 
 [[R-FFI-0010]]
@@ -6022,7 +6065,8 @@ ABI storage and R-FFI-0056 gate.
 *R-FFI-0050* — FFI attribute scopes are closed: `+@link+`, `+@header+`, `+@abi+` on extern block;
 `+@link_name+` on imported symbol; `+@safety+` on imported or exported C function; `+@fenv+` on
 imported C function; `+@repr+`, `+@c_type+` on C type; `+@c_constant+` on verified constant; `+@export_name+`,
-`+@callback+` on exported C function. `+@header+` is repeatable; `+@link+` and `+@abi+` are singleton
+`+@callback+`, `+@signal_handler+` on exported C function; `+@signal_safe+` on imported or exported C
+function (R-FFI-0067). `+@header+` is repeatable; `+@link+` and `+@abi+` are singleton
 per block, and every declaration-scoped FFI attribute is singleton on its declaration.
 Misplaced, duplicated-singleton or unknown FFI attribute requires `+R-DIAG-FFI-003+`.
 
@@ -6054,7 +6098,7 @@ be written inside verified `+extern "C"+` block.
 [[R-FFI-0055]]
 *R-FFI-0055* — C-origin thread entering any exported `+extern "C"+` R function shall be attached by entry
 trampoline or explicit `+std.c+` protocol before any R execution, whether or not
-declaration bears `+@callback+`. Attachment has per-thread owner and nesting depth. Entry on
+declaration bears `+@callback+`; a signal handler of R-FFI-0067 is entered without attachment. Attachment has per-thread owner and nesting depth. Entry on
 already attached thread increments depth and shall not detach an outer
 explicit/R-created context. A trampoline-created temporary attachment detaches only
 after its outermost C-origin entry returns; explicit attachment persists until explicit
@@ -7033,6 +7077,7 @@ but shall emit code and normative rule anchor.
 |`+R-DIAG-USE-002+` |Unconditional replacement of a local value |R-INIT-0014
 |`+R-DIAG-RESOURCE-001+` |Heap-allocation absence cannot be proved |R-FUNC-0019
 |`+R-DIAG-RESOURCE-002+` |Nonblocking execution cannot be proved |R-FUNC-0019
+|`+R-DIAG-RESOURCE-003+` |Signal safety cannot be proved |R-FFI-0067
 |`+R-DIAG-META-001+` |Unresolved static predicate or incompatible branch assumptions |R-META-0001, R-META-0002, R-META-0003
 |`+R-DIAG-TYPE-002+` |Non-Boolean operand of `+!+`, `+&&+`, or `+\|\|+` |R-EXPR-0010
 |`+R-DIAG-TYPE-003+` |Invalid explicit conversion, transmute or unsafe core-intrinsic type |R-EXPR-0016..0019, R-EXPR-0023, R-UNSAFE-0007..0008
@@ -7220,6 +7265,10 @@ UB; satisfying all yields the defined effect.
 |`+R-SAFETY-ASSUME+`
 |`+core::assume(condition)+`
 |Condition is true at this execution point for all abstract-machine states. Effect supplies fact to optimizer; false is immediate UB.
+
+|`+R-SAFETY-UNREACHABLE+`
+|`+core::unreachable()+`
+|Control never reaches the call on any execution. Effect supplies the fact to the optimizer; reaching the call is immediate UB.
 
 |`+R-SAFETY-EXTERN-CALL+`
 |Call imported C function/function pointer

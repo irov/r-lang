@@ -865,7 +865,10 @@ bool r_llvm_ffi_indirect_call(RLlvmEmitter *emitter, const RMirInstruction *inst
     const RSemanticTypeKind kind = r_llvm_value_kind(emitter, instruction->type);
     const bool never_returns = kind == R_SEMANTIC_TYPE_NEVER;
     const bool has_result = !never_returns && (kind != R_SEMANTIC_TYPE_VOID);
-    const bool hosted = context->profile != R_FRONTEND_PROFILE_FREESTANDING;
+    /* R-FFI-0067 (B11): a signal-safe function calls C in the environment it inherited, without
+       the call bracket, whose depth count is thread state of the runtime. */
+    const bool hosted = (context->profile != R_FRONTEND_PROFILE_FREESTANDING) &&
+                        ((emitter->symbol == NULL) || !emitter->symbol->is_signal_safe);
     LLVMValueRef arguments[R_LLVM_C_MAX_PARAMETERS];
     RTypeId argument_types[R_LLVM_C_MAX_PARAMETERS];
     RLlvmCSignature signature;
@@ -989,7 +992,10 @@ bool r_llvm_ffi_indirect_call(RLlvmEmitter *emitter, const RMirInstruction *inst
    the process on a panic that reaches the boundary (R-ERR-0006). */
 static bool r_llvm_c_export_body(RLlvmEmitter *emitter, RSymbolId id) {
     const RSemanticSymbol *symbol = &emitter->frontend->semantic_symbols[(size_t)id - 1U];
-    const bool hosted = emitter->frontend->profile != R_FRONTEND_PROFILE_FREESTANDING;
+    /* R-FFI-0067 (B11): a signal handler is entered without attachment, stack bound or unwind
+       check, all of which read or change thread state of the runtime. */
+    const bool hosted = (emitter->frontend->profile != R_FRONTEND_PROFILE_FREESTANDING) &&
+                        !symbol->is_signal_handler;
     LLVMValueRef wrapper = emitter->c_functions[id];
     LLVMValueRef values[R_LLVM_C_MAX_PARAMETERS];
     LLVMValueRef call_arguments[R_LLVM_C_MAX_PARAMETERS + 1];
@@ -1033,11 +1039,14 @@ static bool r_llvm_c_export_body(RLlvmEmitter *emitter, RSymbolId id) {
             return false;
         }
     }
-    arguments[0] = r_llvm_stack_entry(emitter, id);
-    arguments[1] = r_llvm_span(emitter, symbol->name_span);
-    if ((arguments[0] == NULL) || (arguments[1] == NULL) ||
-        (r_llvm_call_runtime(emitter, "r_runtime_stack_require", arguments, 2U, NULL) == NULL)) {
-        return false;
+    if (!symbol->is_signal_handler) {
+        arguments[0] = r_llvm_stack_entry(emitter, id);
+        arguments[1] = r_llvm_span(emitter, symbol->name_span);
+        if ((arguments[0] == NULL) || (arguments[1] == NULL) ||
+            (r_llvm_call_runtime(emitter, "r_runtime_stack_require", arguments, 2U, NULL) ==
+             NULL)) {
+            return false;
+        }
     }
     if (in_memory) {
         uint32_t size = 0U;

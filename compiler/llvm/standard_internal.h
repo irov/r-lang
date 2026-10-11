@@ -96,6 +96,8 @@ bool r_llvm_std_staged_insert(RLlvmEmitter *emitter,
 bool r_llvm_std_text(RLlvmEmitter *emitter, const RMirInstruction *instruction);
 /* The atomic operations of core (atomics.c). */
 bool r_llvm_std_atomic(RLlvmEmitter *emitter, const RMirInstruction *instruction);
+/* Library R-LIB-0028, Core R-UNSAFE-0008 (B11): the machine operations of core (machine.c). */
+bool r_llvm_std_machine(RLlvmEmitter *emitter, const RMirInstruction *instruction);
 /* Reflection of program types (reflection.c, R-REFL). */
 bool r_llvm_std_reflection(RLlvmEmitter *emitter, const RMirInstruction *instruction);
 /* Library operations that are one call of their C entry (library.c). */

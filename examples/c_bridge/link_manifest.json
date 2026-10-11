@@ -31,6 +31,31 @@
           "c_identifier": "strlen",
           "kind": "function",
           "binding": "strong"
+        },
+        {
+          "c_identifier": "signal",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "raise",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "sigemptyset",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "sigaddset",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "pthread_sigmask",
+          "kind": "function",
+          "binding": "strong"
         }
       ]
     },

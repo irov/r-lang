@@ -1,7 +1,7 @@
 # R Frontend Parser 0.1
 
 This directory contains the bootstrap frontend for the normative English R Core
-Specification `0.1.0-draft.107`.
+Specification `0.1.0-draft.108`.
 
 ```text
 UTF-8 source
@@ -152,7 +152,10 @@ projection chain (`FIELD`, `INDEX`, `DEREF`) an address. A function of the progr
 `module::name` (an async one has `$step`, `$initialize` and `$drop` functions and a
 `$frame_size` constant). Functions of the program pass a scalar in its own type and a value in
 memory as the address of a copy the callee owns; a carrier or a result in memory goes to memory
-the caller passes first.
+the caller passes first. A MIR phi of a scalar is an LLVM phi whose incoming values are added once
+every block is lowered; the emitter keeps the phi node apart from the value table, because a
+value returned or thrown through a `finally` block (or the activation end of `@recursion`) is
+read again from its pending record after the block, and the table then holds that reload.
 
 Ownership. A place or value whose type requires drop has an initialization flag: a move out of a
 whole place runs the move glue only while the source is initialized and moves the flag with it,
@@ -181,14 +184,17 @@ translation (L22.4) is frozen into the image: the elements of an array, the byte
 the linked nodes of a list and the dense entries and probed slots of a dictionary (the hashes
 the key functions compute, mixed as the runtime mixes them) are globals of their own
 (`r_frozen_<kind>.<source>.<offset>`), the owner is a descriptor over them without an allocator,
-and the static object that holds one is never dropped. Static objects that own resources are
+and the static object that holds one is never dropped. The address of another static object,
+of one of its fields or of an element at a constant index, converted to a raw pointer in an
+initializer, is a relocation of that global plus the byte offset (R-OBJ-0013, *Address
+constants*). Static objects that own resources are
 dropped at the end of a hosted program in the reverse of their order; a thread-local object
 that owns resources has a per-thread state, an accessor that registers its drop at the first use
 on a thread, and a drop stack emptied at the exit of the thread and of the program. A program
 string is a private constant, one per interned text, and an empty one still has an address that
 is not null.
 
-Standard operations (`standard.c`, `library.c`, `containers.c`, `text.c`, `atomics.c`,
+Standard operations (`standard.c`, `library.c`, `containers.c`, `text.c`, `atomics.c`, `machine.c`,
 `outcome.c`, `reflection.c`, `threads.c`, `sync.c`, `tagged.c`). A standard call is the call of
 the library or runtime entry the operation stands for: a library result lands in a temporary,
 its status selects the tag of the R carrier or option and its members move into the payload,
@@ -2123,6 +2129,66 @@ read through a shared view (`const T`) as by `T`.
 translation with the same computation at run time; `examples/numbers` runs every operation of
 every type against Python and `examples/binary` prints them for one value.
 
+### Machine operations
+
+`core::atomic_fence`, `core::signal_fence`, `core::trap`, `core::frame_address`,
+`core::stack_pointer`, `core::prefetch_read` and `core::prefetch_write` (Library R-LIB-0028) and
+`core::unreachable` (Core R-UNSAFE-0008) are the last range of standard operations
+(`r_standard_core_machine_operation` and the name and operand-count helpers in
+`frontend_internal.h`). `semantic/core_machine.inc` lowers a call to one `R_HIR_STANDARD_CALL`: a
+fence takes a `core::memory_order`, and a constant `relaxed` is `R-DIAG-ATOMIC-001 [R-MEM-0007]`;
+a prefetch takes a raw pointer (`raw T*` for a write) and records its pointee as auxiliary type;
+`core::unreachable` needs an unsafe context (`R-DIAG-UNSAFE-001`). `core::trap` and
+`core::unreachable` have type `never`, and the MIR ends their block with `unreachable`. The two
+address reads give `usize`: R has no conversion of an integer to a pointer (R-IDB-019), so the
+numbers measure the stack and nothing else. None of them is evaluated at translation, and the
+resource checker proves them for `@noalloc`, `@nonblocking` and `@signal_safe`.
+
+`compiler/llvm/machine.c` writes them:
+
+| Operation | LLVM IR |
+| --- | --- |
+| `atomic_fence`, `signal_fence` | `fence` of the order, `syncscope("singlethread")` for a signal fence; a switch on a run-time order, whose `relaxed` or out-of-range value is the `contract_violation` panic before any fence; a constant order folds the switch |
+| `trap` | `llvm.trap` (the process ends by SIGTRAP: no report, no drops) |
+| `unreachable` | nothing: the `unreachable` that ends the block |
+| `frame_address`, `stack_pointer` | `llvm.frameaddress(0)` and `llvm.read_register` of `sp`, as integers |
+| `prefetch_read`, `prefetch_write` | `llvm.prefetch` of the data cache with the highest locality; it neither faults nor changes memory |
+
+ThreadSanitizer does not model a fence on its own (its runtime treats `fence` as a barrier
+without happens-before), so a plain value handed between threads through fences is reported as
+a race under the TSan preset although the program is correct. The fixtures and `examples/registers`
+hand relaxed atomics over through the fences, which orders them and keeps TSan exact.
+
+`codegen_machine_operations` and its async twin hand a value between threads through a release
+and an acquire fence, fence with every order at run time, check the alignment and order of the
+stack pointer and frame record, walk a table with prefetches and end an excluded path with
+`core::unreachable`; `codegen_machine_fence_order_panic` and `codegen_machine_trap` check the
+two exits, and `tests/check_machine_operations.py` the rejections with their exact diagnostics
+and the LLVM forms in the optimized IR. `examples/registers` uses every operation (`handoff`,
+`stack`, `map`, `watchdog`).
+
+### Address constants
+
+In the initializer of a module object that is not `thread_local`, or of a block-scope `static`
+object, `&place as raw T*` (or `raw const T*`) where the place is a static object that is not
+`thread_local`, one of its fields or an element at a constant index, is an address constant
+(R-OBJ-0013): it reads, writes and borrows nothing, so neither the access rule of mutable statics
+(R-OBJ-0009) nor the unsafe context of a raw conversion applies. The body lowering marks such an
+initializer (`RBodyContext.address_constants`): the access diagnostics of statics it meets are
+deferred, the raw conversion of a borrow that `r_semantic_static_address` accepts consumes them,
+and `r_body_flush_static_deferrals` reports the rest (`&cells[position]` with a run-time index
+is still `R-DIAG-MEM-001 [R-OBJ-0009]`). `r_generic_constant_initializer` admits the conversion
+as a constant, and `r_llvm_static_address` (`statics.c`) walks the place for the byte offset and
+writes `getelementptr (i8, @r_static.N, offset)` into the image, also inside aggregates, arrays
+and through raw-to-raw conversions such as the implicit one to a nullable pointer. A static
+object names only objects declared before it (R-NAME-0003), so the addresses form no cycle. A
+block-scope static object keeps its storage across the awaits of an async function and is not
+a value of its frame (R-FUNC-0011): the await liveness of the MIR skips it.
+
+`codegen_static_addresses` and its async twin read and write through addresses of whole objects,
+fields, elements, a table of pointers, a struct of pointers, a linked pair and a block static;
+`examples/registers map` keeps its register map as address constants.
+
 ### Labeled switches
 
 A switch over an integer, `char` or fieldless enum value, of the program or of the library, may
@@ -2600,6 +2666,43 @@ fields, a nested homogeneous aggregate, a pointer cycle, a packed struct inside 
 `void *` handle, five threads — and a variant that opens the library with `dlopen`, the
 `contract_violation` of an export called before the initialization and after the shutdown, every
 baseline verdict and the rejections of the library options and of APIs C cannot declare.
+
+### Signal handlers
+
+`@signal_safe` marks an R function the compiler proves safe to run in a signal handler, or an
+import whose C function the program asserts async-signal-safe (POSIX); `@signal_handler` marks an
+`extern "C"` definition that is installed as a C signal handler, implies `@signal_safe` and
+converts to `raw fn` as a `@callback` function does (R-FFI-0067). On a function that is not
+`extern "C"` the attribute is `R-DIAG-SYN-002 [R-GRAM-0007]`; with `@callback` it is
+`R-DIAG-FFI-003 [R-FFI-0050]`.
+
+The proof is the third mode of the resource checker (`semantic/resource_effects.inc`, after
+`@noalloc` and `@nonblocking`, whose rules it includes): no thread-local object, no call through a
+pointer, callees only `@signal_safe` functions and imports, standard operations only of the core
+families that need no runtime state (arithmetic, bits, the machine operations, atomics of a
+lock-free size, the unsafe core operations except `adopt` and `release`), no value whose drop runs
+code, no async function and no `@recursion` (its counter is thread-local). A failure is
+`R-DIAG-RESOURCE-003 [R-FFI-0067]`, `@signal_safe cannot be proved: ` followed by the call chain and
+the reason.
+
+Lowering. A handler interrupts code that may itself be inside the runtime, so a signal-safe
+function touches no runtime state: a failed check calls `r_runtime_panic`, which writes the
+report with `write(2)` and aborts, instead of raising (no unwind test follows a call, and the
+panic block of the function is `unreachable`); an import is called without the
+`r_runtime_c_call_begin`/`_end` bracket, which keeps thread-local state; and the C entry of a
+handler has no thread attachment, no stack bound and no unwind check.
+`tests/check_machine_operations.py` reads the IR of `codegen_signal_handler` and admits no runtime
+reference in those functions but `r_runtime_panic`.
+
+On `arm64-apple-darwin` the threads of an async program (Dispatch workers and the threads they
+create) start with the asynchronous signals blocked. A thread-directed `raise` from a task
+therefore arrives later on another thread, and ordinary signals pending together are delivered
+once; a thread that must run its handler synchronously unblocks the signal with
+`pthread_sigmask` (`examples/c_bridge signal`, where `core::signal_fence` then orders the plain
+statics the handler writes with the reads after `raise`). `codegen_signal_handler` runs a handler
+on the main thread of a synchronous program, `codegen_async_signal_handler` signals the process
+from tasks and waits for each delivery, and `codegen_signal_handler_panic` ends with the report
+of a `bounds` panic raised in the handler.
 
 ## Build and test
 

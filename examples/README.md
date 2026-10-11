@@ -24,7 +24,7 @@ bounds and runs it in the sanitizer configurations.
 | [Tournament](tournament/README.md) | Schedule matches, rounds and league tables | Comprehensions, ranges, membership, traits, associated types and constants, derived implementations, owning closures, variadic spread, exchange, cloning and slice rotations |
 | [Background jobs](jobs/README.md) | Deduplicate and supervise checksumming work | Derived generic key hooks, drop hooks, cancellation, detachment, finally and payload lifetime |
 | [Preflight](preflight/README.md) | Validate service configuration | Common error domains, typed error adapters, boundary checks and resource diagnostics |
-| [C bridge](c_bridge/README.md) | Exchange strings and owned packets with C | Header-verified imports, raw callbacks, handles, views anchored to a handle or to bytes (`core::slice_from_raw_parts_in`), attachment and UTF-8 views |
+| [C bridge](c_bridge/README.md) | Exchange strings and owned packets with C and handle a signal | Header-verified imports, raw callbacks, handles, views anchored to a handle or to bytes (`core::slice_from_raw_parts_in`), attachment, UTF-8 views and an `@signal_handler` with signal fences |
 | [Logbook](logbook/README.md) | Filter events and inspect log schemas | Enum reflection, public fields, explicit discriminants and owning payload variants |
 | [Calculator](calculator/README.md) | Real and complex scientific calculations, arithmetic and postfix expressions | Every concrete `std.math` operation, C numeric types, public records, checked errors, a recursive descent parser bounded by `@recursion(depth = 16)`, a state machine on a labeled switch |
 | [Numbers](numbers/README.md) | Radix conversion and integer arithmetic | All integer specializations, checked conversion, overflow, saturation and wrapping, bit counts, rotations and wide arithmetic |
@@ -47,7 +47,7 @@ bounds and runs it in the sanitizer configurations.
 | [ZIP](zip/README.md) / [Unzip](unzip/README.md) | Create and extract archives | Modules, binary formats, checked errors, files, async I/O and cleanup |
 | [Workspace](workspace/README.md) | Manage journal records and inspect files | Directory capabilities, file metadata, cursor I/O and atomic no-replace publication |
 | [JSON workbench](json_tool/README.md) | Normalize configurations and edit JSON | Every JSON field parameter, generic schemas, hooks, exact numbers, incremental input and reader handoff |
-| [Register workbench](registers/README.md) | Update control words and issue concurrent tickets | All atomic operations, CAS, unsigned wrapping and volatile register simulation |
+| [Register workbench](registers/README.md) | Update control words, issue concurrent tickets, hand messages over and map registers | All atomic operations, CAS, unsigned wrapping, volatile register simulation, fences, stack pointer and frame record, prefetch, address constants, unreachable and trap |
 | [Synchronized ledger](ledger/README.md) | Post transactions and acknowledge a handoff | Mutexes, barriers and condition variables |
 | [Cached price quotes](quotes/README.md) | Calculate tax and publish price snapshots | Read/write locks, once validation and lazy immutable policy |
 | [Worker pipelines](workers/README.md) | Check queued messages and sum data in parallel | Native threads, bounded channels, scoped borrows, joining and notifications |

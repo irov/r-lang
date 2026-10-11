@@ -242,7 +242,9 @@ static bool r_llvm_std_panic(RLlvmEmitter *emitter, const RMirInstruction *instr
     if ((instruction->operand_count != 1U) || (text == NULL)) {
         return r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
     }
-    if (instruction->panic_target == R_MIR_BLOCK_ID_INVALID) {
+    if ((instruction->panic_target == R_MIR_BLOCK_ID_INVALID) ||
+        ((emitter->symbol != NULL) && emitter->symbol->is_signal_safe)) {
+        /* R-FFI-0067: in a signal-safe function the report names the category and the place. */
         return r_llvm_panic(
             emitter, "R_RUNTIME_PANIC_EXPLICIT", instruction->span, R_MIR_BLOCK_ID_INVALID);
     }
@@ -1483,6 +1485,15 @@ bool r_llvm_emit_standard_call(RLlvmEmitter *emitter, const RMirInstruction *ins
         return r_llvm_std_swap(emitter, instruction);
     case R_STANDARD_CALL_CORE_ASSUME:
         return r_llvm_std_assume(emitter, instruction);
+    case R_STANDARD_CALL_CORE_ATOMIC_FENCE:
+    case R_STANDARD_CALL_CORE_SIGNAL_FENCE:
+    case R_STANDARD_CALL_CORE_TRAP:
+    case R_STANDARD_CALL_CORE_UNREACHABLE:
+    case R_STANDARD_CALL_CORE_FRAME_ADDRESS:
+    case R_STANDARD_CALL_CORE_STACK_POINTER:
+    case R_STANDARD_CALL_CORE_PREFETCH_READ:
+    case R_STANDARD_CALL_CORE_PREFETCH_WRITE:
+        return r_llvm_std_machine(emitter, instruction);
     case R_STANDARD_CALL_CORE_SLICE_FROM_RAW_PARTS:
     case R_STANDARD_CALL_CORE_SLICE_FROM_RAW_PARTS_MUT:
         return r_llvm_std_slice_from_raw_parts(emitter, instruction);

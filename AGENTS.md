@@ -366,6 +366,26 @@ these rules are the ones that most often reject otherwise reasonable code:
   panics with `invalid_conversion`. A function of a `kind = "loadable"` block is called only
   through `std.dl::resolve(&library, import)`, whose `raw fn?` is not Send: obtain it after the
   awaits that the `std.dl::library` (Send+Sync) lives across.
+- Static state (B11, R-OBJ-0013): a static object may hold the address of a static object declared
+  before it, of a field or of an element at a constant index (`raw u32* second =
+  &state.slots[1] as raw u32*;`) without `unsafe`; the address of a `thread_local` object or an
+  index known only at run time is not a constant. Reads and writes of a mutable static still need
+  `unsafe` (R-OBJ-0009). A raw pointer is not Send, so copy one out of a static only after the
+  awaits of an async function; a block-scope `static` itself is not in the frame.
+- Machine operations (Library R-LIB-0028): `core::atomic_fence(order)` and
+  `core::signal_fence(order)` take any order but `relaxed`; `core::trap()` ends the process by
+  SIGTRAP; `unsafe { core::unreachable(); }` ends a path the logic excludes;
+  `core::stack_pointer()` and `core::frame_address()` are `usize` numbers, never pointers. TSan
+  does not model fences: hand relaxed atomics over through a fence pair, not plain values, or the
+  TSan preset reports a race.
+- Signal handlers (R-FFI-0067): an `extern "C"` definition with `@signal_handler` and `@safety`,
+  converted to `raw fn` for `signal`/`sigaction`. It and every R function it calls are
+  `@signal_safe`: no allocation, blocking, `thread_local`, value with a drop, call through a
+  pointer, async or `@recursion`; an import it calls carries `@signal_safe` (the program asserts
+  POSIX async-signal-safety). A panic there aborts with its report. The threads of an async
+  program start with the signals blocked, so a task's `raise` arrives later on another thread;
+  unblock with `pthread_sigmask` where the handler must run on the raising thread
+  (`examples/c_bridge`), and use `core::signal_fence` only between a thread and its own handler.
 - Hot loops: the optimizer leaves out the bounds checks it can prove (compiler/README.md,
   *Optimization*). Index a local slice or `array<T>` with a local that a condition bounds
   (`i < len(b)`, or `n == len(b)` and `i < n`); take a sub-slice `b[lo..hi]` once and index

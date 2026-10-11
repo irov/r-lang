@@ -361,7 +361,10 @@ bool r_llvm_unwind_test(RLlvmEmitter *emitter, RMirBlockId panic_target) {
     LLVMBasicBlockRef next;
     LLVMBasicBlockRef cleanup;
 
-    if (panic_target == R_MIR_BLOCK_ID_INVALID) {
+    /* R-FFI-0067 (B11): a signal-safe function calls only signal-safe ones, which never leave a
+       panic pending. */
+    if ((panic_target == R_MIR_BLOCK_ID_INVALID) ||
+        ((emitter->symbol != NULL) && emitter->symbol->is_signal_safe)) {
         return true;
     }
     unwinding = r_llvm_unwinding(emitter);
@@ -867,6 +870,11 @@ static bool r_llvm_emit_panic_exit(RLlvmEmitter *emitter) {
         return true;
     }
     (void)block_index;
+    if ((emitter->symbol != NULL) && emitter->symbol->is_signal_safe) {
+        /* R-FFI-0067 (B11): a signal-safe function never unwinds (r_llvm_panic). */
+        (void)LLVMBuildUnreachable(emitter->builder);
+        return true;
+    }
     if (!r_llvm_drop_storage(emitter)) {
         return false;
     }
@@ -1301,6 +1309,7 @@ static bool r_llvm_emit_phi(RLlvmEmitter *emitter, const RMirInstruction *instru
         type = r_llvm_pointer(emitter);
     }
     phi = LLVMBuildPhi(emitter->builder, type, "");
+    emitter->phi_nodes[emitter->phi_count] = phi;
     emitter->phi_blocks[emitter->phi_count] = emitter->current_block;
     emitter->phis[emitter->phi_count++] = instruction;
     return r_llvm_set_value(emitter, instruction->result, phi);
@@ -1407,7 +1416,7 @@ static bool r_llvm_complete_phis(RLlvmEmitter *emitter) {
 
     for (index = 0U; index < emitter->phi_count; ++index) {
         const RMirInstruction *instruction = emitter->phis[index];
-        LLVMValueRef phi = r_llvm_value(emitter, instruction->result);
+        LLVMValueRef phi = emitter->phi_nodes[index];
         LLVMValueRef values[2];
         LLVMBasicBlockRef blocks[2];
         unsigned count = 0U;
@@ -1549,6 +1558,7 @@ static void r_llvm_release_function_state(RLlvmEmitter *emitter) {
     r_llvm_free(emitter, emitter->local_flags);
     r_llvm_free(emitter, emitter->parameter_flags);
     r_llvm_free(emitter, emitter->phis);
+    r_llvm_free(emitter, emitter->phi_nodes);
     r_llvm_free(emitter, emitter->phi_blocks);
     r_llvm_free(emitter, emitter->edges);
     r_llvm_free(emitter, emitter->locals);
@@ -1575,6 +1585,7 @@ static void r_llvm_release_function_state(RLlvmEmitter *emitter) {
     emitter->local_flags = NULL;
     emitter->parameter_flags = NULL;
     emitter->phis = NULL;
+    emitter->phi_nodes = NULL;
     emitter->phi_blocks = NULL;
     emitter->edges = NULL;
     emitter->edge_count = 0U;
@@ -1633,6 +1644,8 @@ static bool r_llvm_prepare_function(RLlvmEmitter *emitter, const RMirFunction *m
     }
     if ((phis != 0U) &&
         (((emitter->phis = r_llvm_allocate(emitter, phis * sizeof(*emitter->phis))) == NULL) ||
+         ((emitter->phi_nodes = r_llvm_allocate(emitter, phis * sizeof(*emitter->phi_nodes))) ==
+          NULL) ||
          ((emitter->phi_blocks = r_llvm_allocate(emitter, phis * sizeof(*emitter->phi_blocks))) ==
           NULL))) {
         return false;

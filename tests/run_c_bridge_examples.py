@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Exercise libc, bounded C strings, runtime attachment, both handle cleanup paths and a library
-opened at run time."""
+"""Exercise libc, bounded C strings, runtime attachment, both handle cleanup paths, a library
+opened at run time and a signal handler written in R."""
 import argparse
 import subprocess
 
@@ -48,12 +48,20 @@ def main():
         run('loadable', library, expected='labs(-42)=42 strlen=true\n')
     run('loadable', '/nonexistent/libnothing.dylib', expected='library not loaded\n', status=69)
     run('loadable', '', expected='invalid library path\n', status=64)
+    # R-FFI-0067: each raise runs the R handler on the raising thread before raise returns.
+    for rounds in [0, 1, 5, 1000]:
+        number = 30 if rounds else 0
+        run('signal', str(rounds),
+            expected=f'raised={rounds} handled={rounds} synchronous={rounds} signal={number}\n')
+    run('signal', '1001', expected='signal needs a count up to 1000\n', status=64)
+    run('signal', 'many', expected='invalid count\n', status=65)
     for command in ['upper', 'release']:
         run(command, 'x' * 257, status=64)
         run(command, '\u00e9' * 129, status=64)
     for args in [('target', 'extra'), ('inspect',), ('unknown',), ('bytes', 'x0'), ('bytes', '0'), ('cstring', 'zz')]:
         run(*args, status=64)
-    print(f'C bridge: {count} libc, UTF-8, termination, callback, handle, loading and validation checks passed')
+    print(f'C bridge: {count} libc, UTF-8, termination, callback, handle, loading, signal and '
+          'validation checks passed')
 
 
 if __name__ == '__main__':

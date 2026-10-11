@@ -3,12 +3,13 @@ import std.console;
 import example.registers.operations;
 import example.registers.operations::{TicketError};
 import example.registers.device;
+import example.registers.machine;
 import example.calculator.common::{Usage};
 
 // Output and exit status shared by command and error branches.
 struct CommandResponse { std.string::string output; i32 status; };
 
-enum Command { script, race, device };
+enum Command { script, race, device, handoff, stack, map, watchdog };
 
 async i32 main(const str[] arguments) {
     try {
@@ -16,7 +17,7 @@ async i32 main(const str[] arguments) {
         
         try {
             if (len(arguments) == 1usize) {
-                std.string::string help = std.string::from_str("registers script INITIAL [add|sub|bit_and|bit_or|bit_xor|exchange VALUE|cas EXPECTED DESIRED]...\nregisters race ITERATIONS\nregisters device INITIAL VALUE...\n");
+                std.string::string help = std.string::from_str("registers script INITIAL [add|sub|bit_and|bit_or|bit_xor|exchange VALUE|cas EXPECTED DESIRED]...\nregisters race ITERATIONS\nregisters device INITIAL VALUE...\nregisters handoff MESSAGES\nregisters stack DEPTH\nregisters map WORD...\nregisters watchdog LIMIT VALUE...\n");
                 await std.console::print(move help);
                 return 0;
             }
@@ -48,11 +49,35 @@ async i32 main(const str[] arguments) {
                 }
                 const u32[] view = values.as_slice();
                 response.output = example.registers.device::run(initial, view); break;
+            case Command::handoff:
+                throw (count != 3usize || initial > 10000u32) Usage { .message = "handoff needs up to 10000 messages" };
+                response.output = example.registers.machine::handoff(initial); break;
+            case Command::stack:
+                throw (count != 3usize || initial > 200u32) Usage { .message = "stack needs a depth up to 200" };
+                response.output = example.registers.machine::stack(initial); break;
+            case Command::map:
+                array<u32> words = std.array::create::<u32>();
+                words.push(initial);
+                for (usize index = 3usize; index < count; index += 1usize) {
+                    u32 word = std.convert::parse_u32(arguments[index], 10u32);
+                    words.push(word);
+                }
+                const u32[] word_view = words.as_slice();
+                response.output = example.registers.machine::mapped(word_view); break;
+            case Command::watchdog:
+                array<u32> amounts = std.array::create::<u32>();
+                for (usize index = 3usize; index < count; index += 1usize) {
+                    u32 amount = std.convert::parse_u32(arguments[index], 10u32);
+                    amounts.push(amount);
+                }
+                const u32[] amount_view = amounts.as_slice();
+                response.output = example.registers.machine::watchdog(initial, amount_view); break;
             }
         } catch (Usage failure) { response.output = f"{failure.message}\n"; response.status = 64; }
         await std.console::print(core::replace(&response.output, std.string::create()));
         return response.status;
     } catch (TicketError failure) { return 70; }
+    catch (core::recursion_error failure) { return 70; }
     catch (std.convert::parse_error failure) { return 65; }
     catch (std.array::push_error<std.string::string> failure) { return 71; }
     catch (std.array::push_error<u32> failure) { return 71; }

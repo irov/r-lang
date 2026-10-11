@@ -78,6 +78,9 @@ typedef struct RResourceCheck {
     const char *reason;
     RSourceSpan span;
     bool nonblocking;
+    /* R-FFI-0067 (B11): the proof of @signal_safe, which also proves @noalloc and @nonblocking
+       (nonblocking is set with it). */
+    bool signal;
 } RResourceCheck;
 
 static bool r_resource_function(RResourceCheck *, RSymbolId, RSourceSpan);
@@ -106,6 +109,10 @@ r_resource_drop(RResourceCheck *check, RTypeId type_id, RSourceSpan span, uint32
         return true;
     }
     check->types[type_id] = 1U;
+    if (check->signal) {
+        /* R-FFI-0067: a signal handler destroys nothing whose cleanup runs code. */
+        return r_resource_reject(check, span, "a value with cleanup code is not signal-safe");
+    }
     switch (type->kind) {
     case R_SEMANTIC_TYPE_PARAMETER: {
         const RGenericParameter *parameter = &context->generic_parameters[type->base - 1U];
@@ -351,6 +358,16 @@ static bool r_resource_standard_proven(RStandardCallOperation operation, bool no
     /* R-SLIB-TEST-0003: a read or a setting of the allocator's attempt counter. */
     case R_STANDARD_CALL_TEST_ALLOCATION_ATTEMPTS:
     case R_STANDARD_CALL_TEST_FAIL_ALLOCATION_AT:
+    /* Library R-LIB-0028 (B11): fences, trap, unreachable, address reads and prefetches neither
+       allocate nor wait. */
+    case R_STANDARD_CALL_CORE_ATOMIC_FENCE:
+    case R_STANDARD_CALL_CORE_SIGNAL_FENCE:
+    case R_STANDARD_CALL_CORE_TRAP:
+    case R_STANDARD_CALL_CORE_UNREACHABLE:
+    case R_STANDARD_CALL_CORE_FRAME_ADDRESS:
+    case R_STANDARD_CALL_CORE_STACK_POINTER:
+    case R_STANDARD_CALL_CORE_PREFETCH_READ:
+    case R_STANDARD_CALL_CORE_PREFETCH_WRITE:
         return true;
     case R_STANDARD_CALL_CORE_ATOMIC_LOAD:
     case R_STANDARD_CALL_CORE_ATOMIC_STORE:
@@ -369,6 +386,49 @@ static bool r_resource_standard_proven(RStandardCallOperation operation, bool no
     }
 }
 
+/* R-FFI-0067 (B11): the standard operations a signal handler may run: compiler intrinsics that
+   need no runtime state, atomics of the sizes the target performs without a lock, and the
+   machine operations. */
+static bool r_resource_signal_standard(const RFrontendContext *context, const RHirNode *node) {
+    switch (node->standard_operation) {
+    case R_STANDARD_CALL_CORE_PANIC:
+    case R_STANDARD_CALL_CORE_ASSUME:
+    case R_STANDARD_CALL_CORE_SLICE_FROM_RAW_PARTS:
+    case R_STANDARD_CALL_CORE_SLICE_FROM_RAW_PARTS_MUT:
+    case R_STANDARD_CALL_CORE_VOLATILE_LOAD:
+    case R_STANDARD_CALL_CORE_VOLATILE_STORE:
+    case R_STANDARD_CALL_CORE_CHECKED_ADD:
+    case R_STANDARD_CALL_CORE_CHECKED_SUB:
+    case R_STANDARD_CALL_CORE_CHECKED_MUL:
+    case R_STANDARD_CALL_CORE_WRAPPING_ADD:
+    case R_STANDARD_CALL_CORE_WRAPPING_SUB:
+    case R_STANDARD_CALL_CORE_WRAPPING_MUL:
+    case R_STANDARD_CALL_CORE_SATURATING_ADD:
+    case R_STANDARD_CALL_CORE_SATURATING_SUB:
+    case R_STANDARD_CALL_CORE_SATURATING_MUL:
+        return true;
+    case R_STANDARD_CALL_CORE_ATOMIC_LOAD:
+    case R_STANDARD_CALL_CORE_ATOMIC_STORE:
+    case R_STANDARD_CALL_CORE_ATOMIC_EXCHANGE:
+    case R_STANDARD_CALL_CORE_ATOMIC_COMPARE_EXCHANGE:
+    case R_STANDARD_CALL_CORE_ATOMIC_FETCH_ADD:
+    case R_STANDARD_CALL_CORE_ATOMIC_FETCH_SUB:
+    case R_STANDARD_CALL_CORE_ATOMIC_FETCH_AND:
+    case R_STANDARD_CALL_CORE_ATOMIC_FETCH_OR:
+    case R_STANDARD_CALL_CORE_ATOMIC_FETCH_XOR:
+    case R_STANDARD_CALL_CORE_ATOMIC_IS_LOCK_FREE: {
+        /* The target performs objects of 1, 2, 4, 8 and 16 bytes without a lock (AArch64). */
+        uint64_t size = 0U;
+        uint64_t alignment = 0U;
+        return r_semantic_type_layout(context, node->auxiliary_type, &size, &alignment) &&
+               ((size == 1U) || (size == 2U) || (size == 4U) || (size == 8U) || (size == 16U));
+    }
+    default:
+        return r_standard_core_bits_operation(node->standard_operation) ||
+               r_standard_core_machine_operation(node->standard_operation);
+    }
+}
+
 static bool r_resource_node(RResourceCheck *check, RHirNodeId node_id, uint32_t depth) {
     RFrontendContext *context = check->context;
     const RHirNode *node;
@@ -379,6 +439,13 @@ static bool r_resource_node(RResourceCheck *check, RHirNodeId node_id, uint32_t 
         return r_resource_reject(check, span, "body exceeds the resource proof limits");
     }
     node = &context->hir_nodes[node_id - 1U];
+    if (check->signal && (node->kind == R_HIR_PLACE) && (node->symbol != R_SYMBOL_ID_INVALID) &&
+        ((size_t)node->symbol <= context->semantic_symbol_count) &&
+        context->semantic_symbols[node->symbol - 1U].is_thread_local) {
+        /* R-FFI-0067: the thread-local instance of a thread R may not know is not created in a
+           signal handler. */
+        return r_resource_reject(check, node->span, "a thread_local object is not signal-safe");
+    }
     switch (node->kind) {
     case R_HIR_NEW:
         return r_resource_reject(check, node->span, "new allocates heap storage");
@@ -411,6 +478,10 @@ static bool r_resource_node(RResourceCheck *check, RHirNodeId node_id, uint32_t 
             }
             break;
         }
+        if (check->signal) {
+            return r_resource_reject(
+                check, node->span, "a call through a pointer is not signal-safe");
+        }
         const RSemanticType *signature =
             callee == NULL ? NULL
                            : r_semantic_type(context, r_semantic_value_type(context, callee->type));
@@ -428,6 +499,13 @@ static bool r_resource_node(RResourceCheck *check, RHirNodeId node_id, uint32_t 
         }
         break;
     case R_HIR_STANDARD_CALL:
+        if (check->signal) {
+            if (!r_resource_signal_standard(context, node)) {
+                return r_resource_reject(
+                    check, node->span, "this standard operation is not signal-safe");
+            }
+            break;
+        }
         if (node->standard_operation == R_STANDARD_CALL_CORE_CLONE) {
             /* R-OWN-0020: a Copy clone is a read; any other clone allocates its copy and
                may call clone hooks, and the allocator has no nonblocking proof. */
@@ -532,6 +610,18 @@ static bool r_resource_function(RResourceCheck *check, RSymbolId function_id, RS
     if (check->functions[function_id] == 2U) {
         return true;
     }
+    if (check->signal && (check->chain_count != 0U)) {
+        /* R-FFI-0067: a callee is proved by its own @signal_safe (asserted for an import). */
+        return function->is_signal_safe ||
+               r_resource_reject(check, span, "the callee is not @signal_safe");
+    }
+    if (check->signal && (function->is_async || (function->recursion_depth != 0U))) {
+        return r_resource_reject(check,
+                                 span,
+                                 function->is_async
+                                     ? "an async function is not signal-safe"
+                                     : "@recursion counts its depth in run-time state");
+    }
     if ((check->functions[function_id] == 1U) && (function->recursion_depth != 0U)) {
         /* L35-1 (R-FUNC-0026): a call back into a function with @recursion whose body is being
            proved adds nothing that body does not already show; the outer proof decides. */
@@ -568,7 +658,8 @@ static bool r_resource_function(RResourceCheck *check, RSymbolId function_id, RS
             return r_resource_reject(check, span, "callee has no corresponding resource contract");
         }
     } else {
-        if (function->is_extern_c && context->profile != R_FRONTEND_PROFILE_FREESTANDING) {
+        if (function->is_extern_c && !check->signal &&
+            context->profile != R_FRONTEND_PROFILE_FREESTANDING) {
             size_t index;
             if (check->nonblocking) {
                 return r_resource_reject(
@@ -612,8 +703,9 @@ static bool r_resource_report(RResourceCheck *check) {
     size_t length;
     size_t index;
     uint32_t intern_id;
-    const char *prefix =
-        check->nonblocking ? "@nonblocking cannot be proved: " : "@noalloc cannot be proved: ";
+    const char *prefix = check->signal        ? "@signal_safe cannot be proved: "
+                         : check->nonblocking ? "@nonblocking cannot be proved: "
+                                              : "@noalloc cannot be proved: ";
     length = strlen(prefix);
     (void)memcpy(message, prefix, length);
     for (index = 0U; index < check->chain_count; ++index) {
@@ -629,9 +721,10 @@ static bool r_resource_report(RResourceCheck *check) {
         return false;
     }
     return r_semantic_add_diagnostic(check->context,
-                                     check->nonblocking ? "R-DIAG-RESOURCE-002"
-                                                        : "R-DIAG-RESOURCE-001",
-                                     "R-FUNC-0019",
+                                     check->signal        ? "R-DIAG-RESOURCE-003"
+                                     : check->nonblocking ? "R-DIAG-RESOURCE-002"
+                                                          : "R-DIAG-RESOURCE-001",
+                                     check->signal ? "R-FFI-0067" : "R-FUNC-0019",
                                      check->context->intern_entries[intern_id - 1U].bytes,
                                      check->span);
 }
@@ -646,7 +739,7 @@ static bool r_semantic_validate_resource_effects(RFrontendContext *context) {
     for (index = 0U; index < context->semantic_symbol_count; ++index) {
         const RSemanticSymbol *function = &context->semantic_symbols[index];
         if (function->kind == R_SEMANTIC_SYMBOL_FUNCTION && !function->is_import &&
-            (function->is_noalloc || function->is_nonblocking)) {
+            (function->is_noalloc || function->is_nonblocking || function->is_signal_safe)) {
             break;
         }
     }
@@ -667,11 +760,14 @@ static bool r_semantic_validate_resource_effects(RFrontendContext *context) {
         if (function->kind != R_SEMANTIC_SYMBOL_FUNCTION || function->is_import) {
             continue;
         }
-        for (effect = 0U; effect < 2U; ++effect) {
-            if (!(effect == 0U ? function->is_noalloc : function->is_nonblocking)) {
+        for (effect = 0U; effect < 3U; ++effect) {
+            if (!(effect == 0U   ? function->is_noalloc
+                  : effect == 1U ? function->is_nonblocking
+                                 : function->is_signal_safe)) {
                 continue;
             }
             check.nonblocking = effect != 0U;
+            check.signal = effect == 2U;
             check.chain_count = 0U;
             check.reason = NULL;
             (void)memset(check.functions, 0, context->semantic_symbol_count + 1U);

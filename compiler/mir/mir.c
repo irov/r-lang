@@ -3145,6 +3145,9 @@ static bool r_mir_lower_standard_call(RMirBuildContext *build,
         (math_operation != NULL) ? math_operation->parameter_count
         : r_standard_core_bits_operation(node->standard_operation)
             ? r_standard_core_bits_operand_count(node->standard_operation)
+        /* Library R-LIB-0028 (B11): a fence order, a prefetch address or nothing. */
+        : r_standard_core_machine_operation(node->standard_operation)
+            ? r_standard_core_machine_operand_count(node->standard_operation)
         /* R-SLIB-NET-0012..0013: the synchronous option operations take their descriptor's
            operands. */
         : (r_standard_net_operation(node->standard_operation) != NULL)
@@ -3493,6 +3496,20 @@ static bool r_mir_lower_standard_call(RMirBuildContext *build,
     } else {
         (void)memset(result, 0, sizeof(*result));
         result->value = instruction.result;
+    }
+    /* Library R-LIB-0028, Core R-UNSAFE-0008 (B11): nothing follows core::trap or
+       core::unreachable. */
+    if (((node->standard_operation == R_STANDARD_CALL_CORE_TRAP) ||
+         (node->standard_operation == R_STANDARD_CALL_CORE_UNREACHABLE)) &&
+        !build->blocks[build->current_block].terminated) {
+        RMirInstruction unreachable;
+
+        (void)memset(&unreachable, 0, sizeof(unreachable));
+        unreachable.kind = R_MIR_INSTRUCTION_UNREACHABLE;
+        unreachable.span = node->span;
+        if (!r_mir_append_instruction(build, unreachable)) {
+            goto cleanup;
+        }
     }
     success = true;
 
@@ -6469,7 +6486,9 @@ static bool r_mir_validate_await_liveness(RMirBuildContext *build,
             build->frontend->resource_status = R_FRONTEND_INTERNAL_ERROR;
             goto cleanup;
         }
-        if ((place->symbol != startup_parameter) &&
+        /* R-FUNC-0011: a block-scope static or thread_local object keeps its own storage across
+           suspensions and is not a value of the frame. */
+        if (!symbol->is_static && (place->symbol != startup_parameter) &&
             ((startup_parameter == R_SYMBOL_ID_INVALID) ||
              (symbol->borrow_origin != startup_parameter))) {
             const uint32_t sync_guard =
@@ -9444,6 +9463,16 @@ static bool r_mir_dump_instruction(const RFrontendContext *context,
         case R_STANDARD_CALL_CORE_NARROWING_DIV:
             operation_name = r_standard_core_bits_qualified_name(instruction->standard_operation);
             break;
+        case R_STANDARD_CALL_CORE_ATOMIC_FENCE:
+        case R_STANDARD_CALL_CORE_SIGNAL_FENCE:
+        case R_STANDARD_CALL_CORE_TRAP:
+        case R_STANDARD_CALL_CORE_UNREACHABLE:
+        case R_STANDARD_CALL_CORE_FRAME_ADDRESS:
+        case R_STANDARD_CALL_CORE_STACK_POINTER:
+        case R_STANDARD_CALL_CORE_PREFETCH_READ:
+        case R_STANDARD_CALL_CORE_PREFETCH_WRITE:
+            operation_name = r_standard_core_machine_name(instruction->standard_operation);
+            break;
         case R_STANDARD_CALL_INVALID:
         default:
             if (async_sync == NULL) {
@@ -9808,7 +9837,9 @@ static bool r_mir_dump_instruction(const RFrontendContext *context,
             (instruction->standard_operation == R_STANDARD_CALL_CORE_RELEASE) ||
             ((instruction->standard_operation >= R_STANDARD_CALL_CORE_CHECKED_ADD) &&
              (instruction->standard_operation <= R_STANDARD_CALL_CORE_SATURATING_MUL)) ||
-            r_standard_core_bits_operation(instruction->standard_operation)) {
+            r_standard_core_bits_operation(instruction->standard_operation) ||
+            (instruction->standard_operation == R_STANDARD_CALL_CORE_PREFETCH_READ) ||
+            (instruction->standard_operation == R_STANDARD_CALL_CORE_PREFETCH_WRITE)) {
             if (!r_write_text(writer, user_data, " pointee=") ||
                 !r_mir_write_type(context, instruction->auxiliary_type, writer, user_data)) {
                 return false;

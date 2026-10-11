@@ -624,6 +624,16 @@ BIT_SUFFIX_OPERATIONS = (
     ("borrowing_sub", "SUFFIX left, SUFFIX right, bool borrow", "(SUFFIX, bool)"),
     ("narrowing_div", "SUFFIX high, SUFFIX low, SUFFIX divisor", "(SUFFIX, SUFFIX)"),
 )
+# Library R-LIB-0028 (B11): name and source signature of each machine operation of core.
+MACHINE_OPERATIONS = (
+    ("atomic_fence", "core::atomic_fence(core::memory_order order) -> void"),
+    ("signal_fence", "core::signal_fence(core::memory_order order) -> void"),
+    ("trap", "core::trap() -> never"),
+    ("frame_address", "core::frame_address() -> usize"),
+    ("stack_pointer", "core::stack_pointer() -> usize"),
+    ("prefetch_read", "core::prefetch_read(raw const T* address) -> void"),
+    ("prefetch_write", "core::prefetch_write(raw T* address) -> void"),
+)
 ATOMIC_OPERATIONS = (
     "atomic_load",
     "atomic_store",
@@ -747,6 +757,11 @@ COMPLEX_FALLIBLE_BINARY = ("div", "pow")
 # the deterministic bridge. It also pins qualified schematic families so an incidental prose
 # spelling cannot silently become their only inventory record.
 EXPLICIT_RULE_ITEMS: dict[str, tuple[ExplicitPublicItem, ...]] = {
+    # Library R-LIB-0028 (B11): the machine operations of core.
+    "R-LIB-0028": tuple(
+        explicit_operation(f"core::{name}", signature, item_kind="intrinsic_family")
+        for name, signature in MACHINE_OPERATIONS
+    ),
     "R-LIB-0027": tuple(
         explicit_operation(
             f"core::{name}_SUFFIX",
@@ -817,6 +832,12 @@ EXPLICIT_RULE_ITEMS: dict[str, tuple[ExplicitPublicItem, ...]] = {
         explicit_operation(
             "core::assume",
             "unsafe core::assume(bool condition) -> void",
+            evidence="R-UNSAFE-0007..0008",
+            item_kind="intrinsic_family",
+        ),
+        explicit_operation(
+            "core::unreachable",
+            "unsafe core::unreachable() -> never",
             evidence="R-UNSAFE-0007..0008",
             item_kind="intrinsic_family",
         ),
@@ -1202,6 +1223,7 @@ EXPLICIT_RULE_BLOCK_SHA256 = {
     "R-LIB-0011": "bad2e9acdb5d0e246e8b7ae30d39bd311a53a20b06d361b34b6558469c790062",
     "R-LIB-0024": "fbfd1bb8389820b08ab2f50db88d465dcc942769e47ebbea751f62ee31d948c4",
     "R-LIB-0027": "7dcf70ed59c082c7cdd65190bf12a79a13cc523f8a37697cd221e8ac30b75b17",
+    "R-LIB-0028": "0e8b8627ee2c247bfd30b19fe3c883b108c2f4789d314b6d3389f179a0c7bdd0",
     "R-LIB-0012": "c2aa9b207f7297de2ab9c470dabf728f2fa1d92c2827b010ef7de32090bc1be1",
     "R-SLIB-C-0001": "49e64346f93cce514fc3d6825645d536f78730d1219412c267f7aadb626baf83",
     "R-SLIB-CONV-0002": "467f4b66ef802d7b779b01c6c1a99a12cfdcef70d10129d56c97f6a672a12a17",
@@ -1739,6 +1761,19 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
             ),
         },
     },
+    "core::unreachable": {
+        "item_kind": "intrinsic_family",
+        "source_signature": "unsafe core::unreachable() -> never",
+        "implementation": {
+            "kind": "intrinsic",
+            "compiler_contract": (
+                "The semantic pass requires no operand and a lexical unsafe context; the call has "
+                "type never, MIR ends its block with an unreachable instruction and the lowering "
+                "emits nothing else, so reaching it is undefined behavior the optimizer relies on "
+                "(R-SAFETY-UNREACHABLE). No runtime symbol, allocation or panic is introduced."
+            ),
+        },
+    },
     "core::slice_from_raw_parts": {
         "item_kind": "intrinsic_family",
         "source_signature": (
@@ -1864,6 +1899,29 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
         },
     },
 }
+# Library R-LIB-0028 (B11): the machine operations, lowered by the compiler to LLVM fences,
+# intrinsics and the unreachable instruction (compiler/llvm/machine.c).
+MACHINE_CONTRACTS = {
+    "atomic_fence": "A fence across threads with the order, admitted without relaxed at translation or "
+    "as a contract violation at run time.",
+    "signal_fence": "A single-thread fence that orders the thread with its signal handlers and emits "
+    "no instruction.",
+    "trap": "The trap intrinsic of the target; the call has type never and ends its MIR block.",
+    "frame_address": "The frame record of the calling function as a usize.",
+    "stack_pointer": "The stack pointer register as a usize.",
+    "prefetch_read": "A data prefetch for reading with the highest locality; no access or fault.",
+    "prefetch_write": "A data prefetch for writing with the highest locality; no access or fault.",
+}
+CORE_INTRINSIC_IMPLEMENTATIONS.update(
+    {
+        f"core::{name}": {
+            "item_kind": "intrinsic_family",
+            "source_signature": signature,
+            "implementation": {"kind": "intrinsic", "compiler_contract": MACHINE_CONTRACTS[name]},
+        }
+        for name, signature in MACHINE_OPERATIONS
+    }
+)
 # Library R-LIB-0027 (L45): the bit and wide integer families are lowered by the compiler inline,
 # to the bit intrinsics of the target and double-width arithmetic, like the arithmetic families of
 # R-LIB-0001.

@@ -124,6 +124,7 @@
         "offload",
         "preflight",
         "realtime",
+        "registers",
         "registry",
         "relay",
         "service",

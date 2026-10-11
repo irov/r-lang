@@ -80,6 +80,7 @@ add_library(r_frontend STATIC
     compiler/llvm/abi.c
     compiler/llvm/async.c
     compiler/llvm/atomics.c
+    compiler/llvm/machine.c
     compiler/llvm/clone.c
     compiler/llvm/containers.c
     compiler/llvm/dispatch.c

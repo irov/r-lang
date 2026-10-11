@@ -256,8 +256,10 @@ typedef struct RLlvmEmitter {
     /* The phis of the function, completed once every block is lowered, with the MIR block each
        is in. A phi of a value that owns resources is storage its incoming values move to on the
        edges (r_c17_emit_async_phi_edge); a branch reaches such a block through an edge block,
-       which then is the predecessor of the block's other phis. */
+       which then is the predecessor of the block's other phis. The LLVM phi is kept apart from
+       the value table, where a pending resume replaces the value with its reload (B11-2). */
     const RMirInstruction **phis;
+    LLVMValueRef *phi_nodes;
     uint32_t *phi_blocks;
     size_t phi_count;
     uint32_t current_block;

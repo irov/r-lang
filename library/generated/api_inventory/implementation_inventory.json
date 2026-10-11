@@ -2,18 +2,19 @@
   "schema_version": 3,
   "generated_from": {
     "path": "specification/R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc",
-    "revision": "0.1.0-draft.75",
-    "sha256": "2bf8cd9d319dd94ed823c2b8ab67ad6adf987b31a3f65a9479c3164e5f376b73"
+    "revision": "0.1.0-draft.76",
+    "sha256": "0601b2ab78ec39313545c06d69cbf1e5ddd5f7042a78907faa4ce180d5152d04"
   },
   "extraction": {
     "qualified_item_pattern": "(?<![A-Za-z0-9_.])((?:core|std\\.[a-z][a-z0-9]*)::[A-Za-z_][A-Za-z0-9_]*)",
     "explicit_rule_item_counts": {
-      "R-LIB-0001": 20,
+      "R-LIB-0001": 21,
       "R-LIB-0011": 10,
       "R-LIB-0012": 22,
       "R-LIB-0024": 21,
       "R-LIB-0025": 4,
       "R-LIB-0027": 10,
+      "R-LIB-0028": 7,
       "R-SLIB-C-0001": 1,
       "R-SLIB-CONV-0002": 1,
       "R-SLIB-CONV-0004": 1,
@@ -30,6 +31,7 @@
       "R-LIB-0024": "fbfd1bb8389820b08ab2f50db88d465dcc942769e47ebbea751f62ee31d948c4",
       "R-LIB-0025": "536bb3dc8c2d40e442d578aad7199694ad01cb313c0e04996b4f439e582223b4",
       "R-LIB-0027": "7dcf70ed59c082c7cdd65190bf12a79a13cc523f8a37697cd221e8ac30b75b17",
+      "R-LIB-0028": "0e8b8627ee2c247bfd30b19fe3c883b108c2f4789d314b6d3389f179a0c7bdd0",
       "R-SLIB-C-0001": "49e64346f93cce514fc3d6825645d536f78730d1219412c267f7aadb626baf83",
       "R-SLIB-CONV-0002": "467f4b66ef802d7b779b01c6c1a99a12cfdcef70d10129d56c97f6a672a12a17",
       "R-SLIB-CONV-0004": "fba1382b6e5573aa46908eb2a43acff59774ad84557b2f33073c63819f514a53",
@@ -3931,6 +3933,51 @@
       "scoped": false
     },
     {
+      "record_id": "core::atomic_fence#operation",
+      "id": "core::atomic_fence",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_family",
+      "normative_rules": [
+        "R-LIB-0028"
+      ],
+      "implementation": {
+        "kind": "intrinsic",
+        "compiler_contract": "A fence across threads with the order, admitted without relaxed at translation or as a contract violation at run time."
+      },
+      "source_signature": "core::atomic_fence(core::memory_order order) -> void",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "void",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "void"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "void",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "void"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "944122060e28c89e85a86af3bc587c23622ef7b851928ac34fb210dad9ddd727"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
       "record_id": "core::atomic_fetch_add#operation",
       "id": "core::atomic_fetch_add",
       "facet": "operation",
@@ -5197,6 +5244,51 @@
       "scoped": false
     },
     {
+      "record_id": "core::frame_address#operation",
+      "id": "core::frame_address",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_family",
+      "normative_rules": [
+        "R-LIB-0028"
+      ],
+      "implementation": {
+        "kind": "intrinsic",
+        "compiler_contract": "The frame record of the calling function as a usize."
+      },
+      "source_signature": "core::frame_address() -> usize",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "usize",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "usize"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "usize",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "usize"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "32968a3b110741b4906fb947d33a286535a35576a4ea604fb9aff9106f6b784a"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
       "record_id": "core::hash#operation",
       "id": "core::hash",
       "facet": "operation",
@@ -5408,6 +5500,7 @@
       "item_kind": "public_type",
       "normative_rules": [
         "R-LIB-0011",
+        "R-LIB-0028",
         "R-SLIB-GEN-0009"
       ],
       "implementation": {
@@ -5474,6 +5567,96 @@
         },
         "completion": null,
         "descriptor_sha256": "e30bda631b3c2b4a6d7e2f739500a0bcf7fd846ec586c0120b1ab815de21f624"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "core::prefetch_read#operation",
+      "id": "core::prefetch_read",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_family",
+      "normative_rules": [
+        "R-LIB-0028"
+      ],
+      "implementation": {
+        "kind": "intrinsic",
+        "compiler_contract": "A data prefetch for reading with the highest locality; no access or fault."
+      },
+      "source_signature": "core::prefetch_read(raw const T* address) -> void",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "void",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "void"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "void",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "void"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "944122060e28c89e85a86af3bc587c23622ef7b851928ac34fb210dad9ddd727"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "core::prefetch_write#operation",
+      "id": "core::prefetch_write",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_family",
+      "normative_rules": [
+        "R-LIB-0028"
+      ],
+      "implementation": {
+        "kind": "intrinsic",
+        "compiler_contract": "A data prefetch for writing with the highest locality; no access or fault."
+      },
+      "source_signature": "core::prefetch_write(raw T* address) -> void",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "void",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "void"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "void",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "void"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "944122060e28c89e85a86af3bc587c23622ef7b851928ac34fb210dad9ddd727"
       },
       "panics_on_allocation_failure": false,
       "discardable_result": false,
@@ -5865,6 +6048,51 @@
       "scoped": false
     },
     {
+      "record_id": "core::signal_fence#operation",
+      "id": "core::signal_fence",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_family",
+      "normative_rules": [
+        "R-LIB-0028"
+      ],
+      "implementation": {
+        "kind": "intrinsic",
+        "compiler_contract": "A single-thread fence that orders the thread with its signal handlers and emits no instruction."
+      },
+      "source_signature": "core::signal_fence(core::memory_order order) -> void",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "void",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "void"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "void",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "void"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "944122060e28c89e85a86af3bc587c23622ef7b851928ac34fb210dad9ddd727"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
       "record_id": "core::slice_from_raw_parts#operation",
       "id": "core::slice_from_raw_parts",
       "facet": "operation",
@@ -6039,6 +6267,51 @@
         },
         "completion": null,
         "descriptor_sha256": "f6f4ea8f938752ffde7954de9289eeffbfaaa8fadb67096be6169e1e5a3c1f60"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "core::stack_pointer#operation",
+      "id": "core::stack_pointer",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_family",
+      "normative_rules": [
+        "R-LIB-0028"
+      ],
+      "implementation": {
+        "kind": "intrinsic",
+        "compiler_contract": "The stack pointer register as a usize."
+      },
+      "source_signature": "core::stack_pointer() -> usize",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "usize",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "usize"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "usize",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "usize"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "32968a3b110741b4906fb947d33a286535a35576a4ea604fb9aff9106f6b784a"
       },
       "panics_on_allocation_failure": false,
       "discardable_result": false,
@@ -6274,6 +6547,51 @@
       "scoped": false
     },
     {
+      "record_id": "core::trap#operation",
+      "id": "core::trap",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_family",
+      "normative_rules": [
+        "R-LIB-0028"
+      ],
+      "implementation": {
+        "kind": "intrinsic",
+        "compiler_contract": "The trap intrinsic of the target; the call has type never and ends its MIR block."
+      },
+      "source_signature": "core::trap() -> never",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "never",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "never"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "never",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "never"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "c17a193a980acea0a83e0e489743d0394e4abbd030f359909484ca4c4985bbc8"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
       "record_id": "core::type_attribute#operation",
       "id": "core::type_attribute",
       "facet": "operation",
@@ -6359,6 +6677,51 @@
         },
         "completion": null,
         "descriptor_sha256": "3f4e91d76ddda30b61a55a0dca91ad61b75b7a067ea406ff3503ddcbf43f26e8"
+      },
+      "panics_on_allocation_failure": false,
+      "discardable_result": false,
+      "scoped": false
+    },
+    {
+      "record_id": "core::unreachable#operation",
+      "id": "core::unreachable",
+      "facet": "operation",
+      "module": "core",
+      "item_kind": "intrinsic_family",
+      "normative_rules": [
+        "R-LIB-0001"
+      ],
+      "implementation": {
+        "kind": "intrinsic",
+        "compiler_contract": "The semantic pass requires no operand and a lexical unsafe context; the call has type never, MIR ends its block with an unreachable instruction and the lowering emits nothing else, so reaching it is undefined behavior the optimizer relies on (R-SAFETY-UNREACHABLE). No runtime symbol, allocation or panic is introduced."
+      },
+      "source_signature": "unsafe core::unreachable() -> never",
+      "checked_effect": {
+        "declaration_kind": "synchronous",
+        "value_type": "never",
+        "normalized_error_set": [],
+        "tag_table": [
+          {
+            "tag": 0,
+            "role": "success",
+            "type": "never"
+          }
+        ],
+        "carrier": "none",
+        "invocation": {
+          "value_type": "never",
+          "normalized_error_set": [],
+          "tag_table": [
+            {
+              "tag": 0,
+              "role": "success",
+              "type": "never"
+            }
+          ],
+          "carrier": "none"
+        },
+        "completion": null,
+        "descriptor_sha256": "c17a193a980acea0a83e0e489743d0394e4abbd030f359909484ca4c4985bbc8"
       },
       "panics_on_allocation_failure": false,
       "discardable_result": false,

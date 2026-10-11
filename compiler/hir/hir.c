@@ -1928,6 +1928,16 @@ static bool r_hir_dump_node(const RFrontendContext *context,
         case R_STANDARD_CALL_CORE_NARROWING_DIV:
             operation_name = r_standard_core_bits_qualified_name(node->standard_operation);
             break;
+        case R_STANDARD_CALL_CORE_ATOMIC_FENCE:
+        case R_STANDARD_CALL_CORE_SIGNAL_FENCE:
+        case R_STANDARD_CALL_CORE_TRAP:
+        case R_STANDARD_CALL_CORE_UNREACHABLE:
+        case R_STANDARD_CALL_CORE_FRAME_ADDRESS:
+        case R_STANDARD_CALL_CORE_STACK_POINTER:
+        case R_STANDARD_CALL_CORE_PREFETCH_READ:
+        case R_STANDARD_CALL_CORE_PREFETCH_WRITE:
+            operation_name = r_standard_core_machine_name(node->standard_operation);
+            break;
         case R_STANDARD_CALL_INVALID:
         default:
             if (async_sync == NULL) {
@@ -1962,6 +1972,8 @@ static bool r_hir_dump_node(const RFrontendContext *context,
             (node->standard_operation == R_STANDARD_CALL_CORE_VOLATILE_STORE) ||
             (node->standard_operation == R_STANDARD_CALL_CORE_ADOPT) ||
             (node->standard_operation == R_STANDARD_CALL_CORE_RELEASE) ||
+            (node->standard_operation == R_STANDARD_CALL_CORE_PREFETCH_READ) ||
+            (node->standard_operation == R_STANDARD_CALL_CORE_PREFETCH_WRITE) ||
             ((node->standard_operation >= R_STANDARD_CALL_CORE_CHECKED_ADD) &&
              (node->standard_operation <= R_STANDARD_CALL_CORE_SATURATING_MUL))) {
             if (!r_write_text(writer, user_data, " pointee=") ||
