@@ -15,7 +15,7 @@
 |Поле |Значение
 |Документ |R Standard Library Specification
 |Версия языка |0.1
-|Редакция документа |0.1.0-draft.76
+|Редакция документа |0.1.0-draft.77
 |Статус |Перевод нормативного черновика; не является стабильным стандартом R 1.0
 |Язык документа |Русский перевод; ключевые нормативные термины приведены на английском
 |Требуемый стандарт языка |R Core Language Specification 0.1
@@ -279,7 +279,9 @@ R-LIB-0001 точные битовые операции
 * `+core::trap() -> never+`;
 * `+core::frame_address() -> usize+` и `+core::stack_pointer() -> usize+`;
 * `+core::prefetch_read(raw const T* address) -> void+` и
-  `+core::prefetch_write(raw T* address) -> void+`.
+  `+core::prefetch_write(raw T* address) -> void+`;
+* `+core::pointer_address(raw const T*? address) -> usize+`;
+* `+core::c_errno() -> c_int+` и `+core::set_c_errno(c_int value) -> void+`.
 
 `+atomic_fence+` — барьер между потоками с заданным порядком, как C17 `+atomic_thread_fence+`; он
 упорядочивает атомарные операции R-LIB-0011 вокруг себя (Core R-MEM-0007 — R-MEM-0010);
@@ -294,7 +296,13 @@ R-LIB-0001 точные битовые операции
 потоке более глубокий вызов имеет меньший указатель стека, а `+frame_address()+` не ниже
 `+stack_pointer()+` той же функции. `+prefetch_read+` и `+prefetch_write+` подсказывают, что память
 по адресу скоро будет прочитана или записана: они не обращаются к памяти, не вызывают сбоя и не
-меняют поведения. T — любой тип. Ни одна из этих операций не выделяет память и не блокирует, ни
+меняют поведения. T — любой тип. `+pointer_address+` — адрес сырого указателя на объект любой
+константности и nullability как беззнаковое целое, ноль для null: адрес раскрывается, но ни одна
+операция не преобразует целое в указатель (Core R-IDB-019). `+c_errno+` читает, а `+set_c_errno+`
+записывает `+errno+` библиотеки C в вызывающем потоке; функция C устанавливает его по своему
+контракту, поэтому чтение, отделённое от её вызова `+await+` (который может продолжиться в другом
+потоке) или другим вызовом, способным его изменить, наблюдает постороннее значение. Ни одна из этих
+операций не выделяет память и не блокирует, ни
 одна не вычисляется при трансляции (Core R-FUNC-0023). Недостающий или лишний аргумент, порядок
 другого типа, аргумент `+prefetch_read+`, не являющийся сырым указателем, и аргумент
 `+prefetch_write+`, не являющийся `+raw T*+`, требуют `+R-DIAG-TYPE-001+`.
@@ -308,7 +316,7 @@ shall предоставлять проверяемые compiler relations origi
 *R-LIB-0003* — `+core+` shall not неявно выделять память, выполнять I/O, читать
 environment, запускать threads либо зависеть от locale. Safe non-atomic operation, не
 наблюдающая память, shall создавать одинаковый результат для одинаковых явных values, кроме
-адресов стека и кадра R-LIB-0028, которые зависят от вызова.
+адресов стека и кадра и C `+errno+` R-LIB-0028, которые зависят от вызова и потока.
 Atomic, volatile и unsafe raw-memory operations may дополнительно зависеть только от
 состояния памяти, устройства и scheduling, разрешённого их документированными contracts.
 
@@ -518,7 +526,8 @@ cleanup выполняет acquire completion и уничтожает любой
 разрешённого T со следующими schematic signatures: `+atomic_load(obj, order) -> T+`,
 `+atomic_store(obj, desired, order) -> void+`, `+atomic_exchange(obj, desired, order) -> T+`,
 `+atomic_compare_exchange(obj, expected, desired, success_order, failure_order) -> core::atomic_compare_exchange_result<T>+`,
-только для integers `+atomic_fetch_add/sub/and/or/xor(obj, operand, order) -> T+` и
+только для integers (integer type или C integer type Core R-TYPE-0013)
+`+atomic_fetch_add/sub/and/or/xor(obj, operand, order) -> T+` и
 `+atomic_is_lock_free(obj) -> bool+`. В каждом signature `+obj+` имеет type
 `+const (atomic T)*+`; mutation через этот shared borrow является закрытым standardized
 исключением interior mutation и не предоставляет ordinary mutable access. Values

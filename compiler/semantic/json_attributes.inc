@@ -98,11 +98,10 @@ static bool r_json_collect_field_attributes(RFrontendContext *context,
             RToken literal = {0};
             RTokenKind suffix = R_TOKEN_INVALID;
             uint64_t value = 0U;
-            bool valid = aggregate->is_repr_c && (field->align_attribute == 0U) &&
-                         (view.child_count == 3U) &&
-                         r_ast_ref_child(context, attribute, 2U, &part) &&
-                         r_ast_ref_token(context, part, &number) &&
-                         (number.kind == R_TOKEN_INTEGER_LITERAL);
+            bool valid =
+                aggregate->is_repr_c && (field->align_attribute == 0U) &&
+                (view.child_count == 3U) && r_ast_ref_child(context, attribute, 2U, &part) &&
+                r_ast_ref_token(context, part, &number) && (number.kind == R_TOKEN_INTEGER_LITERAL);
             if (valid) {
                 literal.kind = number.kind;
                 literal.span = number.span;
@@ -125,6 +124,47 @@ static bool r_json_collect_field_attributes(RFrontendContext *context,
             }
             continue;
         }
+        if (r_ast_direct_token(context, attribute, 1U, NULL, &name) &&
+            r_semantic_token_text_equal_owned(context, &name, "c_field")) {
+            /* R-FFI-0017 (B12): `@c_field(name = "member")` names the C member that a field of
+               a struct or union declared in an extern "C" block stands for, when the member's
+               name is no R field name (a keyword of R such as `drop` or `list`). */
+            RAstTokenView attribute_name;
+            RAstTokenView arguments[2];
+            uint32_t count = 0U;
+            uint32_t intern_id = 0U;
+            const char *bytes = NULL;
+            size_t length = 0U;
+            bool valid = false;
+
+            if (!r_semantic_attribute_arguments(
+                    context, attribute, &attribute_name, arguments, 2U, &count, &valid)) {
+                return false;
+            }
+            valid = valid && (count == 2U) && (arguments[0].kind == R_TOKEN_IDENTIFIER) &&
+                    r_semantic_token_text_equal_owned(context, &arguments[0], "name") &&
+                    r_semantic_string_argument_text(
+                        context, &arguments[1], &intern_id, &bytes, &length) &&
+                    ((aggregate->extern_block_ast != 0U) || (aggregate->extern_block != 0U)) &&
+                    (field->c_name_intern_id == 0U) && (intern_id != 0U) &&
+                    (r_semantic_c_name_class_of(&context->intern_entries[intern_id - 1U]) !=
+                     R_C_NAME_INVALID);
+            if (!valid) {
+                aggregate->poisoned = true;
+                if (!r_semantic_add_diagnostic(
+                        context,
+                        "R-DIAG-FFI-003",
+                        "R-FFI-0050",
+                        "@c_field(name = \"member\") names, once, the C member "
+                        "of a field of a struct or union declared in an "
+                        "extern \"C\" block",
+                        view.span))
+                    return false;
+                continue;
+            }
+            field->c_name_intern_id = intern_id;
+            continue;
+        }
         if (!r_ast_direct_token(context, attribute, 1U, NULL, &name) ||
             !r_semantic_token_text_equal_owned(context, &name, "json")) {
             /* A field takes only @json; an FFI attribute has its closed scopes (R-FFI-0050). */
@@ -138,7 +178,8 @@ static bool r_json_collect_field_attributes(RFrontendContext *context,
                                                          "c_type",
                                                          "c_constant",
                                                          "export_name",
-                                                         "callback"};
+                                                         "callback",
+                                                         "c_field"};
             bool ffi = false;
             for (size_t index = 0U; index < sizeof(ffi_attributes) / sizeof(ffi_attributes[0]);
                  ++index)
@@ -148,8 +189,8 @@ static bool r_json_collect_field_attributes(RFrontendContext *context,
             if (!r_semantic_add_diagnostic(context,
                                            ffi ? "R-DIAG-FFI-003" : "R-DIAG-SYN-002",
                                            ffi ? "R-FFI-0050" : "R-GRAM-0007",
-                                           "a struct field accepts only the @json and @align "
-                                           "attributes",
+                                           "a struct field accepts only the @json, @align and "
+                                           "@c_field attributes",
                                            view.span))
                 return false;
             continue;

@@ -15,7 +15,7 @@ Normative draft of the R standard library
 |Field |Value
 |Document|R Standard Library Specification
 |Language version|0.1
-|Document revision|0.1.0-draft.76
+|Document revision|0.1.0-draft.77
 |Status|Normative draft; not a stable R 1.0 standard
 |Document language|English; normative original
 |Required language standard|R Core Language Specification 0.1
@@ -280,7 +280,9 @@ A function that uses them may be evaluated at translation (Core R-FUNC-0023).
 * `+core::trap() -> never+`;
 * `+core::frame_address() -> usize+` and `+core::stack_pointer() -> usize+`;
 * `+core::prefetch_read(raw const T* address) -> void+` and
-  `+core::prefetch_write(raw T* address) -> void+`.
+  `+core::prefetch_write(raw T* address) -> void+`;
+* `+core::pointer_address(raw const T*? address) -> usize+`;
+* `+core::c_errno() -> c_int+` and `+core::set_c_errno(c_int value) -> void+`.
 
 `+atomic_fence+` is a fence across threads with the order, as C17 `+atomic_thread_fence+`, which
 orders the atomic operations of R-LIB-0011 around it (Core R-MEM-0007 to R-MEM-0010);
@@ -294,8 +296,13 @@ destruction. `+frame_address+` is the address of the frame record of the calling
 (Core R-IDB-019); the stack of the target grows toward lower addresses, so on one thread a deeper
 call has a lower stack pointer, and `+frame_address()+` is not below `+stack_pointer()+` of the same
 function. `+prefetch_read+` and `+prefetch_write+` hint that the memory at the address will soon be
-read or written: they access no memory, cannot fault and change no behaviour. T is any type. None
-of these operations allocates or blocks, and none is evaluated at translation (Core R-FUNC-0023). A
+read or written: they access no memory, cannot fault and change no behaviour. T is any type.
+`+pointer_address+` is the address of a raw object pointer of any constness and nullability as an
+unsigned integer, zero for null: the address is exposed, but no operation converts an integer to a
+pointer (Core R-IDB-019). `+c_errno+` reads and `+set_c_errno+` writes `+errno+` of the C library on
+the calling thread; a C function sets it as its contract says, so a read separated from that call by
+an `+await+` (which may resume on another thread) or by another call that may set it observes an
+unrelated value. None of these operations allocates or blocks, and none is evaluated at translation (Core R-FUNC-0023). A
 missing or extra argument, an order of another type, an argument of `+prefetch_read+` that is no raw
 pointer and one of `+prefetch_write+` that is no `+raw T*+` require `+R-DIAG-TYPE-001+`.
 
@@ -308,7 +315,7 @@ shall not rely on an undocumented unsafe precondition.
 *R-LIB-0003* — `+core+` shall not allocate implicitly, perform I/O, read environment, spawn
 threads or depend on locale. Safe non-atomic operation that does not observe memory
 shall produce the same result for the same explicit values, except the stack and frame addresses
-of R-LIB-0028, which depend on the call. Atomic, volatile and unsafe
+and the C `+errno+` of R-LIB-0028, which depend on the call and the thread. Atomic, volatile and unsafe
 raw-memory operations may additionally depend only on memory, device and scheduling
 state permitted by their documented contracts.
 
@@ -514,7 +521,7 @@ exactly once.
 [[R-LIB-0011]]
 *R-LIB-0011* — `+core+` provides compiler-recognized atomic families for every permitted T
 with these schematic signatures: `+atomic_load(obj, order) -> T+`, `+atomic_store(obj, desired, order) -> void+`, `+atomic_exchange(obj, desired, order) -> T+`, `+atomic_compare_exchange(obj, expected, desired, success_order, failure_order) -> core::atomic_compare_exchange_result<T>+`, integer-only
-`+atomic_fetch_add/sub/and/or/xor(obj, operand, order) -> T+`, and `+atomic_is_lock_free(obj) -> bool+`. In every signature `+obj+` has type `+const (atomic T)*+`; mutation through that
+(an integer type or a C integer type of Core R-TYPE-0013) `+atomic_fetch_add/sub/and/or/xor(obj, operand, order) -> T+`, and `+atomic_is_lock_free(obj) -> bool+`. In every signature `+obj+` has type `+const (atomic T)*+`; mutation through that
 shared borrow is a closed standardized interior-mutation exception and grants no
 ordinary mutable access. `+order+` values are `+core::memory_order::{relaxed,acquire,release,acq_rel,seq_cst}+` as applicable by R-MEM-0007;
 compare-exchange has exactly the two independently checked ordering arguments shown.

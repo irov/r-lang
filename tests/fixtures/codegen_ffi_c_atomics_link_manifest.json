@@ -1,0 +1,45 @@
+{
+  "schema": "r-link-manifest-0.1",
+  "links": [
+    {
+      "logical_name": "atomics",
+      "available": true,
+      "kind": "static",
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "tests/fixtures/ffi/c_atomics.c",
+      "link_artifact_identity": "tests/fixtures/ffi/c_atomics.c",
+      "header_roots": [
+        "tests/fixtures/ffi"
+      ],
+      "abi_record_roots": [
+        "tests/fixtures/ffi"
+      ],
+      "library_version": "0.1",
+      "dependencies": [],
+      "feature_test_definitions": [],
+      "symbols": [
+        {
+          "c_identifier": "atomic_counters_initialize",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "atomic_counters_bump",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "atomic_counters_level",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "atomic_counters_slot",
+          "kind": "function",
+          "binding": "strong"
+        }
+      ]
+    }
+  ]
+}

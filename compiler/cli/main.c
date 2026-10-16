@@ -124,6 +124,8 @@ typedef struct RCliOptions {
     /* --library NAME (B10.1): the program is a library with this name. */
     const char *library_name;
     bool library_seen;
+    /* --runtime-unit (B12): the translation is a unit of the runtime written in R. */
+    bool runtime_unit;
     /* --emit=shared-library (B10.1): the result, the linker, its inputs, the versions and the
        install name of the library. */
     const char *output;
@@ -204,23 +206,24 @@ static bool r_cli_library_name_valid(const char *name) {
 }
 
 static void r_cli_usage(FILE *stream) {
-    (void)fprintf(stream,
-                  "usage: r-front "
-                  "[--emit=tokens|cst|ast|hir|mir|interface|link-plan|bundle|llvm-ir|object|"
-                  "abi-verifier|abi-inventory|abi-record|bindings|export-list|shared-library|"
-                  "c-header|abi-baseline] "
-                  "[--diagnostics=text|json] [--module-map FILE] [--library-map FILE] "
-                  "[--entry MODULE[::FUNCTION]] "
-                  "[--profile freestanding|allocation|hosted|hosted-thread|"
-                  "hosted-native-async] [--deny-panic-alloc] [--test] [--target-manifest FILE] "
-                  "[--link-manifest FILE] [--abi-record FILE] [--abi-header-dir DIR]... "
-                  "[--sysroot DIR] "
-                  "[--rename-symbol OLD=NEW]... [--all-functions] [--opt-level=0|1|2|3] "
-                  "[--bitcode-catalog FILE] [--profile-generate | --profile-use FILE] "
-                  "[--sanitize=address|thread] [--debug-info] [--coverage PREFIX] "
-                  "[--library NAME] [--output FILE] [--linker CC] [--link-input FILE]... "
-                  "[--library-version X.Y.Z] [--compatibility-version X.Y.Z] "
-                  "[--install-name NAME] [--abi-baseline FILE] [--version] [FILE ...]\n");
+    (void)fprintf(
+        stream,
+        "usage: r-front "
+        "[--emit=tokens|cst|ast|hir|mir|interface|link-plan|bundle|llvm-ir|object|"
+        "abi-verifier|abi-inventory|abi-record|bindings|export-list|shared-library|"
+        "c-header|abi-baseline] "
+        "[--diagnostics=text|json] [--module-map FILE] [--library-map FILE] "
+        "[--entry MODULE[::FUNCTION]] "
+        "[--profile freestanding|allocation|hosted|hosted-thread|"
+        "hosted-native-async] [--deny-panic-alloc] [--test] [--target-manifest FILE] "
+        "[--link-manifest FILE] [--abi-record FILE] [--abi-header-dir DIR]... "
+        "[--sysroot DIR] "
+        "[--rename-symbol OLD=NEW]... [--all-functions] [--opt-level=0|1|2|3] "
+        "[--bitcode-catalog FILE] [--profile-generate | --profile-use FILE] "
+        "[--sanitize=address|thread] [--debug-info] [--coverage PREFIX] "
+        "[--library NAME] [--runtime-unit] [--output FILE] [--linker CC] [--link-input FILE]... "
+        "[--library-version X.Y.Z] [--compatibility-version X.Y.Z] "
+        "[--install-name NAME] [--abi-baseline FILE] [--version] [FILE ...]\n");
 }
 
 /* The compiler and its backend; the backend check fails when the linked LLVM or its target
@@ -650,6 +653,11 @@ static bool r_cli_parse_arguments(int argc, char **argv, RCliOptions *options) {
                 return r_cli_option_error("expected OLD=NEW C identifiers", pair);
             }
             options->symbol_renames[options->symbol_rename_count++] = pair;
+        } else if (strcmp(argument, "--runtime-unit") == 0) {
+            if (options->runtime_unit) {
+                return r_cli_option_error("duplicate option", "--runtime-unit");
+            }
+            options->runtime_unit = true;
         } else if (strcmp(argument, "--all-functions") == 0) {
             if (options->all_functions) {
                 return r_cli_option_error("duplicate option", "--all-functions");
@@ -800,6 +808,11 @@ static bool r_cli_parse_arguments(int argc, char **argv, RCliOptions *options) {
     if ((r_cli_emits_library(options->emit) || (options->abi_baseline != NULL)) &&
         (options->library_name == NULL)) {
         return r_cli_option_error("--library is required for selected emit", NULL);
+    }
+    if (options->runtime_unit &&
+        ((options->library_name != NULL) || (strcmp(options->profile, "freestanding") != 0))) {
+        return r_cli_option_error(
+            "--runtime-unit requires --profile freestanding and excludes --library", NULL);
     }
     if ((options->abi_baseline != NULL) && !r_cli_emits_library(options->emit)) {
         return r_cli_option_error("--abi-baseline requires a library emit", NULL);
@@ -1784,8 +1797,26 @@ static int r_cli_run(RFrontendContext *context, RCliOptions *options) {
             header_options.sysroot = options->sysroot;
             header_options.roots = options->abi_header_dirs;
             header_options.root_count = options->abi_header_dir_count;
-            status = r_frontend_emit_abi_record(
-                context, &record_options, &header_options, r_file_writer, stdout);
+            {
+                /* --output FILE writes the record there (B12: the build records the runtime
+                   headers for its units); a failed emission leaves no file. */
+                FILE *stream = stdout;
+                if (options->output != NULL) {
+                    stream = fopen(options->output, "wb");
+                    if (stream == NULL) {
+                        (void)fprintf(stderr, "r-front: cannot write %s\n", options->output);
+                        return 2;
+                    }
+                }
+                status = r_frontend_emit_abi_record(
+                    context, &record_options, &header_options, r_file_writer, stream);
+                if ((stream != stdout) && ((fclose(stream) != 0) || (status != R_FRONTEND_OK))) {
+                    (void)remove(options->output);
+                    if (status == R_FRONTEND_OK) {
+                        status = R_FRONTEND_IO_ERROR;
+                    }
+                }
+            }
             if (status == R_FRONTEND_INVALID_ARGUMENT) {
                 (void)fprintf(stderr,
                               "r-front: --sysroot is not the SDK of the target manifest, or "
@@ -1844,13 +1875,19 @@ static int r_cli_run(RFrontendContext *context, RCliOptions *options) {
             RCliBitcodeCatalog bitcode_catalog;
 
             (void)memset(&bitcode_catalog, 0, sizeof(bitcode_catalog));
-            if ((options->library_name != NULL) && (r_frontend_entry_point_count(context) != 0U)) {
+            if (((options->library_name != NULL) || options->runtime_unit) &&
+                (r_frontend_entry_point_count(context) != 0U)) {
                 (void)fprintf(stderr,
-                              "r-front: R-DIAG-FLOW-001 [R-FUNC-0008]: a library has no main; "
-                              "its exports are its entry points (R-FFI-0064)\n");
+                              options->runtime_unit
+                                  ? "r-front: R-DIAG-FLOW-001 [R-FUNC-0008]: a runtime unit has "
+                                    "no main; its exports are functions of the runtime "
+                                    "(R-FFI-0068)\n"
+                                  : "r-front: R-DIAG-FLOW-001 [R-FUNC-0008]: a library has no "
+                                    "main; its exports are its entry points (R-FFI-0064)\n");
                 return 1;
             }
-            if ((options->library_name == NULL) && (r_frontend_entry_point_count(context) != 1U)) {
+            if ((options->library_name == NULL) && !options->runtime_unit &&
+                (r_frontend_entry_point_count(context) != 1U)) {
                 (void)fprintf(stderr,
                               "r-front: R-DIAG-FLOW-001 [R-FUNC-0008]: a program requires exactly "
                               "one exported entry point: i32 main(), i32 main(const str[] args) "
@@ -1895,6 +1932,7 @@ static int r_cli_run(RFrontendContext *context, RCliOptions *options) {
             artifact_options.debug_info = options->debug_info;
             artifact_options.coverage_prefix = options->coverage_prefix;
             artifact_options.library_name = options->library_name;
+            artifact_options.runtime_unit = options->runtime_unit;
             if ((options->profile_generate || (options->profile_use_path != NULL)) &&
                 ((artifact_options.optimization_level == 0U) ||
                  (options->profile_generate && (options->profile_use_path != NULL)))) {
@@ -1975,12 +2013,30 @@ static int r_cli_run(RFrontendContext *context, RCliOptions *options) {
             } else if (emit == R_EMIT_SHARED_LIBRARY) {
                 status = r_cli_link_library(context, options, &artifact_options);
             } else {
+                /* --output FILE writes the module there instead of standard output (B12: the
+                   build compiles the units of the runtime into their objects); a failed
+                   emission leaves no file. */
+                FILE *stream = stdout;
+                if (options->output != NULL) {
+                    stream = fopen(options->output, "wb");
+                    if (stream == NULL) {
+                        r_cli_bitcode_destroy(&bitcode_catalog);
+                        (void)fprintf(stderr, "r-front: cannot write %s\n", options->output);
+                        return 2;
+                    }
+                }
                 status = r_frontend_emit_llvm(context,
                                               &artifact_options,
                                               emit == R_EMIT_LLVM_IR ? R_FRONTEND_LLVM_IR
                                                                      : R_FRONTEND_LLVM_OBJECT,
                                               r_file_writer,
-                                              stdout);
+                                              stream);
+                if ((stream != stdout) && ((fclose(stream) != 0) || (status != R_FRONTEND_OK))) {
+                    (void)remove(options->output);
+                    if (status == R_FRONTEND_OK) {
+                        status = R_FRONTEND_IO_ERROR;
+                    }
+                }
             }
             r_cli_bitcode_destroy(&bitcode_catalog);
             if (status == R_FRONTEND_NOT_LOWERABLE) {
@@ -2130,6 +2186,12 @@ int main(int argc, char **argv) {
     }
     if (r_frontend_set_profile(context, options.profile) != R_FRONTEND_OK) {
         (void)fprintf(stderr, "r-front: unknown profile: %s\n", options.profile);
+        r_frontend_destroy(context);
+        r_cli_destroy_options(&options);
+        return 2;
+    }
+    if (options.runtime_unit && (r_frontend_set_runtime_unit(context) != R_FRONTEND_OK)) {
+        (void)fprintf(stderr, "r-front: cannot select --runtime-unit\n");
         r_frontend_destroy(context);
         r_cli_destroy_options(&options);
         return 2;

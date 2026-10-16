@@ -234,3 +234,41 @@ std.string::string load(str path) throws std.dl::dl_error, std.alloc::alloc_erro
         return f"labs({value})={result} strlen={has_strlen}\n";
     }
 }
+
+// The C errno of the calling thread (core::c_errno): cleared before the C call and read right
+// after it, before any other call or await can set it.
+@link(name = "system.libc", kind = "system")
+@header("unistd.h")
+@header("errno.h")
+extern "C" {
+    @c_constant(name = "EBADF")
+    const c_int bad_descriptor = 9i32 as c_int;
+    @c_constant(name = "ENOTTY")
+    const c_int not_terminal = 25i32 as c_int;
+    @safety("BRIDGE-ISATTY", "None")
+    c_int isatty(c_int descriptor);
+}
+
+str errno_name(c_int code) {
+    if (code == bad_descriptor) {
+        return "EBADF";
+    }
+    if (code == not_terminal) {
+        return "ENOTTY";
+    }
+    if (code == 0i32 as c_int) {
+        return "none";
+    }
+    return "other";
+}
+
+std.string::string terminal(u32 descriptor) throws std.alloc::alloc_error {
+    core::set_c_errno(0i32 as c_int);
+    unsafe {
+        i32 answer = isatty(descriptor as c_int) as i32;
+        c_int code = core::c_errno();
+        str name = errno_name(code);
+        i32 number = code as i32;
+        return f"isatty({descriptor})={answer} errno={number} {name}\n";
+    }
+}

@@ -1493,6 +1493,11 @@ bool r_llvm_emit_standard_call(RLlvmEmitter *emitter, const RMirInstruction *ins
     case R_STANDARD_CALL_CORE_STACK_POINTER:
     case R_STANDARD_CALL_CORE_PREFETCH_READ:
     case R_STANDARD_CALL_CORE_PREFETCH_WRITE:
+    case R_STANDARD_CALL_CORE_POINTER_ADDRESS:
+    case R_STANDARD_CALL_CORE_OFFSET_BYTES:
+    case R_STANDARD_CALL_CORE_CAST_MUTABLE:
+    case R_STANDARD_CALL_CORE_C_ERRNO:
+    case R_STANDARD_CALL_CORE_SET_C_ERRNO:
         return r_llvm_std_machine(emitter, instruction);
     case R_STANDARD_CALL_CORE_SLICE_FROM_RAW_PARTS:
     case R_STANDARD_CALL_CORE_SLICE_FROM_RAW_PARTS_MUT:

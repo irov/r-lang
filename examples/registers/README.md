@@ -2,8 +2,9 @@
 
 Apply a script to a 32-bit atomic control word, issue tickets concurrently,
 simulate volatile device-register access, hand messages between threads through
-memory fences, measure the stack, write a register block in static storage, or
-halt the process with the trap instruction.
+memory fences, measure the stack, write a register block in static storage,
+measure a register block through its addresses, or halt the process with the
+trap instruction.
 
 ```sh
 ctest --test-dir build-debug -R 'example_registers|registers_commands' --output-on-failure
@@ -14,6 +15,7 @@ build-debug/tests/codegen_example_registers handoff 2000
 build-debug/tests/codegen_example_registers stack 17
 build-debug/tests/codegen_example_registers map 5 1073741831 2147483657
 build-debug/tests/codegen_example_registers watchdog 10 1 2 3
+build-debug/tests/codegen_example_registers layout 5
 ```
 
 `script` supports `add`, `sub`, `bit_and`, `bit_or`, `bit_xor`, `exchange` and
@@ -59,8 +61,19 @@ be is `core::unreachable()`.
 (exit status 133 in a shell), without unwinding or output. Otherwise it prints
 `total=T limit=L`.
 
+`layout COUNTER` measures a block of three registers from the addresses of its
+fields (`core::pointer_address`), then writes COUNTER through the byte offset of
+the counter from a read-only view of the block (`core::offset_bytes`, made
+writable with `core::cast_mutable`) and reads the flags back by a negative
+offset from the counter:
+
+```text
+status@0 counter@8 flags@16 size=24
+counter=5 flags=2
+```
+
 Command tests use a Python bitwise/arithmetic interpreter, stale and successful
 CAS operations, repeated concurrent ticket runs, volatile write sequences,
 repeated fence handoffs, stack descents, register maps decoded in Python, trap
-exits and invalid input. Runtime-generated cleanup remains part of the normal
+exits, block layouts and invalid input. Runtime-generated cleanup remains part of the normal
 example build.

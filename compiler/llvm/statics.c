@@ -1432,7 +1432,7 @@ LLVMValueRef r_llvm_static_global(RLlvmEmitter *emitter, RSymbolId id) {
     uint32_t size = 0U;
     uint32_t align = 0U;
     LLVMValueRef global;
-    char name[64];
+    char name[256];
 
     if (symbol == NULL) {
         (void)r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
@@ -1461,17 +1461,53 @@ LLVMValueRef r_llvm_static_global(RLlvmEmitter *emitter, RSymbolId id) {
         r_llvm_image_free(emitter, &image);
         return NULL;
     }
-    (void)snprintf(name, sizeof(name), "r_static.%" PRIu32, r_llvm_symbol_key(emitter, id));
+    if (symbol->is_extern_c) {
+        /* R-FFI-0068 (B12): an object a unit of the runtime exports has its C name. */
+        const RInternEntry *c_name =
+            ((symbol->c_name_intern_id != 0U) &&
+             (symbol->c_name_intern_id <= emitter->frontend->intern_count))
+                ? &emitter->frontend->intern_entries[symbol->c_name_intern_id - 1U]
+                : NULL;
+        if ((c_name == NULL) || (c_name->length >= sizeof(name)) ||
+            (LLVMGetNamedGlobal(emitter->module, c_name->bytes) != NULL)) {
+            r_llvm_image_free(emitter, &image);
+            (void)r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+            return NULL;
+        }
+        (void)memcpy(name, c_name->bytes, c_name->length);
+        name[c_name->length] = '\0';
+    } else {
+        (void)snprintf(name, sizeof(name), "r_static.%" PRIu32, r_llvm_symbol_key(emitter, id));
+    }
     global = r_llvm_image_global(emitter, &image, align, name);
     r_llvm_image_free(emitter, &image);
     if (global == NULL) {
         return NULL;
+    }
+    if (symbol->is_extern_c) {
+        LLVMSetLinkage(global, LLVMExternalLinkage);
     }
     if (symbol->is_thread_local) {
         LLVMSetThreadLocal(global, 1);
     }
     emitter->statics[id] = global;
     return global;
+}
+
+/* R-FFI-0068 (B12): the objects a unit of the runtime exports exist whether or not its R code
+   names them. */
+bool r_llvm_emit_exported_objects(RLlvmEmitter *emitter) {
+    size_t index;
+
+    for (index = 1U; index <= emitter->frontend->semantic_symbol_count; ++index) {
+        const RSemanticSymbol *symbol = &emitter->frontend->semantic_symbols[index - 1U];
+        if ((symbol->kind == R_SEMANTIC_SYMBOL_MODULE_OBJECT) && symbol->is_extern_c &&
+            !symbol->is_import && !symbol->poisoned &&
+            (r_llvm_static_global(emitter, (RSymbolId)index) == NULL)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 /* A static object holding a frozen owner is never destroyed: its storage is the image. */

@@ -8,8 +8,8 @@
     "target_triple": "arm64-apple-darwin",
     "profile": "hosted-native-async",
     "minimum_os_version": "26.5",
-    "core_specification_revision": "0.1.0-draft.108",
-    "standard_library_specification_revision": "0.1.0-draft.76"
+    "core_specification_revision": "0.1.0-draft.109",
+    "standard_library_specification_revision": "0.1.0-draft.77"
   },
   "toolchain": {
     "c_compiler": "Homebrew clang",
@@ -776,7 +776,7 @@
       "scheduling_guarantee": "no fairness beyond normative synchronization and per-resource ordering"
     },
     "pointer_integer_exposure": {
-      "supported": false,
+      "supported": true,
       "address_width": 64,
       "provenance_restoration_api": null
     },

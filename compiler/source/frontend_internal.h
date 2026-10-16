@@ -913,12 +913,20 @@ typedef struct RSemanticField {
     uint32_t bit_width;
     /* R-FFI-0061 (B9.3): the alignment of the field attribute @align(N), or zero. */
     uint32_t align_attribute;
+    /* R-FFI-0017 (B12): the C member name of @c_field(name = "..."), or zero when the member is
+       named as the field. */
+    uint32_t c_name_intern_id;
     /* R-INIT-0004 (L33): the declared `= initializer` of the field (node zero when absent),
        checked once in the module of its aggregate; an invalid one is not lowered again. */
     RAstRef initializer;
     bool initializer_checked;
     bool initializer_invalid;
 } RSemanticField;
+
+/* R-FFI-0017 (B12): the name of the C member a field of a C-declared aggregate stands for. */
+static inline uint32_t r_semantic_field_c_name(const RSemanticField *field) {
+    return field->c_name_intern_id != UINT32_C(0) ? field->c_name_intern_id : field->name_intern_id;
+}
 
 /* A checked object schema. Parent/end are indices relative to its aggregate's first entry. */
 typedef struct RJsonSchemaField {
@@ -2031,14 +2039,24 @@ typedef enum RStandardCallOperation {
     R_STANDARD_CALL_CORE_FRAME_ADDRESS,
     R_STANDARD_CALL_CORE_STACK_POINTER,
     R_STANDARD_CALL_CORE_PREFETCH_READ,
-    R_STANDARD_CALL_CORE_PREFETCH_WRITE
+    R_STANDARD_CALL_CORE_PREFETCH_WRITE,
+    /* B12: the address of a raw pointer as an integer (Library R-LIB-0028) and the unsafe byte
+       offset of a raw pointer (Core R-UNSAFE-0008), the end of the machine range. */
+    R_STANDARD_CALL_CORE_POINTER_ADDRESS,
+    R_STANDARD_CALL_CORE_OFFSET_BYTES,
+    /* B12: the unsafe removal of the shared permission of a raw pointer (Core R-UNSAFE-0008). */
+    R_STANDARD_CALL_CORE_CAST_MUTABLE,
+    /* B12: errno of the C library on the calling thread (Library R-LIB-0028), the end of the
+       machine range. */
+    R_STANDARD_CALL_CORE_C_ERRNO,
+    R_STANDARD_CALL_CORE_SET_C_ERRNO
 } RStandardCallOperation;
 
 /* Library R-LIB-0028 (B11): whether an operation is a machine operation of core, its qualified
    name and its operand count (an order for a fence, an address for a prefetch, none otherwise). */
 static inline bool r_standard_core_machine_operation(RStandardCallOperation operation) {
     return (operation >= R_STANDARD_CALL_CORE_ATOMIC_FENCE) &&
-           (operation <= R_STANDARD_CALL_CORE_PREFETCH_WRITE);
+           (operation <= R_STANDARD_CALL_CORE_SET_C_ERRNO);
 }
 
 static inline const char *r_standard_core_machine_name(RStandardCallOperation operation) {
@@ -2049,14 +2067,25 @@ static inline const char *r_standard_core_machine_name(RStandardCallOperation op
                                         "core::frame_address",
                                         "core::stack_pointer",
                                         "core::prefetch_read",
-                                        "core::prefetch_write"};
+                                        "core::prefetch_write",
+                                        "core::pointer_address",
+                                        "core::offset_bytes",
+                                        "core::cast_mutable",
+                                        "core::c_errno",
+                                        "core::set_c_errno"};
     return r_standard_core_machine_operation(operation)
                ? names[(uint32_t)operation - (uint32_t)R_STANDARD_CALL_CORE_ATOMIC_FENCE]
                : NULL;
 }
 
 static inline uint32_t r_standard_core_machine_operand_count(RStandardCallOperation operation) {
+    if (operation == R_STANDARD_CALL_CORE_OFFSET_BYTES) {
+        return UINT32_C(2);
+    }
     return ((operation == R_STANDARD_CALL_CORE_ATOMIC_FENCE) ||
+            (operation == R_STANDARD_CALL_CORE_POINTER_ADDRESS) ||
+            (operation == R_STANDARD_CALL_CORE_CAST_MUTABLE) ||
+            (operation == R_STANDARD_CALL_CORE_SET_C_ERRNO) ||
             (operation == R_STANDARD_CALL_CORE_SIGNAL_FENCE) ||
             (operation == R_STANDARD_CALL_CORE_PREFETCH_READ) ||
             (operation == R_STANDARD_CALL_CORE_PREFETCH_WRITE))
@@ -2508,7 +2537,8 @@ typedef enum RAbiTypeNodeKind {
     R_ABI_TYPE_NODE_FUNCTION,
     R_ABI_TYPE_NODE_RECORD,
     R_ABI_TYPE_NODE_ENUM,
-    R_ABI_TYPE_NODE_ARRAY
+    R_ABI_TYPE_NODE_ARRAY,
+    R_ABI_TYPE_NODE_ATOMIC
 } RAbiTypeNodeKind;
 
 typedef struct RAbiTypeNode {
@@ -2818,6 +2848,8 @@ struct RFrontendContext {
     bool mir_lowered;
     bool sources_sealed;
     RFrontendProfile profile;
+    /* B12: the translation is a unit of the runtime written in R (r_frontend_set_runtime_unit). */
+    bool runtime_unit;
     /* R-OBJ-0012: the translation-wide deny-panic-allocation option. */
     bool deny_panic_alloc;
     /* R-FUNC-0025 (M24): test mode and the module whose tests run, NULL for the first source. */

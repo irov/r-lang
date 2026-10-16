@@ -126,7 +126,7 @@ as finished. The matrix records their results per stage.
 | `semantic-slice-audit`, `lowering-rejection-audit` | informational (exit 2 by design): counts of semantic slice sites and lowering rejections; compare with the previous stage |
 | `python3 tools/audit_compiler_implementation.py --compiler build/debug/r-front` | the implementation probes (all must be accepted) |
 | `python3 tools/audit_language_safety.py --compiler build/debug/r-front --sanitized-compiler build/sanitizers/r-front` | the safety probes (all must pass) |
-| `format-check` | clang-format conformance (needs the pinned clang-format) |
+| `format-check` | clang-format conformance (needs the pinned clang-format); it skips generated files, so format only hand-written ones (`clang-format -i` on a `*.generated.inc` or `r_runtime_target_abi.h` makes it stale) |
 
 ## Checklists by kind of change
 
@@ -259,6 +259,17 @@ as finished. The matrix records their results per stage.
 
 ### Runtime (`runtime/`)
 
+- The core of the runtime is written in R (`runtime/r`, the unit `core`, Core R-FFI-0068;
+  compiler/README.md, *Units of the runtime*): allocator and budgets, owners, containers,
+  strings, drop glue and panics. A module of it lists its `.r` file in
+  `R_RUNTIME_UNIT_core_SOURCES` (after the modules it uses) and the C file it replaces in
+  `R_RUNTIME_UNIT_core_REPLACES`; the C types it shares go into `runtime/r/types.r`, proven
+  against the runtime headers, and the C functions it imports into `runtime/r/link_manifest.json`.
+  Its exports keep the C names and types of the headers. A test or benchmark that compiles
+  runtime sources into a program uses `R_RUNTIME_SOURCE_<name>` (empty for a replaced module) and
+  `RUNTIME_UNIT_OBJECTS`, never a `runtime/source` path: a program that compiles the C module
+  tests the oracle, not the runtime (B12-3). `R_RUNTIME_CORE=c` builds the C runtime instead.
+
 - Darwin adapters publish one linearized terminal outcome per operation (R-SLIB-ASYNC-0007):
   task cancellation is selected immediately but reaches the native request asynchronously, so an
   operation with a commit point either gates its native entry (the
@@ -360,6 +371,16 @@ these rules are the ones that most often reject otherwise reasonable code:
   `iterator = move rest;`) and how a refused `std.fs` write hands its data back.
 - `u8` and `u16` operands of arithmetic, bitwise operators and shifts promote to `i32`, as in C;
   narrow the result back with `as` (`(entry >> 4usize) as u16`).
+- A conversion chain `&place as raw A* as raw B*` is two statements (a local for the first);
+  a raw pointer between unrelated pointees goes through `raw void*`; `u8 as c_char` is checked and
+  `char` is signed on the target, so bytes move into C `char` storage with `memcpy`. A format
+  slot of an f-string takes a path only (`{size}`, not `{sizeof(T)}`). A result read only in the
+  right operand of `&&` is unread when the left one stops the condition (R-FUNC-0020): read it
+  first or compare it to a `bool` local.
+- A field of a C-declared struct whose C member is an R keyword (`drop`, `list`, `module`) is
+  named in R and carries `@c_field(name = "member")`. An `_Atomic(T)` member is an `atomic T`
+  field with T a C integer (`atomic c_uint64`) or a nullable raw pointer; such a struct passes to
+  C only through pointers. `atomic raw fn?(...) -> T` holds a function pointer.
 - C layouts (B9.3): every access to a field of a `@repr(C) union` needs `unsafe`; a bit-field
   (`c_uint flags : 3;`) and a field of `@repr(C, packed)` below its alignment have no address,
   so read and assign them by value and never borrow them; a store outside a bit-field's range

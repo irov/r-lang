@@ -615,6 +615,7 @@ LLVMValueRef r_llvm_empty_string(RLlvmEmitter *emitter);
 bool r_llvm_dyn_owner_tag_offset(RLlvmEmitter *emitter, RTypeId type, uint32_t *offset);
 /* The global of a module object or static local (statics.c). */
 LLVMValueRef r_llvm_static_global(RLlvmEmitter *emitter, RSymbolId id);
+bool r_llvm_emit_exported_objects(RLlvmEmitter *emitter);
 /* The drops of the static objects that own resources, at the end of a hosted program. */
 bool r_llvm_emit_static_drops(RLlvmEmitter *emitter);
 /* The slot a THROW to a catch in the same function writes and its EFFECT_PAYLOAD reads. */

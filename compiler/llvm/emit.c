@@ -2178,10 +2178,12 @@ static bool r_llvm_reachable_functions(RLlvmEmitter *emitter) {
     bool success = false;
 
     const bool library =
-        (emitter->artifact_options != NULL) && (emitter->artifact_options->library_name != NULL);
+        (emitter->artifact_options != NULL) && ((emitter->artifact_options->library_name != NULL) ||
+                                                emitter->artifact_options->runtime_unit);
 
     if ((entry == R_SYMBOL_ID_INVALID) != library) {
-        /* A program is emitted from its entry, a library from its exports (R-FFI-0064). */
+        /* A program is emitted from its entry, a library and a unit of the runtime from their
+           exports (R-FFI-0064, B12). */
         return r_llvm_fail(emitter, R_FRONTEND_INVALID_ARGUMENT);
     }
     by_symbol =
@@ -2775,10 +2777,12 @@ RFrontendStatus r_frontend_emit_llvm(const RFrontendContext *context,
             goto cleanup;
         }
     }
-    if (!r_llvm_emit_thread_locals(&emitter) ||
-        ((options != NULL) && (options->library_name != NULL)
-             ? !r_llvm_emit_library_entries(&emitter)
-             : !r_llvm_emit_hosted_main(&emitter)) ||
+    if (!r_llvm_emit_thread_locals(&emitter) || !r_llvm_emit_exported_objects(&emitter) ||
+        /* B12: a unit of the runtime has neither a main nor library entries. */
+        (((options == NULL) || !options->runtime_unit) &&
+         ((options != NULL) && (options->library_name != NULL)
+              ? !r_llvm_emit_library_entries(&emitter)
+              : !r_llvm_emit_hosted_main(&emitter))) ||
         !r_llvm_emit_thread_entries(&emitter) || !r_llvm_emit_sync_initializers(&emitter) ||
         !r_llvm_emit_clone_glue(&emitter) || !r_llvm_emit_json_encoders(&emitter) ||
         !r_llvm_emit_json_streams(&emitter) || !r_llvm_emit_json_decoders(&emitter) ||

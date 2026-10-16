@@ -2568,12 +2568,16 @@ set_tests_properties(r_frontend_backend_version PROPERTIES
 
 add_executable(r_runtime_tests
     runtime_tests.c
-    "${PROJECT_SOURCE_DIR}/runtime/source/allocator.c"
-    "${PROJECT_SOURCE_DIR}/runtime/source/hosted_entry.c"
-    "${PROJECT_SOURCE_DIR}/runtime/source/panic_abort.c"
-    "${PROJECT_SOURCE_DIR}/runtime/source/thread_attachment.c"
-    "${PROJECT_SOURCE_DIR}/runtime/source/utf8.c"
+    ${R_RUNTIME_SOURCE_allocator}
+    ${R_RUNTIME_SOURCE_hosted_entry}
+    ${R_RUNTIME_SOURCE_panic_abort}
+    ${R_RUNTIME_SOURCE_thread_attachment}
+    ${R_RUNTIME_SOURCE_utf8}
 )
+# The modules a unit written in R replaces come from the archive of the units (B12).
+if(R_RUNTIME_CORE STREQUAL "r")
+    target_link_libraries(r_runtime_tests PRIVATE r_runtime_core)
+endif()
 target_include_directories(r_runtime_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/runtime/include"
 )
@@ -4678,6 +4682,12 @@ if(NOT MSVC)
             async_c_layouts
             c_layouts_bit_range
             ffi_c_layouts
+            ffi_c_atomics
+            async_ffi_c_atomics
+            pointer_operations
+            async_pointer_operations
+            unwind_skips_rest
+            async_unwind_skips_rest
             dynamic_loading
             async_dynamic_loading
             machine_operations
@@ -6349,6 +6359,18 @@ if(NOT MSVC)
             set(R_CODEGEN_EXTRA_C_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ffi/c_layouts.c")
             set(R_CODEGEN_ABI_INVENTORY ON)
             set(R_CODEGEN_HEADER_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ffi")
+        elseif(R_CODEGEN_CASE MATCHES "^(async_)?ffi_c_atomics$")
+            # R-FFI-0017 (B12): C _Atomic members of a header-declared struct, proven by its ABI
+            # record and updated by R and C in the same storage.
+            set(R_CODEGEN_SOURCE_1
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_${R_CODEGEN_CASE}.r")
+            set(R_CODEGEN_SOURCE_2 "")
+            set(R_CODEGEN_EXPECTED_PANIC "")
+            set(R_CODEGEN_LINK_MANIFEST
+                "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_ffi_c_atomics_link_manifest.json")
+            set(R_CODEGEN_EXTRA_C_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ffi/c_atomics.c")
+            set(R_CODEGEN_ABI_INVENTORY ON)
+            set(R_CODEGEN_HEADER_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ffi")
         elseif(R_CODEGEN_CASE MATCHES "^(async_)?dynamic_loading$")
             # R-FFI-0063, Library R-SLIB-DL-0001..0004 (B9.3): functions obtained from a library
             # the program opens while it runs.
@@ -6358,7 +6380,7 @@ if(NOT MSVC)
             set(R_CODEGEN_EXPECTED_PANIC "")
             set(R_CODEGEN_LINK_MANIFEST
                 "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/codegen_dynamic_loading_link_manifest.json")
-        elseif(R_CODEGEN_CASE MATCHES "^(async_)?(machine_operations|static_addresses|pending_phi_returns)$")
+        elseif(R_CODEGEN_CASE MATCHES "^(async_)?(machine_operations|static_addresses|pending_phi_returns|pointer_operations|unwind_skips_rest)$")
             # Library R-LIB-0028, Core R-UNSAFE-0008, R-OBJ-0013 (B11): fences, the stack pointer
             # and frame record, prefetches, core::unreachable and address constants of statics;
             # B11-2: short-circuit results returned through a finally block.
@@ -6605,16 +6627,17 @@ if(NOT MSVC)
                 -DR_STD_SYNC_LIBRARY=$<TARGET_FILE:r_std_sync>
                 -DR_STD_THREAD_LIBRARY=$<TARGET_FILE:r_std_thread>
                 -DR_STD_TIME_LIBRARY=$<TARGET_FILE:r_std_time>
-                -DRUNTIME_HOSTED_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/hosted_entry.c
-                -DRUNTIME_ALLOCATOR_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/allocator.c
-                -DRUNTIME_ARRAY_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/array.c
-                -DRUNTIME_LIST_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/list.c
-                -DRUNTIME_DICT_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/dict.c
-                -DRUNTIME_ARC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/arc.c
-                -DRUNTIME_RC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/rc.c
-                -DRUNTIME_DROP_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/drop.c
-                -DRUNTIME_OWN_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/own.c
-                -DRUNTIME_THREAD_ATTACHMENT_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/thread_attachment.c
+                -DRUNTIME_HOSTED_SOURCE=${R_RUNTIME_SOURCE_hosted_entry}
+                "-DRUNTIME_UNIT_OBJECTS=${R_RUNTIME_UNIT_OBJECT_ARGUMENT}"
+                -DRUNTIME_ALLOCATOR_SOURCE=${R_RUNTIME_SOURCE_allocator}
+                -DRUNTIME_ARRAY_SOURCE=${R_RUNTIME_SOURCE_array}
+                -DRUNTIME_LIST_SOURCE=${R_RUNTIME_SOURCE_list}
+                -DRUNTIME_DICT_SOURCE=${R_RUNTIME_SOURCE_dict}
+                -DRUNTIME_ARC_SOURCE=${R_RUNTIME_SOURCE_arc}
+                -DRUNTIME_RC_SOURCE=${R_RUNTIME_SOURCE_rc}
+                -DRUNTIME_DROP_SOURCE=${R_RUNTIME_SOURCE_drop}
+                -DRUNTIME_OWN_SOURCE=${R_RUNTIME_SOURCE_own}
+                -DRUNTIME_THREAD_ATTACHMENT_SOURCE=${R_RUNTIME_SOURCE_thread_attachment}
                 -DRUNTIME_TASK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/task.c
                 -DRUNTIME_STACK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/stack.c
                 -DRUNTIME_DARWIN_IO_LIBRARY=$<TARGET_FILE:r_runtime_darwin_io>
@@ -6625,9 +6648,9 @@ if(NOT MSVC)
                 -DRUNTIME_FS_LANE_ASYNC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_async.c
                 -DRUNTIME_FS_LANE_SYSCALLS_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_syscalls.c
                 -DRUNTIME_FS_SERVICE_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_service.c
-                -DRUNTIME_STRING_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/string.c
-                -DRUNTIME_UTF8_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/utf8.c
-                -DRUNTIME_PANIC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/panic_abort.c
+                -DRUNTIME_STRING_SOURCE=${R_RUNTIME_SOURCE_string}
+                -DRUNTIME_UTF8_SOURCE=${R_RUNTIME_SOURCE_utf8}
+                -DRUNTIME_PANIC_SOURCE=${R_RUNTIME_SOURCE_panic_abort}
                 -DEXPECTED_PANIC=${R_CODEGEN_EXPECTED_PANIC}
                 -DEXPECTED_SECOND_PANIC=${R_CODEGEN_EXPECTED_SECOND_PANIC}
                 -DEXPECTED_EXIT_STATUS=${R_CODEGEN_EXPECTED_EXIT_STATUS}
@@ -7194,8 +7217,14 @@ if(NOT MSVC)
     add_test(NAME r_frontend_c_layouts
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/check_c_layouts.py"
             --front "$<TARGET_FILE:r-front>"
-            --library-map "${PROJECT_SOURCE_DIR}/library/r/library.map")
+            --library-map "${PROJECT_SOURCE_DIR}/library/r/library.map"
+            --fixtures "${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
     set_tests_properties(r_frontend_c_layouts PROPERTIES LABELS "semantic;ffi")
+    add_test(NAME r_frontend_runtime_unit
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/check_runtime_unit.py"
+            --front "$<TARGET_FILE:r-front>"
+            --targets "${PROJECT_SOURCE_DIR}/targets")
+    set_tests_properties(r_frontend_runtime_unit PROPERTIES LABELS "semantic;ffi")
     add_test(NAME r_frontend_machine_operations
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/check_machine_operations.py"
             --front "$<TARGET_FILE:r-front>"
@@ -7219,6 +7248,9 @@ if(NOT MSVC)
         r_runtime_darwin_event r_runtime_darwin_dns r_runtime_darwin_fs_lane
         r_runtime_darwin_io r_runtime_darwin_task r_runtime_darwin_process
         r_runtime_darwin_socket r_runtime_darwin_timer)
+    if(R_RUNTIME_CORE STREQUAL "r")
+        list(APPEND R_SHARED_LIBRARY_LINK_TARGETS r_runtime_core)
+    endif()
     set(R_SHARED_LIBRARY_LINK_INPUTS)
     foreach(R_SHARED_LIBRARY_TARGET IN LISTS R_SHARED_LIBRARY_LINK_TARGETS)
         list(APPEND R_SHARED_LIBRARY_LINK_INPUTS
@@ -9770,16 +9802,17 @@ if(NOT MSVC)
             -DR_STD_SYNC_LIBRARY=$<TARGET_FILE:r_std_sync>
             -DR_STD_THREAD_LIBRARY=$<TARGET_FILE:r_std_thread>
             -DR_STD_TIME_LIBRARY=$<TARGET_FILE:r_std_time>
-            -DRUNTIME_HOSTED_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/hosted_entry.c
-            -DRUNTIME_ALLOCATOR_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/allocator.c
-            -DRUNTIME_ARRAY_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/array.c
-            -DRUNTIME_LIST_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/list.c
-            -DRUNTIME_DICT_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/dict.c
-            -DRUNTIME_ARC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/arc.c
-            -DRUNTIME_RC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/rc.c
-            -DRUNTIME_DROP_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/drop.c
-            -DRUNTIME_OWN_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/own.c
-            -DRUNTIME_THREAD_ATTACHMENT_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/thread_attachment.c
+            -DRUNTIME_HOSTED_SOURCE=${R_RUNTIME_SOURCE_hosted_entry}
+            "-DRUNTIME_UNIT_OBJECTS=${R_RUNTIME_UNIT_OBJECT_ARGUMENT}"
+            -DRUNTIME_ALLOCATOR_SOURCE=${R_RUNTIME_SOURCE_allocator}
+            -DRUNTIME_ARRAY_SOURCE=${R_RUNTIME_SOURCE_array}
+            -DRUNTIME_LIST_SOURCE=${R_RUNTIME_SOURCE_list}
+            -DRUNTIME_DICT_SOURCE=${R_RUNTIME_SOURCE_dict}
+            -DRUNTIME_ARC_SOURCE=${R_RUNTIME_SOURCE_arc}
+            -DRUNTIME_RC_SOURCE=${R_RUNTIME_SOURCE_rc}
+            -DRUNTIME_DROP_SOURCE=${R_RUNTIME_SOURCE_drop}
+            -DRUNTIME_OWN_SOURCE=${R_RUNTIME_SOURCE_own}
+            -DRUNTIME_THREAD_ATTACHMENT_SOURCE=${R_RUNTIME_SOURCE_thread_attachment}
             -DRUNTIME_TASK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/task.c
             -DRUNTIME_STACK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/stack.c
             -DRUNTIME_DARWIN_IO_LIBRARY=$<TARGET_FILE:r_runtime_darwin_io>
@@ -9790,9 +9823,9 @@ if(NOT MSVC)
             -DRUNTIME_FS_LANE_ASYNC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_async.c
             -DRUNTIME_FS_LANE_SYSCALLS_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_syscalls.c
             -DRUNTIME_FS_SERVICE_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_service.c
-            -DRUNTIME_STRING_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/string.c
-            -DRUNTIME_UTF8_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/utf8.c
-            -DRUNTIME_PANIC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/panic_abort.c
+            -DRUNTIME_STRING_SOURCE=${R_RUNTIME_SOURCE_string}
+            -DRUNTIME_UTF8_SOURCE=${R_RUNTIME_SOURCE_utf8}
+            -DRUNTIME_PANIC_SOURCE=${R_RUNTIME_SOURCE_panic_abort}
             -DEXPECTED_PANIC=
             -DENABLE_SANITIZERS=${R_FRONTEND_ENABLE_SANITIZERS}
             -DENABLE_THREAD_SANITIZER=${R_FRONTEND_ENABLE_THREAD_SANITIZER}
@@ -9855,16 +9888,17 @@ if(NOT MSVC)
             -DR_STD_SYNC_LIBRARY=$<TARGET_FILE:r_std_sync>
             -DR_STD_THREAD_LIBRARY=$<TARGET_FILE:r_std_thread>
             -DR_STD_TIME_LIBRARY=$<TARGET_FILE:r_std_time>
-            -DRUNTIME_HOSTED_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/hosted_entry.c
-            -DRUNTIME_ALLOCATOR_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/allocator.c
-            -DRUNTIME_ARRAY_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/array.c
-            -DRUNTIME_LIST_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/list.c
-            -DRUNTIME_DICT_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/dict.c
-            -DRUNTIME_ARC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/arc.c
-            -DRUNTIME_RC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/rc.c
-            -DRUNTIME_DROP_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/drop.c
-            -DRUNTIME_OWN_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/own.c
-            -DRUNTIME_THREAD_ATTACHMENT_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/thread_attachment.c
+            -DRUNTIME_HOSTED_SOURCE=${R_RUNTIME_SOURCE_hosted_entry}
+            "-DRUNTIME_UNIT_OBJECTS=${R_RUNTIME_UNIT_OBJECT_ARGUMENT}"
+            -DRUNTIME_ALLOCATOR_SOURCE=${R_RUNTIME_SOURCE_allocator}
+            -DRUNTIME_ARRAY_SOURCE=${R_RUNTIME_SOURCE_array}
+            -DRUNTIME_LIST_SOURCE=${R_RUNTIME_SOURCE_list}
+            -DRUNTIME_DICT_SOURCE=${R_RUNTIME_SOURCE_dict}
+            -DRUNTIME_ARC_SOURCE=${R_RUNTIME_SOURCE_arc}
+            -DRUNTIME_RC_SOURCE=${R_RUNTIME_SOURCE_rc}
+            -DRUNTIME_DROP_SOURCE=${R_RUNTIME_SOURCE_drop}
+            -DRUNTIME_OWN_SOURCE=${R_RUNTIME_SOURCE_own}
+            -DRUNTIME_THREAD_ATTACHMENT_SOURCE=${R_RUNTIME_SOURCE_thread_attachment}
             -DRUNTIME_TASK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/task.c
             -DRUNTIME_STACK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/stack.c
             -DRUNTIME_DARWIN_IO_LIBRARY=$<TARGET_FILE:r_runtime_darwin_io>
@@ -9875,9 +9909,9 @@ if(NOT MSVC)
             -DRUNTIME_FS_LANE_ASYNC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_async.c
             -DRUNTIME_FS_LANE_SYSCALLS_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_syscalls.c
             -DRUNTIME_FS_SERVICE_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_service.c
-            -DRUNTIME_STRING_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/string.c
-            -DRUNTIME_UTF8_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/utf8.c
-            -DRUNTIME_PANIC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/panic_abort.c
+            -DRUNTIME_STRING_SOURCE=${R_RUNTIME_SOURCE_string}
+            -DRUNTIME_UTF8_SOURCE=${R_RUNTIME_SOURCE_utf8}
+            -DRUNTIME_PANIC_SOURCE=${R_RUNTIME_SOURCE_panic_abort}
             -DEXPECTED_PANIC=
             -DENABLE_SANITIZERS=${R_FRONTEND_ENABLE_SANITIZERS}
             -DENABLE_THREAD_SANITIZER=${R_FRONTEND_ENABLE_THREAD_SANITIZER}
@@ -9939,16 +9973,17 @@ if(NOT MSVC)
             -DR_STD_SYNC_LIBRARY=$<TARGET_FILE:r_std_sync>
             -DR_STD_THREAD_LIBRARY=$<TARGET_FILE:r_std_thread>
             -DR_STD_TIME_LIBRARY=$<TARGET_FILE:r_std_time>
-            -DRUNTIME_HOSTED_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/hosted_entry.c
-            -DRUNTIME_ALLOCATOR_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/allocator.c
-            -DRUNTIME_ARRAY_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/array.c
-            -DRUNTIME_LIST_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/list.c
-            -DRUNTIME_DICT_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/dict.c
-            -DRUNTIME_ARC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/arc.c
-            -DRUNTIME_RC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/rc.c
-            -DRUNTIME_DROP_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/drop.c
-            -DRUNTIME_OWN_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/own.c
-            -DRUNTIME_THREAD_ATTACHMENT_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/thread_attachment.c
+            -DRUNTIME_HOSTED_SOURCE=${R_RUNTIME_SOURCE_hosted_entry}
+            "-DRUNTIME_UNIT_OBJECTS=${R_RUNTIME_UNIT_OBJECT_ARGUMENT}"
+            -DRUNTIME_ALLOCATOR_SOURCE=${R_RUNTIME_SOURCE_allocator}
+            -DRUNTIME_ARRAY_SOURCE=${R_RUNTIME_SOURCE_array}
+            -DRUNTIME_LIST_SOURCE=${R_RUNTIME_SOURCE_list}
+            -DRUNTIME_DICT_SOURCE=${R_RUNTIME_SOURCE_dict}
+            -DRUNTIME_ARC_SOURCE=${R_RUNTIME_SOURCE_arc}
+            -DRUNTIME_RC_SOURCE=${R_RUNTIME_SOURCE_rc}
+            -DRUNTIME_DROP_SOURCE=${R_RUNTIME_SOURCE_drop}
+            -DRUNTIME_OWN_SOURCE=${R_RUNTIME_SOURCE_own}
+            -DRUNTIME_THREAD_ATTACHMENT_SOURCE=${R_RUNTIME_SOURCE_thread_attachment}
             -DRUNTIME_TASK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/task.c
             -DRUNTIME_STACK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/stack.c
             -DRUNTIME_DARWIN_IO_LIBRARY=$<TARGET_FILE:r_runtime_darwin_io>
@@ -9959,9 +9994,9 @@ if(NOT MSVC)
             -DRUNTIME_FS_LANE_ASYNC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_async.c
             -DRUNTIME_FS_LANE_SYSCALLS_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_syscalls.c
             -DRUNTIME_FS_SERVICE_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_service.c
-            -DRUNTIME_STRING_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/string.c
-            -DRUNTIME_UTF8_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/utf8.c
-            -DRUNTIME_PANIC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/panic_abort.c
+            -DRUNTIME_STRING_SOURCE=${R_RUNTIME_SOURCE_string}
+            -DRUNTIME_UTF8_SOURCE=${R_RUNTIME_SOURCE_utf8}
+            -DRUNTIME_PANIC_SOURCE=${R_RUNTIME_SOURCE_panic_abort}
             -DEXPECTED_PANIC=
             -DENABLE_SANITIZERS=${R_FRONTEND_ENABLE_SANITIZERS}
             -DENABLE_THREAD_SANITIZER=${R_FRONTEND_ENABLE_THREAD_SANITIZER}
@@ -10023,16 +10058,17 @@ if(NOT MSVC)
             -DR_STD_SYNC_LIBRARY=$<TARGET_FILE:r_std_sync>
             -DR_STD_THREAD_LIBRARY=$<TARGET_FILE:r_std_thread>
             -DR_STD_TIME_LIBRARY=$<TARGET_FILE:r_std_time>
-            -DRUNTIME_HOSTED_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/hosted_entry.c
-            -DRUNTIME_ALLOCATOR_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/allocator.c
-            -DRUNTIME_ARRAY_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/array.c
-            -DRUNTIME_LIST_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/list.c
-            -DRUNTIME_DICT_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/dict.c
-            -DRUNTIME_ARC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/arc.c
-            -DRUNTIME_RC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/rc.c
-            -DRUNTIME_DROP_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/drop.c
-            -DRUNTIME_OWN_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/own.c
-            -DRUNTIME_THREAD_ATTACHMENT_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/thread_attachment.c
+            -DRUNTIME_HOSTED_SOURCE=${R_RUNTIME_SOURCE_hosted_entry}
+            "-DRUNTIME_UNIT_OBJECTS=${R_RUNTIME_UNIT_OBJECT_ARGUMENT}"
+            -DRUNTIME_ALLOCATOR_SOURCE=${R_RUNTIME_SOURCE_allocator}
+            -DRUNTIME_ARRAY_SOURCE=${R_RUNTIME_SOURCE_array}
+            -DRUNTIME_LIST_SOURCE=${R_RUNTIME_SOURCE_list}
+            -DRUNTIME_DICT_SOURCE=${R_RUNTIME_SOURCE_dict}
+            -DRUNTIME_ARC_SOURCE=${R_RUNTIME_SOURCE_arc}
+            -DRUNTIME_RC_SOURCE=${R_RUNTIME_SOURCE_rc}
+            -DRUNTIME_DROP_SOURCE=${R_RUNTIME_SOURCE_drop}
+            -DRUNTIME_OWN_SOURCE=${R_RUNTIME_SOURCE_own}
+            -DRUNTIME_THREAD_ATTACHMENT_SOURCE=${R_RUNTIME_SOURCE_thread_attachment}
             -DRUNTIME_TASK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/task.c
             -DRUNTIME_STACK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/stack.c
             -DRUNTIME_DARWIN_IO_LIBRARY=$<TARGET_FILE:r_runtime_darwin_io>
@@ -10043,9 +10079,9 @@ if(NOT MSVC)
             -DRUNTIME_FS_LANE_ASYNC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_async.c
             -DRUNTIME_FS_LANE_SYSCALLS_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_syscalls.c
             -DRUNTIME_FS_SERVICE_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_service.c
-            -DRUNTIME_STRING_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/string.c
-            -DRUNTIME_UTF8_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/utf8.c
-            -DRUNTIME_PANIC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/panic_abort.c
+            -DRUNTIME_STRING_SOURCE=${R_RUNTIME_SOURCE_string}
+            -DRUNTIME_UTF8_SOURCE=${R_RUNTIME_SOURCE_utf8}
+            -DRUNTIME_PANIC_SOURCE=${R_RUNTIME_SOURCE_panic_abort}
             -DEXPECTED_PANIC=
             -DCOMPILE_ONLY=TRUE
             -DENABLE_SANITIZERS=${R_FRONTEND_ENABLE_SANITIZERS}
@@ -10108,16 +10144,17 @@ if(NOT MSVC)
             -DR_STD_SYNC_LIBRARY=$<TARGET_FILE:r_std_sync>
             -DR_STD_THREAD_LIBRARY=$<TARGET_FILE:r_std_thread>
             -DR_STD_TIME_LIBRARY=$<TARGET_FILE:r_std_time>
-            -DRUNTIME_HOSTED_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/hosted_entry.c
-            -DRUNTIME_ALLOCATOR_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/allocator.c
-            -DRUNTIME_ARRAY_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/array.c
-            -DRUNTIME_LIST_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/list.c
-            -DRUNTIME_DICT_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/dict.c
-            -DRUNTIME_ARC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/arc.c
-            -DRUNTIME_RC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/rc.c
-            -DRUNTIME_DROP_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/drop.c
-            -DRUNTIME_OWN_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/own.c
-            -DRUNTIME_THREAD_ATTACHMENT_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/thread_attachment.c
+            -DRUNTIME_HOSTED_SOURCE=${R_RUNTIME_SOURCE_hosted_entry}
+            "-DRUNTIME_UNIT_OBJECTS=${R_RUNTIME_UNIT_OBJECT_ARGUMENT}"
+            -DRUNTIME_ALLOCATOR_SOURCE=${R_RUNTIME_SOURCE_allocator}
+            -DRUNTIME_ARRAY_SOURCE=${R_RUNTIME_SOURCE_array}
+            -DRUNTIME_LIST_SOURCE=${R_RUNTIME_SOURCE_list}
+            -DRUNTIME_DICT_SOURCE=${R_RUNTIME_SOURCE_dict}
+            -DRUNTIME_ARC_SOURCE=${R_RUNTIME_SOURCE_arc}
+            -DRUNTIME_RC_SOURCE=${R_RUNTIME_SOURCE_rc}
+            -DRUNTIME_DROP_SOURCE=${R_RUNTIME_SOURCE_drop}
+            -DRUNTIME_OWN_SOURCE=${R_RUNTIME_SOURCE_own}
+            -DRUNTIME_THREAD_ATTACHMENT_SOURCE=${R_RUNTIME_SOURCE_thread_attachment}
             -DRUNTIME_TASK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/task.c
             -DRUNTIME_STACK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/stack.c
             -DRUNTIME_DARWIN_IO_LIBRARY=$<TARGET_FILE:r_runtime_darwin_io>
@@ -10128,9 +10165,9 @@ if(NOT MSVC)
             -DRUNTIME_FS_LANE_ASYNC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_async.c
             -DRUNTIME_FS_LANE_SYSCALLS_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_syscalls.c
             -DRUNTIME_FS_SERVICE_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_service.c
-            -DRUNTIME_STRING_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/string.c
-            -DRUNTIME_UTF8_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/utf8.c
-            -DRUNTIME_PANIC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/source/panic_abort.c
+            -DRUNTIME_STRING_SOURCE=${R_RUNTIME_SOURCE_string}
+            -DRUNTIME_UTF8_SOURCE=${R_RUNTIME_SOURCE_utf8}
+            -DRUNTIME_PANIC_SOURCE=${R_RUNTIME_SOURCE_panic_abort}
             -DEXPECTED_PANIC=
             -DCOMPILE_ONLY=TRUE
             -DENABLE_SANITIZERS=${R_FRONTEND_ENABLE_SANITIZERS}

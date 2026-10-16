@@ -105,6 +105,17 @@ RFrontendStatus r_frontend_set_profile(RFrontendContext *context, const char *pr
     return R_FRONTEND_OK;
 }
 
+RFrontendStatus r_frontend_set_runtime_unit(RFrontendContext *context) {
+    if (context == NULL) {
+        return R_FRONTEND_INVALID_ARGUMENT;
+    }
+    if (context->semantic_analyzing || context->semantic_analyzed) {
+        return R_FRONTEND_CONTEXT_SEALED;
+    }
+    context->runtime_unit = true;
+    return R_FRONTEND_OK;
+}
+
 RFrontendStatus r_frontend_add_library_source(RFrontendContext *context,
                                               const char *display_name,
                                               const uint8_t *bytes,

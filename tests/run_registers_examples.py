@@ -84,16 +84,19 @@ def main():
         run('watchdog', limit, *values, expected=f'total={sum(values)} limit={limit}\n')
     for limit, values in [(5, [1, 2, 3]), (0, [1]), (2**32 - 1, [2**32 - 1, 1])]:
         run('watchdog', limit, *values, status=-signal.SIGTRAP, expected='')
+    for counter in [0, 5, 2**32 - 1]:
+        run('layout', counter,
+            expected=f'status@0 counter@8 flags@16 size=24\ncounter={counter} flags=2\n')
     for args in [('script',), ('script', 0, 'add'), ('script', 0, 'cas', 0),
                  ('script', 0, 'bad', 1), ('race', 100001), ('race', 1, 2), ('bad', 1),
                  ('handoff', 10001), ('handoff', 1, 2), ('stack', 201), ('stack', 1, 2), ('map',),
-                 ('watchdog',)]:
+                 ('watchdog',), ('layout', 1, 2)]:
         run(*args, status=64)
     for args in [('script', -1), ('script', 0, 'add', 2**32), ('device', 0, 'bad'), ('map', 'bad'),
-                 ('watchdog', 1, 'bad')]:
+                 ('watchdog', 1, 'bad'), ('layout', 'bad')]:
         run(*args, status=65)
     print(f'Registers: {count} script, CAS, wrapping, ticket race, volatile, fence handoff, stack, '
-          'register map, trap and validation checks passed')
+          'register map, trap, layout and validation checks passed')
 
 
 if __name__ == '__main__':

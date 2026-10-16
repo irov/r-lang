@@ -1,0 +1,92 @@
+{
+  "schema": "r-link-manifest-0.1",
+  "links": [
+    {
+      "logical_name": "r.runtime",
+      "available": true,
+      "kind": "static",
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "runtime/source",
+      "link_artifact_identity": "libr_runtime_0_1.a",
+      "header_roots": [
+        "runtime/include"
+      ],
+      "abi_record_roots": [
+        "runtime/include"
+      ],
+      "library_version": "0.1",
+      "dependencies": [],
+      "feature_test_definitions": [],
+      "symbols": []
+    },
+    {
+      "logical_name": "system.libc",
+      "available": true,
+      "kind": "system",
+      "implicit_c_runtime": true,
+      "target_triple": "arm64-apple-darwin",
+      "c_abi_identity": "darwin-arm64-lp64-c17",
+      "compile_artifact_identity": "apple-clang-system-runtime",
+      "link_artifact_identity": "apple-system-runtime",
+      "header_roots": [
+        "system-sdk"
+      ],
+      "abi_record_roots": [
+        "darwin-arm64-c17"
+      ],
+      "library_version": "target-sdk",
+      "dependencies": [],
+      "feature_test_definitions": [
+        "_DARWIN_C_SOURCE"
+      ],
+      "symbols": [
+        {
+          "c_identifier": "abort",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "calloc",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "free",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "malloc",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "memcpy",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "memset",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "realloc",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "sched_yield",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "write",
+          "kind": "function",
+          "binding": "strong"
+        }
+      ]
+    }
+  ]
+}

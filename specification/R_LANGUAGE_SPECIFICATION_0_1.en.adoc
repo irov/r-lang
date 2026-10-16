@@ -15,7 +15,7 @@ Normative draft of the R programming language
 |Field |Value
 |Document|R Core Language Specification
 |Language version|0.1
-|Document revision|0.1.0-draft.108
+|Document revision|0.1.0-draft.109
 |Status|Normative draft; not a stable R 1.0 standard
 |Document language|English; normative original
 |Target backend|ISO/IEC 9899:2018 (C17)
@@ -864,8 +864,8 @@ named by the R Standard Library Specification 0.1, these are predefined parametr
 constructors. User-defined schemas are governed by R-TYPE-0031 through R-TYPE-0040.
 
 [[R-TYPE-0013]]
-*R-TYPE-0013* — `+atomic T+` is valid for `+bool+`, integer type, `+usize+`, `+isize+` and nullable raw
-pointer. The predefined spellings `+ai8+`, `+ai16+`, `+ai32+`, `+ai64+`, and
+*R-TYPE-0013* — `+atomic T+` is valid for `+bool+`, integer type, `+usize+`, `+isize+`, C integer type
+(`+c-integer-type+` of Annex A), nullable raw pointer and nullable raw function pointer. The predefined spellings `+ai8+`, `+ai16+`, `+ai32+`, `+ai64+`, and
 `+aisize+` are identical to `+atomic i8+`, `+atomic i16+`, `+atomic i32+`,
 `+atomic i64+`, and `+atomic isize+` in the same order. The spellings `+au8+`,
 `+au16+`, `+au32+`, `+au64+`, and `+ausize+` are
@@ -874,8 +874,8 @@ identical to `+atomic u8+`, `+atomic u16+`, `+atomic u32+`, `+atomic u64+`, and
 introduce alias-distinct identities. Type/interface fingerprints,
 mangling, `+sizeof+`, `+alignof+`, and `+atomic_is_lock_free+` canonicalize each shorthand
 to its expanded atomic type; a declaration through one spelling is compatible with a
-definition through the other. These spellings are not literal suffixes and do not make
-C `+_Atomic+` an FFI type. Atomic type is not
+definition through the other. These spellings are not literal suffixes. C `+_Atomic+` is an
+FFI type only as the member of a C-declared struct (R-FFI-0017). Atomic type is not
 implicitly converted to T and is not Copy.
 
 === 9.3 Type identity and compatibility
@@ -4976,7 +4976,10 @@ operations as closed intrinsic families:
 * `+unsafe core::volatile_load(raw const T* address) -> T+`;
 * `+unsafe core::volatile_store(raw T* address, T value) -> void+`;
 * `+unsafe core::assume(bool condition) -> void+`;
-* `+unsafe core::unreachable() -> never+`.
+* `+unsafe core::unreachable() -> never+`;
+* `+unsafe core::offset_bytes(raw T*? pointer, usize count) -> raw void*?+` and
+  `+unsafe core::offset_bytes(raw T*? pointer, isize count) -> raw void*?+`;
+* `+unsafe core::cast_mutable(raw const T*? pointer) -> raw T*?+`.
 
 Every allocation-supporting profile additionally provides:
 
@@ -5026,8 +5029,14 @@ therefore requires `+move+` under R-FUNC-0002.
 
 `+core::assume+`
 has the R-SAFETY-ASSUME effect. `+core::unreachable+` has the R-SAFETY-UNREACHABLE effect: control
-never returns from it, and reaching it is UB that the optimizer may rely on. None of these ten
-operations allocates or panics; violating an applicable Annex E safety contract is UB rather than a
+never returns from it, and reaching it is UB that the optimizer may rely on.
+
+`+core::offset_bytes+` is the address count bytes after pointer, or before it for a negative
+isize count, under R-SAFETY-OFFSET; the result keeps the constness and nullability of the operand
+(`+raw const T*+` gives `+raw const void*+`) and the provenance of pointer, and reading or writing
+through it follows the contracts of raw pointers. `+core::cast_mutable+` is the same address as a
+pointer that permits writes, keeping nullability, under R-SAFETY-CAST-MUTABLE; it writes nothing.
+T of both is any pointee. None of these twelve operations allocates or panics; violating an applicable Annex E safety contract is UB rather than a
 recoverable result.
 
 [[concurrency]]
@@ -5612,7 +5621,7 @@ trivially Copy, have no user drop and recursively contain no R destruction oblig
 Top-level array parameter or return is forbidden because C adjusts/forbids it. Slice,
 ordinary `+str+`, `+constexpr str+`, own, arc, rc, weak owner, borrow, atomic, array,
 list, dict, task, standard synchronization/thread/channel type, o and payload enum are forbidden by value and as a recursive field of
-an `+@repr(C)+` aggregate.
+an `+@repr(C)+` aggregate, except the atomic member of a C-declared struct (R-FFI-0017).
 
 [[R-FFI-0005]]
 *R-FFI-0005* — C variadic `+...+` may occur only after at least one fixed parameter in
@@ -5649,7 +5658,12 @@ to a complete normalized C enumerator inventory; C declaration order need not ma
 an omitted, additional or aliased C enumerator is a mismatch. A C enum that cannot
 satisfy R's unique-discriminant rule shall instead be mediated as its compatible C
 integer plus verified constants or by a C shim. Different signedness, qualifier or
-ABI-significant property is mismatch.
+ABI-significant property is mismatch. A field of such a struct may be `+atomic T+` with T a C
+integer type or a nullable raw pointer: it matches a C member of type `+_Atomic(T)+` of the same
+value type, and the struct is then a Move type that passes to and from C only through pointers
+(R-FFI-0004). A field whose C member is spelled by an R keyword or another name carries
+`+@c_field(name = "member")+`, the member's C identifier: R code names the field, and the member
+inventory, layout probes and records match the member.
 
 [[R-FFI-0018]]
 *R-FFI-0018* — A declaration with `+@c_constant(name = "C_NAME") const CTYPE NAME = constant-expression;+` mirrors a C integer enum constant or object-like
@@ -5666,8 +5680,9 @@ ABI accessor support or an external C function shim and are not `+@c_constant+` 
 
 [[R-FFI-0019]]
 *R-FFI-0019* — C unnamed or zero-width bit-fields, flexible array members, anonymous aggregate
-members, vector/complex types, variable-length arrays, C `+_Atomic+`, variadic function-pointer
-types, `+restrict+` and `+volatile+`-qualified ABI types are not directly expressible. Library integration shall expose opaque type plus C wrapper/verified bridge
+members, vector/complex types, variable-length arrays, C `+_Atomic+` other than the member of
+R-FFI-0017, variadic function-pointer types, `+restrict+` and `+volatile+`-qualified ABI types are
+not directly expressible. Library integration shall expose opaque type plus C wrapper/verified bridge
 or a separately standardized ABI type rather than guess layout or erase qualifier.
 
 [[R-FFI-0020]]
@@ -5935,8 +5950,10 @@ C-identifier name. Backend emits/calls that actual C identifier. No C++ mangling
 assembler label alias, prefix/suffix or Windows decoration guessing is performed.
 
 [[R-FFI-0046]]
-*R-FFI-0046* — R 0.1 exports C functions only. Exported global objects, TLS, linker aliases
-and symbol-version scripts require a later ABI extension or C shim. A library (R-FFI-0064) is
+*R-FFI-0046* — A program or library of R 0.1 exports C functions only; a runtime unit
+(R-FFI-0068) also exports objects. Exported thread-local objects, linker aliases and
+symbol-version scripts require a later ABI extension or C shim, and an `+extern "C"+` object
+definition outside a runtime unit requires `+R-DIAG-FFI-003+`. A library (R-FFI-0064) is
 versioned as a whole by its current and compatibility versions, which on `+arm64-apple-darwin+`
 are the versions of its Mach-O image, the target having no versioned symbols.
 
@@ -6024,6 +6041,22 @@ accesses on one thread. Either attribute with arguments, repeated, or `+@signal_
 declaration other than an `+extern "C"+` definition or together with `+@callback+`, is a misplaced
 attribute: `+R-DIAG-FFI-003+` of R-FFI-0050 on a C declaration, `+R-DIAG-SYN-002+` otherwise.
 
+[[R-FFI-0068]]
+*R-FFI-0068* — An implementation may translate parts of its own runtime from R as a runtime unit: a
+translation in the freestanding profile without `+main+` (R-FUNC-0008) and without the entry and
+shutdown functions of a library (R-FFI-0064), whose `+extern "C"+` definitions are functions of the
+runtime. Only in a runtime unit may their names use the identifiers the implementation reserves to
+its runtime, `+r_runtime_+` followed by lowercase ASCII letters, digits and underscores (R-FFI-0057).
+Each such function is proven against the runtime header that declares it, as an import is
+(R-FFI-0042), and keeps that C type. It enters no thread attachment, stack preflight or unwind test
+of R-FFI-0055: generated code and the runtime, which call it, have done them. A panic in a runtime
+unit reports and aborts the process (R-ERR-0006). A runtime unit may also define, with `+@safety+`
+and `+extern "C"+`, a module object of a type of R-FFI-0004 or an atomic C integer or nullable raw
+pointer, not `+thread_local+` and constant-initialized (R-OBJ-0010): it is exported under its name,
+proven against the header declaration, and R code accesses it as a mutable static object
+(R-OBJ-0009). A runtime unit reaches the C types and constants of the runtime through verified
+extern blocks like any program (R-FFI-0017, R-FFI-0018).
+
 === 23.7 Unsafe boundary and safe wrappers
 
 [[R-FFI-0010]]
@@ -6064,7 +6097,8 @@ ABI storage and R-FFI-0056 gate.
 [[R-FFI-0050]]
 *R-FFI-0050* — FFI attribute scopes are closed: `+@link+`, `+@header+`, `+@abi+` on extern block;
 `+@link_name+` on imported symbol; `+@safety+` on imported or exported C function; `+@fenv+` on
-imported C function; `+@repr+`, `+@c_type+` on C type; `+@c_constant+` on verified constant; `+@export_name+`,
+imported C function; `+@repr+`, `+@c_type+` on C type; `+@c_field+` on a field of a C-declared struct
+or union (R-FFI-0017); `+@c_constant+` on verified constant; `+@export_name+`,
 `+@callback+`, `+@signal_handler+` on exported C function; `+@signal_safe+` on imported or exported C
 function (R-FFI-0067). `+@header+` is repeatable; `+@link+` and `+@abi+` are singleton
 per block, and every declaration-scoped FFI attribute is singleton on its declaration.
@@ -6647,8 +6681,11 @@ integer-type        = "i8" | "u8" | "i16" | "u16" | "i32" | "u32"
                     | "i64" | "u64" | "isize" | "usize" ;
 enum-underlying-type = integer-type | c-integer-type ;
 floating-type       = "f32" | "f64" ;
-atomic-base-type    = integer-type | "bool" | atomic-raw-pointer-type ;
+atomic-base-type    = integer-type | c-integer-type | "bool" | atomic-raw-pointer-type
+                    | atomic-raw-function-type ;
 atomic-raw-pointer-type = "raw", [ "const" ], pointer-pointee, "*", "?" ;
+atomic-raw-function-type = "raw", "fn", { callable-resource-attribute }, "?",
+                           "(", function-type-parameters, ")", "->", type ;
 c-integer-type      = "c_char" | "c_schar" | "c_uchar" | "c_short" | "c_ushort"
                     | "c_int" | "c_uint" | "c_long" | "c_ulong" | "c_llong"
                     | "c_ullong" | "c_wchar" | "c_wint"
@@ -7269,6 +7306,14 @@ UB; satisfying all yields the defined effect.
 |`+R-SAFETY-UNREACHABLE+`
 |`+core::unreachable()+`
 |Control never reaches the call on any execution. Effect supplies the fact to the optimizer; reaching the call is immediate UB.
+
+|`+R-SAFETY-OFFSET+`
+|`+core::offset_bytes(pointer, count)+`
+|Pointer addresses an allocated object, or is null with count zero, and the address count bytes away stays within that object or one byte past its end. Effect computes that address with the provenance of pointer and accesses nothing.
+
+|`+R-SAFETY-CAST-MUTABLE+`
+|`+core::cast_mutable(pointer)+`
+|A write through the result is permitted: the object is mutable, no shared borrow or other reader that excludes writes is live across the write, and the write synchronizes with every concurrent access. Effect changes no value; a pointer that never writes needs nothing.
 
 |`+R-SAFETY-EXTERN-CALL+`
 |Call imported C function/function pointer
@@ -8664,7 +8709,8 @@ translation shall accept every `+ai8+`, `+ai16+`, `+ai32+`, `+ai64+`, `+aisize+`
 its expanded atomic spelling. At least one fixture shall nest matched
 shorthand/expanded spellings within a pointer, fixed array, and raw-function signature
 and verify one canonical interface fingerprint. The suite shall reject direct arithmetic,
-atomic-suffix literals, nested `+atomic ai32+`, and C `_Atomic` ABI use. For each permitted
+atomic-suffix literals, nested `+atomic ai32+`, and C `_Atomic` ABI use other than the
+header-verified member of R-FFI-0017. For each permitted
 `+atomic i8+`, `+atomic u8+`, `+atomic i16+`, and `+atomic u16+`, fetch fixtures shall verify
 the returned old T, unsigned modulo final conversion, and signed overflow before modification. Cross-module
 fixtures shall prove default export, reject protected access and mismatched

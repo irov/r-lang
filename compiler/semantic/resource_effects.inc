@@ -368,6 +368,11 @@ static bool r_resource_standard_proven(RStandardCallOperation operation, bool no
     case R_STANDARD_CALL_CORE_STACK_POINTER:
     case R_STANDARD_CALL_CORE_PREFETCH_READ:
     case R_STANDARD_CALL_CORE_PREFETCH_WRITE:
+    case R_STANDARD_CALL_CORE_POINTER_ADDRESS:
+    case R_STANDARD_CALL_CORE_OFFSET_BYTES:
+    case R_STANDARD_CALL_CORE_CAST_MUTABLE:
+    case R_STANDARD_CALL_CORE_C_ERRNO:
+    case R_STANDARD_CALL_CORE_SET_C_ERRNO:
         return true;
     case R_STANDARD_CALL_CORE_ATOMIC_LOAD:
     case R_STANDARD_CALL_CORE_ATOMIC_STORE:
@@ -652,8 +657,8 @@ static bool r_resource_function(RResourceCheck *check, RSymbolId function_id, RS
                                          : "the function type does not promise @noalloc");
         }
     } else if (function->is_import ||
-        (function->is_synthetic && function->is_trait_prototype && function->trait != 0U &&
-         context->semantic_traits[function->trait - 1U].callable_signature != 0U)) {
+               (function->is_synthetic && function->is_trait_prototype && function->trait != 0U &&
+                context->semantic_traits[function->trait - 1U].callable_signature != 0U)) {
         if (!(check->nonblocking ? function->is_nonblocking : function->is_noalloc)) {
             return r_resource_reject(check, span, "callee has no corresponding resource contract");
         }

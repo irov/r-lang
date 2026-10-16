@@ -39,6 +39,8 @@ enum Repr_c_intptr : c_intptr { A = 1, B = 7, C, };
 enum Repr_c_uintptr : c_uintptr { A = 1, B = 7, C, };
 enum Repr_c_intmax : c_intmax { A = 1, B = 7, C, };
 enum Repr_c_uintmax : c_uintmax { A = 1, B = 7, C, };
+enum Repr_c_size : c_size { A = 1, B = 7, C, };
+enum Repr_c_ptrdiff : c_ptrdiff { A = -1, B = 7, C, };
 
 protected i32 select(Small value) {
     switch(value) {
@@ -134,6 +136,10 @@ protected i32 exercise() {
     if (r_c_intmax != Repr_c_intmax::B) { return 43; }
     Repr_c_uintmax r_c_uintmax = Repr_c_uintmax::B;
     if (r_c_uintmax != Repr_c_uintmax::B) { return 44; }
+    Repr_c_size r_c_size = Repr_c_size::C;
+    if (r_c_size != Repr_c_size::C) { return 45; }
+    Repr_c_ptrdiff r_c_ptrdiff = Repr_c_ptrdiff::A;
+    if (r_c_ptrdiff != Repr_c_ptrdiff::A) { return 46; }
     switch(big) {
     case Big::Zero: return 3;
     case Big::Max: break;

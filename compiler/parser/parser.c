@@ -1605,9 +1605,11 @@ static bool r_token_is_atomic_shorthand(RTokenKind kind) {
            (kind == R_TOKEN_KW_AUSIZE);
 }
 
+/* c-integer-type of Annex A: every C ABI type but c_bool and the floating ones. */
 static bool r_token_is_c_integer_type(RTokenKind kind) {
-    return (kind >= R_TOKEN_KW_C_CHAR) && (kind <= R_TOKEN_KW_C_UINTMAX) &&
-           (kind != R_TOKEN_KW_C_BOOL);
+    return ((kind >= R_TOKEN_KW_C_CHAR) && (kind <= R_TOKEN_KW_C_UINTMAX) &&
+            (kind != R_TOKEN_KW_C_BOOL)) ||
+           (kind == R_TOKEN_KW_C_SIZE) || (kind == R_TOKEN_KW_C_PTRDIFF);
 }
 
 static bool r_parse_pointer_pointee(RParser *parser) {
@@ -1821,7 +1823,21 @@ static bool r_parse_type(RParser *parser, bool allow_unresolved_name) {
         }
     } else if (kind == R_TOKEN_KW_ATOMIC) {
         (void)r_parser_bump(parser);
-        if (r_parser_at(parser, R_TOKEN_KW_RAW)) {
+        if (r_parser_at(parser, R_TOKEN_KW_RAW) &&
+            (r_parser_peek_n_kind(parser, 1U) == R_TOKEN_KW_FN)) {
+            /* R-TYPE-0013 (B12): an atomic raw function pointer is nullable, as an atomic raw
+               object pointer is; `?` follows `fn` and its resource attributes. */
+            size_t ahead = 2U;
+            while (r_parser_peek_n_kind(parser, ahead) == R_TOKEN_AT) {
+                ahead += 2U;
+            }
+            if (r_parser_peek_n_kind(parser, ahead) != R_TOKEN_QUESTION) {
+                (void)r_parser_syntax_error(parser,
+                                            "atomic raw function pointer type must be nullable");
+            }
+            (void)r_parser_bump(parser);
+            parsed = r_parse_raw_function_type(parser);
+        } else if (r_parser_at(parser, R_TOKEN_KW_RAW)) {
             (void)r_parser_bump(parser);
             (void)r_parser_eat(parser, R_TOKEN_KW_CONST);
             parsed = r_parse_pointer_pointee(parser);
@@ -1829,6 +1845,7 @@ static bool r_parse_type(RParser *parser, bool allow_unresolved_name) {
             (void)r_parser_expect(
                 parser, R_TOKEN_QUESTION, "atomic raw pointer type must be nullable");
         } else if (r_token_is_r_integer_type(r_parser_peek_kind(parser)) ||
+                   r_token_is_c_integer_type(r_parser_peek_kind(parser)) ||
                    r_parser_at(parser, R_TOKEN_KW_BOOL)) {
             parsed = r_parser_bump(parser);
         } else {
@@ -3740,6 +3757,7 @@ static bool r_attribute_name_is_known(const RParser *parser, const RToken *name)
         "align",
         "signal_safe",
         "signal_handler",
+        "c_field",
     };
     size_t index;
     for (index = 0U; index < (sizeof(known_names) / sizeof(known_names[0])); ++index) {

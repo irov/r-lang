@@ -1936,6 +1936,11 @@ static bool r_hir_dump_node(const RFrontendContext *context,
         case R_STANDARD_CALL_CORE_STACK_POINTER:
         case R_STANDARD_CALL_CORE_PREFETCH_READ:
         case R_STANDARD_CALL_CORE_PREFETCH_WRITE:
+        case R_STANDARD_CALL_CORE_POINTER_ADDRESS:
+        case R_STANDARD_CALL_CORE_OFFSET_BYTES:
+        case R_STANDARD_CALL_CORE_CAST_MUTABLE:
+        case R_STANDARD_CALL_CORE_C_ERRNO:
+        case R_STANDARD_CALL_CORE_SET_C_ERRNO:
             operation_name = r_standard_core_machine_name(node->standard_operation);
             break;
         case R_STANDARD_CALL_INVALID:
@@ -1974,6 +1979,9 @@ static bool r_hir_dump_node(const RFrontendContext *context,
             (node->standard_operation == R_STANDARD_CALL_CORE_RELEASE) ||
             (node->standard_operation == R_STANDARD_CALL_CORE_PREFETCH_READ) ||
             (node->standard_operation == R_STANDARD_CALL_CORE_PREFETCH_WRITE) ||
+            (node->standard_operation == R_STANDARD_CALL_CORE_POINTER_ADDRESS) ||
+            (node->standard_operation == R_STANDARD_CALL_CORE_OFFSET_BYTES) ||
+            (node->standard_operation == R_STANDARD_CALL_CORE_CAST_MUTABLE) ||
             ((node->standard_operation >= R_STANDARD_CALL_CORE_CHECKED_ADD) &&
              (node->standard_operation <= R_STANDARD_CALL_CORE_SATURATING_MUL))) {
             if (!r_write_text(writer, user_data, " pointee=") ||

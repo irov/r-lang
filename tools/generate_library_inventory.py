@@ -633,6 +633,10 @@ MACHINE_OPERATIONS = (
     ("stack_pointer", "core::stack_pointer() -> usize"),
     ("prefetch_read", "core::prefetch_read(raw const T* address) -> void"),
     ("prefetch_write", "core::prefetch_write(raw T* address) -> void"),
+    # B12: the address of a raw pointer and the C errno of the calling thread.
+    ("pointer_address", "core::pointer_address(raw const T*? address) -> usize"),
+    ("c_errno", "core::c_errno() -> c_int"),
+    ("set_c_errno", "core::set_c_errno(c_int value) -> void"),
 )
 ATOMIC_OPERATIONS = (
     "atomic_load",
@@ -838,6 +842,18 @@ EXPLICIT_RULE_ITEMS: dict[str, tuple[ExplicitPublicItem, ...]] = {
         explicit_operation(
             "core::unreachable",
             "unsafe core::unreachable() -> never",
+            evidence="R-UNSAFE-0007..0008",
+            item_kind="intrinsic_family",
+        ),
+        explicit_operation(
+            "core::offset_bytes",
+            "unsafe core::offset_bytes(raw T*? pointer, usize count) -> raw void*?",
+            evidence="R-UNSAFE-0007..0008",
+            item_kind="intrinsic_family",
+        ),
+        explicit_operation(
+            "core::cast_mutable",
+            "unsafe core::cast_mutable(raw const T*? pointer) -> raw T*?",
             evidence="R-UNSAFE-0007..0008",
             item_kind="intrinsic_family",
         ),
@@ -1220,10 +1236,10 @@ EXPLICIT_RULE_ITEMS: dict[str, tuple[ExplicitPublicItem, ...]] = {
 EXPLICIT_RULE_BLOCK_SHA256 = {
     "R-LIB-0025": "536bb3dc8c2d40e442d578aad7199694ad01cb313c0e04996b4f439e582223b4",
     "R-LIB-0001": "5375ba18932b66260e350206caa3bdd284a0d99ccb7365d6715ec86a82a256ac",
-    "R-LIB-0011": "bad2e9acdb5d0e246e8b7ae30d39bd311a53a20b06d361b34b6558469c790062",
+    "R-LIB-0011": "acdceaf2ab00bf70998a772385db569191d24cd0051a3f76a5bcfda02a631d90",
     "R-LIB-0024": "fbfd1bb8389820b08ab2f50db88d465dcc942769e47ebbea751f62ee31d948c4",
     "R-LIB-0027": "7dcf70ed59c082c7cdd65190bf12a79a13cc523f8a37697cd221e8ac30b75b17",
-    "R-LIB-0028": "0e8b8627ee2c247bfd30b19fe3c883b108c2f4789d314b6d3389f179a0c7bdd0",
+    "R-LIB-0028": "4fe9112c650d90db71a63c5a51a281740ebe47bc48b3cfeb6ac45395efb91c4e",
     "R-LIB-0012": "c2aa9b207f7297de2ab9c470dabf728f2fa1d92c2827b010ef7de32090bc1be1",
     "R-SLIB-C-0001": "49e64346f93cce514fc3d6825645d536f78730d1219412c267f7aadb626baf83",
     "R-SLIB-CONV-0002": "467f4b66ef802d7b779b01c6c1a99a12cfdcef70d10129d56c97f6a672a12a17",
@@ -1774,6 +1790,32 @@ CORE_INTRINSIC_IMPLEMENTATIONS: dict[str, dict[str, Any]] = {
             ),
         },
     },
+    "core::offset_bytes": {
+        "item_kind": "intrinsic_family",
+        "source_signature": "unsafe core::offset_bytes(raw T*? pointer, usize count) -> raw void*?",
+        "implementation": {
+            "kind": "intrinsic",
+            "compiler_contract": (
+                "The semantic pass requires a raw pointer, a usize or isize byte count and a "
+                "lexical unsafe context; the result is a raw void pointer with the operand's "
+                "constness and nullability, lowered to one inbounds byte GEP (R-SAFETY-OFFSET). "
+                "No runtime symbol, allocation or panic is introduced."
+            ),
+        },
+    },
+    "core::cast_mutable": {
+        "item_kind": "intrinsic_family",
+        "source_signature": "unsafe core::cast_mutable(raw const T*? pointer) -> raw T*?",
+        "implementation": {
+            "kind": "intrinsic",
+            "compiler_contract": (
+                "The semantic pass requires a raw const pointer and a lexical unsafe context; the "
+                "result is the same address with write permission and the operand's nullability "
+                "(R-SAFETY-CAST-MUTABLE), and the lowering emits no instruction. No runtime "
+                "symbol, allocation or panic is introduced."
+            ),
+        },
+    },
     "core::slice_from_raw_parts": {
         "item_kind": "intrinsic_family",
         "source_signature": (
@@ -1911,6 +1953,12 @@ MACHINE_CONTRACTS = {
     "stack_pointer": "The stack pointer register as a usize.",
     "prefetch_read": "A data prefetch for reading with the highest locality; no access or fault.",
     "prefetch_write": "A data prefetch for writing with the highest locality; no access or fault.",
+    "pointer_address": "The address of a raw object pointer as a usize (ptrtoint); no integer "
+    "converts back to a pointer.",
+    "c_errno": "A load of the int that __error() of the C library addresses for the calling "
+    "thread.",
+    "set_c_errno": "A store to the int that __error() of the C library addresses for the calling "
+    "thread.",
 }
 CORE_INTRINSIC_IMPLEMENTATIONS.update(
     {

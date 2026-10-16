@@ -9,7 +9,7 @@ import example.calculator.common::{Usage};
 // Output and exit status shared by command and error branches.
 struct CommandResponse { std.string::string output; i32 status; };
 
-enum Command { script, race, device, handoff, stack, map, watchdog };
+enum Command { script, race, device, handoff, stack, map, watchdog, layout };
 
 async i32 main(const str[] arguments) {
     try {
@@ -17,7 +17,7 @@ async i32 main(const str[] arguments) {
         
         try {
             if (len(arguments) == 1usize) {
-                std.string::string help = std.string::from_str("registers script INITIAL [add|sub|bit_and|bit_or|bit_xor|exchange VALUE|cas EXPECTED DESIRED]...\nregisters race ITERATIONS\nregisters device INITIAL VALUE...\nregisters handoff MESSAGES\nregisters stack DEPTH\nregisters map WORD...\nregisters watchdog LIMIT VALUE...\n");
+                std.string::string help = std.string::from_str("registers script INITIAL [add|sub|bit_and|bit_or|bit_xor|exchange VALUE|cas EXPECTED DESIRED]...\nregisters race ITERATIONS\nregisters device INITIAL VALUE...\nregisters handoff MESSAGES\nregisters stack DEPTH\nregisters map WORD...\nregisters watchdog LIMIT VALUE...\nregisters layout COUNTER\n");
                 await std.console::print(move help);
                 return 0;
             }
@@ -72,6 +72,9 @@ async i32 main(const str[] arguments) {
                 }
                 const u32[] amount_view = amounts.as_slice();
                 response.output = example.registers.machine::watchdog(initial, amount_view); break;
+            case Command::layout:
+                throw (count != 3usize) Usage { .message = "layout needs one counter value" };
+                response.output = example.registers.machine::layout(initial); break;
             }
         } catch (Usage failure) { response.output = f"{failure.message}\n"; response.status = 64; }
         await std.console::print(core::replace(&response.output, std.string::create()));

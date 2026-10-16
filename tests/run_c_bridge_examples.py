@@ -55,13 +55,19 @@ def main():
             expected=f'raised={rounds} handled={rounds} synchronous={rounds} signal={number}\n')
     run('signal', '1001', expected='signal needs a count up to 1000\n', status=64)
     run('signal', 'many', expected='invalid count\n', status=65)
+    # Library R-LIB-0028 (B12): errno is cleared before isatty and read right after it; the
+    # captured standard output is a pipe, so descriptor 1 is no terminal.
+    run('errno', '1000', expected='isatty(1000)=0 errno=9 EBADF\n')
+    run('errno', '1', expected='isatty(1)=0 errno=25 ENOTTY\n')
+    run('errno', '65536', expected='errno needs a descriptor up to 65535\n', status=64)
+    run('errno', 'fd', expected='invalid count\n', status=65)
     for command in ['upper', 'release']:
         run(command, 'x' * 257, status=64)
         run(command, '\u00e9' * 129, status=64)
     for args in [('target', 'extra'), ('inspect',), ('unknown',), ('bytes', 'x0'), ('bytes', '0'), ('cstring', 'zz')]:
         run(*args, status=64)
-    print(f'C bridge: {count} libc, UTF-8, termination, callback, handle, loading, signal and '
-          'validation checks passed')
+    print(f'C bridge: {count} libc, UTF-8, termination, callback, handle, loading, signal, errno '
+          'and validation checks passed')
 
 
 if __name__ == '__main__':

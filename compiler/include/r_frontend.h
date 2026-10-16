@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define R_FRONTEND_VERSION "0.1.0"
-#define R_FRONTEND_CORE_REVISION "0.1.0-draft.108"
+#define R_FRONTEND_CORE_REVISION "0.1.0-draft.109"
 
 typedef uint32_t RSourceId;
 typedef uint32_t RTokenId;
@@ -153,6 +153,10 @@ typedef struct RFrontendArtifactOptions {
        emitter defines NAME_initialize and NAME_shutdown, which start and stop the runtime and
        the program's static state. NULL for a program with a main. */
     const char *library_name;
+    /* A unit of the runtime written in R (B12, r_frontend_set_runtime_unit): no main and no
+       library entries; the exports are the program's entry points, emitted as plain C
+       functions. */
+    bool runtime_unit;
 } RFrontendArtifactOptions;
 
 RFrontendOptions r_frontend_default_options(void);
@@ -174,6 +178,15 @@ const char *r_frontend_backend_cpu(void);
 bool r_frontend_backend_verify(char *message, size_t capacity);
 
 RFrontendStatus r_frontend_set_profile(RFrontendContext *context, const char *profile);
+
+/*
+ * B12: the translation is a unit of the runtime written in R. Its extern "C" definitions are the
+ * runtime's own functions: they may take the implementation's `r_runtime_` names, each is proved
+ * against the declaration of a runtime header, and they are emitted as plain C functions (no
+ * entry checks, panics that abort). Requires the freestanding profile. A selection after analysis
+ * has begun is rejected with R_FRONTEND_CONTEXT_SEALED.
+ */
+RFrontendStatus r_frontend_set_runtime_unit(RFrontendContext *context);
 
 /*
  * Applies the deny-panic-allocation policy of R-OBJ-0012 to every translation unit, as if each

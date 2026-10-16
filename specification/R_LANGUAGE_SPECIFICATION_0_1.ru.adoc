@@ -15,7 +15,7 @@
 |Поле |Значение
 |Документ |R Core Language Specification
 |Версия языка |0.1
-|Редакция документа |0.1.0-draft.108
+|Редакция документа |0.1.0-draft.109
 |Статус |Перевод нормативного черновика; не является стабильным стандартом R 1.0
 |Язык документа |Русский перевод; ключевые нормативные термины приведены на английском
 |Целевой backend |ISO/IEC 9899:2018 (C17)
@@ -880,8 +880,8 @@ Standard Library Specification 0.1, это predefined parametric constructors.
 Пользовательские схемы определены R-TYPE-0031 — R-TYPE-0040.
 
 [[R-TYPE-0013]]
-*R-TYPE-0013* — `+atomic T+` допустим для `+bool+`, integer type, `+usize+`, `+isize+` и
-nullable raw pointer. Predefined spellings `+ai8+`, `+ai16+`, `+ai32+`, `+ai64+` и
+*R-TYPE-0013* — `+atomic T+` допустим для `+bool+`, integer type, `+usize+`, `+isize+`, C integer type
+(`+c-integer-type+` Annex A), nullable raw pointer и nullable raw function pointer. Predefined spellings `+ai8+`, `+ai16+`, `+ai32+`, `+ai64+` и
 `+aisize+` тождественны `+atomic i8+`, `+atomic i16+`, `+atomic i32+`, `+atomic i64+` и
 `+atomic isize+` в том же порядке. Spellings `+au8+`, `+au16+`, `+au32+`, `+au64+` и `+ausize+` тождественны
 `+atomic u8+`, `+atomic u16+`, `+atomic u32+`, `+atomic u64+` и `+atomic usize+` в том
@@ -889,7 +889,8 @@ nullable raw pointer. Predefined spellings `+ai8+`, `+ai16+`, `+ai32+`, `+ai64+`
 Type/interface fingerprints, mangling, `+sizeof+`, `+alignof+` и
 `+atomic_is_lock_free+` canonicalize каждую shorthand к expanded atomic type;
 declaration с одним spelling совместима с definition через другое. Эти spellings
-не являются literal suffixes и не делают C `+_Atomic+` FFI type. Atomic type
+не являются literal suffixes. C `+_Atomic+` является FFI type только как member C-declared
+struct (R-FFI-0017). Atomic type
 неявно не преобразуется в T и не является Copy.
 
 === 9.3 Type identity and compatibility
@@ -4985,7 +4986,10 @@ unsafe operations `+core+` как closed intrinsic families:
 * `+unsafe core::volatile_load(raw const T* address) -> T+`;
 * `+unsafe core::volatile_store(raw T* address, T value) -> void+`;
 * `+unsafe core::assume(bool condition) -> void+`;
-* `+unsafe core::unreachable() -> never+`.
+* `+unsafe core::unreachable() -> never+`;
+* `+unsafe core::offset_bytes(raw T*? pointer, usize count) -> raw void*?+` и
+  `+unsafe core::offset_bytes(raw T*? pointer, isize count) -> raw void*?+`;
+* `+unsafe core::cast_mutable(raw const T*? pointer) -> raw T*?+`.
 
 Каждый allocation-supporting profile дополнительно предоставляет:
 
@@ -5035,7 +5039,14 @@ R-FUNC-0002.
 
 `+core::assume+` имеет effect R-SAFETY-ASSUME. `+core::unreachable+` имеет effect
 R-SAFETY-UNREACHABLE: управление из него не возвращается, а достижение его — UB, на которое может
-опираться оптимизатор. Ни одна из этих десяти operations не
+опираться оптимизатор.
+
+`+core::offset_bytes+` — адрес на count байт после pointer, или перед ним при отрицательном isize
+count, по R-SAFETY-OFFSET; результат сохраняет const и nullability операнда (`+raw const T*+` даёт
+`+raw const void*+`) и provenance pointer, а чтение и запись через него подчиняются contracts raw
+pointers. `+core::cast_mutable+` — тот же адрес как pointer, разрешающий запись, с той же
+nullability, по R-SAFETY-CAST-MUTABLE; сам он ничего не пишет. T обеих — любой pointee. Ни одна из
+этих двенадцати operations не
 allocates и не panics; нарушение применимого safety contract Annex E является UB, а не
 recoverable result.
 
@@ -5639,7 +5650,7 @@ by value shall be trivially Copy, have no user drop and recursively contain no R
 destruction obligation. Top-level array parameter or return is forbidden because C
 adjusts/forbids it. Slice, ordinary `+str+`, `+constexpr str+`, own, arc, rc, weak owner,
 borrow, atomic, array, list, dict, task, standard synchronization/thread/channel type, o и payload enum forbidden by
-value и как recursive field `+@repr(C)+` aggregate.
+value и как recursive field `+@repr(C)+` aggregate, кроме atomic member C-declared struct (R-FFI-0017).
 
 [[R-FFI-0005]]
 *R-FFI-0005* — C variadic `+...+` may occur only after at least one fixed parameter
@@ -5680,7 +5691,12 @@ enumerator inventory; C declaration order need not match, but an omitted,
 additional or aliased C enumerator is a mismatch. A C enum that cannot satisfy R's
 unique-discriminant rule shall instead be mediated as its compatible C integer plus
 verified constants or by a C shim. Different signedness, qualifier or
-ABI-significant property is mismatch.
+ABI-significant property is mismatch. Field такой struct может быть `+atomic T+`, где T — C
+integer type или nullable raw pointer: он соответствует C member типа `+_Atomic(T)+` с тем же
+value type, и struct тогда является Move type, который передаётся в C и из C только через
+pointers (R-FFI-0004). Field, чей C member записан ключевым словом R или другим именем, несёт
+`+@c_field(name = "member")+` — C identifier этого member: код R называет field, а member
+inventory, layout probes и records сопоставляются с member.
 
 [[R-FFI-0018]]
 *R-FFI-0018* — A declaration with
@@ -5701,8 +5717,8 @@ shim and are not `+@c_constant+` forms in R 0.1.
 [[R-FFI-0019]]
 *R-FFI-0019* — C безымянные битовые поля и поля нулевой ширины, flexible array members,
 anonymous aggregate members, vector/complex types, variable-length arrays, C `+_Atomic+`,
-variadic function-pointer types, `+restrict+` and `+volatile+`-qualified ABI types are not
-directly expressible. Library integration shall expose opaque type plus C
+кроме member R-FFI-0017, variadic function-pointer types, `+restrict+` and
+`+volatile+`-qualified ABI types are not directly expressible. Library integration shall expose opaque type plus C
 wrapper/verified bridge or a separately standardized ABI type rather than guess
 layout or erase qualifier.
 
@@ -5984,8 +6000,10 @@ that actual C identifier. No C++ mangling, assembler label alias, prefix/suffix 
 Windows decoration guessing is performed.
 
 [[R-FFI-0046]]
-*R-FFI-0046* — R 0.1 exports C functions only. Exported global objects, TLS,
-linker aliases and symbol-version scripts require a later ABI extension or C shim. Библиотека
+*R-FFI-0046* — Программа или библиотека R 0.1 экспортирует только C functions; runtime unit
+(R-FFI-0068) экспортирует также objects. Exported thread-local objects, linker aliases и
+symbol-version scripts require a later ABI extension or C shim, а определение `+extern "C"+`
+object вне runtime unit требует `+R-DIAG-FFI-003+`. Библиотека
 (R-FFI-0064) версионируется целиком текущей версией и версией совместимости, которые на
 `+arm64-apple-darwin+` являются версиями её образа Mach-O: версионированных символов у цели нет.
 
@@ -6076,6 +6094,22 @@ R-FFI-0058: они работают в окружении прерванного
 от определения `+extern "C"+`, или вместе с `+@callback+` — misplaced attribute: `+R-DIAG-FFI-003+`
 из R-FFI-0050 на объявлении C, иначе `+R-DIAG-SYN-002+`.
 
+[[R-FFI-0068]]
+*R-FFI-0068* — Реализация может транслировать части собственного runtime с R как runtime unit:
+трансляцию в freestanding profile без `+main+` (R-FUNC-0008) и без функций входа и завершения
+библиотеки (R-FFI-0064), чьи определения `+extern "C"+` являются функциями runtime. Только в
+runtime unit их имена могут использовать идентификаторы, которые реализация резервирует за своим
+runtime: `+r_runtime_+` и далее строчные латинские буквы, цифры и подчёркивания (R-FFI-0057).
+Каждая такая функция доказывается по заголовку runtime, который её объявляет, как импорт
+(R-FFI-0042), и сохраняет этот C type. Она не выполняет присоединения потока, предпроверки стека и
+проверки раскрутки R-FFI-0055: их выполнили вызывающие её сгенерированный код и runtime. Паника в
+runtime unit выдаёт отчёт и завершает процесс (R-ERR-0006). Runtime unit может также определить с
+`+@safety+` и `+extern "C"+` module object типа R-FFI-0004 или atomic C integer либо nullable raw
+pointer, не `+thread_local+` и с константной инициализацией (R-OBJ-0010): он экспортируется под
+своим именем, доказывается по объявлению заголовка, а код R обращается к нему как к изменяемому
+статическому объекту (R-OBJ-0009). C types и константы runtime runtime unit получает через
+проверенные extern blocks, как любая программа (R-FFI-0017, R-FFI-0018).
+
 === 23.7 Unsafe boundary and safe wrappers
 
 [[R-FFI-0010]]
@@ -6116,6 +6150,7 @@ return path; otherwise output shall use unchecked ABI storage and R-FFI-0056 gat
 *R-FFI-0050* — FFI attribute scopes are closed: `+@link+`, `+@header+`, `+@abi+` on
 extern block; `+@link_name+` on imported symbol; `+@safety+` on imported or exported C
 function; `+@fenv+` on imported C function; `+@repr+`, `+@c_type+` on C type;
+`+@c_field+` on field C-declared struct или union (R-FFI-0017);
 `+@c_constant+` on verified constant; `+@export_name+`, `+@callback+`,
 `+@signal_handler+` on exported C function; `+@signal_safe+` on imported or exported C
 function (R-FFI-0067). `+@header+` is repeatable;
@@ -6714,8 +6749,11 @@ integer-type        = "i8" | "u8" | "i16" | "u16" | "i32" | "u32"
                     | "i64" | "u64" | "isize" | "usize" ;
 enum-underlying-type = integer-type | c-integer-type ;
 floating-type       = "f32" | "f64" ;
-atomic-base-type    = integer-type | "bool" | atomic-raw-pointer-type ;
+atomic-base-type    = integer-type | c-integer-type | "bool" | atomic-raw-pointer-type
+                    | atomic-raw-function-type ;
 atomic-raw-pointer-type = "raw", [ "const" ], pointer-pointee, "*", "?" ;
+atomic-raw-function-type = "raw", "fn", { callable-resource-attribute }, "?",
+                           "(", function-type-parameters, ")", "->", type ;
 c-integer-type      = "c_char" | "c_schar" | "c_uchar" | "c_short" | "c_ushort"
                     | "c_int" | "c_uint" | "c_long" | "c_ulong" | "c_llong"
                     | "c_ullong" | "c_wchar" | "c_wint"
@@ -7336,6 +7374,14 @@ precondition produces UB; satisfying all yields the defined effect.
 |`+R-SAFETY-UNREACHABLE+`
 |`+core::unreachable()+`
 |Control never reaches the call on any execution. Effect supplies the fact to the optimizer; reaching the call is immediate UB.
+
+|`+R-SAFETY-OFFSET+`
+|`+core::offset_bytes(pointer, count)+`
+|Pointer addresses an allocated object, or is null with count zero, and the address count bytes away stays within that object or one byte past its end. Effect computes that address with the provenance of pointer and accesses nothing.
+
+|`+R-SAFETY-CAST-MUTABLE+`
+|`+core::cast_mutable(pointer)+`
+|A write through the result is permitted: the object is mutable, no shared borrow or other reader that excludes writes is live across the write, and the write synchronizes with every concurrent access. Effect changes no value; a pointer that never writes needs nothing.
 
 |`+R-SAFETY-EXTERN-CALL+`
 |Call imported C function/function pointer
@@ -8738,7 +8784,7 @@ Separate translation shall принимать declaration
 `+au32+`, `+au64+` и `+ausize+`, matched definition с expanded atomic spelling, а хотя бы один fixture
 shall вкладывать matched shorthand/expanded spellings в pointer,
 fixed array и raw-function signature и проверять единый canonical interface fingerprint.
-Suite shall отклонять direct arithmetic, atomic-suffix literals, nested
+Suite shall отклонять direct arithmetic, atomic-suffix literals, C `_Atomic` ABI use кроме header-verified member R-FFI-0017, nested
 `+atomic ai32+` и использование C `_Atomic` ABI. Для каждого permitted
 `+atomic i8+`, `+atomic u8+`, `+atomic i16+` и `+atomic u16+` fetch fixtures shall
 проверять возвращённый прежний T, unsigned modulo final conversion и signed overflow

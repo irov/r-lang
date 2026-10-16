@@ -56,11 +56,12 @@ typedef enum RClangNodeKind {
     R_CLANG_NODE_RECORD,
     R_CLANG_NODE_ENUM,
     R_CLANG_NODE_ARRAY,
-    R_CLANG_NODE_OTHER
+    R_CLANG_NODE_OTHER,
+    R_CLANG_NODE_ATOMIC
 } RClangNodeKind;
 
 /* One node of a type tree. Children are contiguous in RClangGenerator.children: the pointee,
-   the element, or the result followed by the parameters. */
+   the element, the value type of an atomic, or the result followed by the parameters. */
 typedef struct RClangNode {
     RClangNodeKind kind;
     bool is_const;
@@ -408,7 +409,8 @@ static bool r_clang_tree_with_children(RClangGenerator *generator,
 
 /* One C type as a record type tree (schema r-abi-record-0.1). Sugar that does not change the
    type is looked through; a typedef naming a struct, union or enumeration is kept as the
-   spelling of the position; volatile, restrict and _Atomic are not expressible (R-FFI-0019). */
+   spelling of the position; volatile and restrict are not expressible (R-FFI-0019), and an
+   _Atomic type is a node over its value type, which only a struct member may have (R-FFI-0017). */
 static bool r_clang_tree(RClangGenerator *generator, CXType type, size_t *index) {
     const bool is_const = clang_isConstQualifiedType(type) != 0U;
 
@@ -503,6 +505,14 @@ static bool r_clang_tree(RClangGenerator *generator, CXType type, size_t *index)
         node->declaration = definition;
         node->tag_name = r_clang_tag_name(generator, declaration);
         if (generator->nodes[*index].tag_name == NULL) {
+            return false;
+        }
+        break;
+    }
+    case CXType_Atomic: {
+        const CXType value = clang_Type_getValueType(type);
+
+        if (!r_clang_tree_with_children(generator, R_CLANG_NODE_ATOMIC, &value, 1U, index)) {
             return false;
         }
         break;
@@ -1330,7 +1340,7 @@ static bool r_clang_write_tree(const RClangGenerator *generator,
                                RFrontendWriteFn writer,
                                void *user_data) {
     static const char *const names[] = {
-        "void", "scalar", "pointer", "function", "record", "enum", "array", "other"};
+        "void", "scalar", "pointer", "function", "record", "enum", "array", "other", "atomic"};
     const RClangNode *node = &generator->nodes[tree];
     char number[32];
     size_t child;
@@ -1351,6 +1361,11 @@ static bool r_clang_write_tree(const RClangGenerator *generator,
                r_write_text(writer, user_data, "}");
     case R_CLANG_NODE_POINTER:
         return r_write_text(writer, user_data, ", \"pointee\": ") &&
+               r_clang_write_tree(
+                   generator, generator->children[node->first_child], writer, user_data) &&
+               r_write_text(writer, user_data, "}");
+    case R_CLANG_NODE_ATOMIC:
+        return r_write_text(writer, user_data, ", \"value\": ") &&
                r_clang_write_tree(
                    generator, generator->children[node->first_child], writer, user_data) &&
                r_write_text(writer, user_data, "}");

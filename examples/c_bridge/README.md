@@ -15,6 +15,7 @@ build-debug/tests/codegen_example_c_bridge bytes 68656c6c6f00ff
 build-debug/tests/codegen_example_c_bridge cstring 68656c6c6f
 build-debug/tests/codegen_example_c_bridge loadable libSystem.B.dylib
 build-debug/tests/codegen_example_c_bridge signal 5
+build-debug/tests/codegen_example_c_bridge errno 1000
 ```
 
 `inspect` creates an owning NUL-terminated C string, obtains bounded and raw views,
@@ -56,6 +57,12 @@ thread before it returns. The handler writes two plain mutable statics and ends 
 `core::signal_fence(release)`; the raising thread reads them after
 `core::signal_fence(acquire)`, which orders a thread with its own signal handlers. It prints
 `raised=N handled=N synchronous=N signal=30` (SIGUSR1 is 30 on the target) for counts up to 1000.
+
+`errno DESCRIPTOR` clears the C `errno` of the calling thread (`core::set_c_errno(0)`), asks the
+imported `isatty` whether the descriptor is a terminal and reads `errno` right after the call
+(`core::c_errno()`), before another call or an await can change it. A descriptor that is not open
+gives `isatty(1000)=0 errno=9 EBADF`; an open one that is no terminal, such as a pipe,
+`errno=25 ENOTTY`; the names come from `<errno.h>` through `@c_constant`.
 
 The raw-pointer contracts describe allocation, length, alignment and lifetime.
 `core::assume` repeats a bound already enforced before creating the packet; it does

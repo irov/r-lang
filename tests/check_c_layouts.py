@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Check the rejections of C layouts (Core R-AGG-0014, R-FFI-0061, R-FFI-0062, B9.3): unions,
-packed and aligned aggregates and bit-fields, each diagnostic at its exact position with its code,
-rule and message."""
+"""Check the rejections of C layouts (Core R-AGG-0014, R-FFI-0061, R-FFI-0062, B9.3) and of C
+atomic members (R-FFI-0017, B12): unions, packed and aligned aggregates, bit-fields and _Atomic
+members, each diagnostic at its exact position with its code, rule and message."""
 
 import argparse
 from pathlib import Path
@@ -157,6 +157,64 @@ const Bits BUILT = build(64i32 as c_int);
        'translation-time evaluation panics (invalid_conversion) in `make`'),
       (14, 20, 'R-DIAG-CONST-003', 'R-EXPR-0032',
        'translation-time evaluation panics (invalid_conversion) in `build`')]),
+    # B12-1: an extern "C" block beside the functions leaves the module's bindings complete, so
+    # an unresolved call is still diagnosed rather than reported as an unlowerable construct.
+    'extern-block-neighbour': ('''
+@repr(C)
+union Value { c_int a; c_double b; };
+extern "C" {
+}
+c_int read(Value v) {
+    return missing_read(v);
+}
+''', [(7, 12, 'R-DIAG-NAME-001', 'R-NAME-0003',
+       'called function name is unresolved at this source position')]),
+    # R-FFI-0017 (B12): only a C-declared struct has atomic members, of C integers or raw
+    # pointers; an R-declared @repr(C) struct has none.
+    'atomic-members': ('''
+@repr(C)
+struct Local { atomic c_int count; };
+@repr(C)
+struct Fixed { atomic u32 count; };
+''', [(3, 8, 'R-DIAG-FFI-003', 'R-FFI-0004',
+       '@repr(C) struct fields require recursively compatible C ABI types and no drop'),
+      (5, 8, 'R-DIAG-FFI-003', 'R-FFI-0004',
+       '@repr(C) struct fields require recursively compatible C ABI types and no drop')]),
+}
+
+# Rejections proven against fixtures/ffi/c_atomics.h: the block is verified, so the struct is
+# whole and only its use is wrong. Line 1 is the module declaration.
+HEADER_PRELUDE = '''
+@link(name = "atomics", kind = "static")
+@header("c_atomics.h")
+@abi("atomics-abi")
+extern "C" {
+    @repr(C)
+    @c_type(name = "atomic_counters", kind = "typedef")
+    struct Counters {
+        atomic c_uint64 hits;
+        atomic c_int level;
+        atomic raw void*? slot;
+        atomic c_size total;
+        COUNTERS_TAG;
+    };
+    @safety("COUNTERS-BUMP", "The pointer refers to a live value")
+    c_uint64 atomic_counters_bump(raw Counters* counters, c_uint64 amount);
+    IMPORT
+}
+'''
+HEADER_REJECTED = {
+    # An atomic member makes the struct a Move type: it passes through pointers only.
+    'atomic-by-value': ('c_uchar tag', '''@safety("COUNTERS-VALUE", "None")
+    c_uint64 atomic_counters_value(Counters counters);''', '''
+c_uint64 read(Counters counters) {
+    unsafe { return atomic_counters_value(move counters); }
+}
+''', [(17, 5, 'R-DIAG-FFI-001', 'R-FFI-0004', 'C import signature requires exact C ABI types')]),
+    # The member is atomic in R but plain in the header.
+    'atomic-not-in-header': ('atomic c_uchar tag', '', '', [
+        (13, 24, 'R-DIAG-FFI-004', 'R-FFI-0017',
+         'ABI record member type disagrees with the @repr(C) struct field type')]),
 }
 
 DIAGNOSTIC = re.compile(r'^(?P<path>.*?):(?P<line>\d+):(?P<column>\d+): error '
@@ -167,7 +225,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--front', required=True)
     parser.add_argument('--library-map', required=True)
+    parser.add_argument('--fixtures', required=True)
     args = parser.parse_args()
+    fixtures = Path(args.fixtures)
+    sysroot = subprocess.run(['xcrun', '--sdk', 'macosx', '--show-sdk-path'], capture_output=True,
+                             text=True, check=True).stdout.strip()
     with tempfile.TemporaryDirectory(prefix='r-c-layouts-') as directory:
         root = Path(directory)
         for name, (text, expected) in REJECTED.items():
@@ -176,6 +238,29 @@ def main():
             result = subprocess.run(
                 [args.front, '--emit=hir', '--library-map', args.library_map, str(path)],
                 capture_output=True, text=True, timeout=60)
+            assert result.returncode == 1, (name, result.returncode, result.stderr)
+            found = sorted(
+                (int(m['line']), int(m['column']), m['code'], m['rule'], m['message'])
+                for m in map(DIAGNOSTIC.match, result.stderr.splitlines()) if m)
+            assert found == sorted(expected), (name, found)
+        for name, (tag, declaration, text, expected) in HEADER_REJECTED.items():
+            path = root / f'{name}.r'
+            prelude = HEADER_PRELUDE.replace('COUNTERS_TAG', tag).replace('IMPORT', declaration)
+            path.write_text(f'module layouts.{name.replace("-", "_")};\n' + prelude.lstrip('\n') +
+                            text.lstrip('\n'))
+            result = subprocess.run(
+                [args.front, '--emit=abi-record', '--library-map', args.library_map,
+                 '--link-manifest', str(fixtures / 'codegen_ffi_c_atomics_link_manifest.json'),
+                 '--sysroot', sysroot, '--abi-header-dir', str(fixtures / 'ffi'), str(path),
+                 '--output', str(root / f'{name}.json')],
+                capture_output=True, text=True, timeout=60)
+            if result.returncode == 0:
+                result = subprocess.run(
+                    [args.front, '--emit=llvm-ir', '--library-map', args.library_map,
+                     '--link-manifest', str(fixtures / 'codegen_ffi_c_atomics_link_manifest.json'),
+                     '--sysroot', sysroot, '--abi-header-dir', str(fixtures / 'ffi'),
+                     '--abi-record', str(root / f'{name}.json'), str(path)],
+                    capture_output=True, text=True, timeout=60)
             assert result.returncode == 1, (name, result.returncode, result.stderr)
             found = sorted(
                 (int(m['line']), int(m['column']), m['code'], m['rule'], m['message'])

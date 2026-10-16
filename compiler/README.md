@@ -1,7 +1,7 @@
 # R Frontend Parser 0.1
 
 This directory contains the bootstrap frontend for the normative English R Core
-Specification `0.1.0-draft.108`.
+Specification `0.1.0-draft.109`.
 
 ```text
 UTF-8 source
@@ -2144,6 +2144,17 @@ address reads give `usize`: R has no conversion of an integer to a pointer (R-ID
 numbers measure the stack and nothing else. None of them is evaluated at translation, and the
 resource checker proves them for `@noalloc`, `@nonblocking` and `@signal_safe`.
 
+B12 extends the range for the runtime written in R. `core::pointer_address` gives the address of
+any raw pointer as `usize` (the pointee is the auxiliary type): the address is exposed, but R still
+has no conversion of an integer to a pointer, so the target manifests set
+`pointer_integer_exposure.supported` and keep `provenance_restoration_api` null. `unsafe
+core::offset_bytes(pointer, count)` takes a `usize` or `isize` byte count and gives a raw `void`
+pointer with the operand's constness and nullability (R-SAFETY-OFFSET); it converts to any object
+pointer as `void *` does in C. `unsafe core::cast_mutable` turns `raw const T*?` into `raw T*?`
+(R-SAFETY-CAST-MUTABLE). `core::c_errno()` and `core::set_c_errno(value)` read and write the
+`errno` of the C library on the calling thread as a `c_int` (Library R-LIB-0028): a read belongs
+right after the C call, before an `await` that may resume on another thread.
+
 `compiler/llvm/machine.c` writes them:
 
 | Operation | LLVM IR |
@@ -2153,6 +2164,10 @@ resource checker proves them for `@noalloc`, `@nonblocking` and `@signal_safe`.
 | `unreachable` | nothing: the `unreachable` that ends the block |
 | `frame_address`, `stack_pointer` | `llvm.frameaddress(0)` and `llvm.read_register` of `sp`, as integers |
 | `prefetch_read`, `prefetch_write` | `llvm.prefetch` of the data cache with the highest locality; it neither faults nor changes memory |
+| `pointer_address` | `ptrtoint` to `i64` |
+| `offset_bytes` | `getelementptr inbounds i8` by the count |
+| `cast_mutable` | nothing: the permission is a property of the R type |
+| `c_errno`, `set_c_errno` | a load or store of the `i32` that `__error()` of the Darwin C library returns for the thread |
 
 ThreadSanitizer does not model a fence on its own (its runtime treats `fence` as a barrier
 without happens-before), so a plain value handed between threads through fences is reported as
@@ -2165,7 +2180,10 @@ stack pointer and frame record, walk a table with prefetches and end an excluded
 `core::unreachable`; `codegen_machine_fence_order_panic` and `codegen_machine_trap` check the
 two exits, and `tests/check_machine_operations.py` the rejections with their exact diagnostics
 and the LLVM forms in the optimized IR. `examples/registers` uses every operation (`handoff`,
-`stack`, `map`, `watchdog`).
+`stack`, `map`, `watchdog`, `layout`). `codegen_pointer_operations` and its async twin measure and
+offset pointers both ways, write through `cast_mutable`, keep `errno` per thread (a scoped
+thread sets its own) and use atomic C integers and an atomic function pointer;
+`examples/c_bridge errno` reads `errno` after an imported `isatty`.
 
 ### Address constants
 
@@ -2402,8 +2420,8 @@ it. libclang parses the block's headers with the provider's definitions for the 
 record takes the member inventory, the offsets, sizes and alignments and the compatible integer
 type of each enumeration from the compiler's own declarations and record layouts, without
 executing anything on the host (R-CMAP-0024). The C type of each requested symbol is its
-declaration's type, recorded as a type tree of pointers, functions, arrays, scalars and struct,
-union and enumeration leaves; every struct and enumeration reached from such a tree, directly or
+declaration's type, recorded as a type tree of pointers, functions, arrays, `_Atomic` values,
+scalars and struct, union and enumeration leaves; every struct and enumeration reached from such a tree, directly or
 through members, is inventoried with a type tree per member (a bit-field with its
 `bit_offset` and `bit_width`), or marked `inexpressible` (an unnamed or zero-width bit-field, an
 anonymous member, a nested aggregate, an incomplete type). The resulting document
@@ -2667,6 +2685,32 @@ fields, a nested homogeneous aggregate, a pointer cycle, a packed struct inside 
 `contract_violation` of an export called before the initialization and after the shutdown, every
 baseline verdict and the rejections of the library options and of APIs C cannot declare.
 
+### Atomic C integers, function pointers and members
+
+`atomic T` takes a C integer type (`c-integer-type` of Annex A, R-TYPE-0013) as well as the R
+integers, `bool` and nullable raw object pointers, and a nullable raw function pointer `atomic raw
+fn?(P...) -> R`. The atomic operations of R-LIB-0011 accept them as they accept their R
+counterparts: the fetch operations take C integers too, and a signed C integer checks its
+overflow before the modification (the LLVM value kind of a C integer is its R representation).
+The parser reads `atomic raw fn` ahead to `?` (`atomic raw function pointer type must be
+nullable` otherwise), and the type resolution sends it to `r_semantic_atomic_raw_pointer_type`
+before the pointer-suffix check, which knows `?` only after `*`.
+
+A field of a C-declared `@repr(C)` struct may be `atomic T` of a C integer or raw pointer
+(R-FFI-0017): it matches a C member `_Atomic(T)`. libclang reports such a member as
+`CXType_Atomic`; the record writes it as a node `{"node": "atomic", "value": ...}` over the value
+type, `abi_record.c` loads it as `R_ABI_TYPE_NODE_ATOMIC` and matches an R atomic field with the
+same value type, and the verifier spells the type `_Atomic(T)` and probes the member through its
+address, since lvalue conversion drops `_Atomic` (`_Generic(&((T *)0)->m, _Atomic(uint64_t) *:
+1, default: 0)`). A struct with an atomic member is a Move type: a raw pointer may address it,
+but no signature passes it by value, a rule checked from the fields directly because import
+signatures are collected before Copy is known (`r_semantic_aggregate_has_atomic_member`). An R
+keyword cannot name a field, so `@c_field(name = "member")` gives the C identifier of a member
+whose R name differs (`drop`, `list`, `module`): the record, the probes and the layout match by
+`r_semantic_field_c_name`. `codegen_ffi_c_atomics` and its async twin update one struct from R and
+from C (`tests/fixtures/ffi/c_atomics.h`), and `tests/check_c_layouts.py` rejects atomic fields of
+R-declared structs, fixed R integers, a by-value import and an atomic field over a plain member.
+
 ### Signal handlers
 
 `@signal_safe` marks an R function the compiler proves safe to run in a signal handler, or an
@@ -2703,6 +2747,35 @@ statics the handler writes with the reads after `raise`). `codegen_signal_handle
 on the main thread of a synchronous program, `codegen_async_signal_handler` signals the process
 from tasks and waits for each delivery, and `codegen_signal_handler_panic` ends with the report
 of a `bounds` panic raised in the handler.
+
+### Units of the runtime
+
+`r-front --runtime-unit --profile freestanding` translates modules of the runtime written in R
+(`runtime/r`, Core R-FFI-0068) into one object without an entry. Its `extern "C"` definitions are
+functions of the runtime: only there may their names use the reserved prefix `r_runtime_`
+(`r_semantic_c_export_name`), and each is proven against the runtime header that declares it,
+through the probes of the verifier (`r_c_abi_symbol_is_runtime_export`), with the ABI record of
+the unit (`--emit=abi-record` first, then `--emit=object --abi-record`). An exported function
+enters no attachment, stack preflight or unwind test (`r_llvm_c_export_body`), and a panic in the
+unit calls `r_runtime_panic`, which the unit itself defines (`runtime/r/panic.r`) and which
+aborts. The reachable set starts at the exports, and the unit has neither `main` nor library
+entries. A unit may also export objects (`@safety` `extern "C" atomic c_uint32
+r_runtime_unwinding_threads = ...;`): `r_semantic_collect_module_constant` checks the type,
+name and storage (`R-DIAG-FFI-003 [R-FFI-0068]`), `statics.c` names the global by its C name
+with external linkage, and `r_llvm_emit_exported_objects` emits every one whether or not R code
+names it; outside a unit such a definition is `R-DIAG-FFI-003 [R-FFI-0046]`. The C types the
+modules share are declared once in `runtime/r/types.r` from the runtime headers; the libc
+functions they call are listed in `runtime/r/link_manifest.json`.
+
+The build compiles the unit `core` (`R_RUNTIME_UNIT_core_SOURCES` in `CMakeLists.txt`, the shared
+types first) into `build/<preset>/runtime_units/core.o` with the sanitizer of the preset, and the
+archive `r_runtime_core` holds it; `r_runtime_0_1` links that archive and leaves out the C
+sources the unit replaces (`R_RUNTIME_UNIT_core_REPLACES`). `R_RUNTIME_CORE=c` keeps the C
+runtime, the oracle until the battery is green on the new core. Tests and benchmarks that compile
+the runtime into a program themselves receive `R_RUNTIME_SOURCE_<name>` (empty for a replaced
+module) and `RUNTIME_UNIT_OBJECTS`, so every codegen program runs the R core; `r_runtime_tests`
+and the darwin tests link `r_runtime_core` alone. `tests/check_runtime_unit.py` checks the
+exports, exported objects and the rejections.
 
 ## Build and test
 

@@ -377,6 +377,14 @@ static bool r_c_abi_spell_type_with(const RFrontendContext *context,
     }
     case R_SEMANTIC_TYPE_RAW_FUNCTION:
         return r_c_abi_spell_function_pointer(context, type, inner, spell, depth, speller);
+    case R_SEMANTIC_TYPE_ATOMIC:
+        /* R-FFI-0017: an atomic member is C _Atomic(T), spelled as the compiler spells it. */
+        r_c_abi_spell_clear(declarator);
+        return r_c_abi_spell_type(
+                   context, type->base, "", declarator, depth + UINT32_C(1), speller) &&
+               r_c_abi_spell_append(spell, "_Atomic(") &&
+               r_c_abi_spell_append_bytes(spell, declarator->bytes, declarator->length) &&
+               r_c_abi_spell_append(spell, ")") && r_c_abi_spell_declarator(spell, inner);
     case R_SEMANTIC_TYPE_FIXED_ARRAY: {
         /* A member array: T inner[N], parenthesized behind a pointer declarator. */
         char length[32];
@@ -492,6 +500,16 @@ static bool r_c_abi_symbol_is_import(const RSemanticSymbol *symbol) {
             (symbol->kind == R_SEMANTIC_SYMBOL_MODULE_CONSTANT));
 }
 
+/* B12: in a unit of the runtime every extern "C" definition is probed as an import is, so the
+   runtime header that declares it shall give it exactly its prototype (R-FFI-0021). */
+static bool r_c_abi_symbol_is_runtime_export(const RFrontendContext *context,
+                                             const RSemanticSymbol *symbol) {
+    return context->runtime_unit && symbol->is_extern_c && !symbol->is_import &&
+           !symbol->poisoned && symbol->signature_supported &&
+           ((symbol->kind == R_SEMANTIC_SYMBOL_FUNCTION) ||
+            (symbol->kind == R_SEMANTIC_SYMBOL_MODULE_OBJECT));
+}
+
 /* Sorted list of import symbol ids; allocated with the context allocator. */
 static bool r_c_abi_collect_imports(const RFrontendContext *context,
                                     RFrontendContext *allocator,
@@ -508,10 +526,11 @@ static bool r_c_abi_collect_imports(const RFrontendContext *context,
         const RSemanticSymbol *symbol = &context->semantic_symbols[index];
         size_t position;
 
-        if (!r_c_abi_symbol_is_import(symbol)) {
+        if (!r_c_abi_symbol_is_import(symbol) &&
+            !r_c_abi_symbol_is_runtime_export(context, symbol)) {
             continue;
         }
-        if (symbol->link_provider == UINT32_C(0)) {
+        if (symbol->is_import && (symbol->link_provider == UINT32_C(0))) {
             *unresolved = true;
         }
         if (!r_grow_array(allocator, (void **)imports, &capacity, sizeof(**imports), *count + 1U)) {
@@ -592,6 +611,10 @@ static bool r_c_abi_write_definitions(const RFrontendContext *context,
             const RLinkProviderRecord *provider;
             size_t index;
 
+            if (!symbol->is_import) {
+                /* B12: an export of a runtime unit has no link provider. */
+                continue;
+            }
             if ((symbol->link_provider == UINT32_C(0)) ||
                 ((size_t)symbol->link_provider > context->link_provider_count)) {
                 return false;
@@ -1051,14 +1074,18 @@ static bool r_c_abi_write_struct_probes_with(const RFrontendContext *context,
         /* A member whose R type names an R-declared struct has no header spelling of its own;
            the record proved its type tree (R-FFI-0041). */
         typed = !r_c_abi_type_mentions_r_struct(context, field->type, UINT32_C(0));
-        /* An array member is probed through its address: lvalue conversion would decay it. */
+        /* An array or atomic member is probed through its address: lvalue conversion would
+           decay the array and drop _Atomic. */
         {
             const RSemanticType *field_value =
                 r_c_abi_type(context, r_c_abi_value_type(context, field->type));
 
-            is_array = (field_value != NULL) && (field_value->kind == R_SEMANTIC_TYPE_FIXED_ARRAY);
+            is_array =
+                (field_value != NULL) && ((field_value->kind == R_SEMANTIC_TYPE_FIXED_ARRAY) ||
+                                          (field_value->kind == R_SEMANTIC_TYPE_ATOMIC));
         }
-        if (!r_c_abi_intern_text(context, field->name_intern_id, &field_name, &field_name_length) ||
+        if (!r_c_abi_intern_text(
+                context, r_semantic_field_c_name(field), &field_name, &field_name_length) ||
             !r_semantic_type_layout(context, field->type, &field_size, &field_alignment) ||
             (field_alignment == UINT64_C(0)) ||
             (typed && !r_c_abi_spell_type(context,

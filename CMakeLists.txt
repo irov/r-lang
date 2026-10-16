@@ -6,6 +6,13 @@ option(R_FRONTEND_BUILD_TESTS "Build the R frontend tests" ON)
 option(R_FRONTEND_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(R_FRONTEND_ENABLE_FUZZERS "Build libFuzzer entrypoints" OFF)
 option(R_FRONTEND_ENABLE_THREAD_SANITIZER "Enable ThreadSanitizer" OFF)
+# B12: the core of the runtime is written in R (runtime/r) and compiled by the r-front of the
+# tree; "c" builds the C core it replaces, the oracle of the stage.
+set(R_RUNTIME_CORE "r" CACHE STRING "Language of the runtime core: r or c")
+set_property(CACHE R_RUNTIME_CORE PROPERTY STRINGS r c)
+if(NOT R_RUNTIME_CORE MATCHES "^(r|c)$")
+    message(FATAL_ERROR "R_RUNTIME_CORE is r or c, not ${R_RUNTIME_CORE}")
+endif()
 
 if(R_FRONTEND_ENABLE_THREAD_SANITIZER AND
    (R_FRONTEND_ENABLE_SANITIZERS OR R_FRONTEND_ENABLE_FUZZERS))
@@ -141,7 +148,37 @@ add_library(r_runtime_inline_shims STATIC runtime/llvm/inline_shims.generated.c)
 target_include_directories(r_runtime_inline_shims PRIVATE
     runtime/include runtime/darwin/include library/core/include ${R_STANDARD_LAYOUT_INCLUDE_DIRS})
 
-add_library(r_runtime_0_1 STATIC
+# B12: the core of the runtime written in R is one unit (runtime/r, the shared C types first) and
+# replaces these C sources; with R_RUNTIME_CORE=r it is compiled into the archive in their place.
+set(R_RUNTIME_UNITS core)
+set(R_RUNTIME_UNIT_core_SOURCES
+    runtime/r/types.r
+    runtime/r/allocator.r
+    runtime/r/utf8.r
+    runtime/r/own.r
+    runtime/r/array.r
+    runtime/r/string.r
+    runtime/r/list.r
+    runtime/r/dict.r
+    runtime/r/arc.r
+    runtime/r/rc.r
+    runtime/r/drop.r
+    runtime/r/panic.r
+)
+set(R_RUNTIME_UNIT_core_REPLACES
+    runtime/source/allocator.c
+    runtime/source/arc.c
+    runtime/source/array.c
+    runtime/source/dict.c
+    runtime/source/drop.c
+    runtime/source/list.c
+    runtime/source/own.c
+    runtime/source/panic_abort.c
+    runtime/source/rc.c
+    runtime/source/string.c
+    runtime/source/utf8.c
+)
+set(R_RUNTIME_C_SOURCES
     runtime/source/allocator.c
     runtime/source/arc.c
     runtime/source/array.c
@@ -155,6 +192,33 @@ add_library(r_runtime_0_1 STATIC
     runtime/source/thread_attachment.c
     runtime/source/utf8.c
 )
+if(R_RUNTIME_CORE STREQUAL "r")
+    foreach(R_RUNTIME_UNIT IN LISTS R_RUNTIME_UNITS)
+        list(REMOVE_ITEM R_RUNTIME_C_SOURCES ${R_RUNTIME_UNIT_${R_RUNTIME_UNIT}_REPLACES})
+    endforeach()
+endif()
+# The C source of each runtime module for the tests and benchmarks that compile the runtime into
+# a program themselves, empty when a unit replaces it; the objects of the units then join the
+# program instead (R_RUNTIME_UNIT_OBJECT_ARGUMENT, separated by '|').
+set(R_RUNTIME_UNIT_OBJECTS)
+foreach(R_RUNTIME_SOURCE_NAME IN ITEMS allocator arc array dict drop hosted_entry list own
+                                       panic_abort rc string thread_attachment utf8)
+    set(R_RUNTIME_SOURCE_${R_RUNTIME_SOURCE_NAME}
+        "${PROJECT_SOURCE_DIR}/runtime/source/${R_RUNTIME_SOURCE_NAME}.c")
+endforeach()
+if(R_RUNTIME_CORE STREQUAL "r")
+    foreach(R_RUNTIME_UNIT IN LISTS R_RUNTIME_UNITS)
+        list(APPEND R_RUNTIME_UNIT_OBJECTS
+            "${PROJECT_BINARY_DIR}/runtime_units/${R_RUNTIME_UNIT}.o")
+        foreach(R_RUNTIME_REPLACED IN LISTS R_RUNTIME_UNIT_${R_RUNTIME_UNIT}_REPLACES)
+            get_filename_component(R_RUNTIME_SOURCE_NAME "${R_RUNTIME_REPLACED}" NAME_WE)
+            set(R_RUNTIME_SOURCE_${R_RUNTIME_SOURCE_NAME} "")
+        endforeach()
+    endforeach()
+endif()
+string(REPLACE ";" "|" R_RUNTIME_UNIT_OBJECT_ARGUMENT "${R_RUNTIME_UNIT_OBJECTS}")
+
+add_library(r_runtime_0_1 STATIC ${R_RUNTIME_C_SOURCES})
 target_include_directories(r_runtime_0_1 PUBLIC runtime/include)
 target_link_libraries(r_runtime_0_1 PUBLIC Threads::Threads)
 
@@ -519,6 +583,69 @@ endif()
 add_executable(r-front compiler/cli/allocation.c compiler/cli/main.c)
 target_link_libraries(r-front PRIVATE r_frontend)
 
+# B12: the units of the runtime written in R, compiled by this r-front as units of the runtime
+# (compiler/README.md, *Units of the runtime*): each export is proved against the runtime header
+# that declares it, and the object joins the runtime archive with the sanitizer of the preset.
+if(R_RUNTIME_CORE STREQUAL "r")
+    if(APPLE)
+        execute_process(
+            COMMAND xcrun --sdk macosx --show-sdk-path
+            RESULT_VARIABLE R_RUNTIME_SDK_RESULT
+            OUTPUT_VARIABLE R_RUNTIME_SDK_PATH
+            OUTPUT_STRIP_TRAILING_WHITESPACE)
+        if(NOT R_RUNTIME_SDK_RESULT EQUAL 0 OR R_RUNTIME_SDK_PATH STREQUAL "")
+            message(FATAL_ERROR "the units of the runtime need the macOS SDK (xcrun)")
+        endif()
+    endif()
+    set(R_RUNTIME_UNIT_FLAGS)
+    if(R_FRONTEND_ENABLE_SANITIZERS OR R_FRONTEND_ENABLE_FUZZERS)
+        list(APPEND R_RUNTIME_UNIT_FLAGS --sanitize=address)
+    elseif(R_FRONTEND_ENABLE_THREAD_SANITIZER)
+        list(APPEND R_RUNTIME_UNIT_FLAGS --sanitize=thread)
+    endif()
+    file(GLOB R_RUNTIME_UNIT_HEADERS "${PROJECT_SOURCE_DIR}/runtime/include/*.h")
+    set(R_RUNTIME_UNIT_ARGUMENTS
+        --runtime-unit --profile freestanding
+        --target-manifest "${PROJECT_SOURCE_DIR}/targets/arm64-apple-darwin.freestanding.json"
+        --link-manifest "${PROJECT_SOURCE_DIR}/runtime/r/link_manifest.json"
+        --sysroot "${R_RUNTIME_SDK_PATH}"
+        --abi-header-dir "${PROJECT_SOURCE_DIR}/runtime/include")
+    foreach(R_RUNTIME_UNIT IN LISTS R_RUNTIME_UNITS)
+        set(R_RUNTIME_UNIT_RECORD "${PROJECT_BINARY_DIR}/runtime_units/${R_RUNTIME_UNIT}.abi.json")
+        set(R_RUNTIME_UNIT_OBJECT "${PROJECT_BINARY_DIR}/runtime_units/${R_RUNTIME_UNIT}.o")
+        set(R_RUNTIME_UNIT_PATHS)
+        foreach(R_RUNTIME_UNIT_SOURCE IN LISTS R_RUNTIME_UNIT_${R_RUNTIME_UNIT}_SOURCES)
+            list(APPEND R_RUNTIME_UNIT_PATHS "${PROJECT_SOURCE_DIR}/${R_RUNTIME_UNIT_SOURCE}")
+        endforeach()
+        # The ABI record of the runtime headers the unit's C types come from (R-FFI-0041), then
+        # the object, proved against those headers.
+        add_custom_command(
+            OUTPUT "${R_RUNTIME_UNIT_OBJECT}"
+            BYPRODUCTS "${R_RUNTIME_UNIT_RECORD}"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${PROJECT_BINARY_DIR}/runtime_units"
+            COMMAND "$<TARGET_FILE:r-front>" --emit=abi-record ${R_RUNTIME_UNIT_ARGUMENTS}
+                --output "${R_RUNTIME_UNIT_RECORD}" ${R_RUNTIME_UNIT_PATHS}
+            COMMAND "$<TARGET_FILE:r-front>" --emit=object ${R_RUNTIME_UNIT_ARGUMENTS}
+                --abi-record "${R_RUNTIME_UNIT_RECORD}" ${R_RUNTIME_UNIT_FLAGS}
+                --output "${R_RUNTIME_UNIT_OBJECT}" ${R_RUNTIME_UNIT_PATHS}
+            DEPENDS r-front ${R_RUNTIME_UNIT_PATHS} ${R_RUNTIME_UNIT_HEADERS}
+                "${PROJECT_SOURCE_DIR}/runtime/r/link_manifest.json"
+                "${PROJECT_SOURCE_DIR}/targets/arm64-apple-darwin.freestanding.json"
+            COMMENT "Compiling the runtime unit ${R_RUNTIME_UNIT} from R"
+            VERBATIM)
+    endforeach()
+    # The objects of the units form their own archive, which the runtime archive brings to its
+    # users; tests of the runtime that list the darwin libraries themselves link only this one.
+    add_library(r_runtime_core STATIC ${R_RUNTIME_UNIT_OBJECTS})
+    set_target_properties(r_runtime_core PROPERTIES LINKER_LANGUAGE C)
+    if(R_FRONTEND_ENABLE_SANITIZERS OR R_FRONTEND_ENABLE_FUZZERS)
+        target_link_options(r_runtime_core PUBLIC -fsanitize=address,undefined)
+    elseif(R_FRONTEND_ENABLE_THREAD_SANITIZER)
+        target_link_options(r_runtime_core PUBLIC -fsanitize=thread)
+    endif()
+    target_link_libraries(r_runtime_0_1 PUBLIC r_runtime_core)
+endif()
+
 if(MSVC)
     target_compile_options(r-front PRIVATE /W4 /WX /permissive-)
 else()
@@ -559,6 +686,10 @@ if(Python3_Interpreter_FOUND AND CMAKE_C_COMPILER_ID MATCHES "Clang" AND
         get_target_property(R_BITCODE_DIRECTORY ${R_BITCODE_TARGET} SOURCE_DIR)
         set(R_BITCODE_PATHS)
         foreach(R_BITCODE_SOURCE IN LISTS R_BITCODE_SOURCES)
+            if(NOT R_BITCODE_SOURCE MATCHES "[.]c$")
+                # B12: an object of a runtime unit written in R has no C source to compile.
+                continue()
+            endif()
             cmake_path(ABSOLUTE_PATH R_BITCODE_SOURCE BASE_DIRECTORY "${R_BITCODE_DIRECTORY}"
                        OUTPUT_VARIABLE R_BITCODE_PATH)
             list(APPEND R_BITCODE_PATHS "${R_BITCODE_PATH}")

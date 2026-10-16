@@ -1039,7 +1039,10 @@ static bool r_llvm_c_export_body(RLlvmEmitter *emitter, RSymbolId id) {
             return false;
         }
     }
-    if (!symbol->is_signal_handler) {
+    /* B12: a function of the runtime is called by code that has checked its own bound; its frame
+       enters the measured bound of the caller as any callee's does. */
+    if (!symbol->is_signal_handler &&
+        ((emitter->artifact_options == NULL) || !emitter->artifact_options->runtime_unit)) {
         arguments[0] = r_llvm_stack_entry(emitter, id);
         arguments[1] = r_llvm_span(emitter, symbol->name_span);
         if ((arguments[0] == NULL) || (arguments[1] == NULL) ||

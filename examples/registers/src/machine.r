@@ -133,3 +133,39 @@ std.string::string watchdog(u32 limit, const u32[] values) throws std.alloc::all
     }
     return f"total={total} limit={limit}\n";
 }
+
+// A block of device registers. Its layout is measured from the addresses of the fields, and a
+// counter is written through a byte offset from a read-only view of the block, as a driver
+// writes a register it found by offset.
+struct Block {
+    u32 status;
+    u64 counter;
+    u16 flags;
+};
+
+std.string::string layout(u32 initial) throws std.alloc::alloc_error {
+    Block block = {.status = 1u32, .counter = 0u64, .flags = 2u16};
+    usize status_at = 0usize;
+    usize counter_at = 0usize;
+    usize flags_at = 0usize;
+    u16 flags = 0u16;
+    unsafe {
+        raw const Block* view = &block as raw const Block*;
+        raw const u32* status = &block.status as raw const u32*;
+        raw const u64* counter = &block.counter as raw const u64*;
+        raw const u16* flag_word = &block.flags as raw const u16*;
+        usize base = core::pointer_address(view);
+        status_at += core::pointer_address(status) - base;
+        counter_at += core::pointer_address(counter) - base;
+        flags_at += core::pointer_address(flag_word) - base;
+        // The counter, found by its offset from the start of the read-only view.
+        raw u64* target = core::cast_mutable(core::offset_bytes(view, counter_at) as raw const u64*);
+        *target = initial as u64;
+        // The flags, found back from the counter.
+        raw void* back = core::offset_bytes(target, (flags_at as isize) - (counter_at as isize));
+        raw const u16* flag_view = back as raw const u16*;
+        flags += *flag_view;
+    }
+    usize size = sizeof(Block);
+    return f"status@{status_at} counter@{counter_at} flags@{flags_at} size={size}\ncounter={block.counter} flags={flags}\n";
+}

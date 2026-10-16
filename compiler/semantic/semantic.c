@@ -5189,6 +5189,22 @@ static bool r_semantic_pointer_suffix(const RFrontendContext *context,
     return true;
 }
 
+static bool r_semantic_aggregate_has_atomic_member(const RFrontendContext *context,
+                                                   const RSemanticAggregate *aggregate) {
+    uint32_t field_index;
+
+    for (field_index = UINT32_C(0); field_index < aggregate->field_count; ++field_index) {
+        const size_t position = (size_t)aggregate->first_field + (size_t)field_index;
+
+        if ((position < context->semantic_field_count) &&
+            (r_semantic_value_kind(context, context->semantic_fields[position].type) ==
+             R_SEMANTIC_TYPE_ATOMIC)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /* C signatures are nominal: no implicit R scalar or owner conversions. */
 static bool r_semantic_c_abi_type(const RFrontendContext *context,
                                   RTypeId id,
@@ -5217,6 +5233,11 @@ static bool r_semantic_c_abi_type(const RFrontendContext *context,
            yet; its own completion checks it, so here it needs a C spelling only (B9-2). */
         if ((aggregate != NULL) && (!aggregate->complete || !context->semantic_copy_known))
             return aggregate->is_repr_c && !aggregate->is_tagged && !aggregate->poisoned;
+        /* R-FFI-0017: a C-declared struct with atomic members is a Move type, reached through
+           pointers only; its completion checks the members. */
+        if ((aggregate != NULL) && aggregate->is_c_declared && !aggregate->is_copy)
+            return aggregate->is_repr_c && !aggregate->is_tagged && !aggregate->poisoned &&
+                   (aggregate->drop_function == R_SYMBOL_ID_INVALID);
         return r_semantic_c_abi_type(context, type->base, true, depth + 1U);
     }
     if (type->kind == R_SEMANTIC_TYPE_RAW_FUNCTION) {
@@ -5236,8 +5257,11 @@ static bool r_semantic_c_abi_type(const RFrontendContext *context,
     }
     aggregate = r_semantic_aggregate_for_type(context, id);
     if (aggregate != NULL) {
+        /* Signatures may be checked before Copy is known; an atomic member already makes the
+           struct a Move type (R-FFI-0017). */
         return aggregate->complete && !aggregate->poisoned && aggregate->is_repr_c &&
                !aggregate->is_tagged && aggregate->is_copy &&
+               !r_semantic_aggregate_has_atomic_member(context, aggregate) &&
                (aggregate->drop_function == R_SYMBOL_ID_INVALID);
     }
     return false;
@@ -5258,6 +5282,21 @@ r_semantic_repr_c_field_type(const RFrontendContext *context, RTypeId id, uint32
                r_semantic_repr_c_field_type(context, type->base, depth + UINT32_C(1));
     }
     return r_semantic_c_abi_type(context, id, false, depth);
+}
+
+/* R-FFI-0017: a member of a C-declared struct may be C _Atomic of a C integer or of a raw
+   pointer; the record proves it against the header's member. */
+static bool r_semantic_repr_c_atomic_member(const RFrontendContext *context, RTypeId id) {
+    const RSemanticType *type = r_semantic_type(context, id);
+    const RSemanticType *value;
+
+    if ((type == NULL) || (type->kind != R_SEMANTIC_TYPE_ATOMIC)) {
+        return false;
+    }
+    value = r_semantic_type(context, type->base);
+    return (value != NULL) && (r_semantic_type_is_c_abi_integer(context, type->base) ||
+                               ((value->kind == R_SEMANTIC_TYPE_RAW) &&
+                                r_semantic_c_abi_type(context, type->base, false, 1U)));
 }
 
 /* Resource promises belong to the signature, independently of its C ABI spelling. */
@@ -5381,7 +5420,8 @@ static bool r_semantic_raw_function_type(RFrontendContext *context, RAstRef ref,
         result);
 }
 
-/* R-TYPE-0013: `atomic raw T*?` and `atomic raw const T*?` hold a nullable raw object pointer. */
+/* R-TYPE-0013: `atomic raw T*?` and `atomic raw const T*?` hold a nullable raw object pointer;
+   B12: `atomic raw fn?(P...) -> R` a nullable raw function pointer. */
 static bool r_semantic_atomic_raw_pointer_type(RFrontendContext *context,
                                                RAstRef type_ref,
                                                RSourceSpan span,
@@ -5393,8 +5433,27 @@ static bool r_semantic_atomic_raw_pointer_type(RFrontendContext *context,
     RTypeId pointer;
     uint32_t flags = R_SEMANTIC_TYPE_FLAG_NULLABLE;
 
-    if (r_semantic_type_has_direct_token(context, type_ref, R_TOKEN_KW_FN) || !has_pointer ||
-        !is_nullable) {
+    if (r_semantic_type_has_direct_token(context, type_ref, R_TOKEN_KW_FN)) {
+        RTypeId function;
+        const RSemanticType *function_type;
+
+        if (!r_semantic_raw_function_type(context, type_ref, &function)) {
+            return false;
+        }
+        function_type = r_semantic_type(context, function);
+        if ((function_type == NULL) ||
+            ((function_type->flags & R_SEMANTIC_TYPE_FLAG_NULLABLE) == 0U)) {
+            (void)r_semantic_add_diagnostic(context,
+                                            "R-DIAG-TYPE-001",
+                                            "R-TYPE-0013",
+                                            "an atomic raw function pointer is nullable: "
+                                            "atomic raw fn?(...) -> T",
+                                            span);
+            return false;
+        }
+        return r_semantic_intern_type(context, R_SEMANTIC_TYPE_ATOMIC, function, type_id);
+    }
+    if (!has_pointer || !is_nullable) {
         (void)r_semantic_add_diagnostic(context,
                                         "R-DIAG-TYPE-001",
                                         "R-TYPE-0013",
@@ -5606,6 +5665,12 @@ r_semantic_type_from_ast(RFrontendContext *context, RAstRef type_ref, RTypeId *t
     if ((second.kind == R_TOKEN_KW_RAW) &&
         r_semantic_type_has_direct_token(context, type_ref, R_TOKEN_KW_FN)) {
         return r_semantic_raw_function_type(context, type_ref, type_id);
+    }
+    if ((second.kind == R_TOKEN_KW_ATOMIC) && !has_const &&
+        r_semantic_type_has_direct_token(context, type_ref, R_TOKEN_KW_FN)) {
+        /* B12: `atomic raw fn?(...)` has a `?` without a pointer suffix. */
+        return r_semantic_atomic_raw_pointer_type(
+            context, type_ref, view.span, false, false, type_id);
     }
     if (!r_semantic_pointer_suffix(context, type_ref, &has_pointer, &is_nullable)) {
         return false;
@@ -8771,6 +8836,23 @@ bool r_semantic_c_name_reserved(const char *name) {
 }
 
 static bool r_semantic_c_export_name(const RFrontendContext *context, uint32_t intern_id) {
+    const RInternEntry *name = ((intern_id != 0U) && (intern_id <= context->intern_count))
+                                   ? &context->intern_entries[intern_id - 1U]
+                                   : NULL;
+
+    /* B12: a unit of the runtime defines the implementation's own r_runtime_ functions. */
+    if (context->runtime_unit && (name != NULL) && (name->length > 10U) &&
+        (memcmp(name->bytes, "r_runtime_", 10U) == 0) &&
+        (r_semantic_c_name_class_of(name) == R_C_NAME_RESERVED)) {
+        size_t index;
+        for (index = 10U; index < name->length; ++index) {
+            const uint8_t c = (uint8_t)name->bytes[index];
+            if (!(((c >= 'a') && (c <= 'z')) || ((c >= '0') && (c <= '9')) || (c == '_'))) {
+                return false;
+            }
+        }
+        return true;
+    }
     return r_semantic_c_name_class(context, intern_id) == R_C_NAME_ORDINARY;
 }
 
@@ -10273,6 +10355,19 @@ static bool r_semantic_field_has_protected(const RFrontendContext *context, RAst
     }
     return false;
 }
+
+static bool r_semantic_attribute_arguments(const RFrontendContext *context,
+                                           RAstRef attribute,
+                                           RAstTokenView *name,
+                                           RAstTokenView *arguments,
+                                           uint32_t capacity,
+                                           uint32_t *count,
+                                           bool *valid);
+static bool r_semantic_string_argument_text(RFrontendContext *context,
+                                            const RAstTokenView *token,
+                                            uint32_t *intern_id,
+                                            const char **bytes,
+                                            size_t *length);
 
 #include "json_attributes.inc"
 
@@ -11856,14 +11951,23 @@ static bool r_semantic_collect_aggregate_members(RFrontendContext *context) {
                         &width);
         } else {
             uint32_t field_index;
+            bool atomic_member = false;
 
-            valid = aggregate->is_copy && (aggregate->drop_function == R_SYMBOL_ID_INVALID);
+            valid = aggregate->drop_function == R_SYMBOL_ID_INVALID;
             for (field_index = UINT32_C(0); valid && field_index < aggregate->field_count;
                  ++field_index) {
                 const RSemanticField *field =
                     &context->semantic_fields[(size_t)aggregate->first_field + field_index];
+
+                if (aggregate->is_c_declared &&
+                    r_semantic_repr_c_atomic_member(context, field->type)) {
+                    atomic_member = true;
+                    continue;
+                }
                 valid = r_semantic_repr_c_field_type(context, field->type, UINT32_C(0));
             }
+            /* An atomic member makes the struct a Move type, which passes by pointer only. */
+            valid = valid && (aggregate->is_copy || atomic_member);
         }
         if (!valid) {
             aggregate->poisoned = true;
@@ -12236,6 +12340,8 @@ static bool r_semantic_collect_module_constant(RFrontendContext *context,
     bool folded = false;
     bool pending = false;
     uint32_t width;
+    uint32_t c_name_intern_id = UINT32_C(0);
+    const bool is_extern_c = r_ast_has_direct_token(context, external, R_TOKEN_KW_EXTERN);
 
     if ((supported == NULL) ||
         !r_ast_find_direct_child(context, object, R_SYNTAX_TYPE, &type_ref) ||
@@ -12257,8 +12363,40 @@ static bool r_semantic_collect_module_constant(RFrontendContext *context,
     if (r_semantic_type_mentions_opaque_value(context, declared_type, UINT32_C(0))) {
         return r_semantic_opaque_value_diagnostic(context, name.span);
     }
+    if (is_extern_c) {
+        /* R-FFI-0046, R-FFI-0068 (B12): only a unit of the runtime exports an object, with
+           @safety, a C ABI or atomic C type, a name of the runtime and static storage. */
+        RFunctionModifiers modifiers;
+        bool modifiers_supported = true;
+
+        if (!context->runtime_unit) {
+            return r_semantic_add_diagnostic(context,
+                                             "R-DIAG-FFI-003",
+                                             "R-FFI-0046",
+                                             "an extern \"C\" object is exported only by a "
+                                             "runtime unit",
+                                             name.span);
+        }
+        if (!r_semantic_external_modifiers(context, external, &modifiers, &modifiers_supported)) {
+            return false;
+        }
+        c_name_intern_id =
+            modifiers.c_name_intern_id != UINT32_C(0) ? modifiers.c_name_intern_id : name.intern_id;
+        if (is_thread_local || !modifiers.has_safety ||
+            !(r_semantic_c_abi_type(context, declared_type, false, UINT32_C(0)) ||
+              r_semantic_repr_c_atomic_member(context, declared_type)) ||
+            !r_semantic_c_export_name(context, c_name_intern_id)) {
+            return r_semantic_add_diagnostic(context,
+                                             "R-DIAG-FFI-003",
+                                             "R-FFI-0068",
+                                             "an exported object of a runtime unit has @safety, a "
+                                             "C ABI or atomic C type, a name of the runtime and no "
+                                             "thread_local",
+                                             name.span);
+        }
+    }
     is_module_constant =
-        !is_thread_local && (declared_description->kind == R_SEMANTIC_TYPE_CONST) &&
+        !is_extern_c && !is_thread_local && (declared_description->kind == R_SEMANTIC_TYPE_CONST) &&
         r_semantic_integer_properties(
             r_semantic_value_kind(context, r_semantic_value_type(context, declared_type)),
             &is_signed,
@@ -12365,6 +12503,8 @@ static bool r_semantic_collect_module_constant(RFrontendContext *context,
     symbol.is_protected = r_semantic_external_is_protected(context, external);
     symbol.is_static = true;
     symbol.is_thread_local = is_thread_local;
+    symbol.is_extern_c = is_extern_c;
+    symbol.c_name_intern_id = c_name_intern_id;
     symbol.signature_supported = true;
     symbol.consteval_pending = pending;
     symbol.consteval_computed = pending;
@@ -14474,8 +14614,11 @@ static bool r_semantic_source_bindings_incomplete(const RFrontendContext *contex
         if (child_view.kind == R_SYNTAX_EXTERNAL_DECLARATION) {
             RAstRef declaration;
             /* Traits and implementations are collected before any body (L18-2). */
+            /* B12-1: an extern "C" block's imports and C types are collected with the module
+               interface, before any body, like its functions. */
             if (r_ast_find_direct_child(
                     context, child, R_SYNTAX_FUNCTION_DECLARATION, &declaration) ||
+                r_ast_find_direct_child(context, child, R_SYNTAX_EXTERN_BLOCK, &declaration) ||
                 r_ast_find_direct_child(context, child, R_SYNTAX_DROP_DEFINITION, &declaration) ||
                 r_ast_find_direct_child(context, child, R_SYNTAX_TRAIT_DECLARATION, &declaration) ||
                 r_ast_find_direct_child(context, child, R_SYNTAX_IMPL_DECLARATION, &declaration) ||
@@ -25093,7 +25236,7 @@ static bool r_body_core_operation(const RFrontendContext *context,
         /* Library R-LIB-0028 (B11): the machine operations of core. */
         bool machine = false;
         for (uint32_t index = (uint32_t)R_STANDARD_CALL_CORE_ATOMIC_FENCE;
-             !machine && (index <= (uint32_t)R_STANDARD_CALL_CORE_PREFETCH_WRITE);
+             !machine && (index <= (uint32_t)R_STANDARD_CALL_CORE_SET_C_ERRNO);
              ++index) {
             machine = r_semantic_token_text_equal_owned(
                 context,
@@ -25394,7 +25537,8 @@ static bool r_body_lower_core_atomic(RBodyContext *body,
                                  call_span);
     }
     value_type = atomic_type->base;
-    if (is_fetch && !r_semantic_type_is_integer(body->frontend, value_type)) {
+    if (is_fetch && !r_semantic_type_is_integer(body->frontend, value_type) &&
+        !r_semantic_type_is_c_abi_integer(body->frontend, value_type)) {
         return r_body_diagnostic(body,
                                  "R-DIAG-TYPE-001",
                                  "R-LIB-0011",

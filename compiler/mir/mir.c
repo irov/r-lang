@@ -9471,6 +9471,11 @@ static bool r_mir_dump_instruction(const RFrontendContext *context,
         case R_STANDARD_CALL_CORE_STACK_POINTER:
         case R_STANDARD_CALL_CORE_PREFETCH_READ:
         case R_STANDARD_CALL_CORE_PREFETCH_WRITE:
+        case R_STANDARD_CALL_CORE_POINTER_ADDRESS:
+        case R_STANDARD_CALL_CORE_OFFSET_BYTES:
+        case R_STANDARD_CALL_CORE_CAST_MUTABLE:
+        case R_STANDARD_CALL_CORE_C_ERRNO:
+        case R_STANDARD_CALL_CORE_SET_C_ERRNO:
             operation_name = r_standard_core_machine_name(instruction->standard_operation);
             break;
         case R_STANDARD_CALL_INVALID:
@@ -9839,7 +9844,10 @@ static bool r_mir_dump_instruction(const RFrontendContext *context,
              (instruction->standard_operation <= R_STANDARD_CALL_CORE_SATURATING_MUL)) ||
             r_standard_core_bits_operation(instruction->standard_operation) ||
             (instruction->standard_operation == R_STANDARD_CALL_CORE_PREFETCH_READ) ||
-            (instruction->standard_operation == R_STANDARD_CALL_CORE_PREFETCH_WRITE)) {
+            (instruction->standard_operation == R_STANDARD_CALL_CORE_PREFETCH_WRITE) ||
+            (instruction->standard_operation == R_STANDARD_CALL_CORE_POINTER_ADDRESS) ||
+            (instruction->standard_operation == R_STANDARD_CALL_CORE_OFFSET_BYTES) ||
+            (instruction->standard_operation == R_STANDARD_CALL_CORE_CAST_MUTABLE)) {
             if (!r_write_text(writer, user_data, " pointee=") ||
                 !r_mir_write_type(context, instruction->auxiliary_type, writer, user_data)) {
                 return false;

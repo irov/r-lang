@@ -56,6 +56,11 @@
           "c_identifier": "pthread_sigmask",
           "kind": "function",
           "binding": "strong"
+        },
+        {
+          "c_identifier": "isatty",
+          "kind": "function",
+          "binding": "strong"
         }
       ]
     },

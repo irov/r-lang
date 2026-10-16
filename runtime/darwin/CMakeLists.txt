@@ -55,7 +55,7 @@ add_library(
     r_runtime_darwin_base
     STATIC
         source/stack.c
-        ../source/panic_abort.c
+        ${R_RUNTIME_SOURCE_panic_abort}
         ../source/thread_attachment.c
 )
 target_include_directories(r_runtime_darwin_base PUBLIC ../include)
@@ -155,9 +155,16 @@ target_link_libraries(r_runtime_darwin_timer PUBLIC r_runtime_darwin_task)
 r_runtime_darwin_apply_c17_contract(r_runtime_darwin_timer)
 
 if(R_RUNTIME_DARWIN_BUILD_TESTS)
-    add_library(r_runtime_darwin_test_allocator STATIC ../source/allocator.c)
-    target_include_directories(r_runtime_darwin_test_allocator PUBLIC ../include)
-    r_runtime_darwin_apply_c17_contract(r_runtime_darwin_test_allocator)
+    # With the core of the runtime written in R the allocator is in the archive of its units (B12).
+    if(R_RUNTIME_CORE STREQUAL "r")
+        add_library(r_runtime_darwin_test_allocator INTERFACE)
+        target_include_directories(r_runtime_darwin_test_allocator INTERFACE ../include)
+        target_link_libraries(r_runtime_darwin_test_allocator INTERFACE r_runtime_core)
+    else()
+        add_library(r_runtime_darwin_test_allocator STATIC ../source/allocator.c)
+        target_include_directories(r_runtime_darwin_test_allocator PUBLIC ../include)
+        r_runtime_darwin_apply_c17_contract(r_runtime_darwin_test_allocator)
+    endif()
 
     target_compile_definitions(r_runtime_darwin_timer PRIVATE R_RUNTIME_DARWIN_TIMER_TESTING=1)
     target_compile_definitions(

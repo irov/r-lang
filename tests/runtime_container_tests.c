@@ -112,6 +112,28 @@ static int r_runtime_allocator_test(void) {
         return r_runtime_container_fail("failed reallocation did not preserve owner");
     }
     r_runtime_allocator_deallocate(allocation, 64U);
+    /* Every aligned block lies whole inside its allocation, the word before it included; a
+       sanitized build reports a block or word that leaves it, whatever address malloc chose. */
+    {
+        void *blocks[64];
+        size_t index;
+
+        for (index = 0U; index < 64U; ++index) {
+            status = r_runtime_allocator_allocate(&allocator, 64U + index, 64U, &blocks[index]);
+            if ((status != R_RUNTIME_ALLOCATION_OK) || (blocks[index] == NULL) ||
+                (((uintptr_t)blocks[index] & (uintptr_t)63U) != (uintptr_t)0U)) {
+                while (index > 0U) {
+                    index -= 1U;
+                    r_runtime_allocator_deallocate(blocks[index], 64U);
+                }
+                return r_runtime_container_fail("aligned allocation series");
+            }
+            (void)memset(blocks[index], (int)index, 64U + index);
+        }
+        for (index = 0U; index < 64U; ++index) {
+            r_runtime_allocator_deallocate(blocks[index], 64U);
+        }
+    }
     return 0;
 }
 

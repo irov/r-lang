@@ -577,6 +577,8 @@ static bool r_abi_load_type_node(RFrontendContext *context,
         node.kind = R_ABI_TYPE_NODE_ENUM;
     } else if (r_abi_text_equal(kind->text, kind->text_length, "array")) {
         node.kind = R_ABI_TYPE_NODE_ARRAY;
+    } else if (r_abi_text_equal(kind->text, kind->text_length, "atomic")) {
+        node.kind = R_ABI_TYPE_NODE_ATOMIC;
     } else {
         node.kind = R_ABI_TYPE_NODE_OTHER;
     }
@@ -593,10 +595,15 @@ static bool r_abi_load_type_node(RFrontendContext *context,
         return false;
     }
     node.length = (uint64_t)length;
-    /* Children in tree order: pointee, element, or result followed by the parameters. */
-    if (node.kind == R_ABI_TYPE_NODE_POINTER) {
+    /* Children in tree order: pointee, element, atomic value, or result followed by the
+       parameters. */
+    if ((node.kind == R_ABI_TYPE_NODE_POINTER) || (node.kind == R_ABI_TYPE_NODE_ATOMIC)) {
         if (!r_grow_array(context, (void **)&children, &child_capacity, sizeof(*children), 1U) ||
-            !r_abi_load_type_tree(context, document, object, "pointee", &children[0])) {
+            !r_abi_load_type_tree(context,
+                                  document,
+                                  object,
+                                  node.kind == R_ABI_TYPE_NODE_ATOMIC ? "value" : "pointee",
+                                  &children[0])) {
             goto cleanup;
         }
         child_count = 1U;
@@ -1262,6 +1269,15 @@ static bool r_abi_member_matches(const RFrontendContext *context,
     }
     case R_SEMANTIC_TYPE_VOID:
         return node->kind == R_ABI_TYPE_NODE_VOID;
+    case R_SEMANTIC_TYPE_ATOMIC:
+        /* R-FFI-0017: an atomic member is C _Atomic of the same value type. */
+        return (node->kind == R_ABI_TYPE_NODE_ATOMIC) &&
+               r_abi_member_matches(context,
+                                    record,
+                                    type->base,
+                                    r_abi_type_node_child(context, node, 0U),
+                                    false,
+                                    depth + UINT32_C(1));
     case R_SEMANTIC_TYPE_RAW:
         return (node->kind == R_ABI_TYPE_NODE_POINTER) &&
                r_abi_member_matches(context,
@@ -1370,7 +1386,7 @@ static bool r_abi_verify_struct(RFrontendContext *context,
         RSemanticFieldPlace place;
 
         if ((position >= context->semantic_field_count) ||
-            !r_abi_intern_text(context, field->name_intern_id, &name, &name_length)) {
+            !r_abi_intern_text(context, r_semantic_field_c_name(field), &name, &name_length)) {
             context->resource_status = R_FRONTEND_INTERNAL_ERROR;
             return false;
         }
@@ -2074,7 +2090,7 @@ r_abi_verify_r_struct(RAbiMatch *match, uint32_t aggregate_id, size_t abi_type, 
         RSemanticFieldPlace place;
 
         if ((position >= context->semantic_field_count) ||
-            !r_abi_intern_text(context, field->name_intern_id, &name, &name_length)) {
+            !r_abi_intern_text(context, r_semantic_field_c_name(field), &name, &name_length)) {
             context->resource_status = R_FRONTEND_INTERNAL_ERROR;
             return false;
         }

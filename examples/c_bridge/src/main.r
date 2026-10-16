@@ -8,7 +8,7 @@ import example.calculator.common::{Usage};
 // Output and exit status shared by command and error branches.
 struct CommandResponse { std.string::string output; i32 status; };
 
-enum Command { target, attachment, inspect, upper, release, bytes, cstring, loadable, signal };
+enum Command { target, attachment, inspect, upper, release, bytes, cstring, loadable, signal, errno };
 
 async i32 main(const str[] arguments) {
     CommandResponse response = {.output = std.string::create(), .status = 0};
@@ -16,7 +16,7 @@ async i32 main(const str[] arguments) {
     try {
         usize count = len(arguments);
         if (count == 1usize) {
-            std.string::string help = std.string::from_str("c_bridge target\nc_bridge inspect|upper|release TEXT\nc_bridge bytes|cstring HEX\nc_bridge loadable LIBRARY\nc_bridge signal COUNT\n");
+            std.string::string help = std.string::from_str("c_bridge target\nc_bridge inspect|upper|release TEXT\nc_bridge bytes|cstring HEX\nc_bridge loadable LIBRARY\nc_bridge signal COUNT\nc_bridge errno DESCRIPTOR\n");
             await std.console::print(move help);
             return 0;
         }
@@ -34,6 +34,11 @@ async i32 main(const str[] arguments) {
             throw (count != 3usize) Usage { .message = "bridge operation needs text" };
             if (command == Command::loadable) {
                 response.output = example.c_bridge.native::load(arguments[2]);
+            } else {
+            if (command == Command::errno) {
+                u32 descriptor = std.convert::parse_u32(arguments[2], 10u32);
+                throw (descriptor > 65535u32) Usage { .message = "errno needs a descriptor up to 65535" };
+                response.output = example.c_bridge.native::terminal(descriptor);
             } else {
             if (command == Command::signal) {
                 u32 rounds = std.convert::parse_u32(arguments[2], 10u32);
@@ -53,6 +58,7 @@ async i32 main(const str[] arguments) {
             else {
                 std.string::string transformed = example.c_bridge.native::transform(arguments[2], command == Command::release);
                 response.output = f"{transformed}\n";
+            }
             }
             }
             }
