@@ -5,11 +5,11 @@
   "coverage_note": "This catalog records normative source rules only. It makes no claim that a rule is implemented, tested or otherwise covered.",
   "generated_from": {
     "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-    "revision": "0.1.0-draft.110",
-    "sha256": "dc08e48df5e3d59d4164a350005902b54bc74dbf9695baec3f46eb20778f954f"
+    "revision": "0.1.0-draft.111",
+    "sha256": "57d82efbc6688efdf6d2c0cb2c03dc5d31b82481dc2aea946ca101239105ae43"
   },
   "rule_count": 511,
-  "rules_sha256": "035fe672c9ebb008b3e6704194be60d051a02a800b54c936a896dd91dcf21760",
+  "rules_sha256": "d3610ff08588dfab304704b62b0a42e2288e912487e7947f10b9c90e25588ec6",
   "rules": [
     {
       "id": "R-GEN-0001",
@@ -11596,9 +11596,9 @@
         "anchor_line": 6048,
         "declaration_line": 6049,
         "declaration_column": 1,
-        "end_line": 6069
+        "end_line": 6073
       },
-      "text_sha256": "f24f483c2f0717f2f949ca6f92b7c965f98b6f32c36386465da1cf2a0d895f1d"
+      "text_sha256": "64de5d299b00d8b576a3a37e1b1c159ca178d85a2773c48ad1705d13b2992e7c"
     },
     {
       "id": "R-FFI-0010",
@@ -11617,15 +11617,15 @@
         {
           "level": 3,
           "title": "23.7 Unsafe boundary and safe wrappers",
-          "line": 6069
+          "line": 6073
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6071,
-        "declaration_line": 6072,
+        "anchor_line": 6075,
+        "declaration_line": 6076,
         "declaration_column": 1,
-        "end_line": 6075
+        "end_line": 6079
       },
       "text_sha256": "8194af4e25c2dad7f56a4c3a48b82897ce74179486a123a8b09544871d3bbccf"
     },
@@ -11646,15 +11646,15 @@
         {
           "level": 3,
           "title": "23.7 Unsafe boundary and safe wrappers",
-          "line": 6069
+          "line": 6073
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6077,
-        "declaration_line": 6078,
+        "anchor_line": 6081,
+        "declaration_line": 6082,
         "declaration_column": 1,
-        "end_line": 6083
+        "end_line": 6087
       },
       "text_sha256": "dfd5f2f2ff421c77c044892ccf3e1331a8b7b7e6060516a7d92c16d58d6329d1"
     },
@@ -11675,15 +11675,15 @@
         {
           "level": 3,
           "title": "23.7 Unsafe boundary and safe wrappers",
-          "line": 6069
+          "line": 6073
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6085,
-        "declaration_line": 6086,
+        "anchor_line": 6089,
+        "declaration_line": 6090,
         "declaration_column": 1,
-        "end_line": 6089
+        "end_line": 6093
       },
       "text_sha256": "a98991927ff1f1b3cf4a2c7fd9d748d16c40a78dd2d1520c2dd0c04ec3f504d1"
     },
@@ -11704,15 +11704,15 @@
         {
           "level": 3,
           "title": "23.7 Unsafe boundary and safe wrappers",
-          "line": 6069
+          "line": 6073
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6091,
-        "declaration_line": 6092,
+        "anchor_line": 6095,
+        "declaration_line": 6096,
         "declaration_column": 1,
-        "end_line": 6095
+        "end_line": 6099
       },
       "text_sha256": "814ad0a6d057d6cc7d6003ad2ea2571efd014259cf2341863de42dd76480d11e"
     },
@@ -11733,15 +11733,15 @@
         {
           "level": 3,
           "title": "23.7 Unsafe boundary and safe wrappers",
-          "line": 6069
+          "line": 6073
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6097,
-        "declaration_line": 6098,
+        "anchor_line": 6101,
+        "declaration_line": 6102,
         "declaration_column": 1,
-        "end_line": 6104
+        "end_line": 6108
       },
       "text_sha256": "e6368e3908e6a737f0db8224b54b6711e2ef36e1058bed8ef60c2abed7c002a0"
     },
@@ -11762,15 +11762,15 @@
         {
           "level": 3,
           "title": "23.7 Unsafe boundary and safe wrappers",
-          "line": 6069
+          "line": 6073
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6106,
-        "declaration_line": 6107,
+        "anchor_line": 6110,
+        "declaration_line": 6111,
         "declaration_column": 1,
-        "end_line": 6115
+        "end_line": 6119
       },
       "text_sha256": "f7e0817d11129acf06ee91031518b25c78225e6b15a1d4f4b76891c7f6c789a5"
     },
@@ -11791,15 +11791,15 @@
         {
           "level": 3,
           "title": "23.7 Unsafe boundary and safe wrappers",
-          "line": 6069
+          "line": 6073
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6117,
-        "declaration_line": 6118,
+        "anchor_line": 6121,
+        "declaration_line": 6122,
         "declaration_column": 1,
-        "end_line": 6120
+        "end_line": 6124
       },
       "text_sha256": "efae96bcd6ee9c875378da3dd64662147e098f98085f2bb0aa4f509b20c14e67"
     },
@@ -11820,15 +11820,15 @@
         {
           "level": 3,
           "title": "23.7 Unsafe boundary and safe wrappers",
-          "line": 6069
+          "line": 6073
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6122,
-        "declaration_line": 6123,
+        "anchor_line": 6126,
+        "declaration_line": 6127,
         "declaration_column": 1,
-        "end_line": 6128
+        "end_line": 6132
       },
       "text_sha256": "57c1a5027867c410b321cafd57eb4a140f9226bd0b1dfde743eb3cbc89856c7b"
     },
@@ -11849,15 +11849,15 @@
         {
           "level": 3,
           "title": "23.7 Unsafe boundary and safe wrappers",
-          "line": 6069
+          "line": 6073
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6130,
-        "declaration_line": 6131,
+        "anchor_line": 6134,
+        "declaration_line": 6135,
         "declaration_column": 1,
-        "end_line": 6134
+        "end_line": 6138
       },
       "text_sha256": "ebc5988ac256130c57db9af11216205d4dd88bdce274a56f2fbad21ce95a4e2b"
     },
@@ -11878,15 +11878,15 @@
         {
           "level": 3,
           "title": "23.7 Unsafe boundary and safe wrappers",
-          "line": 6069
+          "line": 6073
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6136,
-        "declaration_line": 6137,
+        "anchor_line": 6140,
+        "declaration_line": 6141,
         "declaration_column": 1,
-        "end_line": 6141
+        "end_line": 6145
       },
       "text_sha256": "33a8fd429af247aa69d51a425f0b851018dca24f41c131af0716146438f0dce0"
     },
@@ -11907,15 +11907,15 @@
         {
           "level": 3,
           "title": "23.7 Unsafe boundary and safe wrappers",
-          "line": 6069
+          "line": 6073
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6143,
-        "declaration_line": 6144,
+        "anchor_line": 6147,
+        "declaration_line": 6148,
         "declaration_column": 1,
-        "end_line": 6156
+        "end_line": 6160
       },
       "text_sha256": "b1c0c5b21facb1b1b22458573a5795d1c1eea8ab9535eb57fb1e51721a7c9ba5"
     },
@@ -11936,15 +11936,15 @@
         {
           "level": 3,
           "title": "23.7 Unsafe boundary and safe wrappers",
-          "line": 6069
+          "line": 6073
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6158,
-        "declaration_line": 6159,
+        "anchor_line": 6162,
+        "declaration_line": 6163,
         "declaration_column": 1,
-        "end_line": 6169
+        "end_line": 6173
       },
       "text_sha256": "115c1c0fc5c92974751f6bbe7705e14e9e136dbe270f00fe4d43caa71e7f1931"
     },
@@ -11965,15 +11965,15 @@
         {
           "level": 3,
           "title": "23.7 Unsafe boundary and safe wrappers",
-          "line": 6069
+          "line": 6073
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6171,
-        "declaration_line": 6172,
+        "anchor_line": 6175,
+        "declaration_line": 6176,
         "declaration_column": 1,
-        "end_line": 6180
+        "end_line": 6184
       },
       "text_sha256": "e467e5108a1b2755f31e0eee72ad0e5d47d0d4b1640c7db9634f99ff8f063320"
     },
@@ -11994,15 +11994,15 @@
         {
           "level": 3,
           "title": "23.7 Unsafe boundary and safe wrappers",
-          "line": 6069
+          "line": 6073
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6182,
-        "declaration_line": 6183,
+        "anchor_line": 6186,
+        "declaration_line": 6187,
         "declaration_column": 1,
-        "end_line": 6202
+        "end_line": 6206
       },
       "text_sha256": "9e033aafcfd5fcb1994fb8c148ef512855c345a9813798bd59942c002f7573f2"
     },
@@ -12023,15 +12023,15 @@
         {
           "level": 3,
           "title": "23.7 Unsafe boundary and safe wrappers",
-          "line": 6069
+          "line": 6073
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6204,
-        "declaration_line": 6205,
+        "anchor_line": 6208,
+        "declaration_line": 6209,
         "declaration_column": 1,
-        "end_line": 6211
+        "end_line": 6215
       },
       "text_sha256": "1f89d9c8e80f96fd6a09a30fce21bb1956af3abe3fe1654a9e235d1c41939873"
     },
@@ -12052,15 +12052,15 @@
         {
           "level": 3,
           "title": "23.7 Unsafe boundary and safe wrappers",
-          "line": 6069
+          "line": 6073
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6213,
-        "declaration_line": 6214,
+        "anchor_line": 6217,
+        "declaration_line": 6218,
         "declaration_column": 1,
-        "end_line": 6232
+        "end_line": 6236
       },
       "text_sha256": "754a6aeaa28b6a4821b13ac0a0a1478d6247901ccc9082aeff9f817f9934f53b"
     },
@@ -12076,15 +12076,15 @@
         {
           "level": 2,
           "title": "24. Integration with the R standard library",
-          "line": 6235
+          "line": 6239
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6237,
-        "declaration_line": 6238,
+        "anchor_line": 6241,
+        "declaration_line": 6242,
         "declaration_column": 1,
-        "end_line": 6242
+        "end_line": 6246
       },
       "text_sha256": "def67e531dd6170ad54a418362fcc65530a6398c6db6c5a8d3307c3928d6b1ad"
     },
@@ -12100,15 +12100,15 @@
         {
           "level": 2,
           "title": "24. Integration with the R standard library",
-          "line": 6235
+          "line": 6239
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6244,
-        "declaration_line": 6245,
+        "anchor_line": 6248,
+        "declaration_line": 6249,
         "declaration_column": 1,
-        "end_line": 6250
+        "end_line": 6254
       },
       "text_sha256": "c7d93459739fa494a8f786bdcffde2c3f6b425d9c8717e81e0d07a86d468740a"
     },
@@ -12124,15 +12124,15 @@
         {
           "level": 2,
           "title": "24. Integration with the R standard library",
-          "line": 6235
+          "line": 6239
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6252,
-        "declaration_line": 6253,
+        "anchor_line": 6256,
+        "declaration_line": 6257,
         "declaration_column": 1,
-        "end_line": 6258
+        "end_line": 6262
       },
       "text_sha256": "ea07a76159bd079356783a8269f3cd6570ce9afa36249195a3fdb7d3172a3672"
     },
@@ -12148,15 +12148,15 @@
         {
           "level": 2,
           "title": "25. Implementation limits",
-          "line": 6260
+          "line": 6264
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6262,
-        "declaration_line": 6263,
+        "anchor_line": 6266,
+        "declaration_line": 6267,
         "declaration_column": 1,
-        "end_line": 6269
+        "end_line": 6273
       },
       "text_sha256": "77ecc01c091e00b41da906e921889ac1c694281b768c0edc59f2dc6c5731cc8c"
     },
@@ -12172,15 +12172,15 @@
         {
           "level": 2,
           "title": "25. Implementation limits",
-          "line": 6260
+          "line": 6264
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6271,
-        "declaration_line": 6272,
+        "anchor_line": 6275,
+        "declaration_line": 6276,
         "declaration_column": 1,
-        "end_line": 6274
+        "end_line": 6278
       },
       "text_sha256": "53548687870295b5214d2546ce68dc905d8f2d8efd43a3910bac55883afa1c99"
     },
@@ -12196,15 +12196,15 @@
         {
           "level": 2,
           "title": "25. Implementation limits",
-          "line": 6260
+          "line": 6264
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6276,
-        "declaration_line": 6277,
+        "anchor_line": 6280,
+        "declaration_line": 6281,
         "declaration_column": 1,
-        "end_line": 6279
+        "end_line": 6283
       },
       "text_sha256": "04abd48281225977221423175248c8a396edbc51e300181361b991af6f169b6a"
     },
@@ -12220,15 +12220,15 @@
         {
           "level": 2,
           "title": "25. Implementation limits",
-          "line": 6260
+          "line": 6264
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6281,
-        "declaration_line": 6282,
+        "anchor_line": 6285,
+        "declaration_line": 6286,
         "declaration_column": 1,
-        "end_line": 6284
+        "end_line": 6288
       },
       "text_sha256": "e5285c42713140ea165218be8ae9665f600f8cbf5bfa1aea0f6d6606fa0c17fb"
     },
@@ -12244,15 +12244,15 @@
         {
           "level": 2,
           "title": "25. Implementation limits",
-          "line": 6260
+          "line": 6264
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6286,
-        "declaration_line": 6287,
+        "anchor_line": 6290,
+        "declaration_line": 6291,
         "declaration_column": 1,
-        "end_line": 6290
+        "end_line": 6294
       },
       "text_sha256": "99bcff85d3d68abd713617a8de608f25cebe46254dbcf01b68ee2555e87f7a61"
     },
@@ -12268,20 +12268,20 @@
         {
           "level": 2,
           "title": "Annex A — Normative EBNF grammar",
-          "line": 6330
+          "line": 6334
         },
         {
           "level": 3,
           "title": "A.1 Notation",
-          "line": 6332
+          "line": 6336
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6346,
-        "declaration_line": 6347,
+        "anchor_line": 6350,
+        "declaration_line": 6351,
         "declaration_column": 1,
-        "end_line": 6815
+        "end_line": 6819
       },
       "text_sha256": "0e59539041d327fcf8772ae6a647af4104d93635bf5e19b91aff0a40f4caffb4"
     },
@@ -12297,20 +12297,20 @@
         {
           "level": 2,
           "title": "Annex A — Normative EBNF grammar",
-          "line": 6330
+          "line": 6334
         },
         {
           "level": 3,
           "title": "A.5 Statements",
-          "line": 6717
+          "line": 6721
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 6817,
-        "declaration_line": 6818,
+        "anchor_line": 6821,
+        "declaration_line": 6822,
         "declaration_column": 1,
-        "end_line": 7088
+        "end_line": 7092
       },
       "text_sha256": "79654bcca38957eb4f6275e337798d7c6a6594630de7f53b80da7dc260700a4f"
     },
@@ -12326,20 +12326,20 @@
         {
           "level": 2,
           "title": "Annex A — Normative EBNF grammar",
-          "line": 6330
+          "line": 6334
         },
         {
           "level": 3,
           "title": "A.6 Expressions",
-          "line": 6827
+          "line": 6831
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7090,
-        "declaration_line": 7091,
+        "anchor_line": 7094,
+        "declaration_line": 7095,
         "declaration_column": 1,
-        "end_line": 7095
+        "end_line": 7099
       },
       "text_sha256": "6365bf427a69b2979c08c5e6dc0b0dab76f7eda0e2d556b3573a2cb7601d850e"
     },
@@ -12355,15 +12355,15 @@
         {
           "level": 2,
           "title": "Annex B — Required diagnostics",
-          "line": 7097
+          "line": 7101
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7166,
-        "declaration_line": 7167,
+        "anchor_line": 7170,
+        "declaration_line": 7171,
         "declaration_column": 1,
-        "end_line": 7169
+        "end_line": 7173
       },
       "text_sha256": "64ce7d277d7bb8115e55c04ca67fe62c5d8c751deb341d3fdedf1378d610b325"
     },
@@ -12379,15 +12379,15 @@
         {
           "level": 2,
           "title": "Annex B — Required diagnostics",
-          "line": 7097
+          "line": 7101
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7171,
-        "declaration_line": 7172,
+        "anchor_line": 7175,
+        "declaration_line": 7176,
         "declaration_column": 1,
-        "end_line": 7175
+        "end_line": 7179
       },
       "text_sha256": "1b6315d849c19d5649eaaae1542bcb84faaafd73e8d5c1c2ed8463795ecfa8d2"
     },
@@ -12403,15 +12403,15 @@
         {
           "level": 2,
           "title": "Annex C — Implementation-defined behavior",
-          "line": 7177
+          "line": 7181
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7211,
-        "declaration_line": 7212,
+        "anchor_line": 7215,
+        "declaration_line": 7216,
         "declaration_column": 1,
-        "end_line": 7215
+        "end_line": 7219
       },
       "text_sha256": "82e4d7da65a2dee106b183393f6515daa5911f16283df4075e5df98a9b85e93e"
     },
@@ -12427,15 +12427,15 @@
         {
           "level": 2,
           "title": "Annex D — Unspecified behavior",
-          "line": 7217
+          "line": 7221
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7237,
-        "declaration_line": 7238,
+        "anchor_line": 7241,
+        "declaration_line": 7242,
         "declaration_column": 1,
-        "end_line": 7241
+        "end_line": 7245
       },
       "text_sha256": "c2c6eae2b5ac0054b2be31803eb089fe709387cdf8deee3e58597d0d407c8238"
     },
@@ -12451,20 +12451,20 @@
         {
           "level": 2,
           "title": "Annex E — Unsafe operations and safety contracts",
-          "line": 7243
+          "line": 7247
         },
         {
           "level": 3,
           "title": "E.1 General rule",
-          "line": 7245
+          "line": 7249
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7247,
-        "declaration_line": 7248,
+        "anchor_line": 7251,
+        "declaration_line": 7252,
         "declaration_column": 1,
-        "end_line": 7352
+        "end_line": 7356
       },
       "text_sha256": "88f5a4a68a5bfb0e940e3ac174913ad03f3c51e65b48544bd20c62c68445a1e6"
     },
@@ -12480,20 +12480,20 @@
         {
           "level": 2,
           "title": "Annex E — Unsafe operations and safety contracts",
-          "line": 7243
+          "line": 7247
         },
         {
           "level": 3,
           "title": "E.2 Closed operation table",
-          "line": 7252
+          "line": 7256
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7354,
-        "declaration_line": 7355,
+        "anchor_line": 7358,
+        "declaration_line": 7359,
         "declaration_column": 1,
-        "end_line": 7357
+        "end_line": 7361
       },
       "text_sha256": "56a17b412540bbd94e99129acb44ecd7d82ade9ccc4b3b5e57803e3ecbe32cb9"
     },
@@ -12509,20 +12509,20 @@
         {
           "level": 2,
           "title": "Annex E — Unsafe operations and safety contracts",
-          "line": 7243
+          "line": 7247
         },
         {
           "level": 3,
           "title": "E.2 Closed operation table",
-          "line": 7252
+          "line": 7256
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7359,
-        "declaration_line": 7360,
+        "anchor_line": 7363,
+        "declaration_line": 7364,
         "declaration_column": 1,
-        "end_line": 7364
+        "end_line": 7368
       },
       "text_sha256": "a6b83c3c38228be38c03582bbdaab42989c5530f58dda3c16bb7a6105b66d0ad"
     },
@@ -12538,20 +12538,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.1 Mapping principle",
-          "line": 7368
+          "line": 7372
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7370,
-        "declaration_line": 7371,
+        "anchor_line": 7374,
+        "declaration_line": 7375,
         "declaration_column": 1,
-        "end_line": 7375
+        "end_line": 7379
       },
       "text_sha256": "afb336a36e003e74c495cf00590bd6982b67a6614a73fc383da260720ae9bf37"
     },
@@ -12567,20 +12567,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.1 Mapping principle",
-          "line": 7368
+          "line": 7372
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7377,
-        "declaration_line": 7378,
+        "anchor_line": 7381,
+        "declaration_line": 7382,
         "declaration_column": 1,
-        "end_line": 7417
+        "end_line": 7421
       },
       "text_sha256": "2372854de5587129657c022f695056781f8d69f158f0c75788b8d09d1f254573"
     },
@@ -12596,20 +12596,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.2 Type mapping",
-          "line": 7382
+          "line": 7386
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7419,
-        "declaration_line": 7420,
+        "anchor_line": 7423,
+        "declaration_line": 7424,
         "declaration_column": 1,
-        "end_line": 7423
+        "end_line": 7427
       },
       "text_sha256": "e925f707423b3c00cc062724d2c5add1d78c737b3fd57278168a2ce04bb2cf04"
     },
@@ -12625,20 +12625,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.3 Expressions and checks",
-          "line": 7423
+          "line": 7427
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7425,
-        "declaration_line": 7426,
+        "anchor_line": 7429,
+        "declaration_line": 7430,
         "declaration_column": 1,
-        "end_line": 7428
+        "end_line": 7432
       },
       "text_sha256": "bd6c5c548cd38e18fd0a013794105840b2c2d882a94aefa01541bcf1a3b2d40a"
     },
@@ -12654,20 +12654,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.3 Expressions and checks",
-          "line": 7423
+          "line": 7427
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7430,
-        "declaration_line": 7431,
+        "anchor_line": 7434,
+        "declaration_line": 7435,
         "declaration_column": 1,
-        "end_line": 7433
+        "end_line": 7437
       },
       "text_sha256": "bb5dae9087e7199bfcf890fecf7ebba00d1faccfc48e9d6f0bb45102c5f20c54"
     },
@@ -12683,20 +12683,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.3 Expressions and checks",
-          "line": 7423
+          "line": 7427
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7435,
-        "declaration_line": 7436,
+        "anchor_line": 7439,
+        "declaration_line": 7440,
         "declaration_column": 1,
-        "end_line": 7438
+        "end_line": 7442
       },
       "text_sha256": "c07a3148e936f88e9971047040a6b03732b46ac16649ed24039c7533b60b3c00"
     },
@@ -12712,20 +12712,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.3 Expressions and checks",
-          "line": 7423
+          "line": 7427
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7440,
-        "declaration_line": 7441,
+        "anchor_line": 7444,
+        "declaration_line": 7445,
         "declaration_column": 1,
-        "end_line": 7443
+        "end_line": 7447
       },
       "text_sha256": "d58f981fed86c68864ca5ea06d58328da61a823e196c22836cd24628880f318d"
     },
@@ -12741,20 +12741,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.3 Expressions and checks",
-          "line": 7423
+          "line": 7427
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7445,
-        "declaration_line": 7446,
+        "anchor_line": 7449,
+        "declaration_line": 7450,
         "declaration_column": 1,
-        "end_line": 7451
+        "end_line": 7455
       },
       "text_sha256": "65ee8e2c1c4b30c26491f6a5a3f8001a299c812ae51fad7f938fb12a43f209b1"
     },
@@ -12770,20 +12770,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.3 Expressions and checks",
-          "line": 7423
+          "line": 7427
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7453,
-        "declaration_line": 7454,
+        "anchor_line": 7457,
+        "declaration_line": 7458,
         "declaration_column": 1,
-        "end_line": 7467
+        "end_line": 7471
       },
       "text_sha256": "e0d321f1c4d28b3c25ff829074dd5a8cd00915647c70823cc5826a2c2c37884c"
     },
@@ -12799,20 +12799,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.4 Drop and control flow",
-          "line": 7467
+          "line": 7471
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7469,
-        "declaration_line": 7470,
+        "anchor_line": 7473,
+        "declaration_line": 7474,
         "declaration_column": 1,
-        "end_line": 7472
+        "end_line": 7476
       },
       "text_sha256": "c33f3b4567a31c08816d010c08e9339ee26b79e433a55cb939fbaf3c4e58fb2d"
     },
@@ -12828,20 +12828,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.4 Drop and control flow",
-          "line": 7467
+          "line": 7471
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7474,
-        "declaration_line": 7475,
+        "anchor_line": 7478,
+        "declaration_line": 7479,
         "declaration_column": 1,
-        "end_line": 7477
+        "end_line": 7481
       },
       "text_sha256": "672f40d0ae55c6db9551e7d2015628b0f2c563745f9d40946354cdc3a080301c"
     },
@@ -12857,20 +12857,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.4 Drop and control flow",
-          "line": 7467
+          "line": 7471
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7479,
-        "declaration_line": 7480,
+        "anchor_line": 7483,
+        "declaration_line": 7484,
         "declaration_column": 1,
-        "end_line": 7484
+        "end_line": 7488
       },
       "text_sha256": "6bd07473f1259063d6b951813179129d5ee3f5b1dfdcc7b013bba822537b8887"
     },
@@ -12886,20 +12886,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.5 Translation and validation",
-          "line": 7484
+          "line": 7488
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7486,
-        "declaration_line": 7487,
+        "anchor_line": 7490,
+        "declaration_line": 7491,
         "declaration_column": 1,
-        "end_line": 7488
+        "end_line": 7492
       },
       "text_sha256": "36711854a49af24a712efa65e94ed8b732ce90e0dfca66ce381f282088b7b33a"
     },
@@ -12915,20 +12915,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.5 Translation and validation",
-          "line": 7484
+          "line": 7488
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7490,
-        "declaration_line": 7491,
+        "anchor_line": 7494,
+        "declaration_line": 7495,
         "declaration_column": 1,
-        "end_line": 7495
+        "end_line": 7499
       },
       "text_sha256": "65ff715e50ff7968c42682c4318b2222f2f429caacb9484c5f4220fc97fdfe89"
     },
@@ -12944,20 +12944,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.5 Translation and validation",
-          "line": 7484
+          "line": 7488
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7497,
-        "declaration_line": 7498,
+        "anchor_line": 7501,
+        "declaration_line": 7502,
         "declaration_column": 1,
-        "end_line": 7503
+        "end_line": 7507
       },
       "text_sha256": "76c11c37d1f78441b00ec342e7fab650e4391b9ebb5da6aaf30d392b91e6b1d2"
     },
@@ -12973,20 +12973,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.5 Translation and validation",
-          "line": 7484
+          "line": 7488
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7505,
-        "declaration_line": 7506,
+        "anchor_line": 7509,
+        "declaration_line": 7510,
         "declaration_column": 1,
-        "end_line": 7510
+        "end_line": 7514
       },
       "text_sha256": "f5969c710ad6e8d6e409b8440a0483ad5c32f4bac4bf26e19106b90a675669d1"
     },
@@ -13002,20 +13002,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.6 External C libraries",
-          "line": 7510
+          "line": 7514
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7512,
-        "declaration_line": 7513,
+        "anchor_line": 7516,
+        "declaration_line": 7517,
         "declaration_column": 1,
-        "end_line": 7521
+        "end_line": 7525
       },
       "text_sha256": "df93e3f5144af80aa0a7e3488d126b325c080a54459d9a65994a8a1944c1ef85"
     },
@@ -13031,20 +13031,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.6 External C libraries",
-          "line": 7510
+          "line": 7514
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7523,
-        "declaration_line": 7524,
+        "anchor_line": 7527,
+        "declaration_line": 7528,
         "declaration_column": 1,
-        "end_line": 7532
+        "end_line": 7536
       },
       "text_sha256": "d983446f1bf780591b57616becb5966b5427aa03ce964e12c4227750b655582b"
     },
@@ -13060,20 +13060,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.6 External C libraries",
-          "line": 7510
+          "line": 7514
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7534,
-        "declaration_line": 7535,
+        "anchor_line": 7538,
+        "declaration_line": 7539,
         "declaration_column": 1,
-        "end_line": 7539
+        "end_line": 7543
       },
       "text_sha256": "3f8bfa047e4746d3fbdf536cbbf1f8c9d749eff6335b1953cea43cd39ececbfa"
     },
@@ -13089,20 +13089,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.6 External C libraries",
-          "line": 7510
+          "line": 7514
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7541,
-        "declaration_line": 7542,
+        "anchor_line": 7545,
+        "declaration_line": 7546,
         "declaration_column": 1,
-        "end_line": 7545
+        "end_line": 7549
       },
       "text_sha256": "bc0c814a29807405c5cfa44cf0354f7efe2834d54f7797c585eaafd39567c9f4"
     },
@@ -13118,20 +13118,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.6 External C libraries",
-          "line": 7510
+          "line": 7514
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7547,
-        "declaration_line": 7548,
+        "anchor_line": 7551,
+        "declaration_line": 7552,
         "declaration_column": 1,
-        "end_line": 7550
+        "end_line": 7554
       },
       "text_sha256": "205889afe1cf145f4a4f015eee637324ae6bd16d5f9f3bdee9be3baaa93311f0"
     },
@@ -13147,20 +13147,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.6 External C libraries",
-          "line": 7510
+          "line": 7514
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7552,
-        "declaration_line": 7553,
+        "anchor_line": 7556,
+        "declaration_line": 7557,
         "declaration_column": 1,
-        "end_line": 7556
+        "end_line": 7560
       },
       "text_sha256": "c4ef780f8012c727b1c7552b2660bc313899e6dd392cabb5ddbde8764c1d892b"
     },
@@ -13176,20 +13176,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.6 External C libraries",
-          "line": 7510
+          "line": 7514
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7558,
-        "declaration_line": 7559,
+        "anchor_line": 7562,
+        "declaration_line": 7563,
         "declaration_column": 1,
-        "end_line": 7561
+        "end_line": 7565
       },
       "text_sha256": "4eb5488e9d724d05a9ea8678014a3ef1bf30af91ff62934e1af8c1ecff63f37c"
     },
@@ -13205,20 +13205,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.6 External C libraries",
-          "line": 7510
+          "line": 7514
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7563,
-        "declaration_line": 7564,
+        "anchor_line": 7567,
+        "declaration_line": 7568,
         "declaration_column": 1,
-        "end_line": 7567
+        "end_line": 7571
       },
       "text_sha256": "388b7d978adea4e84ce39d4aaff3ccffc2eb1683c75db1fc1072aa88f6f53239"
     },
@@ -13234,20 +13234,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.6 External C libraries",
-          "line": 7510
+          "line": 7514
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7569,
-        "declaration_line": 7570,
+        "anchor_line": 7573,
+        "declaration_line": 7574,
         "declaration_column": 1,
-        "end_line": 7573
+        "end_line": 7577
       },
       "text_sha256": "895250fb25621c626109c839c62ac099ab788d3ff7186d88420f462213e60c0e"
     },
@@ -13263,20 +13263,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.6 External C libraries",
-          "line": 7510
+          "line": 7514
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7575,
-        "declaration_line": 7576,
+        "anchor_line": 7579,
+        "declaration_line": 7580,
         "declaration_column": 1,
-        "end_line": 7589
+        "end_line": 7593
       },
       "text_sha256": "29549a4fc986f273a2c6fb2bf6f9e2496405e78940208b7e51434f073cb1ec50"
     },
@@ -13292,20 +13292,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.6 External C libraries",
-          "line": 7510
+          "line": 7514
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7591,
-        "declaration_line": 7592,
+        "anchor_line": 7595,
+        "declaration_line": 7596,
         "declaration_column": 1,
-        "end_line": 7595
+        "end_line": 7599
       },
       "text_sha256": "3cb2ff44be18a7d11d7934e001726bc290f8a5bd0cbace33acc66f57f54979c0"
     },
@@ -13321,20 +13321,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.6 External C libraries",
-          "line": 7510
+          "line": 7514
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7597,
-        "declaration_line": 7598,
+        "anchor_line": 7601,
+        "declaration_line": 7602,
         "declaration_column": 1,
-        "end_line": 7602
+        "end_line": 7606
       },
       "text_sha256": "b0af1392bdbf22aa1a9481a267bf6366653acd5fa7771f071499385fab87c40d"
     },
@@ -13350,20 +13350,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.6 External C libraries",
-          "line": 7510
+          "line": 7514
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7604,
-        "declaration_line": 7605,
+        "anchor_line": 7608,
+        "declaration_line": 7609,
         "declaration_column": 1,
-        "end_line": 7608
+        "end_line": 7612
       },
       "text_sha256": "bab463f61be75d188ffd630c58a33c53d55391da2c7cdfcd3d32b6e8cdce020b"
     },
@@ -13379,20 +13379,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.6 External C libraries",
-          "line": 7510
+          "line": 7514
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7610,
-        "declaration_line": 7611,
+        "anchor_line": 7614,
+        "declaration_line": 7615,
         "declaration_column": 1,
-        "end_line": 7622
+        "end_line": 7626
       },
       "text_sha256": "1982945f04186a76cadf45b6e54723ce6b89adf1fbbae5f3948520d8ee5cf30b"
     },
@@ -13408,20 +13408,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.6 External C libraries",
-          "line": 7510
+          "line": 7514
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7624,
-        "declaration_line": 7625,
+        "anchor_line": 7628,
+        "declaration_line": 7629,
         "declaration_column": 1,
-        "end_line": 7634
+        "end_line": 7638
       },
       "text_sha256": "441d565d926eb26b4600ed15cfc15373c6298b5e23a8c2950c2bf91ca7a8a220"
     },
@@ -13437,20 +13437,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.7 Reference counting, threads, tasks and synchronization",
-          "line": 7634
+          "line": 7638
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7636,
-        "declaration_line": 7637,
+        "anchor_line": 7640,
+        "declaration_line": 7641,
         "declaration_column": 1,
-        "end_line": 7643
+        "end_line": 7647
       },
       "text_sha256": "ff66598b47ab4a4b3e116dc0d598c2fb1a269a71d2c5c90cb79695202187afd3"
     },
@@ -13466,20 +13466,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.7 Reference counting, threads, tasks and synchronization",
-          "line": 7634
+          "line": 7638
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7645,
-        "declaration_line": 7646,
+        "anchor_line": 7649,
+        "declaration_line": 7650,
         "declaration_column": 1,
-        "end_line": 7660
+        "end_line": 7664
       },
       "text_sha256": "a8206b50f9276ebf0913ef36bd9c29240ffe131f8861534d1e669f4e4e77d037"
     },
@@ -13495,20 +13495,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.7 Reference counting, threads, tasks and synchronization",
-          "line": 7634
+          "line": 7638
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7662,
-        "declaration_line": 7663,
+        "anchor_line": 7666,
+        "declaration_line": 7667,
         "declaration_column": 1,
-        "end_line": 7674
+        "end_line": 7678
       },
       "text_sha256": "683a914afcf9df3a040473a7528a7a377b9ccbde2e32e127e1a87e5fb54d7c52"
     },
@@ -13524,20 +13524,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.7 Reference counting, threads, tasks and synchronization",
-          "line": 7634
+          "line": 7638
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7676,
-        "declaration_line": 7677,
+        "anchor_line": 7680,
+        "declaration_line": 7681,
         "declaration_column": 1,
-        "end_line": 7717
+        "end_line": 7721
       },
       "text_sha256": "0385e7c4e50a8adb27d1d4e1e88df9fd2329cb1142effe36d6ba7a9996984194"
     },
@@ -13553,20 +13553,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.7 Reference counting, threads, tasks and synchronization",
-          "line": 7634
+          "line": 7638
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7719,
-        "declaration_line": 7720,
+        "anchor_line": 7723,
+        "declaration_line": 7724,
         "declaration_column": 1,
-        "end_line": 7747
+        "end_line": 7751
       },
       "text_sha256": "3a9a6837480792bd5ba694d8ab92c51cccc8ad2303a7dc2611a34ed865fe685a"
     },
@@ -13582,20 +13582,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.7 Reference counting, threads, tasks and synchronization",
-          "line": 7634
+          "line": 7638
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7749,
-        "declaration_line": 7750,
+        "anchor_line": 7753,
+        "declaration_line": 7754,
         "declaration_column": 1,
-        "end_line": 7763
+        "end_line": 7767
       },
       "text_sha256": "0adcdc5df45f191deb757ae4fd709fec47a8192e6744dc7d8ead5b5f563b9176"
     },
@@ -13611,20 +13611,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.7 Reference counting, threads, tasks and synchronization",
-          "line": 7634
+          "line": 7638
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7765,
-        "declaration_line": 7766,
+        "anchor_line": 7769,
+        "declaration_line": 7770,
         "declaration_column": 1,
-        "end_line": 7781
+        "end_line": 7785
       },
       "text_sha256": "43a3e48ff8f043486db01b201affe2bdd11de6257f3ae8d9d1810d593b5ba45a"
     },
@@ -13640,20 +13640,20 @@
         {
           "level": 2,
           "title": "Annex F — Normative mapping to ISO C17",
-          "line": 7366
+          "line": 7370
         },
         {
           "level": 3,
           "title": "F.7 Reference counting, threads, tasks and synchronization",
-          "line": 7634
+          "line": 7638
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7783,
-        "declaration_line": 7784,
+        "anchor_line": 7787,
+        "declaration_line": 7788,
         "declaration_column": 1,
-        "end_line": 7799
+        "end_line": 7803
       },
       "text_sha256": "e2cbc2e0477a17fd5414c94da2b1d4da66a1811042e53b83a473321867768c4b"
     },
@@ -13669,20 +13669,20 @@
         {
           "level": 2,
           "title": "Annex G — Requirements for a conforming implementation",
-          "line": 7801
+          "line": 7805
         },
         {
           "level": 3,
           "title": "G.1 Source of truth",
-          "line": 7803
+          "line": 7807
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7805,
-        "declaration_line": 7806,
+        "anchor_line": 7809,
+        "declaration_line": 7810,
         "declaration_column": 1,
-        "end_line": 7810
+        "end_line": 7814
       },
       "text_sha256": "bc86a618dc77f27c6fc8edda9b5dd5b45ce449644584fe40e78246e80b141b52"
     },
@@ -13698,20 +13698,20 @@
         {
           "level": 2,
           "title": "Annex G — Requirements for a conforming implementation",
-          "line": 7801
+          "line": 7805
         },
         {
           "level": 3,
           "title": "G.2 Required implementation components",
-          "line": 7810
+          "line": 7814
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7812,
-        "declaration_line": 7813,
+        "anchor_line": 7816,
+        "declaration_line": 7817,
         "declaration_column": 1,
-        "end_line": 7816
+        "end_line": 7820
       },
       "text_sha256": "bad79569d6f8f9ca6dc4adcfca58184e6b0104cc7deb7696c8b008e5faa4735d"
     },
@@ -13727,20 +13727,20 @@
         {
           "level": 2,
           "title": "Annex G — Requirements for a conforming implementation",
-          "line": 7801
+          "line": 7805
         },
         {
           "level": 3,
           "title": "G.2 Required implementation components",
-          "line": 7810
+          "line": 7814
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7818,
-        "declaration_line": 7819,
+        "anchor_line": 7822,
+        "declaration_line": 7823,
         "declaration_column": 1,
-        "end_line": 7821
+        "end_line": 7825
       },
       "text_sha256": "6718043f472f621465ed9103efeb4aacb932983038c4cc8d7dcf8da12a5346b0"
     },
@@ -13756,20 +13756,20 @@
         {
           "level": 2,
           "title": "Annex G — Requirements for a conforming implementation",
-          "line": 7801
+          "line": 7805
         },
         {
           "level": 3,
           "title": "G.2 Required implementation components",
-          "line": 7810
+          "line": 7814
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7823,
-        "declaration_line": 7824,
+        "anchor_line": 7827,
+        "declaration_line": 7828,
         "declaration_column": 1,
-        "end_line": 7845
+        "end_line": 7849
       },
       "text_sha256": "6e7decec2439e2a3ce74111d54ea412b0fc8f355d94cf23bde9bdadf77ec263d"
     },
@@ -13785,20 +13785,20 @@
         {
           "level": 2,
           "title": "Annex G — Requirements for a conforming implementation",
-          "line": 7801
+          "line": 7805
         },
         {
           "level": 3,
           "title": "G.3 Profiles",
-          "line": 7830
+          "line": 7834
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 7847,
-        "declaration_line": 7848,
+        "anchor_line": 7851,
+        "declaration_line": 7852,
         "declaration_column": 1,
-        "end_line": 8390
+        "end_line": 8394
       },
       "text_sha256": "c504e9ce230c82cde36f470f9ccd73c69d6a8a26ba2bd74ccc17e92897057a83"
     },
@@ -13814,20 +13814,20 @@
         {
           "level": 2,
           "title": "Annex G — Requirements for a conforming implementation",
-          "line": 7801
+          "line": 7805
         },
         {
           "level": 3,
           "title": "G.4 Minimal normative examples",
-          "line": 7860
+          "line": 7864
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8392,
-        "declaration_line": 8393,
+        "anchor_line": 8396,
+        "declaration_line": 8397,
         "declaration_column": 1,
-        "end_line": 8515
+        "end_line": 8519
       },
       "text_sha256": "972ce9b64348fd45cdc08ac69b0b5b75d457a711949d7ca0c9da41e20c2f68e8"
     },
@@ -13843,20 +13843,20 @@
         {
           "level": 2,
           "title": "Annex G — Requirements for a conforming implementation",
-          "line": 7801
+          "line": 7805
         },
         {
           "level": 3,
           "title": "G.5 Canonical syntax and paired examples",
-          "line": 8454
+          "line": 8458
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8517,
-        "declaration_line": 8518,
+        "anchor_line": 8521,
+        "declaration_line": 8522,
         "declaration_column": 1,
-        "end_line": 8522
+        "end_line": 8526
       },
       "text_sha256": "fcb06bf09f3393ee01c8939ffa21f9881f9b4b4a22bb85d1f2c771c7408bb4a3"
     },
@@ -13872,20 +13872,20 @@
         {
           "level": 2,
           "title": "Annex G — Requirements for a conforming implementation",
-          "line": 7801
+          "line": 7805
         },
         {
           "level": 3,
           "title": "G.6 Release criteria",
-          "line": 8522
+          "line": 8526
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8524,
-        "declaration_line": 8525,
+        "anchor_line": 8528,
+        "declaration_line": 8529,
         "declaration_column": 1,
-        "end_line": 8528
+        "end_line": 8532
       },
       "text_sha256": "ce1c1fd61dd59b87a6c0f31aa95fd937b6f3d7b812ce39a7d09a12b7d4faeb20"
     },
@@ -13901,20 +13901,20 @@
         {
           "level": 2,
           "title": "Annex G — Requirements for a conforming implementation",
-          "line": 7801
+          "line": 7805
         },
         {
           "level": 3,
           "title": "G.6 Release criteria",
-          "line": 8522
+          "line": 8526
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8530,
-        "declaration_line": 8531,
+        "anchor_line": 8534,
+        "declaration_line": 8535,
         "declaration_column": 1,
-        "end_line": 8552
+        "end_line": 8556
       },
       "text_sha256": "4a3cebea609909cb0e065baf47bcf03651d7d4ab92e4050e001f2e92e07e16d4"
     },
@@ -13930,20 +13930,20 @@
         {
           "level": 2,
           "title": "Annex G — Requirements for a conforming implementation",
-          "line": 7801
+          "line": 7805
         },
         {
           "level": 3,
           "title": "G.6 Release criteria",
-          "line": 8522
+          "line": 8526
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8554,
-        "declaration_line": 8555,
+        "anchor_line": 8558,
+        "declaration_line": 8559,
         "declaration_column": 1,
-        "end_line": 8558
+        "end_line": 8562
       },
       "text_sha256": "b6efb69c52aad327bd5817c1f1367e04bda6382e16c3f156f233963628b822fe"
     },
@@ -13959,20 +13959,20 @@
         {
           "level": 2,
           "title": "Annex G — Requirements for a conforming implementation",
-          "line": 7801
+          "line": 7805
         },
         {
           "level": 3,
           "title": "G.6 Release criteria",
-          "line": 8522
+          "line": 8526
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8560,
-        "declaration_line": 8561,
+        "anchor_line": 8564,
+        "declaration_line": 8565,
         "declaration_column": 1,
-        "end_line": 8804
+        "end_line": 8808
       },
       "text_sha256": "0c0b662d222189283a8fe675b2be4b181467abbf8dbb9137a8269ef4708a70e3"
     },
@@ -13988,20 +13988,20 @@
         {
           "level": 2,
           "title": "Annex G — Requirements for a conforming implementation",
-          "line": 7801
+          "line": 7805
         },
         {
           "level": 3,
           "title": "G.6 Release criteria",
-          "line": 8522
+          "line": 8526
         }
       ],
       "source_location": {
         "path": "specification/R_LANGUAGE_SPECIFICATION_0_1.en.adoc",
-        "anchor_line": 8806,
-        "declaration_line": 8807,
+        "anchor_line": 8810,
+        "declaration_line": 8811,
         "declaration_column": 1,
-        "end_line": 8828
+        "end_line": 8832
       },
       "text_sha256": "fec5f9c3d5673b2cc38fd82ff3361e24d02b4dd45c32e5af598436defc38916c"
     }

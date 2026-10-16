@@ -28,8 +28,7 @@ class CStyleCheckTests(unittest.TestCase):
     def test_cleanup_and_allocator_boundary_are_accepted(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
-            (root / "compiler").mkdir()
-            (root / "runtime/source").mkdir(parents=True)
+            (root / "compiler/cli").mkdir(parents=True)
             (root / "compiler/example.c").write_text(
                 "void example(void) {\n"
                 "    goto cleanup;\n"
@@ -38,7 +37,7 @@ class CStyleCheckTests(unittest.TestCase):
                 "}\n",
                 encoding="utf-8",
             )
-            (root / "runtime/source/allocator.c").write_text(
+            (root / "compiler/cli/allocation.c").write_text(
                 "void *allocate(unsigned long size) { return malloc(size); }\n",
                 encoding="utf-8",
             )

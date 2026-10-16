@@ -122,6 +122,33 @@ static LLVMValueRef r_llvm_stack_entry_function(const RLlvmEmitter *emitter,
     return entry->direct ? emitter->direct_twins[entry->symbol] : emitter->functions[entry->symbol];
 }
 
+/* B12.3 (Core R-FFI-0068): the entries of a runtime unit, which generated code and the runtime
+   enter without a stack check of their own: every C function the unit defines, its exports and
+   its internal callbacks. Each runs in the call transition its caller keeps (R-FUNC-0004). */
+static bool r_llvm_unit_entries(RLlvmEmitter *emitter, LLVMValueRef **entries, size_t *count) {
+    const RFrontendContext *context = emitter->frontend;
+    size_t id;
+
+    *entries = NULL;
+    *count = 0U;
+    if ((emitter->artifact_options == NULL) || !emitter->artifact_options->runtime_unit) {
+        return true;
+    }
+    *entries = r_llvm_allocate(emitter, (context->semantic_symbol_count + 1U) * sizeof(**entries));
+    if (*entries == NULL) {
+        return false;
+    }
+    for (id = 1U; id <= context->semantic_symbol_count; ++id) {
+        const RSemanticSymbol *symbol = &context->semantic_symbols[id - 1U];
+        if ((symbol->kind == R_SEMANTIC_SYMBOL_FUNCTION) && symbol->is_extern_c &&
+            !symbol->is_import && (emitter->c_functions[id] != NULL) &&
+            (LLVMCountBasicBlocks(emitter->c_functions[id]) != 0U)) {
+            (*entries)[(*count)++] = emitter->c_functions[id];
+        }
+    }
+    return true;
+}
+
 typedef struct RLlvmFrame {
     char *name;
     uint64_t size;
@@ -218,6 +245,9 @@ typedef struct RLlvmStackComponent {
 
 typedef struct RLlvmStackGraph {
     RLlvmEmitter *emitter;
+    /* The entries of a runtime unit, walked after the entries of the program. */
+    LLVMValueRef *unit_entries;
+    size_t unit_entry_count;
     RLlvmStackNode *nodes;
     size_t count;
     size_t *edges;
@@ -303,6 +333,10 @@ static bool r_llvm_stack_callees(RLlvmStackGraph *graph, RLlvmStackNode *node) {
                             r_llvm_stack_node(graph, graph->emitter->runtime_callees[back]))) {
                         return false;
                     }
+                }
+                /* In the runtime unit that defines it, the iterative drop is also a call. */
+                if (!r_llvm_stack_add_edge(graph, r_llvm_stack_node(graph, callee))) {
+                    return false;
                 }
                 continue;
             }
@@ -397,10 +431,12 @@ static bool r_llvm_stack_components(RLlvmStackGraph *graph) {
     if ((stack == NULL) || (work == NULL) || (next == NULL) || (graph->components == NULL)) {
         goto cleanup;
     }
-    for (entry = 0U; entry < graph->emitter->stack_entry_count; ++entry) {
+    for (entry = 0U; entry < graph->emitter->stack_entry_count + graph->unit_entry_count; ++entry) {
         const RLlvmStackNode *start = r_llvm_stack_node(
             graph,
-            r_llvm_stack_entry_function(graph->emitter, &graph->emitter->stack_entries[entry]));
+            entry < graph->emitter->stack_entry_count
+                ? r_llvm_stack_entry_function(graph->emitter, &graph->emitter->stack_entries[entry])
+                : graph->unit_entries[entry - graph->emitter->stack_entry_count]);
         size_t work_count = 0U;
         size_t root;
         if (start == NULL) {
@@ -574,11 +610,13 @@ static bool r_llvm_check_reach(RLlvmEmitter *emitter,
 
 bool r_llvm_check_indirect_calls(RLlvmEmitter *emitter) {
     LLVMValueRef *work = NULL;
+    LLVMValueRef *unit_entries = NULL;
+    size_t unit_entry_count = 0U;
     size_t count = 0U;
     size_t capacity = 0U;
     size_t next;
     size_t index;
-    bool success = true;
+    bool success = r_llvm_unit_entries(emitter, &unit_entries, &unit_entry_count);
 
     for (index = 0U; success && (index < emitter->stack_entry_count); ++index) {
         success =
@@ -588,6 +626,10 @@ bool r_llvm_check_indirect_calls(RLlvmEmitter *emitter) {
                                &count,
                                &capacity);
     }
+    for (index = 0U; success && (index < unit_entry_count); ++index) {
+        success = r_llvm_check_reach(emitter, unit_entries[index], &work, &count, &capacity);
+    }
+    r_llvm_free(emitter, unit_entries);
     for (next = 0U; success && (next < count); ++next) {
         LLVMValueRef function = work[next];
         LLVMBasicBlockRef block;
@@ -707,21 +749,34 @@ bool r_llvm_preserve_stack_functions(RLlvmEmitter *emitter) {
     const RFrontendContext *context = emitter->frontend;
     const bool all_functions =
         (emitter->artifact_options != NULL) && emitter->artifact_options->all_functions;
-    const size_t capacity = (emitter->stack_entry_count * 2U) + (emitter->stack_edge_count * 2U) +
-                            emitter->runtime_callee_count + emitter->recursion_mark_count +
-                            (all_functions ? context->mir_function_count : 0U);
+    LLVMValueRef *unit_entries = NULL;
+    size_t unit_entry_count = 0U;
+    size_t capacity;
     LLVMValueRef *kept;
     LLVMValueRef used;
     size_t count = 0U;
     size_t index;
 
+    if (!r_llvm_unit_entries(emitter, &unit_entries, &unit_entry_count)) {
+        return false;
+    }
+    capacity = (emitter->stack_entry_count * 2U) + (emitter->stack_edge_count * 2U) +
+               emitter->runtime_callee_count + emitter->recursion_mark_count + unit_entry_count +
+               (all_functions ? context->mir_function_count : 0U);
     if (capacity == 0U) {
+        r_llvm_free(emitter, unit_entries);
         return true;
     }
     kept = r_llvm_allocate(emitter, capacity * sizeof(*kept));
     if (kept == NULL) {
+        r_llvm_free(emitter, unit_entries);
         return false;
     }
+    /* The internal callbacks of a runtime unit are measured after the optimizer as well. */
+    for (index = 0U; index < unit_entry_count; ++index) {
+        r_llvm_keep(kept, &count, unit_entries[index]);
+    }
+    r_llvm_free(emitter, unit_entries);
     for (index = 0U; index < emitter->stack_entry_count; ++index) {
         r_llvm_keep(kept, &count, emitter->stack_entries[index].global);
         if (r_llvm_stack_entry_function(emitter, &emitter->stack_entries[index]) != NULL) {
@@ -768,13 +823,17 @@ bool r_llvm_measure_stack(RLlvmEmitter *emitter) {
     size_t count = 0U;
     size_t index;
 
-    if (emitter->stack_entry_count == 0U) {
-        return true;
-    }
     (void)memset(&frames, 0, sizeof(frames));
     (void)memset(&graph, 0, sizeof(graph));
     frames.emitter = emitter;
     graph.emitter = emitter;
+    if (!r_llvm_unit_entries(emitter, &graph.unit_entries, &graph.unit_entry_count)) {
+        return false;
+    }
+    if ((emitter->stack_entry_count == 0U) && (graph.unit_entry_count == 0U)) {
+        r_llvm_free(emitter, graph.unit_entries);
+        return true;
+    }
     previous_handler = LLVMContextGetDiagnosticHandler(emitter->context);
     previous_context = LLVMContextGetDiagnosticContext(emitter->context);
     LLVMContextSetDiagnosticHandler(emitter->context, r_llvm_stack_remark, &frames);
@@ -861,6 +920,30 @@ bool r_llvm_measure_stack(RLlvmEmitter *emitter) {
         }
         r_llvm_stack_report(emitter, "r.stack.entries", node->function, &bound, 1U);
     }
+    /* B12.3 (Core R-FFI-0068): an entry of a runtime unit, with the unit's functions below it up
+       to its calls through pointers, whose targets check or bound their own stack, fits in the
+       call transition its caller keeps. */
+    for (index = 0U; index < graph.unit_entry_count; ++index) {
+        RLlvmStackNode *node = r_llvm_stack_node(&graph, graph.unit_entries[index]);
+        uint64_t bound;
+        if (node == NULL) {
+            (void)r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR);
+            goto cleanup;
+        }
+        bound = graph.components[node->component].bound;
+        if (bound > r_llvm_target_call_transition()) {
+            size_t length = 0U;
+            (void)fprintf(stderr,
+                          "r-front: R-DIAG-LIMIT-001 [R-FFI-0068]: runtime entry %s needs %" PRIu64
+                          " bytes of stack, above the call transition of %" PRIu64 "\n",
+                          LLVMGetValueName2(node->function, &length),
+                          bound,
+                          r_llvm_target_call_transition());
+            (void)r_llvm_fail(emitter, R_FRONTEND_LIMIT_EXCEEDED);
+            goto cleanup;
+        }
+        r_llvm_stack_report(emitter, "r.stack.entries", node->function, &bound, 1U);
+    }
     success = true;
 
 cleanup:
@@ -868,6 +951,7 @@ cleanup:
         r_llvm_free(emitter, frames.frames[index].name);
     }
     r_llvm_free(emitter, frames.frames);
+    r_llvm_free(emitter, graph.unit_entries);
     r_llvm_free(emitter, graph.nodes);
     r_llvm_free(emitter, graph.edges);
     r_llvm_free(emitter, graph.components);

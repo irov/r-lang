@@ -1440,7 +1440,7 @@ def validate_lane(manifest: dict[str, Any], errors: ValidationErrors) -> None:
                 "executor implementation status must remain explicitly partial",
             )
             errors.require(
-                executor_implementation.get("cmake_target") == "r_runtime_darwin_task",
+                executor_implementation.get("cmake_target") == "r_runtime_core",
                 "executor implementation must name its CMake target",
             )
             for field in (
@@ -2352,8 +2352,8 @@ BLOCKING_POOL_FIELDS = {
     "cancellation_mode": "queued_removed_or_acknowledged_after_return",
 }
 BLOCKING_POOL_IMPLEMENTATION = {
-    "cmake_target": "r_runtime_darwin_task",
-    "source": "runtime/darwin/source/blocking_pool.inc",
+    "cmake_target": "r_runtime_core",
+    "source": "runtime/r/task.r",
     "worker_backend": "pthread",
     "worker_count_runtime_constant": "R_RUNTIME_BLOCKING_THREAD_COUNT",
     "pending_bound_runtime_constant": "R_RUNTIME_BLOCKING_MAX_PENDING_CALLS",

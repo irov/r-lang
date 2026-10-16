@@ -140,6 +140,10 @@ uint64_t r_llvm_target_entry_budget(void) {
     return r_target_llvm_entry_budget_bytes;
 }
 
+uint64_t r_llvm_target_call_transition(void) {
+    return r_target_llvm_call_transition_bytes;
+}
+
 const char *r_frontend_target_c_compiler_version(void) {
     return r_target_c_compiler_version;
 }

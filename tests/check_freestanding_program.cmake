@@ -3,12 +3,13 @@
 # The program object of `r-front --profile freestanding --emit=object` may leave undefined only
 # the symbols of ALLOWED_UNDEFINED_SYMBOLS; the emitter bounds its entries' stacks itself. The
 # freestanding runtime and the core library are compiled with -ffreestanding against the
-# freestanding runtime headers only. A hosted environment source then supplies the panic handler
-# and the stack bounds, links everything and runs the program.
+# freestanding runtime headers only; the UTF-8 module of the runtime is the object of its unit
+# written in R (B12). A hosted environment source then supplies the panic handler and the stack
+# bounds, links everything and runs the program.
 foreach(required IN ITEMS
         R_FRONT_EXECUTABLE C_COMPILER TARGET_MANIFEST SOURCE
         ENVIRONMENT_SOURCE ALLOWED_UNDEFINED_SYMBOLS PROJECT_ROOT OUTPUT_DIR
-        EXPECTED_STDOUT)
+        EXPECTED_STDOUT RUNTIME_UTF8_UNIT_OBJECT)
     if(NOT DEFINED ${required} OR "${${required}}" STREQUAL "")
         message(FATAL_ERROR "freestanding program test requires ${required}")
     endif()
@@ -95,7 +96,6 @@ foreach(source IN ITEMS
         runtime/freestanding/source/panic.c
         runtime/freestanding/source/stack.c
         runtime/freestanding/source/thread_local.c
-        runtime/source/utf8.c
         library/core/source/validate_utf8.c)
     get_filename_component(R_FS_SOURCE_NAME "${source}" NAME_WE)
     set(R_FS_OBJECT "${OUTPUT_DIR}/${R_FS_SOURCE_NAME}.freestanding.o")
@@ -118,7 +118,7 @@ endforeach()
 execute_process(
     COMMAND "${C_COMPILER}" ${R_FS_PLATFORM_FLAGS} ${R_FS_WARNINGS} -O0 ${R_FS_INCLUDES}
         "${ENVIRONMENT_SOURCE}" "${R_FS_FINAL_OBJECT}" ${R_FS_RUNTIME_OBJECTS}
-        -o "${R_FS_EXE}"
+        "${RUNTIME_UTF8_UNIT_OBJECT}" -o "${R_FS_EXE}"
     RESULT_VARIABLE R_FS_LINK_RESULT
     OUTPUT_VARIABLE R_FS_LINK_OUTPUT
     ERROR_VARIABLE R_FS_LINK_ERROR

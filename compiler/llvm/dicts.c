@@ -15,7 +15,7 @@
    table of RRuntimeDict (runtime/include/r_runtime_dict.h) in the program, calling the key
    functions of the key type directly, so that the optimizer inlines the hash and the comparison
    into the probe and the probe into its caller. The probe, the mix of a hash with the seed and
-   the insertion are those of runtime/source/dict.c; growth, removal and iteration stay in the
+   the insertion are those of runtime/r/dict.r; growth, removal and iteration stay in the
    runtime, which finds what these paths insert and the other way round. */
 
 static LLVMValueRef

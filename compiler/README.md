@@ -1,7 +1,7 @@
 # R Frontend Parser 0.1
 
 This directory contains the bootstrap frontend for the normative English R Core
-Specification `0.1.0-draft.110`.
+Specification `0.1.0-draft.111`.
 
 ```text
 UTF-8 source
@@ -448,7 +448,7 @@ dictionary. `get`, `get_mut` and `contains` therefore call `r_dict_lookup.K` of 
 `insert` probes with `r_dict_probe.K` and writes the entry itself when the table has a free one;
 both call the key functions `r_key_hash.K` and `r_key_equal.K` directly, so the hash and the
 comparison inline into the probe and the probe into its caller. The probe, the mix of a hash with
-the seed and the layout of slots and entries are those of `runtime/source/dict.c`
+the seed and the layout of slots and entries are those of `runtime/r/dict.r`
 (`r_runtime_dict.h` declares the layout a contract with the emitter); an empty or full table,
 removal, growth and iteration stay in the runtime, which finds what these paths insert.
 
@@ -557,7 +557,7 @@ main results are checked before native 8-bit status conversion.
 The hosted profiles unwind a panic (Core R-ERR-0005; `panic.strategy` of the hosted target
 manifest is `unwind`), in every profile on the hosted runtime; a freestanding program forwards
 each panic to its environment, which does not return. The
-propagation is explicit, without setjmp/longjmp or native exceptions. `runtime/source/panic_abort.c`
+propagation is explicit, without setjmp/longjmp or native exceptions. `runtime/r/panic.r`
 keeps the unwind state of each thread: no panic, a pending panic (category, span and up to 256
 bytes of message text, cut at a scalar boundary) that the frames carry to their callers, or the
 cleanup of one frame. `r_runtime_raise` (the length of `r_runtime_panic`, so a panic site keeps
@@ -883,7 +883,7 @@ the payload, its move and drop functions `r_thread_move.N` and `r_thread_drop.N`
 type information of the entry's result, the entry trampoline and the stage, in synchronous
 functions and async frames alike.
 
-The pool (`runtime/darwin/source/blocking_pool.inc`, included by the task runtime) starts a
+The pool (part of the task runtime, `runtime/r/task.r`) starts a
 thread only while every existing one is busy, up to `R_RUNTIME_BLOCKING_THREAD_COUNT`, and takes
 jobs from one FIFO. A start reserves a slot before its task commits, so submission never fails;
 cancellation removes a job that no thread took, and a taken job acknowledges its task after the
@@ -2781,19 +2781,28 @@ constant holding its address. The C types the modules share are declared once in
 `mach_time`, `fenv`) in `runtime/r/system.r` from the SDK headers; the libc functions and objects
 they use are listed in `runtime/r/link_manifest.json`.
 
+The entries of a unit, its exports and internal callbacks, have no stack check of their own: the
+generated code that calls the runtime keeps the call transition of the target
+(`call_transition_bytes` of the manifest, `r_llvm_target_call_transition`) below its own bound.
+`r_llvm_measure_stack` therefore measures each entry of a unit like the entries of a program, its
+frame and the unit's functions below it up to its calls through function pointers, whose targets
+are entries with their own checks, reports the bound in `!r.stack.entries` and rejects an entry
+above the transition (`R-DIAG-LIMIT-001 [R-FFI-0068]`); in the core the largest bound is about
+1.3 KB of 16 KB.
+
 The build compiles the unit `core` (`R_RUNTIME_UNIT_core_SOURCES` in `CMakeLists.txt`, the shared
-types first) into `build/<preset>/runtime_units/core.o` with the sanitizer of the preset, and the
-archive `r_runtime_core` holds it; `r_runtime_0_1` links that archive and leaves out the C
-sources the unit replaces (`R_RUNTIME_UNIT_core_REPLACES`). `R_RUNTIME_CORE=c` keeps the C
-runtime, the oracle until the battery is green on the new core. Tests and benchmarks that compile
-the runtime into a program themselves receive `R_RUNTIME_SOURCE_<name>` (empty for a replaced
-module) and `RUNTIME_UNIT_OBJECTS`, so every codegen program runs the R core; `r_runtime_tests`
-and the darwin tests link `r_runtime_core` alone. A darwin library whose sources the unit
-replaces (`r_runtime_darwin_base`, `_task`, `_timer`) becomes an interface library to
-`r_runtime_core` (`r_runtime_darwin_replaced_library`), and the archive links
-`r_runtime_darwin_event`, whose event sequence orders the terminal events of external tasks.
-`tests/check_runtime_unit.py` checks the exports, exported objects, internal callbacks and the
-rejections.
+types first, function `r_runtime_unit`) into `build/<preset>/runtime_units/core.o` with the
+sanitizer of the preset, and the archive `r_runtime_core` holds it; `r_runtime_0_1` adds the
+process boundary (`runtime/source/hosted_entry.c`) and links that archive, which links
+`r_runtime_darwin_event`, whose event sequence orders the terminal events of external tasks. A
+second unit, `freestanding_utf8` (`runtime/r/utf8.r` alone, no sanitizer), is the UTF-8 module of
+freestanding programs (`tests/check_freestanding_program.cmake`). Tests and benchmarks that link a
+program themselves add `RUNTIME_HOSTED_SOURCE` and `RUNTIME_UNIT_OBJECTS`, so every codegen
+program runs the R core; `r_runtime_tests` and the darwin tests link `r_runtime_core`.
+`tests/check_runtime_unit.py` checks the exports, exported objects, internal callbacks, the
+transition limit and the rejections; the runtime entry stack inventory
+(`tools/generate_runtime_entry_stack.py`) names the `.r` source of each runtime entry, and
+`r_runtime_unit_stack` verifies its entries against the bounds the compiler reports for the unit.
 
 ## Build and test
 

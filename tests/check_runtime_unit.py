@@ -39,6 +39,17 @@ extern "C" raw fn(raw void*) -> void r_runtime_probe_work_function() {
 }
 '''
 
+# An entry whose frame alone is above the call transition of the target (16384 bytes).
+DEEP_UNIT = '''
+@safety("R-RUNTIME-PROBE-DEEP", "None")
+extern "C" c_uint8 r_runtime_probe_deep(c_size index) {
+    u8[32768] bytes = {};
+    usize at = (index as usize) % 32768usize;
+    bytes[at] = 1u8;
+    return bytes[(at * 7usize) % 32768usize] as c_uint8;
+}
+'''
+
 OBJECT_REQUIREMENTS = ('an exported object of a runtime unit has @safety, a C ABI or atomic C '
                        'type, a name of the runtime and no thread_local')
 
@@ -114,6 +125,18 @@ def check_unit(args, root):
                      module, re.MULTILINE), module
     assert 'ret ptr @"runtime.probe_unit::probe_work.c"' in module, module
     assert not re.search(r'^define (dso_local )?void @probe_work\(', module, re.MULTILINE), module
+    # Every entry of the unit is measured (B12.3, R-FFI-0068): its bound is reported, and one that
+    # needs more than the call transition of the target is refused.
+    assert re.search(r'^!r\.stack\.entries = ', module, re.MULTILINE), module
+    assert '!{!"runtime.probe_unit::probe_work.c", i64 ' in module, module
+    deep_path = root / 'unit_deep.r'
+    deep_path.write_text('module runtime.probe_deep;\n' + DEEP_UNIT.lstrip('\n'))
+    result = subprocess.run(
+        [args.front, '--emit=llvm-ir', '--opt-level=0', *unit_arguments(args), str(deep_path)],
+        capture_output=True, text=True, timeout=60)
+    assert result.returncode != 0 and re.search(
+        r'R-DIAG-LIMIT-001 \[R-FFI-0068\]: runtime entry r_runtime_probe_deep needs [0-9]+ bytes '
+        r'of stack, above the call transition of 16384', result.stderr), result.stderr
     # A unit has no main (R-FUNC-0008, R-FFI-0068).
     main_path = root / 'unit_main.r'
     main_path.write_text('module runtime.probe_main;\ni32 main() { return 0; }\n')

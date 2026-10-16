@@ -15,7 +15,7 @@ Normative draft of the R programming language
 |Field |Value
 |Document|R Core Language Specification
 |Language version|0.1
-|Document revision|0.1.0-draft.110
+|Document revision|0.1.0-draft.111
 |Status|Normative draft; not a stable R 1.0 standard
 |Document language|English; normative original
 |Target backend|ISO/IEC 9899:2018 (C17)
@@ -6062,7 +6062,11 @@ proven against the header declaration, and R code accesses it as a mutable stati
 of the unit: no other object can name its symbol, and the unit passes its address to the C
 functions that call it back, such as a thread start or a queued work item. It is entered on a
 thread the runtime controls and, like an export, enters no attachment, stack preflight or unwind
-test; its R code establishes what it needs itself (R-FUNC-0004). A runtime unit reaches the C types
+test; its R code establishes what it needs itself (R-FUNC-0004). Every entry of a runtime unit, an
+exported function or an internal callback, together with the functions of the unit below it up to
+its calls through function pointers, shall need at most the stack the target reserves under every
+entry into R code for its calls into the runtime (the call transition of the target manifest,
+R-FUNC-0004); one that needs more requires `+R-DIAG-LIMIT-001+`. A runtime unit reaches the C types
 and constants of the runtime through verified extern blocks like any program (R-FFI-0017,
 R-FFI-0018).
 

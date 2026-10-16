@@ -8,7 +8,7 @@
     "target_triple": "arm64-apple-darwin",
     "profile": "hosted-native-async",
     "minimum_os_version": "26.5",
-    "core_specification_revision": "0.1.0-draft.110",
+    "core_specification_revision": "0.1.0-draft.111",
     "standard_library_specification_revision": "0.1.0-draft.77"
   },
   "toolchain": {
@@ -803,8 +803,8 @@
       "executor_workers_may_block": false,
       "implementation": {
         "status": "type-erased-task-runtime-hosted-integrated-partial",
-        "cmake_target": "r_runtime_darwin_task",
-        "source": "runtime/darwin/source/task.c",
+        "cmake_target": "r_runtime_core",
+        "source": "runtime/r/task.r",
         "system_dependency": "Darwin libdispatch",
         "eager_submission": "dispatch_async_f on a private concurrent queue",
         "two_phase_start": "complete frame allocation and adapter native-state reservation precede payload move and publication",
@@ -850,8 +850,8 @@
       "deadline": "strict native one-shot arms; the std.fs payload absolute-deadline adapter re-arms until the continuous deadline is reached",
       "implementation": {
         "status": "std.time-sleep-integrated",
-        "cmake_target": "r_runtime_darwin_timer",
-        "runtime_source": "runtime/darwin/source/timer.c",
+        "cmake_target": "r_runtime_core",
+        "runtime_source": "runtime/r/timer.r",
         "library_sources": [
           "library/std/time/source/sleep_for.c",
           "library/std/time/source/sleep_until.c"
@@ -1111,8 +1111,8 @@
       "entered_cancellation": "acknowledge only after the entry returns and destroy its result",
       "cancellation_mode": "queued_removed_or_acknowledged_after_return",
       "implementation": {
-        "cmake_target": "r_runtime_darwin_task",
-        "source": "runtime/darwin/source/blocking_pool.inc",
+        "cmake_target": "r_runtime_core",
+        "source": "runtime/r/task.r",
         "worker_backend": "pthread",
         "worker_count_runtime_constant": "R_RUNTIME_BLOCKING_THREAD_COUNT",
         "pending_bound_runtime_constant": "R_RUNTIME_BLOCKING_MAX_PENDING_CALLS"

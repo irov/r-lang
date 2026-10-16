@@ -22,7 +22,6 @@ GENERATED_PREFIXES = ("library/generated/",)
 ALLOCATION_BOUNDARIES = {
     "compiler/cli/allocation.c",
     "compiler/source/frontend.c",
-    "runtime/source/allocator.c",
 }
 DIRECT_ALLOCATION_PATTERN = re.compile(
     r"(?<![.>])\b(malloc|calloc|realloc|free)\s*\("

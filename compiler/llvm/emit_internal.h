@@ -697,6 +697,9 @@ LLVMValueRef r_llvm_stack_entry(RLlvmEmitter *emitter, RSymbolId symbol);
 LLVMValueRef r_llvm_direct_stack_entry(RLlvmEmitter *emitter, RSymbolId symbol);
 /* The entry stack budget of the target manifest (target.c). */
 uint64_t r_llvm_target_entry_budget(void);
+/* The stack generated code keeps for a call into the runtime (R-FUNC-0004), which bounds every
+   entry of a runtime unit (R-FFI-0068). */
+uint64_t r_llvm_target_call_transition(void);
 bool r_llvm_measure_stack(RLlvmEmitter *emitter);
 bool r_llvm_import_bitcode(RLlvmEmitter *emitter, uint32_t level);
 void r_llvm_source_report(RLlvmEmitter *emitter);

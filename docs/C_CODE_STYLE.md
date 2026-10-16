@@ -74,8 +74,8 @@ fails while any normative public item is still recorded as `unimplemented`.
   consumption occurs at call entry or only after a successful commit. A concise `Ownership:`
   paragraph immediately above the declaration is the canonical form.
 - Production allocation goes through its explicit allocator subsystem. Direct `malloc`, `calloc`,
-  `realloc`, or `free` is confined to `runtime/source/allocator.c`, the frontend's default allocator
-  provider, and the developer CLI allocator provider. Native adapters receive an allocator and do
+  `realloc`, or `free` is confined to the frontend's default allocator provider and the developer
+  CLI allocator provider; the runtime allocator is written in R (`runtime/r/allocator.r`). Native adapters receive an allocator and do
   not bypass it. Test-harness allocator callbacks may call the host allocator to inject failures.
 - Validate external and runtime-dependent input with ordinary error handling. This includes bounds,
   overflow, allocation, encoding, operating-system, cancellation, deadline, closed-state, and race

@@ -263,20 +263,19 @@ as finished. The matrix records their results per stage.
   compiler/README.md, *Units of the runtime*): allocator and budgets, owners, containers,
   strings, drop glue, panics, stack bounds, thread attachment, the task executor with
   `task_scope` and the blocking pool, and the darwin timers; `hosted_entry.c` and the darwin
-  adapters (`event.c`, I/O, sockets, processes) stay C until B13. A module of it lists its `.r`
-  file in
-  `R_RUNTIME_UNIT_core_SOURCES` (after the modules it uses) and the C file it replaces in
-  `R_RUNTIME_UNIT_core_REPLACES`; the C types it shares go into `runtime/r/types.r`, proven
-  against the runtime headers, and the C functions it imports into `runtime/r/link_manifest.json`.
-  Its exports keep the C names and types of the headers. A test or benchmark that compiles
-  runtime sources into a program uses `R_RUNTIME_SOURCE_<name>` (empty for a replaced module) and
-  `RUNTIME_UNIT_OBJECTS`, never a `runtime/source` path: a program that compiles the C module
-  tests the oracle, not the runtime (B12-3). `R_RUNTIME_CORE=c` builds the C runtime instead.
-  System interfaces go into `runtime/r/system.r`, proven against the SDK headers. A function a
-  C thread or queue calls back is a `protected` `@callback` (internal to the unit); declare its
-  context `raw void*`, not `raw void*?`: an indirect call may reach every callback of the same R
-  signature, and the glue's `(raw void*?) -> void` would make every callback part of a cycle
-  (R-FUNC-0004). The stack inventory of runtime entries still measures the C oracle.
+  adapters (`event.c`, I/O, sockets, processes) stay C until B13; the C core it replaced is gone
+  (B12.3). A module of it lists its `.r` file in `R_RUNTIME_UNIT_core_SOURCES` (after the
+  modules it uses); the C types it shares go into `runtime/r/types.r`, proven against the runtime
+  headers, and the C functions it imports into `runtime/r/link_manifest.json`. Its exports keep
+  the C names and types of the headers. A test or benchmark that links a program itself adds
+  `RUNTIME_HOSTED_SOURCE` and `RUNTIME_UNIT_OBJECTS` (B12-3). System interfaces go into
+  `runtime/r/system.r`, proven against the SDK headers. A function a C thread or queue calls back
+  is a `protected` `@callback` (internal to the unit); declare its context `raw void*`, not
+  `raw void*?`: an indirect call may reach every callback of the same R signature, and the glue's
+  `(raw void*?) -> void` would make every callback part of a cycle (R-FUNC-0004). Every entry of
+  the unit must fit in the call transition (16 KB; the compiler rejects one above it,
+  R-FFI-0068), and a new runtime entry names its `.r` source in
+  `tools/generate_runtime_entry_stack.py`.
 
 - Darwin adapters publish one linearized terminal outcome per operation (R-SLIB-ASYNC-0007):
   task cancellation is selected immediately but reaches the native request asynchronously, so an
