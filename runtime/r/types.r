@@ -7,6 +7,7 @@ module runtime.types;
 @header("r_runtime_budget.h")
 @header("r_runtime_core.h")
 @header("r_runtime_0_1.h")
+@header("r_runtime_task.h")
 @header("r_runtime_own.h")
 @header("r_runtime_array.h")
 @header("r_runtime_string.h")
@@ -15,6 +16,7 @@ module runtime.types;
 @header("r_runtime_arc.h")
 @header("r_runtime_rc.h")
 @header("r_runtime_drop.h")
+@header("r_runtime_darwin_event.h")
 @abi("r-runtime-abi")
 extern "C" {
     @repr(C)
@@ -52,6 +54,15 @@ extern "C" {
         c_uint32 text_length;
         c_char[256] text;
     };
+
+    // The tasks of the runtime (r_runtime_task.h): their records are the runtime's own
+    // (runtime/r/task.r); C sees incomplete types.
+    @c_type(name = "RRuntimeTask", kind = "typedef")
+    opaque struct TaskHandle;
+    @c_type(name = "RRuntimeTaskExecution", kind = "typedef")
+    opaque struct ExecutionHandle;
+    @c_type(name = "RRuntimeTaskExternalExecution", kind = "typedef")
+    opaque struct ExternalHandle;
 
     @repr(C)
     @c_type(name = "RRuntimeTypeInfo", kind = "typedef")
@@ -347,6 +358,10 @@ extern "C" {
         c_size alignment;
     };
 
+    // The process-wide sequence of the darwin adapters' terminal events (runtime/darwin/source).
+    @safety("R-RUNTIME-EVENT-SEQUENCE-NEXT", "None")
+    c_uint64 r_runtime_darwin_event_sequence_next();
+
     @c_constant(name = "R_RUNTIME_ALLOCATOR_MAX_OBJECT_SIZE")
     const c_size maximum_object_size = 2305843009213693951u64 as c_size;
     @c_constant(name = "R_RUNTIME_ALLOCATOR_MAX_ALIGNMENT")
@@ -360,6 +375,18 @@ extern "C" {
     raw void*? memcpy(raw void*? destination, raw const void*? source, c_size size);
     @safety("R-RUNTIME-MEMSET", "the range is valid for size bytes")
     raw void*? memset(raw void*? destination, c_int value, c_size size);
+}
+
+// The truth of a C _Bool, and a C _Bool of a truth.
+bool is_true(c_bool value) {
+    return value != 0i32 as c_bool;
+}
+
+c_bool c_bool_of(bool value) {
+    if (value == true) {
+        return 1i32 as c_bool;
+    }
+    return 0i32 as c_bool;
 }
 
 // The largest usize, the bound the C arithmetic of the runtime checks against (SIZE_MAX).

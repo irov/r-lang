@@ -1846,7 +1846,7 @@ static bool r_parse_type(RParser *parser, bool allow_unresolved_name) {
                 parser, R_TOKEN_QUESTION, "atomic raw pointer type must be nullable");
         } else if (r_token_is_r_integer_type(r_parser_peek_kind(parser)) ||
                    r_token_is_c_integer_type(r_parser_peek_kind(parser)) ||
-                   r_parser_at(parser, R_TOKEN_KW_BOOL)) {
+                   r_parser_at(parser, R_TOKEN_KW_BOOL) || r_parser_at(parser, R_TOKEN_KW_C_BOOL)) {
             parsed = r_parser_bump(parser);
         } else {
             parsed = false;
@@ -3758,6 +3758,7 @@ static bool r_attribute_name_is_known(const RParser *parser, const RToken *name)
         "signal_safe",
         "signal_handler",
         "c_field",
+        "c_address",
     };
     size_t index;
     for (index = 0U; index < (sizeof(known_names) / sizeof(known_names[0])); ++index) {

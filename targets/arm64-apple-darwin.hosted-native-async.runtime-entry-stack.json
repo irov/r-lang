@@ -1931,6 +1931,13 @@
       "direct_frame_measurement_available": true
     },
     {
+      "c_symbol": "r_runtime_darwin_task_testing_after_end",
+      "source": "runtime/darwin/source/task.c",
+      "category": "runtime-task",
+      "linkage": "external",
+      "direct_frame_measurement_available": true
+    },
+    {
       "c_symbol": "r_runtime_dict_clear",
       "source": "runtime/source/dict.c",
       "category": "runtime-container",

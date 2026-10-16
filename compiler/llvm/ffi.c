@@ -830,7 +830,25 @@ static LLVMValueRef r_llvm_c_export(RLlvmEmitter *emitter, RSymbolId id) {
                    ? (r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR), NULL)
                    : NULL;
     }
-    emitter->c_functions[id] = r_llvm_c_declare(emitter, name, &signature, false);
+    if (symbol->is_protected) {
+        /* B12 (R-FFI-0068): a protected callback of a runtime unit is internal, named after its
+           R function so that two modules may use one C name. */
+        const RSource *source = r_get_source_const(emitter->frontend, symbol->module_source);
+        const RInternEntry *entry =
+            &emitter->frontend->intern_entries[(size_t)symbol->name_intern_id - 1U];
+        const int written =
+            snprintf(name,
+                     sizeof(name),
+                     "%s::%.*s.c",
+                     (source != NULL) && (source->module_name != NULL) ? source->module_name : "?",
+                     (int)entry->length,
+                     entry->bytes);
+
+        if ((written <= 0) || ((size_t)written >= sizeof(name))) {
+            return (r_llvm_fail(emitter, R_FRONTEND_INTERNAL_ERROR), NULL);
+        }
+    }
+    emitter->c_functions[id] = r_llvm_c_declare(emitter, name, &signature, symbol->is_protected);
     return emitter->c_functions[id];
 }
 
@@ -1148,6 +1166,29 @@ LLVMValueRef r_llvm_ffi_object(RLlvmEmitter *emitter, RSymbolId id) {
             (void)r_llvm_unsupported(emitter, "a poisoned C object");
         }
         return NULL;
+    }
+    if (symbol->c_address) {
+        /* B12 (R-FFI-0022): the C object, of a type R may not know, and a private constant
+           holding its address, which is the place of the R name. */
+        char address_name[272];
+        LLVMValueRef object = LLVMGetNamedGlobal(emitter->module, c_name);
+
+        if (object == NULL) {
+            object = LLVMAddGlobal(emitter->module, r_llvm_int(emitter, 8U), c_name);
+            LLVMSetLinkage(object, LLVMExternalLinkage);
+            LLVMSetAlignment(object, 1U);
+        }
+        (void)snprintf(address_name, sizeof(address_name), "%s.address", c_name);
+        global = LLVMGetNamedGlobal(emitter->module, address_name);
+        if (global == NULL) {
+            global = LLVMAddGlobal(emitter->module, r_llvm_pointer(emitter), address_name);
+            LLVMSetInitializer(global, object);
+            LLVMSetGlobalConstant(global, 1);
+            LLVMSetLinkage(global, LLVMPrivateLinkage);
+            LLVMSetUnnamedAddr(global, 1);
+            LLVMSetAlignment(global, 8U);
+        }
+        return global;
     }
     global = LLVMGetNamedGlobal(emitter->module, c_name);
     if (global == NULL) {

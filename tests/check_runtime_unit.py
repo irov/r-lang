@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Check units of the runtime written in R (Core R-FFI-0068, R-FFI-0046, B12): a unit exports
-functions and objects under the names of the runtime without an entry, stack preflight or
-attachment; outside a unit an `extern "C"` object, a runtime name and the unit's options are
-rejected, each diagnostic with its exact position, code, rule and message."""
+"""Check units of the runtime written in R (Core R-FFI-0068, R-FFI-0046, R-FFI-0054, B12): a unit
+exports functions and objects under the names of the runtime without an entry, stack preflight or
+attachment, and keeps its protected callbacks internal; outside a unit an `extern "C"` object, a
+runtime name, a protected callback and the unit's options are rejected, each diagnostic with its
+exact position, code, rule and message."""
 
 import argparse
 from pathlib import Path
@@ -21,6 +22,20 @@ extern "C" c_uint64 r_runtime_probe_limit = 64u64 as c_uint64;
 extern "C" c_uint32 r_runtime_probe_bump() {
     return core::atomic_fetch_add(&r_runtime_probe_counter, 1u32 as c_uint32,
                                   core::memory_order::relaxed);
+}
+
+@callback
+@safety("R-RUNTIME-PROBE-WORK", "context addresses a c_uint32")
+protected extern "C" void probe_work(raw void* context) {
+    unsafe {
+        raw c_uint32* count = context as raw c_uint32*;
+        *count = ((*count as u32) + 1u32) as c_uint32;
+    }
+}
+
+@safety("R-RUNTIME-PROBE-WORK-FUNCTION", "None")
+extern "C" raw fn(raw void*) -> void r_runtime_probe_work_function() {
+    return probe_work;
 }
 '''
 
@@ -51,6 +66,22 @@ extern "C" thread_local c_uint32 r_runtime_probe_local = 1u32 as c_uint32;
 ''', [(2, 21, 'R-DIAG-FFI-003', 'R-FFI-0068', OBJECT_REQUIREMENTS),
       (4, 16, 'R-DIAG-FFI-003', 'R-FFI-0068', OBJECT_REQUIREMENTS),
       (6, 34, 'R-DIAG-FFI-003', 'R-FFI-0068', OBJECT_REQUIREMENTS)]),
+    # Only a runtime unit keeps a protected callback internal; anywhere else, and for a protected
+    # definition without @callback, protected excludes extern "C".
+    'protected-callback-outside-unit': (False, '''
+@callback
+@safety("PROBE", "None")
+protected extern "C" void probe_work(raw void* context) {
+}
+i32 main() { return 0; }
+''', [(4, 22, 'R-DIAG-FFI-003', 'R-FFI-0054',
+       'C export requires a public definition, @safety, and a non-reserved C name')]),
+    'protected-export-in-unit': (True, '''
+@safety("R-RUNTIME-PROBE", "None")
+protected extern "C" void r_runtime_probe_hidden() {
+}
+''', [(3, 22, 'R-DIAG-FFI-003', 'R-FFI-0054',
+       'C export requires a public definition, @safety, and a non-reserved C name')]),
 }
 
 DIAGNOSTIC = re.compile(r'^(?P<path>.*?):(?P<line>\d+):(?P<column>\d+): error '
@@ -77,6 +108,12 @@ def check_unit(args, root):
     assert re.search(r'^define [^\n]*@r_runtime_probe_bump\(\)', module, re.MULTILINE), module
     assert 'atomicrmw add ptr @r_runtime_probe_counter' in module, module
     assert 'r_runtime_stack_require' not in module and 'r_runtime_c_entry' not in module, module
+    # A protected callback is an internal C function named after its R function (R-FFI-0068);
+    # the unit hands out its address, and no other object can name it.
+    assert re.search(r'^define internal void @"runtime\.probe_unit::probe_work\.c"\(ptr ',
+                     module, re.MULTILINE), module
+    assert 'ret ptr @"runtime.probe_unit::probe_work.c"' in module, module
+    assert not re.search(r'^define (dso_local )?void @probe_work\(', module, re.MULTILINE), module
     # A unit has no main (R-FUNC-0008, R-FFI-0068).
     main_path = root / 'unit_main.r'
     main_path.write_text('module runtime.probe_main;\ni32 main() { return 0; }\n')

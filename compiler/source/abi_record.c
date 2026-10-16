@@ -2259,7 +2259,18 @@ static bool r_abi_verify_imports(RFrontendContext *context,
         symbol->first_c_import_slot = (uint32_t)context->c_import_slot_count;
         symbol->c_import_slot_count = UINT32_C(0);
         if (symbol->kind == R_SEMANTIC_SYMBOL_MODULE_OBJECT) {
-            if (!r_abi_match_type(&match, symbol->type, prototype->type_node, UINT32_C(0))) {
+            /* B12: a @c_address import holds a pointer to the C object of the record. */
+            const RSemanticType *address =
+                symbol->c_address ? r_semantic_type(context, symbol->type) : NULL;
+            const RSemanticType *pointer =
+                (address != NULL) && (address->kind == R_SEMANTIC_TYPE_CONST)
+                    ? r_semantic_type(context, address->base)
+                    : address;
+
+            if (!r_abi_match_type(&match,
+                                  pointer != NULL ? pointer->base : symbol->type,
+                                  prototype->type_node,
+                                  UINT32_C(0))) {
                 return false;
             }
         } else if (!r_abi_match_function(

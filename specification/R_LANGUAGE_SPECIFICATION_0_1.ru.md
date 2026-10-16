@@ -6,7 +6,7 @@
 |----|----|
 | Документ | R Core Language Specification |
 | Версия языка | 0.1 |
-| Редакция документа | 0.1.0-draft.109 |
+| Редакция документа | 0.1.0-draft.110 |
 | Статус | Перевод нормативного черновика; не является стабильным стандартом R 1.0 |
 | Язык документа | Русский перевод; ключевые нормативные термины приведены на английском |
 | Целевой backend | ISO/IEC 9899:2018 (C17) |
@@ -2242,7 +2242,7 @@ Anchored forms `core::slice_from_raw_parts_in` и `core::slice_from_raw_parts_in
 
 <a id="R-FFI-0022"></a>
 
-**R-FFI-0022** — `TYPE name;` inside `extern "C"` imports a C object symbol. `thread_local TYPE name;` imports C `_Thread_local` object. External object never starts R ownership and is never automatically dropped.
+**R-FFI-0022** — `TYPE name;` inside `extern "C"` imports a C object symbol. `thread_local TYPE name;` imports C `_Thread_local` object. External object never starts R ownership and is never automatically dropped. `@c_address raw TYPE* name;` или `@c_address raw const TYPE* name;` импортирует вместо этого адрес C object `name`: имя R — константный non-null raw pointer на объект C type TYPE, который может быть opaque (R-FFI-0015). Так достигается C macro, называющий адрес объекта, например `FE_DFL_ENV` (`&_FE_DFL_ENV`); чтение указателя является чтением импортированного объекта (R-FFI-0023).
 
 <a id="R-FFI-0023"></a>
 
@@ -2396,7 +2396,7 @@ Anchored forms `core::slice_from_raw_parts_in` и `core::slice_from_raw_parts_in
 
 <a id="R-FFI-0068"></a>
 
-**R-FFI-0068** — Реализация может транслировать части собственного runtime с R как runtime unit: трансляцию в freestanding profile без `main` (R-FUNC-0008) и без функций входа и завершения библиотеки (R-FFI-0064), чьи определения `extern "C"` являются функциями runtime. Только в runtime unit их имена могут использовать идентификаторы, которые реализация резервирует за своим runtime: `r_runtime_` и далее строчные латинские буквы, цифры и подчёркивания (R-FFI-0057). Каждая такая функция доказывается по заголовку runtime, который её объявляет, как импорт (R-FFI-0042), и сохраняет этот C type. Она не выполняет присоединения потока, предпроверки стека и проверки раскрутки R-FFI-0055: их выполнили вызывающие её сгенерированный код и runtime. Паника в runtime unit выдаёт отчёт и завершает процесс (R-ERR-0006). Runtime unit может также определить с `@safety` и `extern "C"` module object типа R-FFI-0004 или atomic C integer либо nullable raw pointer, не `thread_local` и с константной инициализацией (R-OBJ-0010): он экспортируется под своим именем, доказывается по объявлению заголовка, а код R обращается к нему как к изменяемому статическому объекту (R-OBJ-0009). C types и константы runtime runtime unit получает через проверенные extern blocks, как любая программа (R-FFI-0017, R-FFI-0018).
+**R-FFI-0068** — Реализация может транслировать части собственного runtime с R как runtime unit: трансляцию в freestanding profile без `main` (R-FUNC-0008) и без функций входа и завершения библиотеки (R-FFI-0064), чьи определения `extern "C"` являются функциями runtime. Только в runtime unit их имена могут использовать идентификаторы, которые реализация резервирует за своим runtime: `r_runtime_` и далее строчные латинские буквы, цифры и подчёркивания (R-FFI-0057). Каждая такая функция доказывается по заголовку runtime, который её объявляет, как импорт (R-FFI-0042), и сохраняет этот C type. Она не выполняет присоединения потока, предпроверки стека и проверки раскрутки R-FFI-0055: их выполнили вызывающие её сгенерированный код и runtime. Паника в runtime unit выдаёт отчёт и завершает процесс (R-ERR-0006). Runtime unit может также определить с `@safety` и `extern "C"` module object типа R-FFI-0004 или atomic C integer либо nullable raw pointer, не `thread_local` и с константной инициализацией (R-OBJ-0010): он экспортируется под своим именем, доказывается по объявлению заголовка, а код R обращается к нему как к изменяемому статическому объекту (R-OBJ-0009). Определение `protected` с `@callback` в runtime unit является внутренней C function этого unit: ни один другой объект не может назвать её символ, а unit передаёт её адрес C functions, которые её вызывают, например запуску потока или работе в очереди. В неё входят на потоке, которым управляет runtime, и, как в экспорт, без присоединения, предпроверки стека и проверки раскрутки; то, что нужно её коду R, он устанавливает сам (R-FUNC-0004). C types и константы runtime runtime unit получает через проверенные extern blocks, как любая программа (R-FFI-0017, R-FFI-0018).
 
 ### 23.7 Unsafe boundary and safe wrappers
 
@@ -2422,7 +2422,7 @@ Anchored forms `core::slice_from_raw_parts_in` и `core::slice_from_raw_parts_in
 
 <a id="R-FFI-0050"></a>
 
-**R-FFI-0050** — FFI attribute scopes are closed: `@link`, `@header`, `@abi` on extern block; `@link_name` on imported symbol; `@safety` on imported or exported C function; `@fenv` on imported C function; `@repr`, `@c_type` on C type; `@c_field` on field C-declared struct или union (R-FFI-0017); `@c_constant` on verified constant; `@export_name`, `@callback`, `@signal_handler` on exported C function; `@signal_safe` on imported or exported C function (R-FFI-0067). `@header` is repeatable; `@link` and `@abi` are singleton per block, and every declaration-scoped FFI attribute is singleton on its declaration. Misplaced, duplicated-singleton or unknown FFI attribute requires `R-DIAG-FFI-003`.
+**R-FFI-0050** — FFI attribute scopes are closed: `@link`, `@header`, `@abi` on extern block; `@link_name` on imported symbol; `@c_address` on imported object; `@safety` on imported or exported C function; `@fenv` on imported C function; `@repr`, `@c_type` on C type; `@c_field` on field C-declared struct или union (R-FFI-0017); `@c_constant` on verified constant; `@export_name`, `@callback`, `@signal_handler` on exported C function; `@signal_safe` on imported or exported C function (R-FFI-0067). `@header` is repeatable; `@link` and `@abi` are singleton per block, and every declaration-scoped FFI attribute is singleton on its declaration. Misplaced, duplicated-singleton or unknown FFI attribute requires `R-DIAG-FFI-003`.
 
 <a id="R-FFI-0051"></a>
 
@@ -2438,7 +2438,7 @@ Anchored forms `core::slice_from_raw_parts_in` и `core::slice_from_raw_parts_in
 
 <a id="R-FFI-0054"></a>
 
-**R-FFI-0054** — Outside an extern block, `extern "C"` is valid only on a non-`protected` function definition satisfying R-FFI-0024. Protected definition, body-less prototype, object declaration либо any other top-level `extern` use is a constraint violation; imports shall be written inside verified `extern "C"` block.
+**R-FFI-0054** — Outside an extern block, `extern "C"` is valid only on a non-`protected` function definition satisfying R-FFI-0024 либо, в runtime unit, на `protected` definition с `@callback` (R-FFI-0068). Any other protected definition, body-less prototype, object declaration либо any other top-level `extern` use is a constraint violation; imports shall be written inside verified `extern "C"` block.
 
 <a id="R-FFI-0055"></a>
 

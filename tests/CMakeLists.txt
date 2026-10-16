@@ -2587,7 +2587,7 @@ target_compile_definitions(r_runtime_tests PRIVATE
 target_link_libraries(r_runtime_tests PRIVATE Threads::Threads)
 if(APPLE)
     target_sources(r_runtime_tests PRIVATE
-        "${PROJECT_SOURCE_DIR}/runtime/darwin/source/stack.c"
+        ${R_RUNTIME_SOURCE_stack}
     )
     target_include_directories(r_runtime_tests PRIVATE
         "${PROJECT_SOURCE_DIR}/runtime/darwin/include"
@@ -6638,12 +6638,12 @@ if(NOT MSVC)
                 -DRUNTIME_DROP_SOURCE=${R_RUNTIME_SOURCE_drop}
                 -DRUNTIME_OWN_SOURCE=${R_RUNTIME_SOURCE_own}
                 -DRUNTIME_THREAD_ATTACHMENT_SOURCE=${R_RUNTIME_SOURCE_thread_attachment}
-                -DRUNTIME_TASK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/task.c
-                -DRUNTIME_STACK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/stack.c
+                -DRUNTIME_TASK_SOURCE=${R_RUNTIME_SOURCE_task}
+                -DRUNTIME_STACK_SOURCE=${R_RUNTIME_SOURCE_stack}
                 -DRUNTIME_DARWIN_IO_LIBRARY=$<TARGET_FILE:r_runtime_darwin_io>
                 -DRUNTIME_DARWIN_PROCESS_LIBRARY=$<TARGET_FILE:r_runtime_darwin_process>
                 -DRUNTIME_DARWIN_EVENT_LIBRARY=$<TARGET_FILE:r_runtime_darwin_event>
-                -DRUNTIME_DARWIN_TIMER_LIBRARY=$<TARGET_FILE:r_runtime_darwin_timer>
+                -DRUNTIME_DARWIN_TIMER_LIBRARY=${R_RUNTIME_DARWIN_TIMER_ARCHIVE}
                 -DRUNTIME_FS_LANE_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane.c
                 -DRUNTIME_FS_LANE_ASYNC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_async.c
                 -DRUNTIME_FS_LANE_SYSCALLS_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_syscalls.c
@@ -7251,6 +7251,12 @@ if(NOT MSVC)
     if(R_RUNTIME_CORE STREQUAL "r")
         list(APPEND R_SHARED_LIBRARY_LINK_TARGETS r_runtime_core)
     endif()
+    foreach(R_SHARED_LIBRARY_TARGET IN LISTS R_SHARED_LIBRARY_LINK_TARGETS)
+        get_target_property(R_SHARED_LIBRARY_TYPE ${R_SHARED_LIBRARY_TARGET} TYPE)
+        if(R_SHARED_LIBRARY_TYPE STREQUAL "INTERFACE_LIBRARY")
+            list(REMOVE_ITEM R_SHARED_LIBRARY_LINK_TARGETS ${R_SHARED_LIBRARY_TARGET})
+        endif()
+    endforeach()
     set(R_SHARED_LIBRARY_LINK_INPUTS)
     foreach(R_SHARED_LIBRARY_TARGET IN LISTS R_SHARED_LIBRARY_LINK_TARGETS)
         list(APPEND R_SHARED_LIBRARY_LINK_INPUTS
@@ -9813,12 +9819,12 @@ if(NOT MSVC)
             -DRUNTIME_DROP_SOURCE=${R_RUNTIME_SOURCE_drop}
             -DRUNTIME_OWN_SOURCE=${R_RUNTIME_SOURCE_own}
             -DRUNTIME_THREAD_ATTACHMENT_SOURCE=${R_RUNTIME_SOURCE_thread_attachment}
-            -DRUNTIME_TASK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/task.c
-            -DRUNTIME_STACK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/stack.c
+            -DRUNTIME_TASK_SOURCE=${R_RUNTIME_SOURCE_task}
+            -DRUNTIME_STACK_SOURCE=${R_RUNTIME_SOURCE_stack}
             -DRUNTIME_DARWIN_IO_LIBRARY=$<TARGET_FILE:r_runtime_darwin_io>
             -DRUNTIME_DARWIN_PROCESS_LIBRARY=$<TARGET_FILE:r_runtime_darwin_process>
             -DRUNTIME_DARWIN_EVENT_LIBRARY=$<TARGET_FILE:r_runtime_darwin_event>
-            -DRUNTIME_DARWIN_TIMER_LIBRARY=$<TARGET_FILE:r_runtime_darwin_timer>
+            -DRUNTIME_DARWIN_TIMER_LIBRARY=${R_RUNTIME_DARWIN_TIMER_ARCHIVE}
             -DRUNTIME_FS_LANE_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane.c
             -DRUNTIME_FS_LANE_ASYNC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_async.c
             -DRUNTIME_FS_LANE_SYSCALLS_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_syscalls.c
@@ -9899,12 +9905,12 @@ if(NOT MSVC)
             -DRUNTIME_DROP_SOURCE=${R_RUNTIME_SOURCE_drop}
             -DRUNTIME_OWN_SOURCE=${R_RUNTIME_SOURCE_own}
             -DRUNTIME_THREAD_ATTACHMENT_SOURCE=${R_RUNTIME_SOURCE_thread_attachment}
-            -DRUNTIME_TASK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/task.c
-            -DRUNTIME_STACK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/stack.c
+            -DRUNTIME_TASK_SOURCE=${R_RUNTIME_SOURCE_task}
+            -DRUNTIME_STACK_SOURCE=${R_RUNTIME_SOURCE_stack}
             -DRUNTIME_DARWIN_IO_LIBRARY=$<TARGET_FILE:r_runtime_darwin_io>
             -DRUNTIME_DARWIN_PROCESS_LIBRARY=$<TARGET_FILE:r_runtime_darwin_process>
             -DRUNTIME_DARWIN_EVENT_LIBRARY=$<TARGET_FILE:r_runtime_darwin_event>
-            -DRUNTIME_DARWIN_TIMER_LIBRARY=$<TARGET_FILE:r_runtime_darwin_timer>
+            -DRUNTIME_DARWIN_TIMER_LIBRARY=${R_RUNTIME_DARWIN_TIMER_ARCHIVE}
             -DRUNTIME_FS_LANE_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane.c
             -DRUNTIME_FS_LANE_ASYNC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_async.c
             -DRUNTIME_FS_LANE_SYSCALLS_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_syscalls.c
@@ -9984,12 +9990,12 @@ if(NOT MSVC)
             -DRUNTIME_DROP_SOURCE=${R_RUNTIME_SOURCE_drop}
             -DRUNTIME_OWN_SOURCE=${R_RUNTIME_SOURCE_own}
             -DRUNTIME_THREAD_ATTACHMENT_SOURCE=${R_RUNTIME_SOURCE_thread_attachment}
-            -DRUNTIME_TASK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/task.c
-            -DRUNTIME_STACK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/stack.c
+            -DRUNTIME_TASK_SOURCE=${R_RUNTIME_SOURCE_task}
+            -DRUNTIME_STACK_SOURCE=${R_RUNTIME_SOURCE_stack}
             -DRUNTIME_DARWIN_IO_LIBRARY=$<TARGET_FILE:r_runtime_darwin_io>
             -DRUNTIME_DARWIN_PROCESS_LIBRARY=$<TARGET_FILE:r_runtime_darwin_process>
             -DRUNTIME_DARWIN_EVENT_LIBRARY=$<TARGET_FILE:r_runtime_darwin_event>
-            -DRUNTIME_DARWIN_TIMER_LIBRARY=$<TARGET_FILE:r_runtime_darwin_timer>
+            -DRUNTIME_DARWIN_TIMER_LIBRARY=${R_RUNTIME_DARWIN_TIMER_ARCHIVE}
             -DRUNTIME_FS_LANE_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane.c
             -DRUNTIME_FS_LANE_ASYNC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_async.c
             -DRUNTIME_FS_LANE_SYSCALLS_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_syscalls.c
@@ -10069,12 +10075,12 @@ if(NOT MSVC)
             -DRUNTIME_DROP_SOURCE=${R_RUNTIME_SOURCE_drop}
             -DRUNTIME_OWN_SOURCE=${R_RUNTIME_SOURCE_own}
             -DRUNTIME_THREAD_ATTACHMENT_SOURCE=${R_RUNTIME_SOURCE_thread_attachment}
-            -DRUNTIME_TASK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/task.c
-            -DRUNTIME_STACK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/stack.c
+            -DRUNTIME_TASK_SOURCE=${R_RUNTIME_SOURCE_task}
+            -DRUNTIME_STACK_SOURCE=${R_RUNTIME_SOURCE_stack}
             -DRUNTIME_DARWIN_IO_LIBRARY=$<TARGET_FILE:r_runtime_darwin_io>
             -DRUNTIME_DARWIN_PROCESS_LIBRARY=$<TARGET_FILE:r_runtime_darwin_process>
             -DRUNTIME_DARWIN_EVENT_LIBRARY=$<TARGET_FILE:r_runtime_darwin_event>
-            -DRUNTIME_DARWIN_TIMER_LIBRARY=$<TARGET_FILE:r_runtime_darwin_timer>
+            -DRUNTIME_DARWIN_TIMER_LIBRARY=${R_RUNTIME_DARWIN_TIMER_ARCHIVE}
             -DRUNTIME_FS_LANE_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane.c
             -DRUNTIME_FS_LANE_ASYNC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_async.c
             -DRUNTIME_FS_LANE_SYSCALLS_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_syscalls.c
@@ -10155,12 +10161,12 @@ if(NOT MSVC)
             -DRUNTIME_DROP_SOURCE=${R_RUNTIME_SOURCE_drop}
             -DRUNTIME_OWN_SOURCE=${R_RUNTIME_SOURCE_own}
             -DRUNTIME_THREAD_ATTACHMENT_SOURCE=${R_RUNTIME_SOURCE_thread_attachment}
-            -DRUNTIME_TASK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/task.c
-            -DRUNTIME_STACK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/stack.c
+            -DRUNTIME_TASK_SOURCE=${R_RUNTIME_SOURCE_task}
+            -DRUNTIME_STACK_SOURCE=${R_RUNTIME_SOURCE_stack}
             -DRUNTIME_DARWIN_IO_LIBRARY=$<TARGET_FILE:r_runtime_darwin_io>
             -DRUNTIME_DARWIN_PROCESS_LIBRARY=$<TARGET_FILE:r_runtime_darwin_process>
             -DRUNTIME_DARWIN_EVENT_LIBRARY=$<TARGET_FILE:r_runtime_darwin_event>
-            -DRUNTIME_DARWIN_TIMER_LIBRARY=$<TARGET_FILE:r_runtime_darwin_timer>
+            -DRUNTIME_DARWIN_TIMER_LIBRARY=${R_RUNTIME_DARWIN_TIMER_ARCHIVE}
             -DRUNTIME_FS_LANE_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane.c
             -DRUNTIME_FS_LANE_ASYNC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_async.c
             -DRUNTIME_FS_LANE_SYSCALLS_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_syscalls.c

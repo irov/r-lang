@@ -494,11 +494,10 @@ _Bool r_runtime_blocking_withdraw(RRuntimeBlockingJob *job);
    which exits the process, it only refuses reservations. */
 void r_runtime_blocking_stop(void);
 
-#if defined(R_RUNTIME_DARWIN_TASK_TESTING)
 /* Testing: hook runs once on the worker that executed a task with a budget, after the end of the
-   task is published and before the executor releases the task (M42-3); NULL disarms it. */
+   task is published and before the executor releases the task (M42-3); NULL disarms it. Always
+   present: an unarmed hook costs one atomic load. */
 void r_runtime_darwin_task_testing_after_end(void (*hook)(void));
-#endif
 
 #ifdef __cplusplus
 }

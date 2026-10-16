@@ -13,8 +13,15 @@ extern "C" {
         atomic c_int level;
         atomic raw void*? slot;
         atomic c_size total;
+        atomic c_bool ready;
         c_uchar tag;
     };
+
+    // R-FFI-0022 (B12): ATOMIC_REGISTRY_MAIN, the address of an object of an incomplete type.
+    @c_type(name = "atomic_registry", kind = "struct")
+    opaque struct Registry;
+    @c_address
+    raw Registry* atomic_registry_main;
 
     @safety("COUNTERS-INITIALIZE", "The pointer refers to live storage of the struct")
     void atomic_counters_initialize(raw Counters* counters, c_uchar tag);
@@ -24,11 +31,16 @@ extern "C" {
     c_int atomic_counters_level(raw const Counters* counters);
     @safety("COUNTERS-SLOT", "The pointer refers to a live value")
     raw void*? atomic_counters_slot(raw const Counters* counters);
+    @safety("COUNTERS-READY", "The pointer refers to a live value")
+    c_bool atomic_counters_ready(raw const Counters* counters);
+    @safety("REGISTRY-TAG", "The pointer refers to the registry")
+    c_int atomic_registry_tag(raw const Registry* registry);
 }
 
 i32 main() {
     Counters counters = Counters { .hits = 5u64 as c_uint64, .level = 0i32 as c_int, .slot = null,
-                                   .total = 0usize as c_size, .tag = 1u8 as c_uchar };
+                                   .total = 0usize as c_size, .ready = 0i32 as c_bool,
+                                   .tag = 1u8 as c_uchar };
     i32 marker = 7;
 
     if (sizeof(Counters) != 40usize || alignof(Counters) != 8usize) {
@@ -54,6 +66,13 @@ i32 main() {
         if (atomic_counters_slot(pointer as raw const Counters*) != address as raw void*?) {
             return 5;
         }
+        core::atomic_store(&pointer->ready, 1i32 as c_bool, core::memory_order::release);
+        if (atomic_counters_ready(pointer as raw const Counters*) != 1i32 as c_bool) {
+            return 10;
+        }
+        if (atomic_registry_tag(atomic_registry_main as raw const Registry*) != 42i32 as c_int) {
+            return 11;
+        }
     }
     if (core::atomic_load(&counters.hits, core::memory_order::acquire) != 18u64 as c_uint64 ||
         core::atomic_load(&counters.total, core::memory_order::acquire) != 10usize as c_size) {
@@ -76,6 +95,7 @@ i32 main() {
         atomic_counters_initialize(pointer, 9u8 as c_uchar);
         if (core::atomic_load(&pointer->hits, core::memory_order::relaxed) != 0u64 as c_uint64 ||
             core::atomic_load(&pointer->slot, core::memory_order::relaxed) != null ||
+            core::atomic_load(&pointer->ready, core::memory_order::relaxed) != 0i32 as c_bool ||
             pointer->tag != 9u8 as c_uchar) {
             return 9;
         }

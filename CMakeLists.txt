@@ -153,6 +153,7 @@ target_include_directories(r_runtime_inline_shims PRIVATE
 set(R_RUNTIME_UNITS core)
 set(R_RUNTIME_UNIT_core_SOURCES
     runtime/r/types.r
+    runtime/r/system.r
     runtime/r/allocator.r
     runtime/r/utf8.r
     runtime/r/own.r
@@ -164,6 +165,10 @@ set(R_RUNTIME_UNIT_core_SOURCES
     runtime/r/rc.r
     runtime/r/drop.r
     runtime/r/panic.r
+    runtime/r/stack.r
+    runtime/r/thread.r
+    runtime/r/task.r
+    runtime/r/timer.r
 )
 set(R_RUNTIME_UNIT_core_REPLACES
     runtime/source/allocator.c
@@ -176,7 +181,11 @@ set(R_RUNTIME_UNIT_core_REPLACES
     runtime/source/panic_abort.c
     runtime/source/rc.c
     runtime/source/string.c
+    runtime/source/thread_attachment.c
     runtime/source/utf8.c
+    runtime/darwin/source/stack.c
+    runtime/darwin/source/task.c
+    runtime/darwin/source/timer.c
 )
 set(R_RUNTIME_C_SOURCES
     runtime/source/allocator.c
@@ -206,6 +215,10 @@ foreach(R_RUNTIME_SOURCE_NAME IN ITEMS allocator arc array dict drop hosted_entr
     set(R_RUNTIME_SOURCE_${R_RUNTIME_SOURCE_NAME}
         "${PROJECT_SOURCE_DIR}/runtime/source/${R_RUNTIME_SOURCE_NAME}.c")
 endforeach()
+foreach(R_RUNTIME_SOURCE_NAME IN ITEMS stack task timer)
+    set(R_RUNTIME_SOURCE_${R_RUNTIME_SOURCE_NAME}
+        "${PROJECT_SOURCE_DIR}/runtime/darwin/source/${R_RUNTIME_SOURCE_NAME}.c")
+endforeach()
 if(R_RUNTIME_CORE STREQUAL "r")
     foreach(R_RUNTIME_UNIT IN LISTS R_RUNTIME_UNITS)
         list(APPEND R_RUNTIME_UNIT_OBJECTS
@@ -217,6 +230,17 @@ if(R_RUNTIME_CORE STREQUAL "r")
     endforeach()
 endif()
 string(REPLACE ";" "|" R_RUNTIME_UNIT_OBJECT_ARGUMENT "${R_RUNTIME_UNIT_OBJECTS}")
+# The archives of the darwin libraries that tests and benchmarks link by path; a library that the
+# unit replaces has none.
+foreach(R_RUNTIME_DARWIN_NAME IN ITEMS task timer)
+    string(TOUPPER "${R_RUNTIME_DARWIN_NAME}" R_RUNTIME_DARWIN_UPPER)
+    if(R_RUNTIME_SOURCE_${R_RUNTIME_DARWIN_NAME})
+        set(R_RUNTIME_DARWIN_${R_RUNTIME_DARWIN_UPPER}_ARCHIVE
+            "$<TARGET_FILE:r_runtime_darwin_${R_RUNTIME_DARWIN_NAME}>")
+    else()
+        set(R_RUNTIME_DARWIN_${R_RUNTIME_DARWIN_UPPER}_ARCHIVE "")
+    endif()
+endforeach()
 
 add_library(r_runtime_0_1 STATIC ${R_RUNTIME_C_SOURCES})
 target_include_directories(r_runtime_0_1 PUBLIC runtime/include)
@@ -603,13 +627,16 @@ if(R_RUNTIME_CORE STREQUAL "r")
     elseif(R_FRONTEND_ENABLE_THREAD_SANITIZER)
         list(APPEND R_RUNTIME_UNIT_FLAGS --sanitize=thread)
     endif()
-    file(GLOB R_RUNTIME_UNIT_HEADERS "${PROJECT_SOURCE_DIR}/runtime/include/*.h")
+    file(GLOB R_RUNTIME_UNIT_HEADERS "${PROJECT_SOURCE_DIR}/runtime/include/*.h"
+        "${PROJECT_SOURCE_DIR}/runtime/darwin/include/*.h")
     set(R_RUNTIME_UNIT_ARGUMENTS
         --runtime-unit --profile freestanding
         --target-manifest "${PROJECT_SOURCE_DIR}/targets/arm64-apple-darwin.freestanding.json"
         --link-manifest "${PROJECT_SOURCE_DIR}/runtime/r/link_manifest.json"
         --sysroot "${R_RUNTIME_SDK_PATH}"
-        --abi-header-dir "${PROJECT_SOURCE_DIR}/runtime/include")
+        --abi-header-dir "${PROJECT_SOURCE_DIR}/runtime/include"
+        --abi-header-dir "${PROJECT_SOURCE_DIR}/runtime/darwin/include"
+        --abi-header-dir "${R_RUNTIME_SDK_PATH}/usr/include")
     foreach(R_RUNTIME_UNIT IN LISTS R_RUNTIME_UNITS)
         set(R_RUNTIME_UNIT_RECORD "${PROJECT_BINARY_DIR}/runtime_units/${R_RUNTIME_UNIT}.abi.json")
         set(R_RUNTIME_UNIT_OBJECT "${PROJECT_BINARY_DIR}/runtime_units/${R_RUNTIME_UNIT}.o")
@@ -644,6 +671,10 @@ if(R_RUNTIME_CORE STREQUAL "r")
         target_link_options(r_runtime_core PUBLIC -fsanitize=thread)
     endif()
     target_link_libraries(r_runtime_0_1 PUBLIC r_runtime_core)
+    if(APPLE)
+        # The event sequence of the darwin adapters orders the terminal events of tasks.
+        target_link_libraries(r_runtime_core PUBLIC r_runtime_darwin_event)
+    endif()
 endif()
 
 if(MSVC)
@@ -682,6 +713,11 @@ if(Python3_Interpreter_FOUND AND CMAKE_C_COMPILER_ID MATCHES "Clang" AND
     set(R_BITCODE_OBJECTS)
     set(R_BITCODE_TWINS)
     foreach(R_BITCODE_TARGET IN LISTS R_BITCODE_TARGETS)
+        get_target_property(R_BITCODE_TYPE ${R_BITCODE_TARGET} TYPE)
+        if(R_BITCODE_TYPE STREQUAL "INTERFACE_LIBRARY")
+            # B12: a darwin library the runtime unit replaces compiles nothing.
+            continue()
+        endif()
         get_target_property(R_BITCODE_SOURCES ${R_BITCODE_TARGET} SOURCES)
         get_target_property(R_BITCODE_DIRECTORY ${R_BITCODE_TARGET} SOURCE_DIR)
         set(R_BITCODE_PATHS)

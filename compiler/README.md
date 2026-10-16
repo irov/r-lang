@@ -1,7 +1,7 @@
 # R Frontend Parser 0.1
 
 This directory contains the bootstrap frontend for the normative English R Core
-Specification `0.1.0-draft.109`.
+Specification `0.1.0-draft.110`.
 
 ```text
 UTF-8 source
@@ -2763,9 +2763,23 @@ entries. A unit may also export objects (`@safety` `extern "C" atomic c_uint32
 r_runtime_unwinding_threads = ...;`): `r_semantic_collect_module_constant` checks the type,
 name and storage (`R-DIAG-FFI-003 [R-FFI-0068]`), `statics.c` names the global by its C name
 with external linkage, and `r_llvm_emit_exported_objects` emits every one whether or not R code
-names it; outside a unit such a definition is `R-DIAG-FFI-003 [R-FFI-0046]`. The C types the
-modules share are declared once in `runtime/r/types.r` from the runtime headers; the libc
-functions they call are listed in `runtime/r/link_manifest.json`.
+names it; outside a unit such a definition is `R-DIAG-FFI-003 [R-FFI-0046]`. A `protected`
+`@callback` definition of a unit is an internal callback (R-FFI-0054, R-FFI-0068): the function
+the unit hands to a thread start or a Dispatch queue. It gets no probe and an internal C wrapper
+named after the R function (`runtime.tasks::task_worker.c`, `r_llvm_c_export` in
+`compiler/llvm/ffi.c`), so two modules may use one name and no other object can call it. The
+runtime units declare the context of such callbacks `raw void*` (the C type is `void *` either
+way): an indirect call of the unit may reach every callback of its R signature (R-FUNC-0004,
+`r_semantic_callback_may_be_target`), and drop and move glue, `(raw void*?) -> void`, would
+otherwise close a cycle through every task callback. An import `@c_address raw T* name;`
+(R-FFI-0022) is the address of the C object `name`, of a type R may leave opaque, as C macros
+such as `DISPATCH_SOURCE_TYPE_TIMER` (`&_dispatch_source_type_timer`) spell it: the verifier
+probes `&name` against the declared pointer type, the ABI record matches the object against its
+pointee, and the emitter declares the C object as an external byte and the R name as a private
+constant holding its address. The C types the modules share are declared once in
+`runtime/r/types.r` from the runtime headers, the system interfaces (`pthread`, Dispatch,
+`mach_time`, `fenv`) in `runtime/r/system.r` from the SDK headers; the libc functions and objects
+they use are listed in `runtime/r/link_manifest.json`.
 
 The build compiles the unit `core` (`R_RUNTIME_UNIT_core_SOURCES` in `CMakeLists.txt`, the shared
 types first) into `build/<preset>/runtime_units/core.o` with the sanitizer of the preset, and the
@@ -2774,8 +2788,12 @@ sources the unit replaces (`R_RUNTIME_UNIT_core_REPLACES`). `R_RUNTIME_CORE=c` k
 runtime, the oracle until the battery is green on the new core. Tests and benchmarks that compile
 the runtime into a program themselves receive `R_RUNTIME_SOURCE_<name>` (empty for a replaced
 module) and `RUNTIME_UNIT_OBJECTS`, so every codegen program runs the R core; `r_runtime_tests`
-and the darwin tests link `r_runtime_core` alone. `tests/check_runtime_unit.py` checks the
-exports, exported objects and the rejections.
+and the darwin tests link `r_runtime_core` alone. A darwin library whose sources the unit
+replaces (`r_runtime_darwin_base`, `_task`, `_timer`) becomes an interface library to
+`r_runtime_core` (`r_runtime_darwin_replaced_library`), and the archive links
+`r_runtime_darwin_event`, whose event sequence orders the terminal events of external tasks.
+`tests/check_runtime_unit.py` checks the exports, exported objects, internal callbacks and the
+rejections.
 
 ## Build and test
 

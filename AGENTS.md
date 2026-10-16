@@ -261,7 +261,10 @@ as finished. The matrix records their results per stage.
 
 - The core of the runtime is written in R (`runtime/r`, the unit `core`, Core R-FFI-0068;
   compiler/README.md, *Units of the runtime*): allocator and budgets, owners, containers,
-  strings, drop glue and panics. A module of it lists its `.r` file in
+  strings, drop glue, panics, stack bounds, thread attachment, the task executor with
+  `task_scope` and the blocking pool, and the darwin timers; `hosted_entry.c` and the darwin
+  adapters (`event.c`, I/O, sockets, processes) stay C until B13. A module of it lists its `.r`
+  file in
   `R_RUNTIME_UNIT_core_SOURCES` (after the modules it uses) and the C file it replaces in
   `R_RUNTIME_UNIT_core_REPLACES`; the C types it shares go into `runtime/r/types.r`, proven
   against the runtime headers, and the C functions it imports into `runtime/r/link_manifest.json`.
@@ -269,6 +272,11 @@ as finished. The matrix records their results per stage.
   runtime sources into a program uses `R_RUNTIME_SOURCE_<name>` (empty for a replaced module) and
   `RUNTIME_UNIT_OBJECTS`, never a `runtime/source` path: a program that compiles the C module
   tests the oracle, not the runtime (B12-3). `R_RUNTIME_CORE=c` builds the C runtime instead.
+  System interfaces go into `runtime/r/system.r`, proven against the SDK headers. A function a
+  C thread or queue calls back is a `protected` `@callback` (internal to the unit); declare its
+  context `raw void*`, not `raw void*?`: an indirect call may reach every callback of the same R
+  signature, and the glue's `(raw void*?) -> void` would make every callback part of a cycle
+  (R-FUNC-0004). The stack inventory of runtime entries still measures the C oracle.
 
 - Darwin adapters publish one linearized terminal outcome per operation (R-SLIB-ASYNC-0007):
   task cancellation is selected immediately but reaches the native request asynchronously, so an
@@ -312,7 +320,8 @@ these rules are the ones that most often reject otherwise reasonable code:
 - Grammar: `if (c) { } else { }` only — there is no `else if`; use `switch`, early `return` or
   nested blocks. `throw (condition) error_value;` is the conditional throw.
 - Reserved words that look like names: `list`, `raw`, `import`, `export`, `move`, `drop`, `task`,
-  `module`.
+  `module`, `own`, `dict`, `array`, `weak`, `opaque`, `protected` (a C member of such a name is
+  bound with `@c_field(name = "...")`).
 - R-NAME-0009: a parameter or local may not reuse a component of an imported module path or the
   name of a module function (`server` in a program with `example.arena.server`, `failure` where
   the module declares `failure`).

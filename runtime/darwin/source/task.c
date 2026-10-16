@@ -280,13 +280,12 @@ static void task_release_reference(RRuntimeTask *task) {
 
 static void task_worker(void *context);
 
-#if defined(R_RUNTIME_DARWIN_TASK_TESTING)
+/* Testing (always present, as in r_runtime_task.h: an unarmed hook costs one atomic load). */
 static _Atomic(void (*)(void)) task_testing_after_end;
 
 void r_runtime_darwin_task_testing_after_end(void (*hook)(void)) {
     atomic_store_explicit(&task_testing_after_end, hook, memory_order_release);
 }
-#endif
 
 static void task_dispatch(RRuntimeTask *task) {
     dispatch_queue_t queue = r_runtime_executor.queue;
@@ -642,8 +641,8 @@ static void task_execute(RRuntimeTask *task, _Bool on_worker) {
     }
 
     task_publish_terminal(task);
-#if defined(R_RUNTIME_DARWIN_TASK_TESTING)
-    if (on_worker && (task->budget != NULL)) {
+    if (on_worker && (task->budget != NULL) &&
+        (atomic_load_explicit(&task_testing_after_end, memory_order_acquire) != NULL)) {
         void (*hook)(void) =
             atomic_exchange_explicit(&task_testing_after_end, NULL, memory_order_acq_rel);
 
@@ -651,7 +650,6 @@ static void task_execute(RRuntimeTask *task, _Bool on_worker) {
             hook();
         }
     }
-#endif
     executor_remove_task(task, on_worker);
 }
 

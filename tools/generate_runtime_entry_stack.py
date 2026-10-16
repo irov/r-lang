@@ -1505,6 +1505,7 @@ EXTERNAL_ENTRIES += (
     ("r_runtime_darwin_io_submit_read_some", "runtime/darwin/source/io_read.c", "runtime-io"),
     ("r_runtime_darwin_io_submit_write", "runtime/darwin/source/io_write.c", "runtime-io"),
     ("r_runtime_darwin_io_submit_write_some", "runtime/darwin/source/io_write.c", "runtime-io"),
+    ("r_runtime_darwin_task_testing_after_end", "runtime/darwin/source/task.c", "runtime-task"),
     ("r_runtime_dict_clear", "runtime/source/dict.c", "runtime-container"),
     ("r_runtime_dict_contains", "runtime/source/dict.c", "runtime-container"),
     ("r_runtime_dict_destroy_count", "runtime/source/dict.c", "runtime-container"),

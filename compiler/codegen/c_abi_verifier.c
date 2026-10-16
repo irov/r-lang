@@ -505,7 +505,7 @@ static bool r_c_abi_symbol_is_import(const RSemanticSymbol *symbol) {
 static bool r_c_abi_symbol_is_runtime_export(const RFrontendContext *context,
                                              const RSemanticSymbol *symbol) {
     return context->runtime_unit && symbol->is_extern_c && !symbol->is_import &&
-           !symbol->poisoned && symbol->signature_supported &&
+           !symbol->is_protected && !symbol->poisoned && symbol->signature_supported &&
            ((symbol->kind == R_SEMANTIC_SYMBOL_FUNCTION) ||
             (symbol->kind == R_SEMANTIC_SYMBOL_MODULE_OBJECT));
 }
@@ -1338,9 +1338,15 @@ RFrontendStatus r_c_abi_write_verifier(const RFrontendContext *context,
             continue;
         }
         if (symbol->kind == R_SEMANTIC_SYMBOL_MODULE_OBJECT) {
-            /* R-FFI-0022: the object's address shall have exactly the declared pointer type. */
-            if (!r_c_abi_spell_type(
-                    context, symbol->type, "*", &spell, UINT32_C(0), &header_speller)) {
+            /* R-FFI-0022: the object's address shall have exactly the declared pointer type;
+               a @c_address import declares that pointer itself (B12). */
+            if (!r_c_abi_spell_type(context,
+                                    symbol->c_address ? r_c_abi_value_type(context, symbol->type)
+                                                      : symbol->type,
+                                    symbol->c_address ? "" : "*",
+                                    &spell,
+                                    UINT32_C(0),
+                                    &header_speller)) {
                 status = R_FRONTEND_NOT_LOWERABLE;
                 goto cleanup;
             }

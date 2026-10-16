@@ -1136,6 +1136,9 @@ typedef struct RSemanticSymbol {
     bool fenv_preserve;
     /* Reserved-class C identifier reached through the private bridge of R-CMAP-0026. */
     bool uses_bridge;
+    /* B12 (R-FFI-0022): an imported object declared with @c_address names the address of the C
+       object; its R type is the const raw pointer to it. */
+    bool c_address;
     /* The signature passes an R-declared @repr(C) struct: the C type at each such position
        comes from the block's ABI record (R-FFI-0021, R-FFI-0041); the slots list them in the
        order the C spellers visit them. */

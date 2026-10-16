@@ -51,16 +51,27 @@ function(r_runtime_darwin_apply_c17_contract target)
     endif()
 endfunction()
 
-add_library(
-    r_runtime_darwin_base
-    STATIC
-        source/stack.c
-        ${R_RUNTIME_SOURCE_panic_abort}
-        ../source/thread_attachment.c
+# B12: the library of a module that the runtime unit written in R replaces is an interface to the
+# archive of that unit.
+function(r_runtime_darwin_replaced_library target)
+    add_library(${target} INTERFACE)
+    target_include_directories(${target} INTERFACE include ../include)
+    target_link_libraries(${target} INTERFACE r_runtime_core ${ARGN})
+endfunction()
+
+set(R_RUNTIME_DARWIN_BASE_SOURCES
+    ${R_RUNTIME_SOURCE_stack}
+    ${R_RUNTIME_SOURCE_panic_abort}
+    ${R_RUNTIME_SOURCE_thread_attachment}
 )
-target_include_directories(r_runtime_darwin_base PUBLIC ../include)
-target_link_libraries(r_runtime_darwin_base PUBLIC Threads::Threads)
-r_runtime_darwin_apply_c17_contract(r_runtime_darwin_base)
+if(R_RUNTIME_DARWIN_BASE_SOURCES)
+    add_library(r_runtime_darwin_base STATIC ${R_RUNTIME_DARWIN_BASE_SOURCES})
+    target_include_directories(r_runtime_darwin_base PUBLIC ../include)
+    target_link_libraries(r_runtime_darwin_base PUBLIC Threads::Threads)
+    r_runtime_darwin_apply_c17_contract(r_runtime_darwin_base)
+else()
+    r_runtime_darwin_replaced_library(r_runtime_darwin_base Threads::Threads)
+endif()
 
 add_library(r_runtime_darwin_event STATIC source/event.c)
 target_include_directories(r_runtime_darwin_event PUBLIC include)
@@ -122,13 +133,18 @@ set_source_files_properties(
 )
 r_runtime_darwin_apply_c17_contract(r_runtime_darwin_io)
 
-add_library(r_runtime_darwin_task STATIC source/task.c)
-target_include_directories(r_runtime_darwin_task PUBLIC include ../include)
-target_link_libraries(
-    r_runtime_darwin_task
-    PUBLIC Threads::Threads r_runtime_darwin_base r_runtime_darwin_event
-)
-r_runtime_darwin_apply_c17_contract(r_runtime_darwin_task)
+if(R_RUNTIME_SOURCE_task)
+    add_library(r_runtime_darwin_task STATIC ${R_RUNTIME_SOURCE_task})
+    target_include_directories(r_runtime_darwin_task PUBLIC include ../include)
+    target_link_libraries(
+        r_runtime_darwin_task
+        PUBLIC Threads::Threads r_runtime_darwin_base r_runtime_darwin_event
+    )
+    r_runtime_darwin_apply_c17_contract(r_runtime_darwin_task)
+else()
+    r_runtime_darwin_replaced_library(
+        r_runtime_darwin_task Threads::Threads r_runtime_darwin_base r_runtime_darwin_event)
+endif()
 
 add_library(r_runtime_darwin_process STATIC source/process.c source/signal.c)
 target_include_directories(r_runtime_darwin_process PUBLIC include ../include)
@@ -149,10 +165,14 @@ target_include_directories(r_runtime_darwin_socket PUBLIC include ../include)
 target_link_libraries(r_runtime_darwin_socket PUBLIC Threads::Threads r_runtime_darwin_event)
 r_runtime_darwin_apply_c17_contract(r_runtime_darwin_socket)
 
-add_library(r_runtime_darwin_timer STATIC source/timer.c)
-target_include_directories(r_runtime_darwin_timer PUBLIC include ../include)
-target_link_libraries(r_runtime_darwin_timer PUBLIC r_runtime_darwin_task)
-r_runtime_darwin_apply_c17_contract(r_runtime_darwin_timer)
+if(R_RUNTIME_SOURCE_timer)
+    add_library(r_runtime_darwin_timer STATIC ${R_RUNTIME_SOURCE_timer})
+    target_include_directories(r_runtime_darwin_timer PUBLIC include ../include)
+    target_link_libraries(r_runtime_darwin_timer PUBLIC r_runtime_darwin_task)
+    r_runtime_darwin_apply_c17_contract(r_runtime_darwin_timer)
+else()
+    r_runtime_darwin_replaced_library(r_runtime_darwin_timer r_runtime_darwin_task)
+endif()
 
 if(R_RUNTIME_DARWIN_BUILD_TESTS)
     # With the core of the runtime written in R the allocator is in the archive of its units (B12).
@@ -166,7 +186,9 @@ if(R_RUNTIME_DARWIN_BUILD_TESTS)
         r_runtime_darwin_apply_c17_contract(r_runtime_darwin_test_allocator)
     endif()
 
-    target_compile_definitions(r_runtime_darwin_timer PRIVATE R_RUNTIME_DARWIN_TIMER_TESTING=1)
+    if(R_RUNTIME_SOURCE_timer)
+        target_compile_definitions(r_runtime_darwin_timer PRIVATE R_RUNTIME_DARWIN_TIMER_TESTING=1)
+    endif()
     target_compile_definitions(
         r_runtime_darwin_socket
         PRIVATE R_RUNTIME_DARWIN_SOCKET_TESTING=1
@@ -246,12 +268,7 @@ if(R_RUNTIME_DARWIN_BUILD_TESTS)
     add_test(NAME r_runtime_darwin_io_direct COMMAND r_runtime_darwin_io_direct_tests)
     set_tests_properties(r_runtime_darwin_io_direct PROPERTIES TIMEOUT 60)
 
-    target_compile_definitions(r_runtime_darwin_task PRIVATE R_RUNTIME_DARWIN_TASK_TESTING=1)
     add_executable(r_runtime_darwin_task_tests tests/task_tests.c)
-    target_compile_definitions(
-        r_runtime_darwin_task_tests
-        PRIVATE R_RUNTIME_DARWIN_TASK_TESTING=1
-    )
     target_link_libraries(
         r_runtime_darwin_task_tests
         PRIVATE r_runtime_darwin_task r_runtime_darwin_test_allocator

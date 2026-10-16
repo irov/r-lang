@@ -1,10 +1,17 @@
 #include "c_atomics.h"
 
+struct atomic_registry {
+    int tag;
+};
+
+struct atomic_registry atomic_registry_main = {42};
+
 void atomic_counters_initialize(atomic_counters *counters, unsigned char tag) {
     atomic_init(&counters->hits, UINT64_C(0));
     atomic_init(&counters->level, 0);
     atomic_init(&counters->slot, NULL);
     atomic_init(&counters->total, (size_t)0U);
+    atomic_init(&counters->ready, 0);
     counters->tag = tag;
 }
 
@@ -19,4 +26,12 @@ int atomic_counters_level(const atomic_counters *counters) {
 
 void *atomic_counters_slot(const atomic_counters *counters) {
     return atomic_load_explicit(&counters->slot, memory_order_acquire);
+}
+
+_Bool atomic_counters_ready(const atomic_counters *counters) {
+    return atomic_load_explicit(&counters->ready, memory_order_acquire);
+}
+
+int atomic_registry_tag(const struct atomic_registry *registry) {
+    return registry->tag;
 }

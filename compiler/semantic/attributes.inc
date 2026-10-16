@@ -38,6 +38,7 @@ static const char *const r_attribute_builtin_names[] = {
     "signal_safe",
     "signal_handler",
     "c_field",
+    "c_address",
 };
 
 static bool r_semantic_attribute_is_user(const RFrontendContext *context, RAstRef attribute) {

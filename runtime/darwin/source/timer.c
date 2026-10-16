@@ -150,10 +150,10 @@ static void timer_event(void *context) {
 
 static void timer_cancelled(void *context) {
     RRuntimeDarwinTimer *timer = context;
-    const uintptr_t source_value =
-        atomic_exchange_explicit(&timer->native_source, (uintptr_t)0U, memory_order_acq_rel);
+    void *const source_value =
+        atomic_exchange_explicit(&timer->native_source, NULL, memory_order_acq_rel);
 
-    if (source_value == (uintptr_t)0U) {
+    if (source_value == NULL) {
         return;
     }
     timer_testing_pause_cancel_handler(timer);
@@ -165,16 +165,15 @@ void r_runtime_darwin_timer_initialize(RRuntimeDarwinTimer *timer) {
     if (timer == NULL) {
         return;
     }
-    atomic_init(&timer->native_source, (uintptr_t)0U);
+    atomic_init(&timer->native_source, NULL);
     atomic_init(&timer->activated, 0);
     timer->execution = NULL;
 }
 
 void r_runtime_darwin_timer_move(RRuntimeDarwinTimer *destination, RRuntimeDarwinTimer *source) {
-    uintptr_t source_value;
+    void *source_value;
 
-    source_value =
-        atomic_exchange_explicit(&source->native_source, (uintptr_t)0U, memory_order_acq_rel);
+    source_value = atomic_exchange_explicit(&source->native_source, NULL, memory_order_acq_rel);
     atomic_store_explicit(&destination->native_source, source_value, memory_order_release);
 }
 
@@ -212,7 +211,7 @@ r_runtime_darwin_timer_prepare(RRuntimeDarwinTimer *timer, uint64_t seconds, uin
         return R_RUNTIME_DARWIN_TIMER_PREPARE_ALLOCATION_FAILED;
     }
     dispatch_source_set_timer(source, deadline, DISPATCH_TIME_FOREVER, 0U);
-    atomic_store_explicit(&timer->native_source, (uintptr_t)source, memory_order_release);
+    atomic_store_explicit(&timer->native_source, (void *)source, memory_order_release);
     return R_RUNTIME_DARWIN_TIMER_PREPARE_OK;
 }
 
@@ -260,7 +259,7 @@ void r_runtime_darwin_timer_dispose_unsubmitted(RRuntimeDarwinTimer *timer) {
         return;
     }
     source = (dispatch_source_t)atomic_exchange_explicit(
-        &timer->native_source, (uintptr_t)0U, memory_order_acq_rel);
+        &timer->native_source, NULL, memory_order_acq_rel);
     if (source == NULL) {
         return;
     }

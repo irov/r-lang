@@ -5295,6 +5295,8 @@ static bool r_semantic_repr_c_atomic_member(const RFrontendContext *context, RTy
     }
     value = r_semantic_type(context, type->base);
     return (value != NULL) && (r_semantic_type_is_c_abi_integer(context, type->base) ||
+                               ((value->kind == R_SEMANTIC_TYPE_C_ABI_NUMERIC) &&
+                                (value->length == (uint64_t)R_TOKEN_KW_C_BOOL)) ||
                                ((value->kind == R_SEMANTIC_TYPE_RAW) &&
                                 r_semantic_c_abi_type(context, type->base, false, 1U)));
 }
@@ -9240,7 +9242,10 @@ static bool r_semantic_collect_function(RFrontendContext *context,
             modifiers.c_name_span = name_token.span;
             modifiers.c_name_intern_id = name_token.intern_id;
         }
-        if (!has_body || modifiers.is_protected || !modifiers.has_safety ||
+        /* B12 (R-FFI-0068): in a runtime unit a protected @callback is internal to the unit. */
+        if (!has_body ||
+            (modifiers.is_protected && !(context->runtime_unit && modifiers.is_callback)) ||
+            !modifiers.has_safety ||
             !r_semantic_c_export_name(context, modifiers.c_name_intern_id)) {
             signature_supported = false;
             if (!r_semantic_add_diagnostic(
@@ -13715,6 +13720,7 @@ static bool r_semantic_collect_c_object(RFrontendContext *context,
     RCNameClass name_class;
     bool has_safety = false;
     bool has_link_name = false;
+    bool has_c_address = false;
     bool is_thread_local;
     bool supported = true;
     bool uses_bridge = false;
@@ -13779,6 +13785,10 @@ static bool r_semantic_collect_c_object(RFrontendContext *context,
                 c_name_span = arguments[0].span;
             }
             has_link_name = true;
+        } else if (valid &&
+                   r_semantic_token_text_equal_owned(context, &attribute_name, "c_address")) {
+            valid = !has_c_address && (count == UINT32_C(0)) && !is_thread_local;
+            has_c_address = true;
         } else {
             valid = false;
         }
@@ -13802,6 +13812,27 @@ static bool r_semantic_collect_c_object(RFrontendContext *context,
             return false;
         }
         supported = false;
+    } else if (has_c_address) {
+        /* B12 (R-FFI-0022): the name is the address of the C object, a non-null raw pointer to
+           its type, which may be opaque (R-FFI-0015); the address never changes. */
+        const RSemanticType *address = r_semantic_type(context, declared_type);
+
+        if ((address == NULL) || (address->kind != R_SEMANTIC_TYPE_RAW) ||
+            ((address->flags & R_SEMANTIC_TYPE_FLAG_NULLABLE) != 0U) ||
+            !r_semantic_c_abi_type(context, declared_type, false, UINT32_C(0))) {
+            supported = false;
+            if (!r_semantic_add_diagnostic(context,
+                                           "R-DIAG-FFI-001",
+                                           "R-FFI-0022",
+                                           "@c_address declares a non-null raw pointer to the "
+                                           "C object",
+                                           view.span)) {
+                return false;
+            }
+        } else if (!r_semantic_intern_type(
+                       context, R_SEMANTIC_TYPE_CONST, declared_type, &declared_type)) {
+            return false;
+        }
     } else if (r_semantic_type_mentions_opaque_value(context, declared_type, UINT32_C(0))) {
         supported = false;
         if (!r_semantic_opaque_value_diagnostic(context, view.span)) {
@@ -13907,6 +13938,7 @@ static bool r_semantic_collect_c_object(RFrontendContext *context,
         symbol.is_extern_c = true;
         symbol.is_import = true;
         symbol.uses_bridge = uses_bridge;
+        symbol.c_address = has_c_address;
         symbol.passes_r_struct = passes_r_struct;
         symbol.extern_block = block->block_index;
         symbol.link_kind = block->has_link ? block->link_kind : R_LINK_KIND_UNSPECIFIED;

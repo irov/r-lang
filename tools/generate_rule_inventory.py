@@ -14,7 +14,7 @@ from typing import Any
 
 
 DOCUMENT_CONTRACTS = {
-    "R_LANGUAGE_SPECIFICATION_0_1.en.adoc": ("0.1.0-draft.109", 511),
+    "R_LANGUAGE_SPECIFICATION_0_1.en.adoc": ("0.1.0-draft.110", 511),
     "R_STANDARD_LIBRARY_SPECIFICATION_0_1.en.adoc": ("0.1.0-draft.77", 483),
 }
 

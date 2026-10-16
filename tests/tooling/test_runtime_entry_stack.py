@@ -83,7 +83,7 @@ class RuntimeEntryStackTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.inventory["schema"], "r-runtime-entry-stack-inventory-0.1")
         self.assertFalse(self.inventory["conformance_claim"])
-        self.assertEqual(len(self.inventory["external_entries"]), 1132)
+        self.assertEqual(len(self.inventory["external_entries"]), 1133)
         self.assertEqual(len(self.inventory["header_static_inline_helpers"]), 135)
         self.assertEqual(
             self.inventory["coverage"]["scope"], "direct-project-entry-frame-only"

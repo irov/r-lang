@@ -38,6 +38,21 @@
           "c_identifier": "atomic_counters_slot",
           "kind": "function",
           "binding": "strong"
+        },
+        {
+          "c_identifier": "atomic_counters_ready",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "atomic_registry_tag",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "atomic_registry_main",
+          "kind": "data",
+          "binding": "strong"
         }
       ]
     }

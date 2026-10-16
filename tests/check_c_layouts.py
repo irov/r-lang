@@ -180,6 +180,26 @@ struct Fixed { atomic u32 count; };
        '@repr(C) struct fields require recursively compatible C ABI types and no drop'),
       (5, 8, 'R-DIAG-FFI-003', 'R-FFI-0004',
        '@repr(C) struct fields require recursively compatible C ABI types and no drop')]),
+    # R-FFI-0022 (B12): @c_address names the object's address, a non-null raw pointer, and is
+    # no thread_local import (R-FFI-0050).
+    'c-address-forms': ('''
+@link(name = "atomics", kind = "static")
+@header("c_atomics.h")
+@abi("atomics-abi")
+extern "C" {
+    @c_address
+    raw c_int*? nullable_address;
+    @c_address
+    c_int value_address;
+    @c_address
+    thread_local raw c_int* local_address;
+}
+''', [(6, 5, 'R-DIAG-FFI-001', 'R-FFI-0022',
+       '@c_address declares a non-null raw pointer to the C object'),
+      (8, 5, 'R-DIAG-FFI-001', 'R-FFI-0022',
+       '@c_address declares a non-null raw pointer to the C object'),
+      (10, 5, 'R-DIAG-FFI-003', 'R-FFI-0050',
+       'invalid, duplicate, or misplaced C import attribute')]),
 }
 
 # Rejections proven against fixtures/ffi/c_atomics.h: the block is verified, so the struct is
@@ -196,6 +216,7 @@ extern "C" {
         atomic c_int level;
         atomic raw void*? slot;
         atomic c_size total;
+        atomic c_bool ready;
         COUNTERS_TAG;
     };
     @safety("COUNTERS-BUMP", "The pointer refers to a live value")
@@ -210,10 +231,14 @@ HEADER_REJECTED = {
 c_uint64 read(Counters counters) {
     unsafe { return atomic_counters_value(move counters); }
 }
-''', [(17, 5, 'R-DIAG-FFI-001', 'R-FFI-0004', 'C import signature requires exact C ABI types')]),
+''', [(18, 5, 'R-DIAG-FFI-001', 'R-FFI-0004', 'C import signature requires exact C ABI types')]),
     # The member is atomic in R but plain in the header.
+    # The pointer of an address import has the object's C type, here struct atomic_registry.
+    'c-address-mismatch': ('c_uchar tag', '''@c_address
+    raw c_int* atomic_registry_main;''', '', [
+        (19, 16, 'R-DIAG-FFI-004', 'R-FFI-0022', 'declaration disagrees with its verified C header')]),
     'atomic-not-in-header': ('atomic c_uchar tag', '', '', [
-        (13, 24, 'R-DIAG-FFI-004', 'R-FFI-0017',
+        (14, 24, 'R-DIAG-FFI-004', 'R-FFI-0017',
          'ABI record member type disagrees with the @repr(C) struct field type')]),
 }
 

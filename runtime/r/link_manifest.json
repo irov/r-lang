@@ -10,15 +10,23 @@
       "compile_artifact_identity": "runtime/source",
       "link_artifact_identity": "libr_runtime_0_1.a",
       "header_roots": [
-        "runtime/include"
+        "runtime/include",
+        "runtime/darwin/include"
       ],
       "abi_record_roots": [
-        "runtime/include"
+        "runtime/include",
+        "runtime/darwin/include"
       ],
       "library_version": "0.1",
       "dependencies": [],
       "feature_test_definitions": [],
-      "symbols": []
+      "symbols": [
+        {
+          "c_identifier": "r_runtime_darwin_event_sequence_next",
+          "kind": "function",
+          "binding": "strong"
+        }
+      ]
     },
     {
       "logical_name": "system.libc",
@@ -42,6 +50,21 @@
       ],
       "symbols": [
         {
+          "c_identifier": "_FE_DFL_ENV",
+          "kind": "data",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "_dispatch_queue_attr_concurrent",
+          "kind": "data",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "_dispatch_source_type_timer",
+          "kind": "data",
+          "binding": "strong"
+        },
+        {
           "c_identifier": "abort",
           "kind": "function",
           "binding": "strong"
@@ -52,7 +75,92 @@
           "binding": "strong"
         },
         {
+          "c_identifier": "dispatch_activate",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "dispatch_after_f",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "dispatch_async_f",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "dispatch_get_global_queue",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "dispatch_queue_create",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "dispatch_release",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "dispatch_set_context",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "dispatch_source_cancel",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "dispatch_source_create",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "dispatch_source_set_cancel_handler_f",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "dispatch_source_set_event_handler_f",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "dispatch_source_set_timer",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "dispatch_time",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "fegetenv",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "fesetenv",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
           "c_identifier": "free",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "mach_continuous_time",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "mach_timebase_info",
           "kind": "function",
           "binding": "strong"
         },
@@ -68,6 +176,86 @@
         },
         {
           "c_identifier": "memset",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "nanosleep",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "pthread_cond_broadcast",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "pthread_cond_destroy",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "pthread_cond_init",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "pthread_cond_signal",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "pthread_cond_wait",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "pthread_create",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "pthread_get_stackaddr_np",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "pthread_get_stacksize_np",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "pthread_join",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "pthread_mutex_destroy",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "pthread_mutex_init",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "pthread_mutex_lock",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "pthread_mutex_unlock",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "pthread_self",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "pthread_setname_np",
           "kind": "function",
           "binding": "strong"
         },

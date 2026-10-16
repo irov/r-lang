@@ -13,8 +13,15 @@ extern "C" {
         atomic c_int level;
         atomic raw void*? slot;
         atomic c_size total;
+        atomic c_bool ready;
         c_uchar tag;
     };
+
+    // R-FFI-0022 (B12): ATOMIC_REGISTRY_MAIN, the address of an object of an incomplete type.
+    @c_type(name = "atomic_registry", kind = "struct")
+    opaque struct Registry;
+    @c_address
+    raw Registry* atomic_registry_main;
 
     @safety("COUNTERS-INITIALIZE", "The pointer refers to live storage of the struct")
     void atomic_counters_initialize(raw Counters* counters, c_uchar tag);
@@ -24,6 +31,10 @@ extern "C" {
     c_int atomic_counters_level(raw const Counters* counters);
     @safety("COUNTERS-SLOT", "The pointer refers to a live value")
     raw void*? atomic_counters_slot(raw const Counters* counters);
+    @safety("COUNTERS-READY", "The pointer refers to a live value")
+    c_bool atomic_counters_ready(raw const Counters* counters);
+    @safety("REGISTRY-TAG", "The pointer refers to the registry")
+    c_int atomic_registry_tag(raw const Registry* registry);
 }
 
 protected async c_uint64 settle(c_uint64 value) {
@@ -32,7 +43,8 @@ protected async c_uint64 settle(c_uint64 value) {
 
 protected async i32 run() throws std.async::start_error {
     Counters counters = Counters { .hits = 5u64 as c_uint64, .level = 0i32 as c_int, .slot = null,
-                                   .total = 0usize as c_size, .tag = 1u8 as c_uchar };
+                                   .total = 0usize as c_size, .ready = 0i32 as c_bool,
+                                   .tag = 1u8 as c_uchar };
     c_uint64 amount = await settle(3u64 as c_uint64);
     c_uint64 before = core::atomic_fetch_add(&counters.hits, amount, core::memory_order::relaxed);
     if (before != 5u64 as c_uint64) {
@@ -51,6 +63,13 @@ protected async i32 run() throws std.async::start_error {
         return 3;
     }
     unsafe {
+        core::atomic_store(&counters.ready, 1i32 as c_bool, core::memory_order::release);
+        if (atomic_counters_ready(&counters as raw const Counters*) != 1i32 as c_bool) {
+            return 7;
+        }
+        if (atomic_registry_tag(atomic_registry_main as raw const Registry*) != 42i32 as c_int) {
+            return 8;
+        }
         if (atomic_counters_level(&counters as raw const Counters*) != -4i32 as c_int) {
             return 4;
         }

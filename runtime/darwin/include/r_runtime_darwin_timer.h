@@ -14,7 +14,8 @@ typedef enum RRuntimeDarwinTimerPrepareStatus {
 } RRuntimeDarwinTimerPrepareStatus;
 
 typedef struct RRuntimeDarwinTimer {
-    _Atomic uintptr_t native_source;
+    /* The dispatch_source_t, null once taken. */
+    void *_Atomic native_source;
     _Atomic _Bool activated;
     RRuntimeTaskExternalExecution *execution;
 } RRuntimeDarwinTimer;
@@ -40,7 +41,7 @@ void r_runtime_darwin_timer_cancel(RRuntimeDarwinTimer *timer);
 /* Releases a successfully prepared source which was not transferred into a committed task. */
 void r_runtime_darwin_timer_dispose_unsubmitted(RRuntimeDarwinTimer *timer);
 
-#if defined(R_RUNTIME_DARWIN_TIMER_TESTING)
+/* Testing hooks (always present: an unarmed hook costs one atomic load). */
 /* Pauses the next cancel handler after it takes native-source ownership. */
 void r_runtime_darwin_timer_testing_pause_next_cancel_handler(void);
 /* Waits until the armed cancel handler has entered its test pause. */
@@ -49,6 +50,5 @@ void r_runtime_darwin_timer_testing_wait_for_cancel_handler(void);
 void r_runtime_darwin_timer_testing_cancel_paused_timer(void);
 /* Releases the cancel handler observed by the preceding wait call. */
 void r_runtime_darwin_timer_testing_release_cancel_handler(void);
-#endif
 
 #endif

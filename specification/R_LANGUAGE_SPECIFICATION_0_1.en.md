@@ -6,7 +6,7 @@ Normative draft of the R programming language
 | --- | --- |
 | Document | R Core Language Specification |
 | Language version | 0.1 |
-| Document revision | 0.1.0-draft.109 |
+| Document revision | 0.1.0-draft.110 |
 | Status | Normative draft; not a stable R 1.0 standard |
 | Document language | English; normative original |
 | Target backend | ISO/IEC 9899:2018 (C17) |
@@ -2239,7 +2239,7 @@ For `core::adopt` and `core::release`, T is selected from the pointer or owner a
 
 <a id="R-FFI-0022"></a>
 
-**R-FFI-0022** — `TYPE name;` inside `extern "C"` imports a C object symbol. `thread_local TYPE name;` imports C `_Thread_local` object. External object never starts R ownership and is never automatically dropped.
+**R-FFI-0022** — `TYPE name;` inside `extern "C"` imports a C object symbol. `thread_local TYPE name;` imports C `_Thread_local` object. External object never starts R ownership and is never automatically dropped. `@c_address raw TYPE* name;` or `@c_address raw const TYPE* name;` imports the address of the C object `name` instead: the R name is a constant non-null raw pointer to an object of C type TYPE, which may be opaque (R-FFI-0015). This reaches a C macro that names the address of an object, such as `FE_DFL_ENV` (`&_FE_DFL_ENV`); reading the pointer reads an imported object (R-FFI-0023).
 
 <a id="R-FFI-0023"></a>
 
@@ -2393,7 +2393,7 @@ For `core::adopt` and `core::release`, T is selected from the pointer or owner a
 
 <a id="R-FFI-0068"></a>
 
-**R-FFI-0068** — An implementation may translate parts of its own runtime from R as a runtime unit: a translation in the freestanding profile without `main` (R-FUNC-0008) and without the entry and shutdown functions of a library (R-FFI-0064), whose `extern "C"` definitions are functions of the runtime. Only in a runtime unit may their names use the identifiers the implementation reserves to its runtime, `r_runtime_` followed by lowercase ASCII letters, digits and underscores (R-FFI-0057). Each such function is proven against the runtime header that declares it, as an import is (R-FFI-0042), and keeps that C type. It enters no thread attachment, stack preflight or unwind test of R-FFI-0055: generated code and the runtime, which call it, have done them. A panic in a runtime unit reports and aborts the process (R-ERR-0006). A runtime unit may also define, with `@safety` and `extern "C"`, a module object of a type of R-FFI-0004 or an atomic C integer or nullable raw pointer, not `thread_local` and constant-initialized (R-OBJ-0010): it is exported under its name, proven against the header declaration, and R code accesses it as a mutable static object (R-OBJ-0009). A runtime unit reaches the C types and constants of the runtime through verified extern blocks like any program (R-FFI-0017, R-FFI-0018).
+**R-FFI-0068** — An implementation may translate parts of its own runtime from R as a runtime unit: a translation in the freestanding profile without `main` (R-FUNC-0008) and without the entry and shutdown functions of a library (R-FFI-0064), whose `extern "C"` definitions are functions of the runtime. Only in a runtime unit may their names use the identifiers the implementation reserves to its runtime, `r_runtime_` followed by lowercase ASCII letters, digits and underscores (R-FFI-0057). Each such function is proven against the runtime header that declares it, as an import is (R-FFI-0042), and keeps that C type. It enters no thread attachment, stack preflight or unwind test of R-FFI-0055: generated code and the runtime, which call it, have done them. A panic in a runtime unit reports and aborts the process (R-ERR-0006). A runtime unit may also define, with `@safety` and `extern "C"`, a module object of a type of R-FFI-0004 or an atomic C integer or nullable raw pointer, not `thread_local` and constant-initialized (R-OBJ-0010): it is exported under its name, proven against the header declaration, and R code accesses it as a mutable static object (R-OBJ-0009). A `protected` `@callback` definition of a runtime unit is an internal C function of the unit: no other object can name its symbol, and the unit passes its address to the C functions that call it back, such as a thread start or a queued work item. It is entered on a thread the runtime controls and, like an export, enters no attachment, stack preflight or unwind test; its R code establishes what it needs itself (R-FUNC-0004). A runtime unit reaches the C types and constants of the runtime through verified extern blocks like any program (R-FFI-0017, R-FFI-0018).
 
 ### 23.7 Unsafe boundary and safe wrappers
 
@@ -2419,7 +2419,7 @@ For `core::adopt` and `core::release`, T is selected from the pointer or owner a
 
 <a id="R-FFI-0050"></a>
 
-**R-FFI-0050** — FFI attribute scopes are closed: `@link`, `@header`, `@abi` on extern block; `@link_name` on imported symbol; `@safety` on imported or exported C function; `@fenv` on imported C function; `@repr`, `@c_type` on C type; `@c_field` on a field of a C-declared struct or union (R-FFI-0017); `@c_constant` on verified constant; `@export_name`, `@callback`, `@signal_handler` on exported C function; `@signal_safe` on imported or exported C function (R-FFI-0067). `@header` is repeatable; `@link` and `@abi` are singleton per block, and every declaration-scoped FFI attribute is singleton on its declaration. Misplaced, duplicated-singleton or unknown FFI attribute requires `R-DIAG-FFI-003`.
+**R-FFI-0050** — FFI attribute scopes are closed: `@link`, `@header`, `@abi` on extern block; `@link_name` on imported symbol; `@c_address` on imported object; `@safety` on imported or exported C function; `@fenv` on imported C function; `@repr`, `@c_type` on C type; `@c_field` on a field of a C-declared struct or union (R-FFI-0017); `@c_constant` on verified constant; `@export_name`, `@callback`, `@signal_handler` on exported C function; `@signal_safe` on imported or exported C function (R-FFI-0067). `@header` is repeatable; `@link` and `@abi` are singleton per block, and every declaration-scoped FFI attribute is singleton on its declaration. Misplaced, duplicated-singleton or unknown FFI attribute requires `R-DIAG-FFI-003`.
 
 <a id="R-FFI-0051"></a>
 
@@ -2435,7 +2435,7 @@ For `core::adopt` and `core::release`, T is selected from the pointer or owner a
 
 <a id="R-FFI-0054"></a>
 
-**R-FFI-0054** — Outside an extern block, `extern "C"` is valid only on a non-`protected` function definition satisfying R-FFI-0024. A protected definition, body-less prototype, object declaration or any other top-level `extern` use is a constraint violation; imports shall be written inside verified `extern "C"` block.
+**R-FFI-0054** — Outside an extern block, `extern "C"` is valid only on a non-`protected` function definition satisfying R-FFI-0024, or, in a runtime unit, on a `protected` `@callback` definition (R-FFI-0068). Any other protected definition, body-less prototype, object declaration or any other top-level `extern` use is a constraint violation; imports shall be written inside verified `extern "C"` block.
 
 <a id="R-FFI-0055"></a>
 

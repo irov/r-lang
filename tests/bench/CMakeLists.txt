@@ -42,6 +42,16 @@ set(R_BENCH_LIBRARY_TARGETS
     r_std_io r_std_rc r_std_sync r_std_thread r_std_time r_runtime_darwin_socket
     r_runtime_darwin_dns r_runtime_darwin_io r_runtime_darwin_process r_runtime_darwin_event
     r_runtime_darwin_timer r_runtime_inline_shims)
+# B12: an interface library left by a module of the runtime unit has no file to depend on.
+foreach(R_BENCH_LIBRARY IN LISTS R_BENCH_LIBRARY_TARGETS)
+    get_target_property(R_BENCH_LIBRARY_TYPE ${R_BENCH_LIBRARY} TYPE)
+    if(R_BENCH_LIBRARY_TYPE STREQUAL "INTERFACE_LIBRARY")
+        list(REMOVE_ITEM R_BENCH_LIBRARY_TARGETS ${R_BENCH_LIBRARY})
+    endif()
+endforeach()
+if(TARGET r_runtime_core)
+    list(APPEND R_BENCH_LIBRARY_TARGETS r_runtime_core)
+endif()
 
 set(R_BENCH_CODEGEN_ARGUMENTS
     -DR_FRONT_EXECUTABLE=$<TARGET_FILE:r-front>
@@ -112,12 +122,12 @@ set(R_BENCH_CODEGEN_ARGUMENTS
     -DRUNTIME_DROP_SOURCE=${R_RUNTIME_SOURCE_drop}
     -DRUNTIME_OWN_SOURCE=${R_RUNTIME_SOURCE_own}
     -DRUNTIME_THREAD_ATTACHMENT_SOURCE=${R_RUNTIME_SOURCE_thread_attachment}
-    -DRUNTIME_TASK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/task.c
-    -DRUNTIME_STACK_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/stack.c
+    -DRUNTIME_TASK_SOURCE=${R_RUNTIME_SOURCE_task}
+    -DRUNTIME_STACK_SOURCE=${R_RUNTIME_SOURCE_stack}
     -DRUNTIME_DARWIN_IO_LIBRARY=$<TARGET_FILE:r_runtime_darwin_io>
     -DRUNTIME_DARWIN_PROCESS_LIBRARY=$<TARGET_FILE:r_runtime_darwin_process>
     -DRUNTIME_DARWIN_EVENT_LIBRARY=$<TARGET_FILE:r_runtime_darwin_event>
-    -DRUNTIME_DARWIN_TIMER_LIBRARY=$<TARGET_FILE:r_runtime_darwin_timer>
+    -DRUNTIME_DARWIN_TIMER_LIBRARY=${R_RUNTIME_DARWIN_TIMER_ARCHIVE}
     -DRUNTIME_FS_LANE_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane.c
     -DRUNTIME_FS_LANE_ASYNC_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_async.c
     -DRUNTIME_FS_LANE_SYSCALLS_SOURCE=${PROJECT_SOURCE_DIR}/runtime/darwin/source/fs_lane_syscalls.c
