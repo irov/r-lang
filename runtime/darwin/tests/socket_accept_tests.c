@@ -326,6 +326,73 @@ static int test_deadline(RRuntimeAllocator *allocator) {
     return 0;
 }
 
+/*
+ * B13.1b: two accepts watch one listener at once. Each reactor watch is a registration of its own
+ * (EV_UDATA_SPECIFIC), so the second neither replaces nor removes the first, as two Dispatch
+ * sources on one descriptor did: both accept a client.
+ */
+static int test_two_accepts_share_listener(RRuntimeAllocator *allocator) {
+    TestListener listener;
+    TestAcceptCompletion first;
+    TestAcceptCompletion second;
+    RRuntimeDarwinSocketAcceptPrepareResult first_prepared;
+    RRuntimeDarwinSocketAcceptPrepareResult second_prepared;
+    struct sockaddr_in client_local = {0};
+    int first_client;
+    int second_client;
+
+    CHECK(listener_create(&listener, 1));
+    completion_initialize(&first);
+    completion_initialize(&second);
+    first_prepared = r_runtime_darwin_socket_accept_prepare(allocator, listener.descriptor, 0U);
+    second_prepared = r_runtime_darwin_socket_accept_prepare(allocator, listener.descriptor, 0U);
+    CHECK(first_prepared.status == R_RUNTIME_DARWIN_SOCKET_PREPARE_OK &&
+          second_prepared.status == R_RUNTIME_DARWIN_SOCKET_PREPARE_OK);
+    CHECK(r_runtime_darwin_socket_accept_bind(first_prepared.request, accept_completed, &first));
+    CHECK(r_runtime_darwin_socket_accept_bind(second_prepared.request, accept_completed, &second));
+    CHECK(r_runtime_darwin_socket_accept_activate(first_prepared.request));
+    CHECK(r_runtime_darwin_socket_accept_activate(second_prepared.request));
+    first_client = client_connect(&listener, &client_local);
+    second_client = client_connect(&listener, &client_local);
+    CHECK(first_client >= 0 && second_client >= 0);
+    completion_wait(&first);
+    completion_wait(&second);
+    CHECK(first.result.terminal_event == R_RUNTIME_DARWIN_SOCKET_TERMINAL_NATIVE &&
+          first.result.accepted && first.descriptor >= 0);
+    CHECK(second.result.terminal_event == R_RUNTIME_DARWIN_SOCKET_TERMINAL_NATIVE &&
+          second.result.accepted && second.descriptor >= 0);
+    CHECK(close(first_client) == 0 && close(second_client) == 0);
+    CHECK(close(listener.descriptor) == 0);
+    completion_destroy(&first);
+    completion_destroy(&second);
+    return 0;
+}
+
+/*
+ * B13.1b: a watch whose descriptor is closed before it is armed is refused by the kernel; the
+ * reactor treats the refusal as readiness, so the accept job reports the closed descriptor
+ * instead of the process aborting.
+ */
+static int test_closed_listener_reports_native_error(RRuntimeAllocator *allocator) {
+    TestListener listener;
+    TestAcceptCompletion completion;
+    RRuntimeDarwinSocketAcceptPrepareResult prepared;
+
+    CHECK(listener_create(&listener, 1));
+    completion_initialize(&completion);
+    prepared = r_runtime_darwin_socket_accept_prepare(allocator, listener.descriptor, 0U);
+    CHECK(prepared.status == R_RUNTIME_DARWIN_SOCKET_PREPARE_OK && prepared.request != NULL);
+    CHECK(r_runtime_darwin_socket_accept_bind(prepared.request, accept_completed, &completion));
+    CHECK(close(listener.descriptor) == 0);
+    CHECK(r_runtime_darwin_socket_accept_activate(prepared.request));
+    completion_wait(&completion);
+    CHECK(completion.result.terminal_event == R_RUNTIME_DARWIN_SOCKET_TERMINAL_NATIVE);
+    CHECK(!completion.result.accepted && completion.result.native_error == EBADF);
+    CHECK(completion.descriptor < 0);
+    completion_destroy(&completion);
+    return 0;
+}
+
 static int test_cancel_native_races(RRuntimeAllocator *allocator) {
     size_t iteration;
 
@@ -440,6 +507,8 @@ int main(void) {
     CHECK(test_success(&allocator) == 0);
     CHECK(test_cancel_before_activation(&allocator) == 0);
     CHECK(test_deadline(&allocator) == 0);
+    CHECK(test_two_accepts_share_listener(&allocator) == 0);
+    CHECK(test_closed_listener_reports_native_error(&allocator) == 0);
     CHECK(test_cancel_native_races(&allocator) == 0);
     CHECK(test_late_cancel_does_not_replace_delivered_result(&allocator) == 0);
     (void)puts("socket_accept_tests: ok");

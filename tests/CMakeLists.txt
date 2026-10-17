@@ -3563,9 +3563,7 @@ target_include_directories(r_library_net_udp_tests PRIVATE
 if(APPLE)
     target_compile_definitions(
         r_library_net_udp_tests
-        PRIVATE
-            R_LIBRARY_NET_TESTING=1
-            R_RUNTIME_DARWIN_SOCKET_TESTING=1
+        PRIVATE R_LIBRARY_NET_TESTING=1
     )
 endif()
 
@@ -6601,7 +6599,6 @@ if(NOT MSVC)
                 -DR_STD_JSON_LIBRARY=$<TARGET_FILE:r_std_json>
                 -DR_STD_NET_LIBRARY=$<TARGET_FILE:r_std_net>
                 -DR_STD_PROCESS_LIBRARY=$<TARGET_FILE:r_std_process>
-                -DRUNTIME_DARWIN_SOCKET_LIBRARY=$<TARGET_FILE:r_runtime_darwin_socket>
                 -DRUNTIME_DARWIN_DNS_LIBRARY=$<TARGET_FILE:r_runtime_darwin_dns>
                 -DR_STD_STRING_LIBRARY=$<TARGET_FILE:r_std_string>
                 -DR_STD_UTF8_LIBRARY=$<TARGET_FILE:r_std_utf8>
@@ -7221,7 +7218,7 @@ if(NOT MSVC)
         r_std_json r_std_math r_std_time r_std_env r_std_thread r_std_sync r_std_async r_std_io
         r_std_fs r_std_net r_std_process r_std_signal r_std_c r_runtime_core
         r_runtime_darwin_event r_runtime_darwin_dns r_runtime_darwin_fs_lane
-        r_runtime_darwin_io r_runtime_darwin_process r_runtime_darwin_socket)
+        r_runtime_darwin_io r_runtime_darwin_process)
     set(R_SHARED_LIBRARY_LINK_INPUTS)
     foreach(R_SHARED_LIBRARY_TARGET IN LISTS R_SHARED_LIBRARY_LINK_TARGETS)
         list(APPEND R_SHARED_LIBRARY_LINK_INPUTS
@@ -9760,7 +9757,6 @@ if(NOT MSVC)
                 -DR_STD_JSON_LIBRARY=$<TARGET_FILE:r_std_json>
                 -DR_STD_NET_LIBRARY=$<TARGET_FILE:r_std_net>
                 -DR_STD_PROCESS_LIBRARY=$<TARGET_FILE:r_std_process>
-                -DRUNTIME_DARWIN_SOCKET_LIBRARY=$<TARGET_FILE:r_runtime_darwin_socket>
                 -DRUNTIME_DARWIN_DNS_LIBRARY=$<TARGET_FILE:r_runtime_darwin_dns>
                 -DR_STD_STRING_LIBRARY=$<TARGET_FILE:r_std_string>
             -DR_STD_UTF8_LIBRARY=$<TARGET_FILE:r_std_utf8>
@@ -9831,7 +9827,6 @@ if(NOT MSVC)
                 -DR_STD_JSON_LIBRARY=$<TARGET_FILE:r_std_json>
                 -DR_STD_NET_LIBRARY=$<TARGET_FILE:r_std_net>
                 -DR_STD_PROCESS_LIBRARY=$<TARGET_FILE:r_std_process>
-                -DRUNTIME_DARWIN_SOCKET_LIBRARY=$<TARGET_FILE:r_runtime_darwin_socket>
                 -DRUNTIME_DARWIN_DNS_LIBRARY=$<TARGET_FILE:r_runtime_darwin_dns>
                 -DR_STD_STRING_LIBRARY=$<TARGET_FILE:r_std_string>
             -DR_STD_UTF8_LIBRARY=$<TARGET_FILE:r_std_utf8>
@@ -9901,7 +9896,6 @@ if(NOT MSVC)
                 -DR_STD_JSON_LIBRARY=$<TARGET_FILE:r_std_json>
                 -DR_STD_NET_LIBRARY=$<TARGET_FILE:r_std_net>
                 -DR_STD_PROCESS_LIBRARY=$<TARGET_FILE:r_std_process>
-                -DRUNTIME_DARWIN_SOCKET_LIBRARY=$<TARGET_FILE:r_runtime_darwin_socket>
                 -DRUNTIME_DARWIN_DNS_LIBRARY=$<TARGET_FILE:r_runtime_darwin_dns>
                 -DR_STD_STRING_LIBRARY=$<TARGET_FILE:r_std_string>
             -DR_STD_UTF8_LIBRARY=$<TARGET_FILE:r_std_utf8>
@@ -9971,7 +9965,6 @@ if(NOT MSVC)
                 -DR_STD_JSON_LIBRARY=$<TARGET_FILE:r_std_json>
                 -DR_STD_NET_LIBRARY=$<TARGET_FILE:r_std_net>
                 -DR_STD_PROCESS_LIBRARY=$<TARGET_FILE:r_std_process>
-                -DRUNTIME_DARWIN_SOCKET_LIBRARY=$<TARGET_FILE:r_runtime_darwin_socket>
                 -DRUNTIME_DARWIN_DNS_LIBRARY=$<TARGET_FILE:r_runtime_darwin_dns>
                 -DR_STD_STRING_LIBRARY=$<TARGET_FILE:r_std_string>
             -DR_STD_UTF8_LIBRARY=$<TARGET_FILE:r_std_utf8>
@@ -10042,7 +10035,6 @@ if(NOT MSVC)
                 -DR_STD_JSON_LIBRARY=$<TARGET_FILE:r_std_json>
                 -DR_STD_NET_LIBRARY=$<TARGET_FILE:r_std_net>
                 -DR_STD_PROCESS_LIBRARY=$<TARGET_FILE:r_std_process>
-                -DRUNTIME_DARWIN_SOCKET_LIBRARY=$<TARGET_FILE:r_runtime_darwin_socket>
                 -DRUNTIME_DARWIN_DNS_LIBRARY=$<TARGET_FILE:r_runtime_darwin_dns>
                 -DR_STD_STRING_LIBRARY=$<TARGET_FILE:r_std_string>
             -DR_STD_UTF8_LIBRARY=$<TARGET_FILE:r_std_utf8>

@@ -15,7 +15,7 @@ typedef enum RRuntimeDarwinTimerPrepareStatus {
 
 typedef struct RRuntimeDarwinTimer {
     /* The alarm of the reactor that fires at the deadline fixed by prepare. */
-    RRuntimeReactorAlarm alarm;
+    RRuntimeReactorSource alarm;
     _Bool prepared;
     RRuntimeTaskExternalExecution *execution;
 } RRuntimeDarwinTimer;

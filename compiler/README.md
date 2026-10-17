@@ -2769,8 +2769,8 @@ the unit hands to a thread start or to the reactor. It gets no probe and an inte
 named after the R function (`runtime.tasks::pool_worker.c`, `r_llvm_c_export` in
 `compiler/llvm/ffi.c`), so two modules may use one name and no other object can call it. The
 signatures of such callbacks stay apart from drop and move glue, `(raw void*?) -> void`: a
-thread entry returns its pointer and an alarm callback takes its alarm (`(raw Alarm*?) -> void`),
-because an indirect call of the unit may reach every callback of its R signature (R-FUNC-0004,
+thread entry returns its pointer, a reactor callback takes its source (`(raw Source*?) -> void`)
+and a job of the worker pool takes its job (`(raw Job*?) -> void`), because an indirect call of the unit may reach every callback of its R signature (R-FUNC-0004,
 `r_semantic_callback_may_be_target`), and a shared signature would close a cycle through glue
 and every callback. An import `@c_address raw T* name;` (R-FFI-0022) is the address of the C
 object `name`, of a type R may leave opaque, as C macros such as `FE_DFL_ENV` (`&_FE_DFL_ENV`)
@@ -2783,15 +2783,29 @@ constant holding its address. The C types the modules share are declared once in
 they use are listed in `runtime/r/link_manifest.json`.
 
 The executor of the core (`runtime/r/task.r`) runs ready tasks on its own pool of worker threads:
-one FIFO linked through the task frames, one worker per online processor, and a watch that adds
-a worker while queued work waits behind busy workers that take nothing for 10 ms, as Dispatch
-did, up to 64; an extra worker idle for 5 s ends. The reactor (`runtime/r/reactor.r`) is one
-thread that owns the kernel event queue (kqueue on darwin) and its one-shot alarms (timers of
-`std.time`, deadlines of group waits, the watch of the pool). Other threads only post commands,
-which the reactor takes when its wakeup fires, so a native registration changes and an event is
-delivered on one thread: an alarm with a settle callback settles exactly once, after it fired or
-was disarmed, and a posted command that the reactor has not taken keeps the alarm, whose storage
-its owner may release at settlement, out of the command list.
+one FIFO linked through the task frames, a second for the jobs of the runtime's adapters
+(`RRuntimeJob`, `defer`), taken first, one worker per online processor, and a monitor alarm that
+adds a worker while queued work waits behind busy workers that take nothing for 10 ms, as
+Dispatch did, up to 64; an extra worker idle for 5 s ends. The reactor (`runtime/r/reactor.r`) is
+one thread that owns the kernel event queue (kqueue on darwin) and its sources: one-shot alarms
+(timers of `std.time`, deadlines of group waits, the monitor of the pool) and watches of the read
+or write readiness of a descriptor (the socket adapters). Other threads only post commands, which
+the reactor takes when its wakeup fires, so a native registration changes and an event is
+delivered on one thread: a source with a settle callback settles exactly once, an alarm after it
+fired or was disarmed and a watch, which waits for one event per arm, after it was disarmed; a
+posted command that the reactor has not taken keeps the source, whose storage its owner may
+release at settlement, out of the command list. Each watch is a registration of its own
+(`EV_UDATA_SPECIFIC`), so watches of one descriptor neither replace nor remove each other, as
+Dispatch sources did, and a registration the kernel refuses (a closed descriptor) counts as
+readiness, whose native call reports the error.
+
+The socket adapters (`runtime/r/socket.r`, `r_runtime_darwin_socket.h`) keep native calls off the
+reactor thread: a readiness event starts a job of the pool that makes the nonblocking `connect`
+check, `accept`, `sendto` or `recvmsg` and either watches again or selects the terminal outcome,
+and the completion is a second job, run once the outcome is selected, both sources have settled
+and no native job runs, so it is the adapter's last access to the request, as the cancel
+handlers of Dispatch sources were. A paused or slow native call therefore delays no other
+source; a deadline of a request queued behind it still fires.
 
 The entries of a unit, its exports and internal callbacks, have no stack check of their own: the
 generated code that calls the runtime keeps the call transition of the target

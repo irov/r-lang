@@ -7,10 +7,10 @@ import runtime.panics;
 import runtime.stacks;
 
 // The reactor of the runtime (r_runtime_reactor.h): one thread that owns the kernel event queue,
-// arms and disarms the alarms of timers and deadlines, and runs their callbacks. Other threads only
-// post commands, which the reactor takes when its wakeup event fires, so a native registration is
-// changed and an event delivered on one thread: a cancellation and an event that fired meanwhile
-// are ordered there, and an alarm is settled exactly once.
+// registers and removes the sources of timers, deadlines and descriptors, and runs their callbacks.
+// Other threads only post commands, which the reactor takes when its wakeup event fires, so a
+// native registration is changed and an event delivered on one thread: a cancellation and an
+// event that fired meanwhile are ordered there, and a source is settled exactly once.
 @header("r_runtime_reactor.h")
 extern "C" {
 }
@@ -20,25 +20,39 @@ extern "C" {
 @abi("r-runtime-abi")
 extern "C" {
     @repr(C)
-    @c_type(name = "RRuntimeReactorAlarm", kind = "typedef")
-    struct Alarm {
-        raw Alarm*? next;
-        raw fn?(raw Alarm*?) -> void fire;
-        raw fn?(raw Alarm*?) -> void settle;
+    @c_type(name = "RRuntimeReactorSource", kind = "typedef")
+    struct Source {
+        raw Source*? next;
+        raw fn?(raw Source*?) -> void fire;
+        raw fn?(raw Source*?) -> void settle;
         raw void*? context;
         c_uint64 deadline;
+        c_uintptr ident;
+        c_int filter;
         c_uint32 command;
         c_uint32 state;
     };
+
+    // A job of the worker pool (runtime/r/task.r): run is called once, on a worker, with the
+    // job, whose context names its owner; run may release the storage of the job.
+    @repr(C)
+    @c_type(name = "RRuntimeJob", kind = "typedef")
+    struct Job {
+        raw Job*? next;
+        raw fn?(raw Job*?) -> void run;
+        raw void*? context;
+    };
 }
 
-// Commands an alarm may carry; a later command replaces an earlier one not yet taken.
+// Commands a source may carry; a later command replaces an earlier one not yet taken.
 const u32 command_none = 0u32;
 const u32 command_arm = 1u32;
 const u32 command_disarm = 2u32;
 
-// States, written by the reactor thread under the lock. An alarm with a settle callback ends
-// settled, exactly once; one without returns to idle after it fires and may be armed again.
+// States, written by the reactor thread under the lock. A source with a settle callback ends
+// settled, exactly once; an alarm without one returns to idle after it fires and may be armed
+// again. A descriptor watch stays fired after its event, unregistered, until it is armed again
+// or disarmed.
 const u32 state_idle = 0u32;
 const u32 state_armed = 1u32;
 const u32 state_fired = 2u32;
@@ -49,7 +63,7 @@ const u64 u64_maximum = 18446744073709551615u64;
 const u64 i64_maximum = 9223372036854775807u64;
 
 Mutex reactor_mutex = {.signature = runtime.system::mutex_signature as c_long, .bytes = {}};
-raw Alarm*? commands = null;
+raw Source*? commands = null;
 c_int kernel_queue = -1i32 as c_int;
 bool started = false;
 
@@ -126,119 +140,152 @@ protected void wake() {
     }
 }
 
-// An alarm owned by the reactor until its command is taken: armed for the deadline, or removed.
-protected void arm_native(raw Alarm*? alarm, u64 deadline) {
-    u64 current = now();
-    u64 remaining = 1u64;
-    if (deadline > current) {
-        remaining = deadline - current;
-    }
-    if (remaining > i64_maximum) {
-        remaining = i64_maximum;
-    }
+protected bool is_watch(raw Source*? source) {
     unsafe {
-        if (change(core::pointer_address(alarm) as c_uintptr, runtime.system::filter_timer,
-                   runtime.system::event_add | runtime.system::event_oneshot,
-                   runtime.system::note_nanoseconds, remaining as c_intptr,
-                   alarm as raw void*?) != 0i32 as c_int) {
+        return (source->filter as i32) != (runtime.system::filter_timer as i32);
+    }
+}
+
+// Registers a source taken by the reactor: an alarm for its deadline, a watch for one readiness
+// event of its descriptor. Each registration is specific to its source (EV_UDATA_SPECIFIC), so
+// sources on one descriptor never replace or remove each other, as independent Dispatch sources
+// did. False when the kernel refuses a watch, a descriptor that is not open: its owner then
+// learns the error from its native call.
+protected bool arm_native(raw Source*? source, u64 deadline) {
+    unsafe {
+        c_int specific = runtime.system::event_add | runtime.system::event_oneshot |
+                         runtime.system::event_udata_specific;
+        if (is_watch(source) == true) {
+            return change(source->ident, source->filter, specific, 0i32 as c_int,
+                          0i64 as c_intptr, source as raw void*?) == 0i32 as c_int;
+        }
+        u64 current = now();
+        u64 remaining = 1u64;
+        if (deadline > current) {
+            remaining = deadline - current;
+        }
+        if (remaining > i64_maximum) {
+            remaining = i64_maximum;
+        }
+        if (change(core::pointer_address(source) as c_uintptr, runtime.system::filter_timer,
+                   specific, runtime.system::note_nanoseconds, remaining as c_intptr,
+                   source as raw void*?) != 0i32 as c_int) {
             fail();
         }
+        return true;
     }
 }
 
-protected void disarm_native(raw Alarm*? alarm) {
+protected void disarm_native(raw Source*? source) {
     unsafe {
-        // ENOENT: the one-shot registration fired and is gone; its event was handled before.
-        change(core::pointer_address(alarm) as c_uintptr, runtime.system::filter_timer,
-               runtime.system::event_delete, 0i32 as c_int, 0i64 as c_intptr, null) as void;
+        c_uintptr ident = source->ident;
+        if (is_watch(source) == false) {
+            ident = core::pointer_address(source) as c_uintptr;
+        }
+        // ENOENT: the one-shot registration fired and is gone, its event handled before; for a
+        // watch also a descriptor closed meanwhile, which removed it.
+        change(ident, source->filter,
+               runtime.system::event_delete | runtime.system::event_udata_specific,
+               0i32 as c_int, 0i64 as c_intptr, source as raw void*?) as void;
     }
 }
 
-protected void call(raw fn?(raw Alarm*?) -> void callback, raw Alarm*? alarm) {
+protected void call(raw fn?(raw Source*?) -> void callback, raw Source*? source) {
     unsafe {
         if (callback == null) {
             fail();
         }
-        callback(alarm);
+        callback(source);
     }
 }
 
-// Settles an alarm that will not fire again, unless a command was posted meanwhile: that command
+// Settles a source that will not fire again, unless a command was posted meanwhile: that command
 // settles it when the reactor takes it. Deciding under the lock that no command is linked keeps
 // the storage, which the settle callback may release, out of the command list.
-protected void try_settle(raw Alarm*? alarm) {
+protected void try_settle(raw Source*? source) {
     unsafe {
-        raw fn?(raw Alarm*?) -> void callback = alarm->settle;
+        raw fn?(raw Source*?) -> void callback = source->settle;
         reactor_lock();
-        bool waiting = (alarm->command as u32) != command_none;
+        bool waiting = (source->command as u32) != command_none;
         if (waiting == true) {
-            alarm->state = state_fired as c_uint32;
+            source->state = state_fired as c_uint32;
         } else {
-            alarm->state = state_settled as c_uint32;
+            source->state = state_settled as c_uint32;
         }
         reactor_unlock();
         if (waiting == false) {
-            call(callback, alarm);
+            call(callback, source);
         }
     }
 }
 
-// The timer of an armed alarm fired.
-protected void fired(raw Alarm*? alarm) {
+// The registration of an armed source fired, or a watch could not be registered. An alarm with
+// a settle callback then settles; a watch waits, unregistered, for its owner to arm it again or
+// to disarm it.
+protected void fired(raw Source*? source) {
     unsafe {
-        if ((alarm->state as u32) != state_armed) {
+        if ((source->state as u32) != state_armed) {
             return;
         }
-        bool settles = alarm->settle != null;
+        bool watching = is_watch(source);
+        bool settles = false;
+        if (watching == false) {
+            settles = source->settle != null;
+        }
         reactor_lock();
-        if (settles == true) {
-            alarm->state = state_fired as c_uint32;
+        if ((watching == true) || (settles == true)) {
+            source->state = state_fired as c_uint32;
         } else {
-            alarm->state = state_idle as c_uint32;
+            source->state = state_idle as c_uint32;
         }
         reactor_unlock();
-        call(alarm->fire, alarm);
+        call(source->fire, source);
         if (settles == true) {
-            try_settle(alarm);
+            try_settle(source);
         }
     }
 }
 
-// Takes every posted command, the latest of each alarm. An alarm without a settle callback is
+// Takes every posted command, the latest of each source. An alarm without a settle callback is
 // only armed; one with a settle callback is armed once and settles after it fires or when it is
-// disarmed, whichever the reactor sees first.
+// disarmed, whichever the reactor sees first. A watch is armed again after each event until it
+// is disarmed, and settles then.
 protected void take_commands() {
     reactor_lock();
     unsafe {
-        raw Alarm*? alarm = commands;
+        raw Source*? source = commands;
         commands = null;
         reactor_unlock();
-        while (alarm != null) {
+        while (source != null) {
             reactor_lock();
-            raw Alarm*? following = alarm->next;
-            u32 command = alarm->command as u32;
-            u64 deadline = alarm->deadline as u64;
-            u32 state = alarm->state as u32;
-            bool settles = alarm->settle != null;
-            alarm->next = null;
-            alarm->command = command_none as c_uint32;
+            raw Source*? following = source->next;
+            u32 command = source->command as u32;
+            u64 deadline = source->deadline as u64;
+            u32 state = source->state as u32;
+            bool settles = source->settle != null;
+            bool watching = is_watch(source);
+            source->next = null;
+            source->command = command_none as c_uint32;
+            bool rearm = (watching == true) && (state == state_fired);
             bool arming = (command == command_arm) &&
-                          ((state == state_idle) || (state == state_armed));
+                          ((state == state_idle) || (state == state_armed) || (rearm == true));
             if (arming == true) {
-                alarm->state = state_armed as c_uint32;
+                source->state = state_armed as c_uint32;
             }
             reactor_unlock();
             if (arming == true) {
-                arm_native(alarm, deadline);
+                if (arm_native(source, deadline) == false) {
+                    fired(source);
+                }
             } else {
                 if ((settles == true) && (state != state_settled)) {
                     if (state == state_armed) {
-                        disarm_native(alarm);
+                        disarm_native(source);
                     }
-                    try_settle(alarm);
+                    try_settle(source);
                 }
             }
-            alarm = following;
+            source = following;
         }
     }
 }
@@ -271,13 +318,13 @@ protected extern "C" raw void*? reactor_main(raw void*? context) {
             bool woken = false;
             usize index = 0usize;
             usize total = count as usize;
-            // Timer events first: a command taken afterwards finds what they did.
+            // Source events first: a command taken afterwards finds what they did.
             while (index < total) {
                 Event entry = events[index];
                 if ((entry.filter as i32) == (runtime.system::filter_user as i32)) {
                     woken = true;
                 } else {
-                    fired(entry.udata as raw Alarm*?);
+                    fired(entry.udata as raw Source*?);
                 }
                 index += 1usize;
             }
@@ -322,33 +369,55 @@ bool start() {
     return true;
 }
 
-// Prepares an alarm; its callbacks run on the reactor thread with the alarm, whose context names
-// their owner. Without settle the alarm may be armed again after it fires.
-void initialize(raw Alarm*? alarm, raw fn?(raw Alarm*?) -> void fire,
-                raw fn?(raw Alarm*?) -> void settle_callback, raw void*? context) {
+// Prepares an alarm; its callbacks run on the reactor thread with the source, whose context
+// names their owner. Without settle the alarm may be armed again after it fires.
+void initialize(raw Source*? source, raw fn?(raw Source*?) -> void fire,
+                raw fn?(raw Source*?) -> void settle_callback, raw void*? context) {
     unsafe {
-        *alarm = Alarm {.next = null, .fire = fire, .settle = settle_callback, .context = context,
-                        .deadline = 0u64 as c_uint64, .command = command_none as c_uint32,
-                        .state = state_idle as c_uint32};
+        *source = Source {.next = null, .fire = fire, .settle = settle_callback,
+                          .context = context, .deadline = 0u64 as c_uint64,
+                          .ident = 0u64 as c_uintptr, .filter = runtime.system::filter_timer,
+                          .command = command_none as c_uint32, .state = state_idle as c_uint32};
     }
 }
 
-// Posts a command; false when the alarm has settled, which ends its use.
-protected bool post(raw Alarm*? alarm, u32 command, u64 deadline) {
+// Prepares a watch of the read or write readiness of an open descriptor, which stays open until
+// the watch settles. Each arm waits for one event, after which fire runs on the reactor thread;
+// disarm settles the watch once, after which no callback runs.
+void initialize_watch(raw Source*? source, c_int descriptor, c_int filter,
+                      raw fn?(raw Source*?) -> void fire,
+                      raw fn?(raw Source*?) -> void settle_callback, raw void*? context) {
+    unsafe {
+        if (((filter as i32) != (runtime.system::filter_read as i32)) &&
+            ((filter as i32) != (runtime.system::filter_write as i32))) {
+            fail();
+        }
+        if (((descriptor as i32) < 0i32) || (settle_callback == null)) {
+            fail();
+        }
+        *source = Source {.next = null, .fire = fire, .settle = settle_callback,
+                          .context = context, .deadline = 0u64 as c_uint64,
+                          .ident = descriptor as c_uintptr, .filter = filter,
+                          .command = command_none as c_uint32, .state = state_idle as c_uint32};
+    }
+}
+
+// Posts a command; false when the source has settled, which ends its use.
+protected bool post(raw Source*? source, u32 command, u64 deadline) {
     reactor_lock();
     unsafe {
-        if ((alarm->state as u32) == state_settled) {
+        if ((source->state as u32) == state_settled) {
             reactor_unlock();
             return false;
         }
         if (command == command_arm) {
-            alarm->deadline = deadline as c_uint64;
+            source->deadline = deadline as c_uint64;
         }
-        bool linked = (alarm->command as u32) != command_none;
-        alarm->command = command as c_uint32;
+        bool linked = (source->command as u32) != command_none;
+        source->command = command as c_uint32;
         if (linked == false) {
-            alarm->next = commands;
-            commands = alarm;
+            source->next = commands;
+            commands = source;
         }
     }
     reactor_unlock();
@@ -357,30 +426,35 @@ protected bool post(raw Alarm*? alarm, u32 command, u64 deadline) {
 }
 
 // Arms an alarm for a deadline of the monotonic clock, or moves the deadline of an armed one.
-bool arm(raw Alarm*? alarm, u64 deadline) {
-    return post(alarm, command_arm, deadline);
+bool arm(raw Source*? source, u64 deadline) {
+    return post(source, command_arm, deadline);
 }
 
-// Disarms an alarm with a settle callback: it settles once, at once if it has not fired.
-bool disarm(raw Alarm*? alarm) {
-    return post(alarm, command_disarm, 0u64);
+// Arms a watch for its next readiness event.
+bool watch(raw Source*? source) {
+    return post(source, command_arm, 0u64);
 }
 
-// Whether a command of the alarm waits for the reactor.
-bool pending(raw Alarm*? alarm) {
+// Disarms a source with a settle callback: it settles once, at once if it is not registered.
+bool disarm(raw Source*? source) {
+    return post(source, command_disarm, 0u64);
+}
+
+// Whether a command of the source waits for the reactor.
+bool pending(raw Source*? source) {
     reactor_lock();
     unsafe {
-        bool waiting = (alarm->command as u32) != command_none;
+        bool waiting = (source->command as u32) != command_none;
         reactor_unlock();
         return waiting;
     }
 }
 
-// Whether an alarm with a settle callback has settled.
-bool settled(raw Alarm*? alarm) {
+// Whether a source with a settle callback has settled.
+bool settled(raw Source*? source) {
     reactor_lock();
     unsafe {
-        bool done = (alarm->state as u32) == state_settled;
+        bool done = (source->state as u32) == state_settled;
         reactor_unlock();
         return done;
     }

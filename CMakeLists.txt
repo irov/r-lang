@@ -163,6 +163,7 @@ set(R_RUNTIME_UNIT_core_SOURCES
     runtime/r/reactor.r
     runtime/r/task.r
     runtime/r/timer.r
+    runtime/r/socket.r
 )
 # A freestanding program links the UTF-8 module alone, without a sanitizer (R-CONF-0005).
 set(R_RUNTIME_UNIT_freestanding_utf8_SOURCES runtime/r/utf8.r)
@@ -514,7 +515,6 @@ if(APPLE)
         r_runtime_darwin_fs_lane
         r_runtime_darwin_io
         r_runtime_darwin_process
-        r_runtime_darwin_socket
     )
     target_link_libraries(r_std_io PUBLIC r_runtime_darwin_io r_runtime_core)
     target_link_libraries(r_std_fs PUBLIC
@@ -525,7 +525,6 @@ if(APPLE)
     target_link_libraries(r_std_time PUBLIC r_runtime_core)
     target_link_libraries(r_std_net PUBLIC
         r_runtime_darwin_dns
-        r_runtime_darwin_socket
         r_runtime_core
     )
     target_link_libraries(r_std_process PUBLIC r_runtime_darwin_process r_runtime_core)
@@ -638,8 +637,7 @@ if(Python3_Interpreter_FOUND AND CMAKE_C_COMPILER_ID MATCHES "Clang" AND
         r_std_fs r_std_net r_std_process r_std_signal r_std_c)
     if(APPLE)
         list(APPEND R_BITCODE_TARGETS r_runtime_darwin_event r_runtime_darwin_dns
-            r_runtime_darwin_fs_lane r_runtime_darwin_io r_runtime_darwin_process
-            r_runtime_darwin_socket)
+            r_runtime_darwin_fs_lane r_runtime_darwin_io r_runtime_darwin_process)
     endif()
     get_filename_component(R_BITCODE_TOOL_DIRECTORY "${CMAKE_C_COMPILER}" DIRECTORY)
     set(R_BITCODE_OBJECTS)

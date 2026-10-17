@@ -39,7 +39,7 @@ set(R_BENCH_LIBRARY_TARGETS
     r_std_secret r_std_random r_std_hash r_std_math r_std_format r_std_json r_std_net r_std_process r_std_signal
     r_std_test
     r_std_string r_std_utf8 r_std_async r_std_c r_std_convert r_std_env r_std_error r_std_fs
-    r_std_io r_std_rc r_std_sync r_std_thread r_std_time r_runtime_darwin_socket
+    r_std_io r_std_rc r_std_sync r_std_thread r_std_time
     r_runtime_darwin_dns r_runtime_darwin_io r_runtime_darwin_process r_runtime_darwin_event
     r_runtime_inline_shims r_runtime_core)
 
@@ -85,7 +85,6 @@ set(R_BENCH_CODEGEN_ARGUMENTS
     -DR_STD_JSON_LIBRARY=$<TARGET_FILE:r_std_json>
     -DR_STD_NET_LIBRARY=$<TARGET_FILE:r_std_net>
     -DR_STD_PROCESS_LIBRARY=$<TARGET_FILE:r_std_process>
-    -DRUNTIME_DARWIN_SOCKET_LIBRARY=$<TARGET_FILE:r_runtime_darwin_socket>
     -DRUNTIME_DARWIN_DNS_LIBRARY=$<TARGET_FILE:r_runtime_darwin_dns>
     -DR_STD_STRING_LIBRARY=$<TARGET_FILE:r_std_string>
     -DR_STD_UTF8_LIBRARY=$<TARGET_FILE:r_std_utf8>

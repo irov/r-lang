@@ -60,7 +60,27 @@
           "binding": "strong"
         },
         {
+          "c_identifier": "accept",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
           "c_identifier": "calloc",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "close",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "connect",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "fcntl",
           "kind": "function",
           "binding": "strong"
         },
@@ -76,6 +96,11 @@
         },
         {
           "c_identifier": "free",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "getsockopt",
           "kind": "function",
           "binding": "strong"
         },
@@ -210,7 +235,27 @@
           "binding": "strong"
         },
         {
+          "c_identifier": "recvmsg",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
           "c_identifier": "sched_yield",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "sendto",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "setsockopt",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "socket",
           "kind": "function",
           "binding": "strong"
         },

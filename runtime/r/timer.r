@@ -4,7 +4,7 @@ import runtime.types::{ExternalHandle};
 import runtime.system;
 import runtime.system::{Mutex, Condition};
 import runtime.reactor;
-import runtime.reactor::{Alarm};
+import runtime.reactor::{Source};
 import runtime.tasks;
 
 // One-shot timers of the darwin adapter (r_runtime_darwin_timer.h): a reactor alarm whose deadline
@@ -23,7 +23,7 @@ extern "C" {
     @repr(C)
     @c_type(name = "RRuntimeDarwinTimer", kind = "typedef")
     struct Timer {
-        Alarm alarm;
+        Source alarm;
         c_bool prepared;
         raw ExternalHandle*? execution;
     };
@@ -50,7 +50,7 @@ extern "C" void r_runtime_darwin_timer_cancel(raw Timer*? timer) {
             return;
         }
         // A settled alarm refuses the command: the task was acknowledged already.
-        runtime.reactor::disarm(&timer->alarm as raw Alarm*) as void;
+        runtime.reactor::disarm(&timer->alarm as raw Source*) as void;
     }
 }
 
@@ -185,7 +185,7 @@ protected void testing_pause_cancel_handler(raw Timer*? timer) {
 
 @callback
 @safety("R-RUNTIME-TIMER-FIRED", "context is a bound timer")
-protected extern "C" void timer_fired(raw Alarm*? alarm) {
+protected extern "C" void timer_fired(raw Source*? alarm) {
     unsafe {
         raw Timer*? timer = alarm->context as raw Timer*?;
         c_uint64 sequence = runtime.types::r_runtime_darwin_event_sequence_next();
@@ -196,7 +196,7 @@ protected extern "C" void timer_fired(raw Alarm*? alarm) {
 
 @callback
 @safety("R-RUNTIME-TIMER-SETTLED", "context is a bound timer")
-protected extern "C" void timer_settled(raw Alarm*? alarm) {
+protected extern "C" void timer_settled(raw Source*? alarm) {
     unsafe {
         raw Timer*? timer = alarm->context as raw Timer*?;
         testing_pause_cancel_handler(timer);
@@ -212,7 +212,7 @@ extern "C" void r_runtime_darwin_timer_initialize(raw Timer*? timer) {
         if (timer == null) {
             return;
         }
-        runtime.reactor::initialize(&timer->alarm as raw Alarm*, timer_fired, timer_settled,
+        runtime.reactor::initialize(&timer->alarm as raw Source*, timer_fired, timer_settled,
                                     timer as raw void*?);
         timer->prepared = runtime.types::c_bool_of(false);
         timer->execution = null;
@@ -273,10 +273,10 @@ extern "C" void r_runtime_darwin_timer_bind_and_activate(raw Timer*? timer,
         timer->execution = execution;
         timer->prepared = runtime.types::c_bool_of(false);
         u64 deadline = timer->alarm.deadline as u64;
-        runtime.reactor::initialize(&timer->alarm as raw Alarm*, timer_fired, timer_settled,
+        runtime.reactor::initialize(&timer->alarm as raw Source*, timer_fired, timer_settled,
                                     timer as raw void*?);
         runtime.tasks::r_runtime_task_external_start_ready(execution);
-        runtime.reactor::arm(&timer->alarm as raw Alarm*, deadline) as void;
+        runtime.reactor::arm(&timer->alarm as raw Source*, deadline) as void;
     }
 }
 

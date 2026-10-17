@@ -119,24 +119,9 @@ target_link_libraries(
 )
 r_runtime_darwin_apply_c17_contract(r_runtime_darwin_process)
 
-add_library(
-    r_runtime_darwin_socket
-    STATIC
-        source/socket_accept.c
-        source/socket_connect.c
-        source/socket_datagram.c
-)
-target_include_directories(r_runtime_darwin_socket PUBLIC include ../include)
-target_link_libraries(r_runtime_darwin_socket PUBLIC Threads::Threads r_runtime_darwin_event)
-r_runtime_darwin_apply_c17_contract(r_runtime_darwin_socket)
-
 if(R_RUNTIME_DARWIN_BUILD_TESTS)
     # The allocator, tasks and timers the adapter tests use are the core of the runtime, written
     # in R (B12).
-    target_compile_definitions(
-        r_runtime_darwin_socket
-        PRIVATE R_RUNTIME_DARWIN_SOCKET_TESTING=1
-    )
     target_compile_definitions(
         r_runtime_darwin_process
         PRIVATE R_RUNTIME_DARWIN_PROCESS_TESTING=1
@@ -241,7 +226,7 @@ if(R_RUNTIME_DARWIN_BUILD_TESTS)
     add_executable(r_runtime_darwin_socket_tests tests/socket_tests.c)
     target_link_libraries(
         r_runtime_darwin_socket_tests
-        PRIVATE r_runtime_darwin_socket r_runtime_core
+        PRIVATE r_runtime_core r_runtime_darwin_event
     )
     r_runtime_darwin_apply_c17_contract(r_runtime_darwin_socket_tests)
     add_test(NAME r_runtime_darwin_socket COMMAND r_runtime_darwin_socket_tests)
@@ -250,7 +235,7 @@ if(R_RUNTIME_DARWIN_BUILD_TESTS)
     add_executable(r_runtime_darwin_socket_accept_tests tests/socket_accept_tests.c)
     target_link_libraries(
         r_runtime_darwin_socket_accept_tests
-        PRIVATE r_runtime_darwin_socket r_runtime_core
+        PRIVATE r_runtime_core r_runtime_darwin_event
     )
     r_runtime_darwin_apply_c17_contract(r_runtime_darwin_socket_accept_tests)
     add_test(NAME r_runtime_darwin_socket_accept COMMAND r_runtime_darwin_socket_accept_tests)

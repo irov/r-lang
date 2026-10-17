@@ -75,7 +75,12 @@ typedef struct RRuntimeDarwinSocketDatagramResult {
     _Bool truncated;
 } RRuntimeDarwinSocketDatagramResult;
 
-/* The request borrow is valid only for the duration of the completion callback. */
+/*
+ * The adapters are written in R (runtime/r/socket.r): readiness and deadlines are sources of the
+ * reactor, and the native calls and the completion run in jobs of the worker pool. The completion
+ * runs once, on a worker, after which the adapter no longer touches the request; the request
+ * borrow is valid only for the duration of the completion callback.
+ */
 typedef void (*RRuntimeDarwinSocketConnectCompletionFn)(RRuntimeDarwinSocketConnect *request,
                                                         void *context);
 typedef void (*RRuntimeDarwinSocketAcceptCompletionFn)(RRuntimeDarwinSocketAccept *request,
@@ -85,26 +90,28 @@ typedef void (*RRuntimeDarwinSocketDatagramCompletionFn)(RRuntimeDarwinSocketDat
 
 /*
  * Two-phase accept reservation. listener_descriptor remains borrowed through completion and must
- * name an open nonblocking close-on-exec listening socket. Success reserves suspended Dispatch
- * sources but performs no accept submission. timeout_nanoseconds == 0 means no timer.
+ * name an open nonblocking close-on-exec listening socket. Success fixes the deadline and
+ * reserves the reactor sources but performs no accept submission. timeout_nanoseconds == 0 means
+ * no timer.
  */
 RRuntimeDarwinSocketAcceptPrepareResult r_runtime_darwin_socket_accept_prepare(
     RRuntimeAllocator *allocator, int listener_descriptor, uint64_t timeout_nanoseconds);
 
-/* Installs the sole completion observer without activating either Dispatch source. */
+/* Installs the sole completion observer without arming either reactor source. */
 _Bool r_runtime_darwin_socket_accept_bind(RRuntimeDarwinSocketAccept *request,
                                           RRuntimeDarwinSocketAcceptCompletionFn completion,
                                           void *context);
 
 /*
- * Arms only the optional deadline source. This lets a higher-level FIFO keep read readiness
- * suspended while queued time still counts toward the operation's absolute deadline.
+ * Arms only the optional deadline alarm. This lets a higher-level FIFO keep read readiness
+ * unwatched while queued time still counts toward the operation's absolute deadline.
  */
 _Bool r_runtime_darwin_socket_accept_arm_deadline(RRuntimeDarwinSocketAccept *request);
 
 /*
- * Activates readiness observation. accept is invoked only by the Dispatch read handler. Repeated
- * activation and activation after an already selected terminal event are successful no-ops.
+ * Activates readiness observation. accept is invoked only by the job that a read readiness event
+ * starts. Repeated activation and activation after an already selected terminal event are
+ * successful no-ops.
  */
 _Bool r_runtime_darwin_socket_accept_activate(RRuntimeDarwinSocketAccept *request);
 
@@ -127,9 +134,9 @@ void r_runtime_darwin_socket_accept_release(RRuntimeDarwinSocketAccept *request)
 void r_runtime_darwin_socket_accept_abort(RRuntimeDarwinSocketAccept **request);
 
 /*
- * Two-phase connect reservation. Success owns one nonblocking close-on-exec socket and suspended
- * Dispatch sources, but performs no connect submission. timeout_nanoseconds == 0 means no timer.
- * Native socket creation failure is distinct from allocation/source reservation failure.
+ * Two-phase connect reservation. Success owns one nonblocking close-on-exec socket and unarmed
+ * reactor sources, but performs no connect submission. timeout_nanoseconds == 0 means no timer.
+ * Native socket creation failure is distinct from allocation failure.
  */
 RRuntimeDarwinSocketPrepareResult
 r_runtime_darwin_socket_connect_prepare(RRuntimeAllocator *allocator,
@@ -147,8 +154,8 @@ _Bool r_runtime_darwin_socket_connect_bind(RRuntimeDarwinSocketConnect *request,
 
 /*
  * Consumes the prepared state transition and submits the nonblocking connect. The callback runs
- * exactly once after every Dispatch source cancel handler has acknowledged that it can no longer
- * access the request.
+ * exactly once after every reactor source has settled and no native job runs, so the adapter no
+ * longer accesses the request.
  */
 _Bool r_runtime_darwin_socket_connect_activate(RRuntimeDarwinSocketConnect *request);
 
@@ -168,7 +175,7 @@ int r_runtime_darwin_socket_connect_take_descriptor(RRuntimeDarwinSocketConnect 
 
 /*
  * Consumes the request after completion callback delivery. Prepared-but-unsubmitted requests use
- * connect_abort instead so suspended Dispatch objects are destroyed without callbacks.
+ * connect_abort instead, which frees them without callbacks.
  */
 void r_runtime_darwin_socket_connect_release(RRuntimeDarwinSocketConnect *request);
 void r_runtime_darwin_socket_connect_abort(RRuntimeDarwinSocketConnect **request);
@@ -210,11 +217,14 @@ _Bool r_runtime_darwin_socket_datagram_copy_received(RRuntimeDarwinSocketDatagra
 void r_runtime_darwin_socket_datagram_release(RRuntimeDarwinSocketDatagram *request);
 void r_runtime_darwin_socket_datagram_abort(RRuntimeDarwinSocketDatagram **request);
 
-#if defined(R_RUNTIME_DARWIN_SOCKET_TESTING)
+/* Testing hooks (always present: an unarmed hook costs one atomic load). */
+/* Pauses the next datagram job before its native call. */
 void r_runtime_darwin_socket_testing_pause_next_datagram_before_native(void);
+/* Waits until the paused datagram job has entered its pause. */
 void r_runtime_darwin_socket_testing_wait_for_datagram_before_native(void);
+/* Releases the paused datagram job. */
 void r_runtime_darwin_socket_testing_release_datagram_before_native(void);
+/* Makes the next datagram native call fail with native_error without calling it. */
 void r_runtime_darwin_socket_testing_fail_next_datagram_native(int native_error);
-#endif
 
 #endif

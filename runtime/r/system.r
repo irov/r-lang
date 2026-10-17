@@ -152,6 +152,10 @@ extern "C" {
         raw void*? udata;
     };
 
+    @c_constant(name = "EVFILT_READ")
+    const c_int filter_read = -1i32 as c_int;
+    @c_constant(name = "EVFILT_WRITE")
+    const c_int filter_write = -2i32 as c_int;
     @c_constant(name = "EVFILT_TIMER")
     const c_int filter_timer = -7i32 as c_int;
     @c_constant(name = "EVFILT_USER")
@@ -164,6 +168,8 @@ extern "C" {
     const c_int event_oneshot = 16i32 as c_int;
     @c_constant(name = "EV_CLEAR")
     const c_int event_clear = 32i32 as c_int;
+    @c_constant(name = "EV_UDATA_SPECIFIC")
+    const c_int event_udata_specific = 256i32 as c_int;
     @c_constant(name = "EV_ERROR")
     const c_int event_error = 16384i32 as c_int;
     @c_constant(name = "NOTE_TRIGGER")
@@ -176,6 +182,156 @@ extern "C" {
     @safety("R-RUNTIME-KEVENT", "the lists address the given counts of kevent records")
     c_int kevent(c_int queue, raw const Event*? changes, c_int change_count, raw Event*? events,
                  c_int event_count, raw const TimeSpec*? timeout);
+}
+
+// Sockets and descriptors (sys/socket.h, sys/un.h, fcntl.h, unistd.h, errno.h): the native calls
+// of the socket adapters (runtime/r/socket.r), made on nonblocking close-on-exec descriptors.
+@link(name = "system.libc", kind = "system")
+@header("sys/socket.h")
+@header("sys/un.h")
+@header("sys/uio.h")
+@header("fcntl.h")
+@header("unistd.h")
+@header("errno.h")
+@abi("r-runtime-system-abi")
+extern "C" {
+    @repr(C)
+    @c_type(name = "sockaddr", kind = "struct")
+    struct SocketAddress {
+        @c_field(name = "sa_len")
+        c_uint8 length;
+        @c_field(name = "sa_family")
+        c_uint8 family;
+        @c_field(name = "sa_data")
+        c_char[14] data;
+    };
+
+    @repr(C)
+    @c_type(name = "sockaddr_storage", kind = "struct")
+    struct SocketStorage {
+        @c_field(name = "ss_len")
+        c_uint8 length;
+        @c_field(name = "ss_family")
+        c_uint8 family;
+        @c_field(name = "__ss_pad1")
+        c_char[6] head;
+        @c_field(name = "__ss_align")
+        c_int64 alignment;
+        @c_field(name = "__ss_pad2")
+        c_char[112] tail;
+    };
+
+    @repr(C)
+    @c_type(name = "sockaddr_un", kind = "struct")
+    struct LocalAddress {
+        @c_field(name = "sun_len")
+        c_uint8 length;
+        @c_field(name = "sun_family")
+        c_uint8 family;
+        @c_field(name = "sun_path")
+        c_char[104] path;
+    };
+
+    @repr(C)
+    @c_type(name = "iovec", kind = "struct")
+    struct IoVector {
+        @c_field(name = "iov_base")
+        raw void*? base;
+        @c_field(name = "iov_len")
+        c_size length;
+    };
+
+    @repr(C)
+    @c_type(name = "msghdr", kind = "struct")
+    struct MessageHeader {
+        @c_field(name = "msg_name")
+        raw void*? name;
+        @c_field(name = "msg_namelen")
+        c_uint32 name_length;
+        @c_field(name = "msg_iov")
+        raw IoVector*? vector;
+        @c_field(name = "msg_iovlen")
+        c_int vector_length;
+        @c_field(name = "msg_control")
+        raw void*? control;
+        @c_field(name = "msg_controllen")
+        c_uint32 control_length;
+        @c_field(name = "msg_flags")
+        c_int flags;
+    };
+
+    @c_constant(name = "AF_UNIX")
+    const c_int family_local = 1i32 as c_int;
+    @c_constant(name = "AF_INET")
+    const c_int family_inet = 2i32 as c_int;
+    @c_constant(name = "AF_INET6")
+    const c_int family_inet6 = 30i32 as c_int;
+    @c_constant(name = "SOCK_STREAM")
+    const c_int socket_stream = 1i32 as c_int;
+    @c_constant(name = "SOCK_DGRAM")
+    const c_int socket_datagram = 2i32 as c_int;
+    @c_constant(name = "SOL_SOCKET")
+    const c_int socket_level = 65535i32 as c_int;
+    @c_constant(name = "SO_ERROR")
+    const c_int option_error = 4103i32 as c_int;
+    @c_constant(name = "SO_TYPE")
+    const c_int option_type = 4104i32 as c_int;
+    @c_constant(name = "SO_NOSIGPIPE")
+    const c_int option_no_sigpipe = 4130i32 as c_int;
+    @c_constant(name = "MSG_TRUNC")
+    const c_int message_truncated = 16i32 as c_int;
+    @c_constant(name = "F_GETFD")
+    const c_int get_descriptor_flags = 1i32 as c_int;
+    @c_constant(name = "F_SETFD")
+    const c_int set_descriptor_flags = 2i32 as c_int;
+    @c_constant(name = "F_GETFL")
+    const c_int get_status_flags = 3i32 as c_int;
+    @c_constant(name = "F_SETFL")
+    const c_int set_status_flags = 4i32 as c_int;
+    @c_constant(name = "FD_CLOEXEC")
+    const c_int close_on_exec = 1i32 as c_int;
+    @c_constant(name = "O_NONBLOCK")
+    const c_int nonblocking = 4i32 as c_int;
+    @c_constant(name = "ENOENT")
+    const c_int error_no_entry = 2i32 as c_int;
+    @c_constant(name = "EINTR")
+    const c_int error_interrupted = 4i32 as c_int;
+    @c_constant(name = "ENOMEM")
+    const c_int error_no_memory = 12i32 as c_int;
+    @c_constant(name = "EAGAIN")
+    const c_int error_again = 35i32 as c_int;
+    @c_constant(name = "EWOULDBLOCK")
+    const c_int error_would_block = 35i32 as c_int;
+    @c_constant(name = "EINPROGRESS")
+    const c_int error_in_progress = 36i32 as c_int;
+    @c_constant(name = "EALREADY")
+    const c_int error_already = 37i32 as c_int;
+    @c_constant(name = "EMSGSIZE")
+    const c_int error_message_size = 40i32 as c_int;
+    @c_constant(name = "EISCONN")
+    const c_int error_connected = 56i32 as c_int;
+
+    @safety("R-RUNTIME-SOCKET", "None")
+    c_int socket(c_int domain, c_int kind, c_int protocol);
+    @safety("R-RUNTIME-CONNECT", "address addresses length bytes of a socket address")
+    c_int connect(c_int descriptor, raw const SocketAddress* address, c_uint32 length);
+    @safety("R-RUNTIME-ACCEPT", "address addresses *length writable bytes")
+    c_int accept(c_int descriptor, raw SocketAddress*? address, raw c_uint32*? length);
+    @safety("R-RUNTIME-GETSOCKOPT", "value addresses *length writable bytes")
+    c_int getsockopt(c_int descriptor, c_int level, c_int name, raw void*? value,
+                     raw c_uint32*? length);
+    @safety("R-RUNTIME-SETSOCKOPT", "value addresses length bytes")
+    c_int setsockopt(c_int descriptor, c_int level, c_int name, raw const void*? value,
+                     c_uint32 length);
+    @safety("R-RUNTIME-SENDTO", "data addresses size bytes; address addresses length bytes")
+    c_long sendto(c_int descriptor, raw const void*? data, c_size size, c_int flags,
+                  raw const SocketAddress*? address, c_uint32 length);
+    @safety("R-RUNTIME-RECVMSG", "message addresses a valid message header")
+    c_long recvmsg(c_int descriptor, raw MessageHeader* message, c_int flags);
+    @safety("R-RUNTIME-CLOSE", "None")
+    c_int close(c_int descriptor);
+    @safety("R-RUNTIME-FCNTL", "the variadic argument is the int the command takes, if any")
+    c_int fcntl(c_int descriptor, c_int command, ...);
 }
 
 // The floating-point environment (fenv.h): R code runs in the default environment, and a C caller's

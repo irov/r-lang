@@ -9,7 +9,7 @@ import runtime.panics;
 import runtime.stacks;
 import runtime.threads;
 import runtime.reactor;
-import runtime.reactor::{Alarm};
+import runtime.reactor::{Source, Job};
 
 // The tasks of the runtime (r_runtime_task.h): an executor over a pool of worker threads,
 // task frames with their payload and result, the one linearized terminal outcome of external
@@ -263,9 +263,10 @@ struct Task {
     // The next task of the ready queue of the worker pool, while this one is queued there.
     raw Task*? ready_next = null;
     // The alarm of a deadline-bounded scope wait; while armed it retains the task.
-    Alarm scope_alarm = {.next = null, .fire = null, .settle = null, .context = null,
-                         .deadline = 0u64 as c_uint64, .command = 0u32 as c_uint32,
-                         .state = 0u32 as c_uint32};
+    Source scope_alarm = {.next = null, .fire = null, .settle = null, .context = null,
+                          .deadline = 0u64 as c_uint64, .ident = 0u64 as c_uintptr,
+                          .filter = runtime.system::filter_timer, .command = 0u32 as c_uint32,
+                          .state = 0u32 as c_uint32};
     bool scope_alarm_armed = false;
     // The native thread this task waits to join, while it waits; zero otherwise.
     usize joining_thread = 0usize;
@@ -551,13 +552,13 @@ protected void run_external_cancel(raw Task*? frame);
 // ---- The worker pool ----
 //
 // Ready tasks wait in one FIFO, linked through the task: a task is queued at most once, while its
-// state is queued, and an external task only for its cancel callback. The pool keeps one worker
-// per processor online; while queued work waits behind busy workers that make no progress, a
-// watch of the reactor adds one, up to a bound, as Dispatch did, and an extra worker idle for a
-// while ends.
+// state is queued, and an external task only for its cancel callback. Jobs of the runtime's
+// adapters wait in a second FIFO and are taken first. The pool keeps one worker per processor
+// online; while queued work waits behind busy workers that make no progress, a monitor alarm of
+// the reactor adds one, up to a bound, as Dispatch did, and an extra worker idle for a while ends.
 
 const u32 pool_maximum = 64u32;
-const u64 pool_watch_nanoseconds = 10000000u64;
+const u64 pool_monitor_nanoseconds = 10000000u64;
 const i64 pool_idle_seconds = 5i64;
 
 Mutex pool_mutex = {.signature = runtime.system::mutex_signature as c_long, .bytes = {}};
@@ -565,18 +566,21 @@ Condition pool_condition = {.signature = runtime.system::condition_signature as 
                             .bytes = {}};
 raw Task*? ready_head = null;
 raw Task*? ready_tail = null;
+raw Job*? jobs_head = null;
+raw Job*? jobs_tail = null;
 u32 pool_workers = 0u32;
 u32 pool_minimum = 0u32;
 // Workers waiting for work, and the signals sent to them that no worker has consumed yet.
 u32 pool_waiting = 0u32;
 u32 pool_signals = 0u32;
-// Tasks taken by workers; the watch adds a worker only when none was taken since it was armed.
+// Work taken by workers; the monitor adds a worker only when none was taken since it was armed.
 u64 pool_taken = 0u64;
-u64 pool_watch_taken = 0u64;
-bool pool_watch_armed = false;
-Alarm pool_watch = {.next = null, .fire = null, .settle = null, .context = null,
-                    .deadline = 0u64 as c_uint64, .command = 0u32 as c_uint32,
-                    .state = 0u32 as c_uint32};
+u64 pool_monitor_taken = 0u64;
+bool pool_monitor_armed = false;
+Source pool_monitor = {.next = null, .fire = null, .settle = null, .context = null,
+                       .deadline = 0u64 as c_uint64, .ident = 0u64 as c_uintptr,
+                       .filter = runtime.system::filter_timer, .command = 0u32 as c_uint32,
+                       .state = 0u32 as c_uint32};
 
 protected void pool_lock() {
     unsafe {
@@ -592,6 +596,27 @@ protected void pool_unlock() {
     }
 }
 
+// Runs a job on a worker; the job is not touched after run returns.
+protected void run_job(raw Job*? job) {
+    if (runtime.types::is_true(runtime.stacks::r_runtime_stack_initialize_current_thread()) ==
+        false) {
+        runtime.panics::r_runtime_panic(12u32 as c_uint, no_span());
+    }
+    unsafe {
+        if (worker_depth == u32_maximum) {
+            fail();
+        }
+        worker_depth += 1u32;
+        raw fn?(raw Job*?) -> void run = job->run;
+        if (run == null) {
+            fail();
+        }
+        run(job);
+        worker_depth -= 1u32;
+    }
+    runtime.threads::r_runtime_thread_local_cleanup_current();
+}
+
 @callback
 @safety("R-RUNTIME-TASK-POOL-WORKER", "runs as the entry of an executor worker thread")
 protected extern "C" raw void*? pool_worker(raw void*? context) {
@@ -601,7 +626,7 @@ protected extern "C" raw void*? pool_worker(raw void*? context) {
     pool_lock();
     unsafe {
         while (true) {
-            while (ready_head == null) {
+            while ((ready_head == null) && (jobs_head == null)) {
                 pool_waiting += 1u32;
                 c_int status = 0i32 as c_int;
                 if (pool_workers > pool_minimum) {
@@ -619,11 +644,25 @@ protected extern "C" raw void*? pool_worker(raw void*? context) {
                     pool_signals -= 1u32;
                 }
                 bool expired = (status as i32) != 0i32;
-                if ((expired == true) && (ready_head == null) && (pool_workers > pool_minimum)) {
+                bool idle = (ready_head == null) && (jobs_head == null);
+                if ((expired == true) && (idle == true) && (pool_workers > pool_minimum)) {
                     pool_workers -= 1u32;
                     pool_unlock();
                     return context;
                 }
+            }
+            pool_taken += 1u64;
+            if (jobs_head != null) {
+                raw Job*? job = jobs_head;
+                jobs_head = job->next;
+                if (jobs_head == null) {
+                    jobs_tail = null;
+                }
+                job->next = null;
+                pool_unlock();
+                run_job(job);
+                pool_lock();
+                continue;
             }
             raw Task*? frame = ready_head;
             ready_head = frame->ready_next;
@@ -631,7 +670,6 @@ protected extern "C" raw void*? pool_worker(raw void*? context) {
                 ready_tail = null;
             }
             frame->ready_next = null;
-            pool_taken += 1u64;
             pool_unlock();
             if (frame->kind == Kind::external) {
                 run_external_cancel(frame);
@@ -660,28 +698,30 @@ protected bool pool_spawn_locked() {
 }
 
 @callback
-@safety("R-RUNTIME-TASK-POOL-WATCH", "context is the watch alarm of the pool")
-protected extern "C" void pool_watch_fired(raw Alarm*? watch) {
+@safety("R-RUNTIME-TASK-POOL-MONITOR", "context is the monitor alarm of the pool")
+protected extern "C" void pool_monitor_fired(raw Source*? monitor) {
     pool_lock();
     unsafe {
-        bool backlog = ready_head != null;
-        bool stuck = (backlog == true) && (pool_taken == pool_watch_taken) &&
+        bool backlog = (ready_head != null) || (jobs_head != null);
+        bool stuck = (backlog == true) && (pool_taken == pool_monitor_taken) &&
                      (pool_waiting <= pool_signals);
         if ((stuck == true) && (pool_workers < pool_maximum)) {
             pool_spawn_locked() as void;
         }
         if (backlog == true) {
-            pool_watch_taken = pool_taken;
-            runtime.reactor::arm(watch, runtime.reactor::now() + pool_watch_nanoseconds) as void;
+            pool_monitor_taken = pool_taken;
+            runtime.reactor::arm(monitor, runtime.reactor::now() + pool_monitor_nanoseconds)
+                as void;
         } else {
-            pool_watch_armed = false;
+            pool_monitor_armed = false;
         }
     }
     pool_unlock();
 }
 
-// Starts the pool once: the number of workers it keeps and the watch of its queue.
-protected bool pool_start() {
+// Starts the pool once: the number of workers it keeps and the monitor of its queue. Workers
+// start with the first work queued.
+bool pool_start() {
     pool_lock();
     unsafe {
         if (pool_minimum == 0u32) {
@@ -693,8 +733,8 @@ protected bool pool_start() {
             if (minimum > pool_maximum) {
                 minimum = pool_maximum;
             }
-            raw Alarm* watch = &pool_watch as raw Alarm*;
-            runtime.reactor::initialize(watch, pool_watch_fired, null, watch as raw void*?);
+            raw Source* monitor = &pool_monitor as raw Source*;
+            runtime.reactor::initialize(monitor, pool_monitor_fired, null, monitor as raw void*?);
             pool_minimum = minimum;
         }
     }
@@ -702,16 +742,10 @@ protected bool pool_start() {
     return true;
 }
 
-protected void task_dispatch(raw Task*? frame) {
-    pool_lock();
+// Hands queued work to a waiting worker, or adds one while the pool keeps fewer than its minimum,
+// or else arms the monitor.
+protected void pool_wake_locked() {
     unsafe {
-        frame->ready_next = null;
-        if (ready_tail == null) {
-            ready_head = frame;
-        } else {
-            ready_tail->ready_next = frame;
-        }
-        ready_tail = frame;
         if (pool_waiting > pool_signals) {
             pool_signals += 1u32;
             runtime.system::require_zero(
@@ -724,14 +758,48 @@ protected void task_dispatch(raw Task*? frame) {
             if (pool_workers == 0u32) {
                 fail();
             }
-            if ((spawned == false) && (pool_watch_armed == false)) {
-                pool_watch_armed = true;
-                pool_watch_taken = pool_taken;
-                runtime.reactor::arm(&pool_watch as raw Alarm*,
-                                     runtime.reactor::now() + pool_watch_nanoseconds) as void;
+            if ((spawned == false) && (pool_monitor_armed == false)) {
+                pool_monitor_armed = true;
+                pool_monitor_taken = pool_taken;
+                runtime.reactor::arm(&pool_monitor as raw Source*,
+                                     runtime.reactor::now() + pool_monitor_nanoseconds) as void;
             }
         }
     }
+}
+
+protected void task_dispatch(raw Task*? frame) {
+    pool_lock();
+    unsafe {
+        frame->ready_next = null;
+        if (ready_tail == null) {
+            ready_head = frame;
+        } else {
+            ready_tail->ready_next = frame;
+        }
+        ready_tail = frame;
+    }
+    pool_wake_locked();
+    pool_unlock();
+}
+
+// Queues a job of an adapter; the pool shall be started (pool_start).
+void defer(raw Job*? job) {
+    pool_lock();
+    unsafe {
+        if ((job == null) || (job->run == null) || (pool_minimum == 0u32)) {
+            pool_unlock();
+            fail();
+        }
+        job->next = null;
+        if (jobs_tail == null) {
+            jobs_head = job;
+        } else {
+            jobs_tail->next = job;
+        }
+        jobs_tail = job;
+    }
+    pool_wake_locked();
     pool_unlock();
 }
 
@@ -1213,7 +1281,7 @@ extern "C" ExecutorStartStatus r_runtime_executor_lifecycle_start(raw Allocator*
             executor_unlock();
             return ExecutorStartStatus::R_RUNTIME_EXECUTOR_START_ALLOCATION_FAILED;
         }
-        // The reactor runs the alarms of timers, deadlines and the watch of the worker pool.
+        // The reactor runs the alarms of timers, deadlines and the monitor of the worker pool.
         bool ready = (runtime.reactor::start() == true) && (pool_start() == true);
         if (ready == false) {
             runtime.heap::r_runtime_allocator_deallocate(reservation, 1u64 as c_size);
@@ -2869,7 +2937,7 @@ extern "C" void r_runtime_task_scope_bind(raw Scope*? scope, c_size reservation,
 // pending leaves the alarm, embedded in the owner, out of the reactor's command list.
 @callback
 @safety("R-RUNTIME-TASK-SCOPE-DEADLINE", "context is a task retained by its armed alarm")
-protected extern "C" void scope_deadline_fired(raw Alarm*? fired_alarm) {
+protected extern "C" void scope_deadline_fired(raw Source*? fired_alarm) {
     unsafe {
         raw Task*? owner = fired_alarm->context as raw Task*?;
         Wakeup wakeup = {};
@@ -2885,7 +2953,7 @@ protected extern "C" void scope_deadline_fired(raw Alarm*? fired_alarm) {
         if (bounded == true) {
             due = runtime.reactor::now() >= owner->scope_deadline;
         }
-        raw Alarm* alarm = &owner->scope_alarm as raw Alarm*;
+        raw Source* alarm = &owner->scope_alarm as raw Source*;
         if (runtime.reactor::pending(alarm) == false) {
             if ((bounded == true) && (due == false)) {
                 runtime.reactor::arm(alarm, owner->scope_deadline) as void;
@@ -3001,7 +3069,7 @@ protected WaitOutcome scope_wait_locked(raw Scope*? scope, raw Task*? owner,
         owner->scope_deadline = 0u64;
         if (bounded == true) {
             owner->scope_deadline = deadline;
-            raw Alarm* alarm = &owner->scope_alarm as raw Alarm*;
+            raw Source* alarm = &owner->scope_alarm as raw Source*;
             if (owner->scope_alarm_armed == false) {
                 // The alarm retains the owner while armed (scope_deadline_fired).
                 owner->references += 1usize;

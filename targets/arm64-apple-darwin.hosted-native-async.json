@@ -1300,14 +1300,15 @@
       "implementation": {
         "status": "listen-bind-connect-accept-listener-close-tcp-read-write-shutdown-stream-close-udp-data-close-task-bridge-integrated-partial",
         "cmake_targets": [
-          "r_runtime_darwin_socket",
+          "r_runtime_core",
           "r_std_net"
         ],
         "source_directories": [
+          "runtime/r",
           "runtime/darwin",
           "library/internal/networking"
         ],
-        "backend": "non-blocking BSD socket establishment with Dispatch readiness sources; TCP and Unix stream payload through immediate nonblocking system calls and per-handle Dispatch readiness sources",
+        "backend": "non-blocking BSD socket establishment and datagrams with readiness watches of the runtime reactor over kqueue and native calls in worker pool jobs; TCP and Unix stream payload through immediate nonblocking system calls and per-handle Dispatch readiness sources",
         "supported_operations": [
           "std.net::tcp_listen",
           "std.net::tcp_accept",
@@ -1349,13 +1350,13 @@
         "listen_bind_submission": "bounded socket, setsockopt, bind and listen calls run after successful task commit without occupying a blocking worker lane",
         "listen_bind_cancellation": "cancellation observed before native submission performs no socket operation; successful bind or listen is the non-cancellable establishment commit",
         "listen_bind_deadline": "the absolute continuous-clock deadline is checked immediately before socket creation",
-        "connect_submission": "socket, Dispatch write source and optional strict Dispatch timer are reserved before task commit; connect is submitted only after successful commit and never blocks an executor worker",
-        "connect_completion": "Dispatch write readiness is verified through SO_ERROR; successful native establishment transfers the nonblocking close-on-exec descriptor into the retained tcp_stream identity",
-        "connect_cancellation_deadline_acknowledgement": "the task frame, socket and sources remain live until every activated Dispatch source cancel handler acknowledges cleanup; one event-sequence-selected terminal outcome is published and becomes immutable before callback delivery",
-        "accept_reservation": "the new tcp_stream storage, an independent listener retain, a FIFO node, the native request, Dispatch read source and optional strict timer are reserved before task commit; start failure leaves the listener queue unchanged and performs no accept",
-        "accept_submission": "successful starts enqueue in per-listener FIFO order; only the head activates its Dispatch read source, queued deadlines remain armed, and accept is called only from head read-readiness handling; transient EAGAIN, EWOULDBLOCK or EINTR leaves the head pending",
+        "connect_submission": "socket, reactor write watch and optional deadline alarm are reserved before task commit; connect is submitted only after successful commit and never blocks an executor worker",
+        "connect_completion": "write readiness is verified through SO_ERROR in a worker pool job; successful native establishment transfers the nonblocking close-on-exec descriptor into the retained tcp_stream identity",
+        "connect_cancellation_deadline_acknowledgement": "the task frame, socket and sources remain live until both reactor sources have settled and no native job runs; one event-sequence-selected terminal outcome is published and becomes immutable before callback delivery",
+        "accept_reservation": "the new tcp_stream storage, an independent listener retain, a FIFO node, the native request, reactor read watch and optional deadline alarm are reserved before task commit; start failure leaves the listener queue unchanged and performs no accept",
+        "accept_submission": "successful starts enqueue in per-listener FIFO order; only the head activates its read watch, queued deadlines remain armed, and accept is called only from the job of head read readiness; transient EAGAIN, EWOULDBLOCK or EINTR leaves the head pending and watching again",
         "accept_completion": "successful accept establishes FD_CLOEXEC, O_NONBLOCK and SO_NOSIGPIPE before publishing a newly owned tcp_stream and preserves the exact peer sockaddr returned by accept",
-        "accept_cancellation_deadline_acknowledgement": "native readiness, cancellation and deadline candidates use the shared monotonic event sequence; the listener retain, task frame, accepted descriptor, FIFO node and sources remain live until every Dispatch cancel handler acknowledges cleanup; the selected result becomes immutable before callback delivery, and only then is the node removed and the next ready head activated",
+        "accept_cancellation_deadline_acknowledgement": "native readiness, cancellation and deadline candidates use the shared monotonic event sequence; the listener retain, task frame, accepted descriptor, FIFO node and sources remain live until both reactor sources have settled and no native job runs; the selected result becomes immutable before callback delivery, and only then is the node removed and the next ready head activated",
         "listener_close_submission": "successful task start consumes the listener and atomically marks its identity closing before returning; new accepts and address observations report closed; all FIFO accept reservations and active native requests are cancelled and acknowledged before the listener descriptor is closed",
         "listener_close_cancellation_deadline_acknowledgement": "close duties, descriptor release and the consumed listener release continue after task cancellation or deadline; an independently armed strict Dispatch timer rechecks the absolute mach-continuous deadline and records one shared event sequence at expiry; terminal publication waits for accept drain and timer cancellation acknowledgement, and a pre-existing close failure retains precedence",
         "tcp_payload_handle": "the first data operation lazily reserves one hidden duplicated-descriptor payload handle with read and write readiness sources under the tcp_stream mutex before task commit; stream storage owns the cached view and every committed request owns an independent retain through its terminal transition",
@@ -1375,7 +1376,7 @@
         "udp_datagram_submission_and_ownership": "udp_send_to and udp_receive_from reserve the task, independent socket retain, direction FIFO node, native request, optional strict timer and receive bounce storage before task commit; failed start preserves the complete named array owner byte-for-byte and performs no native datagram operation",
         "udp_receive_buffer_contract": "receive reads one datagram into independent bounce storage, commits only the received prefix into the returned array, leaves its tail unchanged and reports truncation exactly when the datagram exceeded the supplied buffer; native failure, cancellation and deadline preserve every byte, while send never mutates the array",
         "udp_direction_ordering": "sends and receives use separate submission-order FIFOs so each direction is serialized while the two directions progress independently; zero-length send remains one real native datagram in the send FIFO",
-        "udp_send_commit_cancellation_deadline_acknowledgement": "native acceptance of the complete datagram is the send commit and cannot be replaced by a later cancellation or deadline; every terminal race uses the shared event sequence and retains the task, exact buffer owner, socket, queue node and Dispatch sources through native cancellation acknowledgement",
+        "udp_send_commit_cancellation_deadline_acknowledgement": "native acceptance of the complete datagram is the send commit and cannot be replaced by a later cancellation or deadline; every terminal race uses the shared event sequence and retains the task, exact buffer owner, socket, queue node and reactor sources through native cancellation acknowledgement",
         "udp_close_terminal_cleanup": "udp_close consumes the named socket only after complete close reservation and task commit, rejects later operations, cancels and drains both direction FIFOs, closes the descriptor and releases the consumed socket exactly once; cancellation, deadline and close failure never skip cleanup, and a pre-existing close failure precedes an expired deadline",
         "handle_retention": "atomic independent references close the non-blocking descriptor exactly once after the final view or operation retain",
         "unix_domain_sockets": "R-SLIB-NET-0014..0017: Unix-domain listeners, streams and datagram sockets reuse the TCP listener, TCP stream and UDP socket storages and operation paths; a path converts to sockaddr_un before task commit, connect uses the same non-blocking connect source, accept publishes no peer address, a datagram send goes to the connected peer and a receive reports no sender; listen and datagram bind remove a stale socket file only on request, and peer credentials come from getpeereid and LOCAL_PEERPID",
@@ -1459,11 +1460,11 @@
       },
       {
         "family": "tcp_udp_establishment",
-        "backend": "non-blocking BSD sockets plus DispatchSourceRead/DispatchSourceWrite",
+        "backend": "non-blocking BSD sockets plus reactor read and write watches over kqueue",
         "lane": false,
         "cancellation": "native",
         "deadline": "native",
-        "acknowledgement": "all operation Dispatch source cancellation handlers"
+        "acknowledgement": "settlement of all operation reactor sources and the last native job"
       },
       {
         "family": "tcp_payload",
@@ -1475,11 +1476,11 @@
       },
       {
         "family": "udp_datagram",
-        "backend": "non-blocking BSD datagrams plus DispatchSourceRead/DispatchSourceWrite",
+        "backend": "non-blocking BSD datagrams plus reactor read and write watches over kqueue",
         "lane": false,
         "cancellation": "native",
         "deadline": "native",
-        "acknowledgement": "all operation Dispatch source cancellation handlers"
+        "acknowledgement": "settlement of all operation reactor sources and the last native job"
       },
       {
         "family": "child_spawn",

@@ -744,7 +744,7 @@ NETWORK_UDP_DIRECTION_ORDERING = (
 NETWORK_UDP_SEND_TERMINAL_ACKNOWLEDGEMENT = (
     "native acceptance of the complete datagram is the send commit and cannot be replaced by a "
     "later cancellation or deadline; every terminal race uses the shared event sequence and "
-    "retains the task, exact buffer owner, socket, queue node and Dispatch sources through native "
+    "retains the task, exact buffer owner, socket, queue node and reactor sources through native "
     "cancellation acknowledgement"
 )
 NETWORK_UDP_CLOSE_TERMINAL_CLEANUP = (
@@ -2102,7 +2102,7 @@ def validate_lane(manifest: dict[str, Any], errors: ValidationErrors) -> None:
         )
         errors.require(
             string_set(network_implementation.get("cmake_targets"))
-            == {"r_runtime_darwin_socket", "r_std_net"},
+            == {"r_runtime_core", "r_std_net"},
             "network adapter CMake target set is not closed",
         )
         errors.require(

@@ -18,7 +18,7 @@ repository holds everything of its 0.1 implementation for one target, `arm64-app
 | --- | --- |
 | `specification/` | The normative Core (`R_LANGUAGE_SPECIFICATION_0_1`) and Standard Library (`R_STANDARD_LIBRARY_SPECIFICATION_0_1`) specifications, English and Russian, AsciiDoc (Core also rendered to Markdown); `generated/` holds the rule inventories derived from them |
 | `compiler/` | `r-front`: re2c lexer, CST, AST, whole-program semantic analysis, typed HIR and MIR, LLVM emitter (IR and objects of the target, `compiler/llvm`), C ABI bridge of FFI imports. Strict C17, no stable external ABI |
-| `runtime/` | The hosted runtime: `runtime/r`, its core written in R (allocator, containers, strings, panics, the task executor with its worker pool, the reactor and timers), `runtime/source/hosted_entry.c` and `runtime/darwin` (payload I/O, sockets, DNS, processes, signals, file-system lane, in C until B13) |
+| `runtime/` | The hosted runtime: `runtime/r`, its core written in R (allocator, containers, strings, panics, the task executor with its worker pool, the reactor, timers and socket adapters), `runtime/source/hosted_entry.c` and `runtime/darwin` (payload I/O, DNS, processes, signals, file-system lane, in C until B13) |
 | `library/` | The standard library: `core` and `std/*` in C (one public operation per `.c` file), `r/std/*.r` modules written in R and listed in `library/r/library.map`, `native/*` providers behind the checked FFI (TLS over Mbed TLS, crypto over libsodium and Mbed TLS, SQLite, mmap), `internal/` shared code, `generated/` inventories |
 | `targets/` | The pinned target manifests (toolchain, ABI, stack budgets, specification revisions) |
 | `tests/` | C unit tests, CMake check drivers, R fixtures, golden artifacts, Python differential tests and the `run_*_examples.py` drivers of the examples |
@@ -262,19 +262,20 @@ as finished. The matrix records their results per stage.
 - The core of the runtime is written in R (`runtime/r`, the unit `core`, Core R-FFI-0068;
   compiler/README.md, *Units of the runtime*): allocator and budgets, owners, containers,
   strings, drop glue, panics, stack bounds, thread attachment, the task executor (its own pool
-  of worker threads) with `task_scope` and the blocking pool, the reactor (one thread over
-  kqueue that owns the alarms of timers and deadlines; other threads only post commands) and
-  the darwin timers; `hosted_entry.c` and the darwin
-  adapters (`event.c`, I/O, sockets, processes) stay C until B13; the C core it replaced is gone
-  (B12.3). A module of it lists its `.r` file in `R_RUNTIME_UNIT_core_SOURCES` (after the
+  of worker threads and its jobs) with `task_scope` and the blocking pool, the reactor (one
+  thread over kqueue that owns the alarms of timers and deadlines and the readiness watches of
+  descriptors; other threads only post commands), the darwin timers and the socket adapters
+  (connect, accept, datagrams: native calls in pool jobs, never on the reactor thread);
+  `hosted_entry.c` and the darwin adapters (`event.c`, I/O, DNS, processes, signals, file-system
+  lane) stay C until B13; the C core it replaced is gone (B12.3). A module of it lists its `.r` file in `R_RUNTIME_UNIT_core_SOURCES` (after the
   modules it uses); the C types it shares go into `runtime/r/types.r`, proven against the runtime
   headers, and the C functions it imports into `runtime/r/link_manifest.json`. Its exports keep
   the C names and types of the headers. A test or benchmark that links a program itself adds
   `RUNTIME_HOSTED_SOURCE` and `RUNTIME_UNIT_OBJECTS` (B12-3). System interfaces go into
   `runtime/r/system.r`, proven against the SDK headers. A function a C thread or queue calls back
   is a `protected` `@callback` (internal to the unit) whose R signature differs from the glue's
-  `(raw void*?) -> void` (a thread entry returns its pointer, an alarm callback takes its
-  alarm): an indirect call may reach every callback of the same R signature, and a shared one
+  `(raw void*?) -> void` (a thread entry returns its pointer, a reactor callback takes its
+  source, a pool job its job): an indirect call may reach every callback of the same R signature, and a shared one
   makes every callback part of a cycle (R-FUNC-0004). Every entry of
   the unit must fit in the call transition (16 KB; the compiler rejects one above it,
   R-FFI-0068), and a new runtime entry names its `.r` source in
