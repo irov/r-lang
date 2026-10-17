@@ -793,11 +793,11 @@
   },
   "hosted_native_async": {
     "executor": {
-      "backend": "libdispatch",
+      "backend": "runtime worker pool over pthreads and the reactor thread over kqueue",
       "worker_count": {
-        "mode": "libdispatch-managed",
+        "mode": "one worker per online processor; while queued work waits behind busy workers that take nothing for 10 ms the reactor adds one; an extra worker idle for 5 s ends",
         "minimum": 1,
-        "maximum": "Darwin runtime limit"
+        "maximum": 64
       },
       "ready_task_policy": "runtime FIFO per submission source; no order across independent ready sources",
       "executor_workers_may_block": false,
@@ -805,8 +805,8 @@
         "status": "type-erased-task-runtime-hosted-integrated-partial",
         "cmake_target": "r_runtime_core",
         "source": "runtime/r/task.r",
-        "system_dependency": "Darwin libdispatch",
-        "eager_submission": "dispatch_async_f on a private concurrent queue",
+        "system_dependency": "pthread and kqueue",
+        "eager_submission": "one FIFO ready queue linked through the task frames",
         "two_phase_start": "complete frame allocation and adapter native-state reservation precede payload move and publication",
         "start_failure_operand_preservation": "implemented",
         "completion_release_acquire": "implemented",
@@ -842,11 +842,11 @@
       }
     },
     "timers": {
-      "backend": "DispatchSourceTimer",
+      "backend": "reactor alarms over kqueue EVFILT_TIMER; std.fs payload deadlines DispatchSourceTimer",
       "deadline_clock": "mach_continuous_time continuous monotonic domain",
-      "native_scheduling_clock": "Dispatch mach_absolute_time uptime domain",
-      "clock_bridge": "absolute std.fs payload-operation deadlines retain the mach_continuous_time instant and recompute the remaining duration on activation and every Dispatch timer wake; std.time sleep timers currently use one relative Dispatch arm",
-      "cancellation": "dispatch_source_cancel with cancel-handler acknowledgement",
+      "native_scheduling_clock": "relative kqueue and Dispatch timers in the mach_absolute_time uptime domain",
+      "clock_bridge": "absolute std.fs payload-operation deadlines retain the mach_continuous_time instant and recompute the remaining duration on activation and every Dispatch timer wake; std.time sleep timers arm one reactor alarm for the remaining duration of their continuous deadline",
+      "cancellation": "a reactor disarm command; the alarm settles once on the reactor thread, after it fired or was disarmed, and its settlement acknowledges the task",
       "deadline": "strict native one-shot arms; the std.fs payload absolute-deadline adapter re-arms until the continuous deadline is reached",
       "implementation": {
         "status": "std.time-sleep-integrated",

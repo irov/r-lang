@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #define R_TASK_TEST_REQUIRE(condition, message)                                                    \
     do {                                                                                           \
@@ -713,6 +714,73 @@ static _Bool test_eager_parallel_progress(RRuntimeAllocator *allocator) {
                         "parallel condition destruction failed");
     R_TASK_TEST_REQUIRE(pthread_mutex_destroy(&context.mutex) == 0,
                         "parallel mutex destruction failed");
+    return 1;
+}
+
+/* B13: more tasks than processors, each blocking its worker until all have entered, progress only
+   when the pool adds workers behind busy ones that make no progress, as Dispatch did. */
+static _Bool test_pool_grows_behind_blocked_workers(RRuntimeAllocator *allocator) {
+    const RRuntimeTypeInfo payload_type = {
+        sizeof(RTaskTestParallelPayload),
+        _Alignof(RTaskTestParallelPayload),
+        parallel_payload_move,
+        parallel_payload_drop,
+    };
+    const RRuntimeTypeInfo result_type = {sizeof(int), _Alignof(int), NULL, NULL};
+    RTaskTestParallelContext context;
+    RTaskTestParallelPayload payloads[48];
+    RRuntimeTask *tasks[48];
+    int results[48];
+    const long online = sysconf(_SC_NPROCESSORS_ONLN);
+    size_t count = online > 0L ? (size_t)online + 2U : 3U;
+    size_t index;
+
+    if (count > 48U) {
+        count = 48U;
+    }
+    R_TASK_TEST_REQUIRE(r_runtime_executor_lifecycle_start(allocator) ==
+                            R_RUNTIME_EXECUTOR_START_OK,
+                        "pool growth executor failed to start");
+    R_TASK_TEST_REQUIRE(pthread_mutex_init(&context.mutex, NULL) == 0,
+                        "pool growth mutex initialization failed");
+    R_TASK_TEST_REQUIRE(pthread_cond_init(&context.condition, NULL) == 0,
+                        "pool growth condition initialization failed");
+    context.entered = 0U;
+    context.release = 0;
+    atomic_init(&context.payload_drops, 0U);
+    for (index = 0U; index < count; ++index) {
+        RRuntimeTaskPrepareResult prepared;
+        RRuntimeTaskStartResult started;
+
+        payloads[index].context = &context;
+        payloads[index].value = (int)(index + 100U);
+        prepared = r_runtime_task_start_prepare(payload_type, result_type, parallel_body);
+        R_TASK_TEST_REQUIRE(prepared.status == R_RUNTIME_TASK_START_OK,
+                            "pool growth prepare failed");
+        started = r_runtime_task_start_commit(&prepared.transaction, &payloads[index]);
+        R_TASK_TEST_REQUIRE(started.status == R_RUNTIME_TASK_START_OK, "pool growth commit failed");
+        tasks[index] = started.task;
+        results[index] = 0;
+    }
+    R_TASK_TEST_REQUIRE(pthread_mutex_lock(&context.mutex) == 0, "pool growth lock failed");
+    while (context.entered != count) {
+        R_TASK_TEST_REQUIRE(pthread_cond_wait(&context.condition, &context.mutex) == 0,
+                            "pool growth entry wait failed");
+    }
+    context.release = 1;
+    (void)pthread_cond_broadcast(&context.condition);
+    R_TASK_TEST_REQUIRE(pthread_mutex_unlock(&context.mutex) == 0, "pool growth unlock failed");
+    for (index = 0U; index < count; ++index) {
+        R_TASK_TEST_REQUIRE(r_runtime_task_await(&tasks[index], &results[index]) ==
+                                R_RUNTIME_TASK_AWAIT_OK,
+                            "pool growth await failed");
+        R_TASK_TEST_REQUIRE(results[index] == (int)(index + 100U), "pool growth result is wrong");
+    }
+    R_TASK_TEST_REQUIRE(r_runtime_executor_lifecycle_stop(), "pool growth executor did not stop");
+    R_TASK_TEST_REQUIRE(pthread_cond_destroy(&context.condition) == 0,
+                        "pool growth condition destruction failed");
+    R_TASK_TEST_REQUIRE(pthread_mutex_destroy(&context.mutex) == 0,
+                        "pool growth mutex destruction failed");
     return 1;
 }
 
@@ -2048,6 +2116,7 @@ int main(void) {
     if (!test_in_place_payload_initialize(&allocator) ||
         !test_terminal_publication_after_payload_drop(&allocator) ||
         !test_await_and_result_transfer(&allocator) || !test_eager_parallel_progress(&allocator) ||
+        !test_pool_grows_behind_blocked_workers(&allocator) ||
         !test_cancel_acknowledgement_and_detach(&allocator) ||
         !test_external_committed_completion_overrides_cancel(&allocator) ||
         !test_external_event_sequence_order(&allocator, 1) ||

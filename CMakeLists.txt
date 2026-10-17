@@ -160,6 +160,7 @@ set(R_RUNTIME_UNIT_core_SOURCES
     runtime/r/panic.r
     runtime/r/stack.r
     runtime/r/thread.r
+    runtime/r/reactor.r
     runtime/r/task.r
     runtime/r/timer.r
 )

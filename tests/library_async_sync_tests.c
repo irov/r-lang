@@ -100,6 +100,21 @@ static _Bool completes(RRuntimeTask *task) {
     return 1;
 }
 
+/* Waits up to ten seconds for the drops of the shared value to reach expected. A cancelled waiter
+   keeps its reference to the resource until a worker has acknowledged the cancellation, which
+   happens after r_std_async_cancel returns; a lost acknowledgement never drops the value. */
+static _Bool drops_reach(unsigned expected) {
+    const clock_t start = clock();
+
+    while (atomic_load(&value_drops) < expected) {
+        if ((clock() - start) > 10 * CLOCKS_PER_SEC) {
+            return 0;
+        }
+        (void)sched_yield();
+    }
+    return atomic_load(&value_drops) == expected;
+}
+
 /* A task that stays pending for a while has not been handed the resource. The while is 2000
    yields or 1 ms, whichever ends first: on a loaded machine every yield waits for a time slice,
    and the backpressure test, which checks 2000 messages, took minutes (B8-4). */
@@ -162,7 +177,7 @@ static int test_mutex(RRuntimeAllocator *allocator) {
     r_std_async_mutex_destroy(&second);
     R_TEST_CHECK(atomic_load(&value_drops) == 0U);
     r_std_async_mutex_guard_destroy(&guard);
-    R_TEST_CHECK(atomic_load(&value_drops) == 1U);
+    R_TEST_CHECK(drops_reach(1U));
     return 0;
 }
 
@@ -197,7 +212,7 @@ static int test_mutex_cancellation_stress(RRuntimeAllocator *allocator) {
                  R_TEST_WAITERS / 2);
     r_std_async_mutex_guard_destroy(&guard);
     r_std_async_mutex_destroy(&created.value);
-    R_TEST_CHECK(atomic_load(&value_drops) == 1U);
+    R_TEST_CHECK(drops_reach(1U));
     return 0;
 }
 

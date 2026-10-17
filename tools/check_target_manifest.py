@@ -894,7 +894,7 @@ PAYLOAD_IMPLEMENTATION_STATUS = (
 TIMER_CLOCK_BRIDGE = (
     "absolute std.fs payload-operation deadlines retain the mach_continuous_time instant and "
     "recompute the remaining duration on activation and every Dispatch timer wake; std.time "
-    "sleep timers currently use one relative Dispatch arm"
+    "sleep timers arm one reactor alarm for the remaining duration of their continuous deadline"
 )
 TIMER_DEADLINE = (
     "strict native one-shot arms; the std.fs payload absolute-deadline adapter re-arms until "

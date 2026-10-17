@@ -803,8 +803,8 @@ borrowed storage, including when the parent is itself cancelled.
 
 Core draft.60 composes these (R-STMT-0018). `await group.first_until(deadline, &a, &b)` returns
 `o<usize>` and `await group.all_until(deadline)` returns `bool`; the deadline is a
-`std.time::instant`, and `r_runtime_task_scope_wait_until` arms a `dispatch_after_f` wakeup for
-the suspended waiter, so a passing deadline ends only the wait. `group.cancel_all()` lowers to
+`std.time::instant`, and `r_runtime_task_scope_wait_until` arms the reactor alarm of the waiting
+task (`runtime/r/reactor.r`) for the suspended waiter, so a passing deadline ends only the wait. `group.cancel_all()` lowers to
 `R_HIR_TASK_SCOPE_CLOSE` with the `drop` operation and emits only the member discard of the
 group exit: every unconsumed member is cancelled and consumed, and the next `all()` or the exit
 observes acknowledgement. `select (group) { case T x = await move a: ... case until (d): ... }`
@@ -2765,21 +2765,33 @@ name and storage (`R-DIAG-FFI-003 [R-FFI-0068]`), `statics.c` names the global b
 with external linkage, and `r_llvm_emit_exported_objects` emits every one whether or not R code
 names it; outside a unit such a definition is `R-DIAG-FFI-003 [R-FFI-0046]`. A `protected`
 `@callback` definition of a unit is an internal callback (R-FFI-0054, R-FFI-0068): the function
-the unit hands to a thread start or a Dispatch queue. It gets no probe and an internal C wrapper
-named after the R function (`runtime.tasks::task_worker.c`, `r_llvm_c_export` in
+the unit hands to a thread start or to the reactor. It gets no probe and an internal C wrapper
+named after the R function (`runtime.tasks::pool_worker.c`, `r_llvm_c_export` in
 `compiler/llvm/ffi.c`), so two modules may use one name and no other object can call it. The
-runtime units declare the context of such callbacks `raw void*` (the C type is `void *` either
-way): an indirect call of the unit may reach every callback of its R signature (R-FUNC-0004,
-`r_semantic_callback_may_be_target`), and drop and move glue, `(raw void*?) -> void`, would
-otherwise close a cycle through every task callback. An import `@c_address raw T* name;`
-(R-FFI-0022) is the address of the C object `name`, of a type R may leave opaque, as C macros
-such as `DISPATCH_SOURCE_TYPE_TIMER` (`&_dispatch_source_type_timer`) spell it: the verifier
+signatures of such callbacks stay apart from drop and move glue, `(raw void*?) -> void`: a
+thread entry returns its pointer and an alarm callback takes its alarm (`(raw Alarm*?) -> void`),
+because an indirect call of the unit may reach every callback of its R signature (R-FUNC-0004,
+`r_semantic_callback_may_be_target`), and a shared signature would close a cycle through glue
+and every callback. An import `@c_address raw T* name;` (R-FFI-0022) is the address of the C
+object `name`, of a type R may leave opaque, as C macros such as `FE_DFL_ENV` (`&_FE_DFL_ENV`)
+spell it: the verifier
 probes `&name` against the declared pointer type, the ABI record matches the object against its
 pointee, and the emitter declares the C object as an external byte and the R name as a private
 constant holding its address. The C types the modules share are declared once in
-`runtime/r/types.r` from the runtime headers, the system interfaces (`pthread`, Dispatch,
+`runtime/r/types.r` from the runtime headers, the system interfaces (`pthread`, kqueue,
 `mach_time`, `fenv`) in `runtime/r/system.r` from the SDK headers; the libc functions and objects
 they use are listed in `runtime/r/link_manifest.json`.
+
+The executor of the core (`runtime/r/task.r`) runs ready tasks on its own pool of worker threads:
+one FIFO linked through the task frames, one worker per online processor, and a watch that adds
+a worker while queued work waits behind busy workers that take nothing for 10 ms, as Dispatch
+did, up to 64; an extra worker idle for 5 s ends. The reactor (`runtime/r/reactor.r`) is one
+thread that owns the kernel event queue (kqueue on darwin) and its one-shot alarms (timers of
+`std.time`, deadlines of group waits, the watch of the pool). Other threads only post commands,
+which the reactor takes when its wakeup fires, so a native registration changes and an event is
+delivered on one thread: an alarm with a settle callback settles exactly once, after it fired or
+was disarmed, and a posted command that the reactor has not taken keeps the alarm, whose storage
+its owner may release at settlement, out of the command list.
 
 The entries of a unit, its exports and internal callbacks, have no stack check of their own: the
 generated code that calls the runtime keeps the call transition of the target

@@ -3,13 +3,15 @@ import runtime.types;
 import runtime.types::{SourceSpan, PanicCategory, PanicReport, TypeInfo, Allocator, AllocationStatus,
                        Budget, TaskHandle, ExecutionHandle, ExternalHandle};
 import runtime.system;
-import runtime.system::{Mutex, Condition, Thread, Queue, Object, TimeSpec, Timebase};
+import runtime.system::{Mutex, Condition, Thread, TimeSpec};
 import runtime.heap;
 import runtime.panics;
 import runtime.stacks;
 import runtime.threads;
+import runtime.reactor;
+import runtime.reactor::{Alarm};
 
-// The tasks of the darwin target (r_runtime_task.h): an executor over a concurrent Dispatch queue,
+// The tasks of the runtime (r_runtime_task.h): an executor over a pool of worker threads,
 // task frames with their payload and result, the one linearized terminal outcome of external
 // tasks (R-SLIB-ASYNC-0007), supervision scopes, deadlines and budgets of tasks, and the pool of
 // threads that run blocking calls (Core R-TERM-0015).
@@ -258,6 +260,13 @@ struct Task {
                                 .text_length = 0u32 as c_uint32, .text = {}};
     // The task this thread was executing when this one started executing inline over it.
     raw Task*? executing_outer = null;
+    // The next task of the ready queue of the worker pool, while this one is queued there.
+    raw Task*? ready_next = null;
+    // The alarm of a deadline-bounded scope wait; while armed it retains the task.
+    Alarm scope_alarm = {.next = null, .fire = null, .settle = null, .context = null,
+                         .deadline = 0u64 as c_uint64, .command = 0u32 as c_uint32,
+                         .state = 0u32 as c_uint32};
+    bool scope_alarm_armed = false;
     // The native thread this task waits to join, while it waits; zero otherwise.
     usize joining_thread = 0usize;
 };
@@ -280,8 +289,6 @@ struct Wakeup {
 struct WaitOutcome {
     ExecutionAwaitStatus status =
         ExecutionAwaitStatus::R_RUNTIME_TASK_EXECUTION_AWAIT_INVALID;
-    bool armed = false;
-    u64 remaining = 0u64;
 };
 
 const u32 u32_maximum = 4294967295u32;
@@ -294,7 +301,6 @@ Mutex executor_mutex = {.signature = runtime.system::mutex_signature as c_long, 
 Condition executor_condition = {.signature = runtime.system::condition_signature as c_long,
                                 .bytes = {}};
 raw Allocator*? executor_allocator = null;
-raw Queue*? executor_queue = null;
 raw void*? executor_reservation = null;
 raw Task*? executor_tasks = null;
 raw Task*? executor_tasks_tail = null;
@@ -504,7 +510,8 @@ protected void task_deallocate(raw Task*? frame) {
         raw Budget*? budget = frame->budget;
         bool counted = frame->counted;
         bool linked = (frame->waiter != null) || (frame->waiting_on != null) ||
-                      (frame->waiting_scope != null) || (frame->scope != null);
+                      (frame->waiting_scope != null) || (frame->scope != null) ||
+                      (frame->scope_alarm_armed == true);
         if ((frame->payload_initialized == true) || (frame->result_initialized == true) ||
             (frame->observer_cleanup_active == true) || (frame->references != 0usize) ||
             (linked == true) || (frame->open_scope_count != 0usize) ||
@@ -539,23 +546,193 @@ protected void task_release_reference(raw Task*? frame) {
 }
 
 protected void task_execute(raw Task*? frame, bool on_worker);
+protected void run_external_cancel(raw Task*? frame);
 
-@callback
-@safety("R-RUNTIME-TASK-WORKER", "context is a queued task")
-protected extern "C" void task_worker(raw void* context) {
+// ---- The worker pool ----
+//
+// Ready tasks wait in one FIFO, linked through the task: a task is queued at most once, while its
+// state is queued, and an external task only for its cancel callback. The pool keeps one worker
+// per processor online; while queued work waits behind busy workers that make no progress, a
+// watch of the reactor adds one, up to a bound, as Dispatch did, and an extra worker idle for a
+// while ends.
+
+const u32 pool_maximum = 64u32;
+const u64 pool_watch_nanoseconds = 10000000u64;
+const i64 pool_idle_seconds = 5i64;
+
+Mutex pool_mutex = {.signature = runtime.system::mutex_signature as c_long, .bytes = {}};
+Condition pool_condition = {.signature = runtime.system::condition_signature as c_long,
+                            .bytes = {}};
+raw Task*? ready_head = null;
+raw Task*? ready_tail = null;
+u32 pool_workers = 0u32;
+u32 pool_minimum = 0u32;
+// Workers waiting for work, and the signals sent to them that no worker has consumed yet.
+u32 pool_waiting = 0u32;
+u32 pool_signals = 0u32;
+// Tasks taken by workers; the watch adds a worker only when none was taken since it was armed.
+u64 pool_taken = 0u64;
+u64 pool_watch_taken = 0u64;
+bool pool_watch_armed = false;
+Alarm pool_watch = {.next = null, .fire = null, .settle = null, .context = null,
+                    .deadline = 0u64 as c_uint64, .command = 0u32 as c_uint32,
+                    .state = 0u32 as c_uint32};
+
+protected void pool_lock() {
     unsafe {
-        task_execute(context as raw Task*?, true);
+        runtime.system::require_zero(
+            runtime.system::pthread_mutex_lock(&pool_mutex as raw Mutex*));
     }
 }
 
-protected void task_dispatch(raw Task*? frame) {
+protected void pool_unlock() {
     unsafe {
-        raw Queue*? queue = executor_queue;
-        if (queue == null) {
-            fail();
-        }
-        runtime.system::dispatch_async_f(queue, frame as raw void*?, task_worker);
+        runtime.system::require_zero(
+            runtime.system::pthread_mutex_unlock(&pool_mutex as raw Mutex*));
     }
+}
+
+@callback
+@safety("R-RUNTIME-TASK-POOL-WORKER", "runs as the entry of an executor worker thread")
+protected extern "C" raw void*? pool_worker(raw void*? context) {
+    unsafe {
+        runtime.system::pthread_setname_np(runtime.system::c_string("r.worker\0")) as void;
+    }
+    pool_lock();
+    unsafe {
+        while (true) {
+            while (ready_head == null) {
+                pool_waiting += 1u32;
+                c_int status = 0i32 as c_int;
+                if (pool_workers > pool_minimum) {
+                    TimeSpec interval = {.seconds = pool_idle_seconds as c_long,
+                                         .nanoseconds = 0i64 as c_long};
+                    status = runtime.system::pthread_cond_timedwait_relative_np(
+                        &pool_condition as raw Condition*, &pool_mutex as raw Mutex*,
+                        &interval as raw const TimeSpec*);
+                } else {
+                    status = runtime.system::pthread_cond_wait(&pool_condition as raw Condition*,
+                                                               &pool_mutex as raw Mutex*);
+                }
+                pool_waiting -= 1u32;
+                if (pool_signals != 0u32) {
+                    pool_signals -= 1u32;
+                }
+                bool expired = (status as i32) != 0i32;
+                if ((expired == true) && (ready_head == null) && (pool_workers > pool_minimum)) {
+                    pool_workers -= 1u32;
+                    pool_unlock();
+                    return context;
+                }
+            }
+            raw Task*? frame = ready_head;
+            ready_head = frame->ready_next;
+            if (ready_head == null) {
+                ready_tail = null;
+            }
+            frame->ready_next = null;
+            pool_taken += 1u64;
+            pool_unlock();
+            if (frame->kind == Kind::external) {
+                run_external_cancel(frame);
+            } else {
+                task_execute(frame, true);
+            }
+            pool_lock();
+        }
+    }
+    pool_unlock();
+    return context;
+}
+
+// Adds a worker; false when the thread cannot be made.
+protected bool pool_spawn_locked() {
+    unsafe {
+        raw Thread*? thread = null;
+        if (runtime.system::pthread_create(&thread as raw (raw Thread*?)*, null, pool_worker,
+                                           null) != 0i32 as c_int) {
+            return false;
+        }
+        runtime.system::pthread_detach(thread) as void;
+        pool_workers += 1u32;
+    }
+    return true;
+}
+
+@callback
+@safety("R-RUNTIME-TASK-POOL-WATCH", "context is the watch alarm of the pool")
+protected extern "C" void pool_watch_fired(raw Alarm*? watch) {
+    pool_lock();
+    unsafe {
+        bool backlog = ready_head != null;
+        bool stuck = (backlog == true) && (pool_taken == pool_watch_taken) &&
+                     (pool_waiting <= pool_signals);
+        if ((stuck == true) && (pool_workers < pool_maximum)) {
+            pool_spawn_locked() as void;
+        }
+        if (backlog == true) {
+            pool_watch_taken = pool_taken;
+            runtime.reactor::arm(watch, runtime.reactor::now() + pool_watch_nanoseconds) as void;
+        } else {
+            pool_watch_armed = false;
+        }
+    }
+    pool_unlock();
+}
+
+// Starts the pool once: the number of workers it keeps and the watch of its queue.
+protected bool pool_start() {
+    pool_lock();
+    unsafe {
+        if (pool_minimum == 0u32) {
+            i64 online = runtime.system::sysconf(runtime.system::processors_online) as i64;
+            u32 minimum = 1u32;
+            if (online > 1i64) {
+                minimum = online as u32;
+            }
+            if (minimum > pool_maximum) {
+                minimum = pool_maximum;
+            }
+            raw Alarm* watch = &pool_watch as raw Alarm*;
+            runtime.reactor::initialize(watch, pool_watch_fired, null, watch as raw void*?);
+            pool_minimum = minimum;
+        }
+    }
+    pool_unlock();
+    return true;
+}
+
+protected void task_dispatch(raw Task*? frame) {
+    pool_lock();
+    unsafe {
+        frame->ready_next = null;
+        if (ready_tail == null) {
+            ready_head = frame;
+        } else {
+            ready_tail->ready_next = frame;
+        }
+        ready_tail = frame;
+        if (pool_waiting > pool_signals) {
+            pool_signals += 1u32;
+            runtime.system::require_zero(
+                runtime.system::pthread_cond_signal(&pool_condition as raw Condition*));
+        } else {
+            bool spawned = false;
+            if (pool_workers < pool_minimum) {
+                spawned = pool_spawn_locked();
+            }
+            if (pool_workers == 0u32) {
+                fail();
+            }
+            if ((spawned == false) && (pool_watch_armed == false)) {
+                pool_watch_armed = true;
+                pool_watch_taken = pool_taken;
+                runtime.reactor::arm(&pool_watch as raw Alarm*,
+                                     runtime.reactor::now() + pool_watch_nanoseconds) as void;
+            }
+        }
+    }
+    pool_unlock();
 }
 
 protected bool request_resume_locked(raw Task*? frame) {
@@ -696,11 +873,9 @@ protected bool external_cancel_schedule_locked(raw Task*? frame) {
     }
 }
 
-@callback
-@safety("R-RUNTIME-TASK-EXTERNAL-CANCEL-WORKER", "context is a task retained for its cancel")
-protected extern "C" void external_cancel_worker(raw void* context) {
+// Runs the cancel callback of an external task on a worker; the task was retained for it.
+protected void run_external_cancel(raw Task*? frame) {
     unsafe {
-        raw Task*? frame = context as raw Task*?;
         if (worker_depth == u32_maximum) {
             fail();
         }
@@ -719,14 +894,8 @@ protected extern "C" void external_cancel_worker(raw void* context) {
 }
 
 protected void external_cancel_dispatch(raw Task*? frame) {
-    unsafe {
-        raw Queue*? queue = executor_queue;
-        if (queue == null) {
-            fail();
-        }
-        runtime.threads::r_runtime_hosted_work_begin();
-        runtime.system::dispatch_async_f(queue, frame as raw void*?, external_cancel_worker);
-    }
+    runtime.threads::r_runtime_hosted_work_begin();
+    task_dispatch(frame);
 }
 
 protected void preparation_finish_locked(raw Task*? frame) {
@@ -1044,16 +1213,14 @@ extern "C" ExecutorStartStatus r_runtime_executor_lifecycle_start(raw Allocator*
             executor_unlock();
             return ExecutorStartStatus::R_RUNTIME_EXECUTOR_START_ALLOCATION_FAILED;
         }
-        raw Queue*? queue = runtime.system::dispatch_queue_create(
-            runtime.system::c_string("dev.r-lang.executor\0"),
-            runtime.system::_dispatch_queue_attr_concurrent);
-        if (queue == null) {
+        // The reactor runs the alarms of timers, deadlines and the watch of the worker pool.
+        bool ready = (runtime.reactor::start() == true) && (pool_start() == true);
+        if (ready == false) {
             runtime.heap::r_runtime_allocator_deallocate(reservation, 1u64 as c_size);
             executor_unlock();
             return ExecutorStartStatus::R_RUNTIME_EXECUTOR_START_ALLOCATION_FAILED;
         }
         executor_allocator = allocator;
-        executor_queue = queue;
         executor_reservation = reservation;
         executor_tasks = null;
         executor_tasks_tail = null;
@@ -1344,14 +1511,12 @@ extern "C" c_bool r_runtime_executor_lifecycle_stop() {
         while ((preparation_count != 0usize) || (live_task_count != 0usize)) {
             executor_wait();
         }
-        raw Queue*? queue = executor_queue;
+        // The worker pool and the reactor outlive the generation; their threads wait idle.
         raw void*? reservation = executor_reservation;
         executor_allocator = null;
-        executor_queue = null;
         executor_reservation = null;
         executor_unlock();
 
-        runtime.system::dispatch_release(Object {.queue = queue});
         runtime.heap::r_runtime_allocator_deallocate(reservation, 1u64 as c_size);
 
         executor_lock();
@@ -2696,50 +2861,37 @@ extern "C" void r_runtime_task_scope_bind(raw Scope*? scope, c_size reservation,
     executor_unlock();
 }
 
-// The monotonic clock of std.time::instant: continuous Mach time in nanoseconds, the exact
-// quotient of ticks times numer by denom, saturated.
-protected u64 monotonic_now() {
-    unsafe {
-        Timebase timebase = {.numer = 0u32 as c_uint32, .denom = 0u32 as c_uint32};
-        if (runtime.system::mach_timebase_info(&timebase as raw Timebase*) != 0i32 as c_int) {
-            fail();
-        }
-        u64 numer = timebase.numer as u64;
-        u64 denom = timebase.denom as u64;
-        if (denom == 0u64) {
-            fail();
-        }
-        u64 ticks = runtime.system::mach_continuous_time() as u64;
-        // ticks = quotient * denom + remainder, so ticks * numer / denom is
-        // quotient * numer + remainder * numer / denom; remainder * numer < 2^64.
-        u64 quotient = ticks / denom;
-        u64 remainder = ticks % denom;
-        u64 tail = (remainder * numer) / denom;
-        auto (low, high) = core::widening_mul(quotient, numer);
-        bool overflow = high != 0u64;
-        bool beyond = low > u64_maximum - tail;
-        if ((overflow == true) || (beyond == true)) {
-            return u64_maximum;
-        }
-        return low + tail;
-    }
-}
-
-// A one-shot wakeup armed by a deadline-bounded wait. It resumes the owner only while that owner
-// still waits on a scope with a reached deadline, so a stale wakeup has no effect.
+// The wakeup of a deadline-bounded wait, on the reactor thread. It resumes the owner only while
+// that owner still waits on a scope with a reached deadline, so a stale wakeup has no effect. The
+// alarm retains its owner while armed: it is armed again while the owner waits for a deadline
+// still ahead or a later deadline is posted, and otherwise gives its reference back. A deadline is
+// posted under the owner's lock while the alarm is armed, so deciding under that lock that none is
+// pending leaves the alarm, embedded in the owner, out of the reactor's command list.
 @callback
-@safety("R-RUNTIME-TASK-SCOPE-DEADLINE", "context is a task retained for this wakeup")
-protected extern "C" void scope_deadline_fired(raw void* context) {
+@safety("R-RUNTIME-TASK-SCOPE-DEADLINE", "context is a task retained by its armed alarm")
+protected extern "C" void scope_deadline_fired(raw Alarm*? fired_alarm) {
     unsafe {
-        raw Task*? owner = context as raw Task*?;
+        raw Task*? owner = fired_alarm->context as raw Task*?;
         Wakeup wakeup = {};
+        bool release = false;
         executor_lock();
         task_lock(owner);
         raw Scope*? scope = owner->waiting_scope;
-        bool due = false;
+        bool bounded = false;
         if ((scope != null) && (owner->scope_deadline_active == true)) {
-            if (task_of(scope->waiter) == owner) {
-                due = monotonic_now() >= owner->scope_deadline;
+            bounded = task_of(scope->waiter) == owner;
+        }
+        bool due = false;
+        if (bounded == true) {
+            due = runtime.reactor::now() >= owner->scope_deadline;
+        }
+        raw Alarm* alarm = &owner->scope_alarm as raw Alarm*;
+        if (runtime.reactor::pending(alarm) == false) {
+            if ((bounded == true) && (due == false)) {
+                runtime.reactor::arm(alarm, owner->scope_deadline) as void;
+            } else {
+                owner->scope_alarm_armed = false;
+                release = true;
             }
         }
         task_unlock(owner);
@@ -2748,7 +2900,9 @@ protected extern "C" void scope_deadline_fired(raw void* context) {
         }
         executor_unlock();
         wake(wakeup);
-        task_release_reference(owner);
+        if (release == true) {
+            task_release_reference(owner);
+        }
     }
 }
 
@@ -2831,14 +2985,11 @@ protected WaitOutcome scope_wait_locked(raw Scope*? scope, raw Task*? owner,
             }
             return outcome(ExecutionAwaitStatus::R_RUNTIME_TASK_EXECUTION_AWAIT_OK);
         }
-        u64 remaining = 0u64;
         if (bounded == true) {
-            u64 now = monotonic_now();
-            if (now >= deadline) {
+            if (runtime.reactor::now() >= deadline) {
                 *expired = runtime.types::c_bool_of(true);
                 return outcome(ExecutionAwaitStatus::R_RUNTIME_TASK_EXECUTION_AWAIT_OK);
             }
-            remaining = deadline - now;
         }
         task_lock(owner);
         if ((owner->references > runtime.types::size_maximum - 2usize) || (scope->waiter != null)) {
@@ -2850,13 +3001,19 @@ protected WaitOutcome scope_wait_locked(raw Scope*? scope, raw Task*? owner,
         owner->scope_deadline = 0u64;
         if (bounded == true) {
             owner->scope_deadline = deadline;
-            // The wakeup retains the owner until it has run.
-            owner->references += 1usize;
+            raw Alarm* alarm = &owner->scope_alarm as raw Alarm*;
+            if (owner->scope_alarm_armed == false) {
+                // The alarm retains the owner while armed (scope_deadline_fired).
+                owner->references += 1usize;
+                owner->scope_alarm_armed = true;
+                runtime.reactor::initialize(alarm, scope_deadline_fired, null,
+                                            owner as raw void*?);
+            }
+            runtime.reactor::arm(alarm, deadline) as void;
         }
         scope->waiter = handle_of(owner);
         task_unlock(owner);
-        return WaitOutcome {.status = ExecutionAwaitStatus::R_RUNTIME_TASK_EXECUTION_AWAIT_SUSPENDED,
-                            .armed = bounded, .remaining = remaining};
+        return outcome(ExecutionAwaitStatus::R_RUNTIME_TASK_EXECUTION_AWAIT_SUSPENDED);
     }
 }
 
@@ -2941,20 +3098,6 @@ protected ExecutionAwaitStatus scope_wait(raw ExecutionHandle*? execution, raw S
         WaitOutcome decided = scope_wait_locked(scope, owner, selection, count, ready_index,
                                                 vacancy, bounded, deadline, expired);
         executor_unlock();
-        if (decided.armed == true) {
-            u64 delay = decided.remaining;
-            if (delay > i64_maximum) {
-                delay = i64_maximum;
-            }
-            // The global queue of DISPATCH_QUEUE_PRIORITY_DEFAULT is that of QOS_CLASS_DEFAULT
-            // (dispatch/queue.h).
-            runtime.system::dispatch_after_f(
-                runtime.system::dispatch_time(runtime.system::time_now as c_uint64,
-                                              delay as c_int64),
-                runtime.system::dispatch_get_global_queue(
-                    runtime.system::priority_default as c_intptr, 0u64 as c_uintptr),
-                owner as raw void*?, scope_deadline_fired);
-        }
         if (previous_waiter != null) {
             task_release_reference(previous_waiter);
         }

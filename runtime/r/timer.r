@@ -2,13 +2,15 @@ module runtime.timers;
 import runtime.types;
 import runtime.types::{ExternalHandle};
 import runtime.system;
-import runtime.system::{Mutex, Condition, Source, Object};
+import runtime.system::{Mutex, Condition};
+import runtime.reactor;
+import runtime.reactor::{Alarm};
 import runtime.tasks;
 
-// One-shot timers of the darwin adapter (r_runtime_darwin_timer.h): a suspended Dispatch timer
-// source reserved before the task commits, bound to the committed external execution, activated
-// once; its event selects completion, and its cancel handler, which owns the source, acknowledges
-// the task.
+// One-shot timers of the darwin adapter (r_runtime_darwin_timer.h): a reactor alarm whose deadline
+// prepare fixes before the task commits, bound to the committed external execution and armed
+// once. Its firing selects completion; its settlement, after it fired or was disarmed, acknowledges
+// the task (runtime/r/reactor.r).
 @header("r_runtime_darwin_timer.h")
 extern "C" {
 }
@@ -21,8 +23,8 @@ extern "C" {
     @repr(C)
     @c_type(name = "RRuntimeDarwinTimer", kind = "typedef")
     struct Timer {
-        atomic raw void*? native_source;
-        atomic c_bool activated;
+        Alarm alarm;
+        c_bool prepared;
         raw ExternalHandle*? execution;
     };
 
@@ -37,30 +39,9 @@ extern "C" {
 }
 
 const u64 nanoseconds_per_second = 1000000000u64;
-const u64 delta_maximum = 9223372036854775807u64;
-
-protected raw Source*? source_of(raw Timer*? timer) {
-    unsafe {
-        return core::atomic_load(&timer->native_source, core::memory_order::acquire) as raw Source*?;
-    }
-}
-
-protected void activate_source(raw Timer*? timer, raw Source*? source) {
-    unsafe {
-        core::atomic_compare_exchange_result<c_bool> activated = core::atomic_compare_exchange(
-            &timer->activated, 0i32 as c_bool, 1i32 as c_bool, core::memory_order::acq_rel,
-            core::memory_order::acquire);
-        switch (move activated) {
-        case variant core::atomic_compare_exchange_result::exchanged(move previous):
-            previous as void;
-            runtime.system::dispatch_activate(Object {.source = source});
-            break;
-        case variant core::atomic_compare_exchange_result::unchanged(move previous):
-            previous as void;
-            break;
-        }
-    }
-}
+const u64 u64_maximum = 18446744073709551615u64;
+// The horizon of a delay: the signed 64-bit nanoseconds a native timer takes.
+const u64 delay_maximum = 9223372036854775807u64;
 
 @safety("R-RUNTIME-TIMER-CANCEL", "timer is null or initialized")
 extern "C" void r_runtime_darwin_timer_cancel(raw Timer*? timer) {
@@ -68,13 +49,8 @@ extern "C" void r_runtime_darwin_timer_cancel(raw Timer*? timer) {
         if ((timer == null) || (timer->execution == null)) {
             return;
         }
-        raw Source*? source = source_of(timer);
-        if (source == null) {
-            // The cancel handler owns acknowledgement once the timer has been bound.
-            return;
-        }
-        activate_source(timer, source);
-        runtime.system::dispatch_source_cancel(source);
+        // A settled alarm refuses the command: the task was acknowledged already.
+        runtime.reactor::disarm(&timer->alarm as raw Alarm*) as void;
     }
 }
 
@@ -205,33 +181,25 @@ protected void testing_pause_cancel_handler(raw Timer*? timer) {
     pause_unlock(mutex);
 }
 
-// ---- Dispatch handlers ----
+// ---- Callbacks of the alarm, on the reactor thread ----
 
 @callback
-@safety("R-RUNTIME-TIMER-EVENT", "context is a bound timer")
-protected extern "C" void timer_event(raw void* context) {
+@safety("R-RUNTIME-TIMER-FIRED", "context is a bound timer")
+protected extern "C" void timer_fired(raw Alarm*? alarm) {
     unsafe {
-        raw Timer*? timer = context as raw Timer*?;
+        raw Timer*? timer = alarm->context as raw Timer*?;
         c_uint64 sequence = runtime.types::r_runtime_darwin_event_sequence_next();
-        if (runtime.types::is_true(runtime.tasks::r_runtime_task_external_try_select_completion_at(
-                timer->execution, sequence)) == true) {
-            r_runtime_darwin_timer_cancel(timer);
-        }
+        runtime.tasks::r_runtime_task_external_try_select_completion_at(timer->execution,
+                                                                         sequence) as void;
     }
 }
 
 @callback
-@safety("R-RUNTIME-TIMER-CANCELLED", "context is a bound timer")
-protected extern "C" void timer_cancelled(raw void* context) {
+@safety("R-RUNTIME-TIMER-SETTLED", "context is a bound timer")
+protected extern "C" void timer_settled(raw Alarm*? alarm) {
     unsafe {
-        raw Timer*? timer = context as raw Timer*?;
-        raw void*? taken = core::atomic_exchange(&timer->native_source, null,
-                                                 core::memory_order::acq_rel);
-        if (taken == null) {
-            return;
-        }
+        raw Timer*? timer = alarm->context as raw Timer*?;
         testing_pause_cancel_handler(timer);
-        runtime.system::dispatch_release(Object {.source = taken as raw Source*?});
         runtime.tasks::r_runtime_task_external_acknowledge(timer->execution);
     }
 }
@@ -244,18 +212,20 @@ extern "C" void r_runtime_darwin_timer_initialize(raw Timer*? timer) {
         if (timer == null) {
             return;
         }
-        core::atomic_store(&timer->native_source, null, core::memory_order::relaxed);
-        core::atomic_store(&timer->activated, 0i32 as c_bool, core::memory_order::relaxed);
+        runtime.reactor::initialize(&timer->alarm as raw Alarm*, timer_fired, timer_settled,
+                                    timer as raw void*?);
+        timer->prepared = runtime.types::c_bool_of(false);
         timer->execution = null;
     }
 }
 
-@safety("R-RUNTIME-TIMER-MOVE", "both timers are initialized")
+@safety("R-RUNTIME-TIMER-MOVE", "both timers are initialized; source is not bound")
 extern "C" void r_runtime_darwin_timer_move(raw Timer*? destination, raw Timer*? source) {
     unsafe {
-        raw void*? taken = core::atomic_exchange(&source->native_source, null,
-                                                 core::memory_order::acq_rel);
-        core::atomic_store(&destination->native_source, taken, core::memory_order::release);
+        // A prepared timer is not yet known to the reactor: its deadline moves with it.
+        destination->alarm.deadline = source->alarm.deadline;
+        destination->prepared = source->prepared;
+        source->prepared = runtime.types::c_bool_of(false);
     }
 }
 
@@ -266,42 +236,28 @@ extern "C" PrepareStatus r_runtime_darwin_timer_prepare(raw Timer*? timer, c_uin
         if (timer == null) {
             return PrepareStatus::R_RUNTIME_DARWIN_TIMER_PREPARE_INVALID;
         }
-        bool busy = (source_of(timer) != null) || (timer->execution != null);
-        bool activated =
-            core::atomic_load(&timer->activated, core::memory_order::acquire) != 0i32 as c_bool;
-        if ((busy == true) || (activated == true) ||
-            ((nanoseconds as u64) >= nanoseconds_per_second)) {
+        bool busy = (runtime.types::is_true(timer->prepared) == true) || (timer->execution != null);
+        if ((busy == true) || ((nanoseconds as u64) >= nanoseconds_per_second)) {
             return PrepareStatus::R_RUNTIME_DARWIN_TIMER_PREPARE_INVALID;
         }
         u64 whole = seconds as u64;
-        if (whole > delta_maximum / nanoseconds_per_second) {
+        if (whole > delay_maximum / nanoseconds_per_second) {
             return PrepareStatus::R_RUNTIME_DARWIN_TIMER_PREPARE_UNAVAILABLE;
         }
         u64 delay = whole * nanoseconds_per_second;
-        if ((nanoseconds as u64) > delta_maximum - delay) {
+        if ((nanoseconds as u64) > delay_maximum - delay) {
             return PrepareStatus::R_RUNTIME_DARWIN_TIMER_PREPARE_UNAVAILABLE;
         }
         delay += nanoseconds as u64;
-        c_uint64 deadline = runtime.system::dispatch_time(runtime.system::time_now as c_uint64,
-                                                          delay as c_int64);
-        if ((deadline as u64) == (runtime.system::time_forever as u64)) {
+        u64 current = runtime.reactor::now();
+        if (delay > u64_maximum - current) {
             return PrepareStatus::R_RUNTIME_DARWIN_TIMER_PREPARE_UNAVAILABLE;
         }
-        raw runtime.system::Queue*? queue = runtime.system::dispatch_get_global_queue(
-            runtime.system::priority_default as c_intptr, 0u64 as c_uintptr);
-        if (queue == null) {
-            return PrepareStatus::R_RUNTIME_DARWIN_TIMER_PREPARE_UNAVAILABLE;
-        }
-        raw Source*? source = runtime.system::dispatch_source_create(
-            runtime.system::_dispatch_source_type_timer, 0u64 as c_uintptr,
-            runtime.system::timer_strict as c_uintptr, queue);
-        if (source == null) {
+        if (runtime.reactor::start() == false) {
             return PrepareStatus::R_RUNTIME_DARWIN_TIMER_PREPARE_ALLOCATION_FAILED;
         }
-        runtime.system::dispatch_source_set_timer(
-            source, deadline, runtime.system::time_forever as c_uint64, 0u64 as c_uint64);
-        core::atomic_store(&timer->native_source, source as raw void*?,
-                           core::memory_order::release);
+        timer->alarm.deadline = (current + delay) as c_uint64;
+        timer->prepared = runtime.types::c_bool_of(true);
     }
     return PrepareStatus::R_RUNTIME_DARWIN_TIMER_PREPARE_OK;
 }
@@ -310,22 +266,17 @@ extern "C" PrepareStatus r_runtime_darwin_timer_prepare(raw Timer*? timer, c_uin
 extern "C" void r_runtime_darwin_timer_bind_and_activate(raw Timer*? timer,
                                                          raw ExternalHandle*? execution) {
     unsafe {
-        if ((timer == null) || (execution == null) || (timer->execution != null)) {
-            runtime.system::abort();
-        }
-        raw Source*? source = source_of(timer);
-        if (source == null) {
+        if ((timer == null) || (execution == null) || (timer->execution != null) ||
+            (runtime.types::is_true(timer->prepared) == false)) {
             runtime.system::abort();
         }
         timer->execution = execution;
-        runtime.system::dispatch_set_context(Object {.source = source}, timer as raw void*?);
-        runtime.system::dispatch_source_set_event_handler_f(source, timer_event);
-        runtime.system::dispatch_source_set_cancel_handler_f(source, timer_cancelled);
+        timer->prepared = runtime.types::c_bool_of(false);
+        u64 deadline = timer->alarm.deadline as u64;
+        runtime.reactor::initialize(&timer->alarm as raw Alarm*, timer_fired, timer_settled,
+                                    timer as raw void*?);
         runtime.tasks::r_runtime_task_external_start_ready(execution);
-        raw Source*? current = source_of(timer);
-        if (current != null) {
-            activate_source(timer, current);
-        }
+        runtime.reactor::arm(&timer->alarm as raw Alarm*, deadline) as void;
     }
 }
 
@@ -335,13 +286,6 @@ extern "C" void r_runtime_darwin_timer_dispose_unsubmitted(raw Timer*? timer) {
         if ((timer == null) || (timer->execution != null)) {
             return;
         }
-        raw Source*? source = core::atomic_exchange(&timer->native_source, null,
-                                                    core::memory_order::acq_rel) as raw Source*?;
-        if (source == null) {
-            return;
-        }
-        activate_source(timer, source);
-        runtime.system::dispatch_source_cancel(source);
-        runtime.system::dispatch_release(Object {.source = source});
+        timer->prepared = runtime.types::c_bool_of(false);
     }
 }

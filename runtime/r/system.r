@@ -108,6 +108,74 @@ extern "C" {
     c_int pthread_join(raw Thread*? thread, raw (raw void*?)*? result);
     @safety("R-RUNTIME-PTHREAD-SETNAME", "name is a NUL-terminated string")
     c_int pthread_setname_np(raw const c_char* name);
+    @safety("R-RUNTIME-PTHREAD-DETACH", "thread is joinable and not joined")
+    c_int pthread_detach(raw Thread*? thread);
+    @safety("R-RUNTIME-PTHREAD-COND-TIMEDWAIT-RELATIVE",
+            "mutex is held by this thread; both are initialized; interval addresses a timespec")
+    c_int pthread_cond_timedwait_relative_np(raw Condition* condition, raw Mutex* mutex,
+                                             raw const TimeSpec* interval);
+}
+
+// The number of processors online (unistd.h).
+@link(name = "system.libc", kind = "system")
+@header("unistd.h")
+@abi("r-runtime-system-abi")
+extern "C" {
+    @c_constant(name = "_SC_NPROCESSORS_ONLN")
+    const c_int processors_online = 58i32 as c_int;
+
+    @safety("R-RUNTIME-SYSCONF", "None")
+    c_long sysconf(c_int name);
+}
+
+// Kernel event queues (sys/event.h): the reactor thread waits on one for timers and, from B13,
+// for the readiness of descriptors, child processes and signals.
+@link(name = "system.libc", kind = "system")
+@header("sys/event.h")
+@abi("r-runtime-system-abi")
+extern "C" {
+    // sys/event.h declares it under #pragma pack(4): no member is aligned beyond four bytes.
+    @repr(C, packed)
+    @c_type(name = "kevent", kind = "struct")
+    struct Event {
+        @align(4)
+        c_uintptr ident;
+        @align(2)
+        c_int16 filter;
+        @align(2)
+        c_uint16 flags;
+        @align(4)
+        c_uint32 fflags;
+        @align(4)
+        c_intptr data;
+        @align(4)
+        raw void*? udata;
+    };
+
+    @c_constant(name = "EVFILT_TIMER")
+    const c_int filter_timer = -7i32 as c_int;
+    @c_constant(name = "EVFILT_USER")
+    const c_int filter_user = -10i32 as c_int;
+    @c_constant(name = "EV_ADD")
+    const c_int event_add = 1i32 as c_int;
+    @c_constant(name = "EV_DELETE")
+    const c_int event_delete = 2i32 as c_int;
+    @c_constant(name = "EV_ONESHOT")
+    const c_int event_oneshot = 16i32 as c_int;
+    @c_constant(name = "EV_CLEAR")
+    const c_int event_clear = 32i32 as c_int;
+    @c_constant(name = "EV_ERROR")
+    const c_int event_error = 16384i32 as c_int;
+    @c_constant(name = "NOTE_TRIGGER")
+    const c_int note_trigger = 16777216i32 as c_int;
+    @c_constant(name = "NOTE_NSECONDS")
+    const c_int note_nanoseconds = 4i32 as c_int;
+
+    @safety("R-RUNTIME-KQUEUE", "None")
+    c_int kqueue();
+    @safety("R-RUNTIME-KEVENT", "the lists address the given counts of kevent records")
+    c_int kevent(c_int queue, raw const Event*? changes, c_int change_count, raw Event*? events,
+                 c_int event_count, raw const TimeSpec*? timeout);
 }
 
 // The floating-point environment (fenv.h): R code runs in the default environment, and a C caller's
@@ -133,89 +201,6 @@ extern "C" {
     c_int fegetenv(raw FloatingEnvironment* environment);
     @safety("R-RUNTIME-FESETENV", "environment addresses an environment")
     c_int fesetenv(raw const FloatingEnvironment* environment);
-}
-
-// Dispatch (libdispatch). Its objects are pointers to opaque structs; dispatch_object_t is a
-// transparent union of them, passed as the pointer it holds.
-@link(name = "system.libc", kind = "system")
-@header("dispatch/dispatch.h")
-@abi("r-runtime-system-abi")
-extern "C" {
-    @c_type(name = "_os_object_s", kind = "struct") opaque struct OsObject;
-    @c_type(name = "dispatch_object_s", kind = "struct") opaque struct DispatchObject;
-    @c_type(name = "dispatch_queue_s", kind = "struct") opaque struct Queue;
-    @c_type(name = "dispatch_queue_attr_s", kind = "struct") opaque struct QueueAttributes;
-    @c_type(name = "dispatch_group_s", kind = "struct") opaque struct Group;
-    @c_type(name = "dispatch_source_s", kind = "struct") opaque struct Source;
-    @c_type(name = "dispatch_channel_s", kind = "struct") opaque struct Channel;
-    @c_type(name = "dispatch_mach_s", kind = "struct") opaque struct Mach;
-    @c_type(name = "dispatch_mach_msg_s", kind = "struct") opaque struct MachMessage;
-    @c_type(name = "dispatch_semaphore_s", kind = "struct") opaque struct Semaphore;
-    @c_type(name = "dispatch_data_s", kind = "struct") opaque struct Data;
-    @c_type(name = "dispatch_io_s", kind = "struct") opaque struct Io;
-    @c_type(name = "dispatch_source_type_s", kind = "struct") opaque struct SourceType;
-
-    @repr(C)
-    @c_type(name = "dispatch_object_t", kind = "typedef")
-    union Object {
-        @c_field(name = "_os_obj") raw OsObject*? os_object;
-        @c_field(name = "_do") raw DispatchObject*? object;
-        @c_field(name = "_dq") raw Queue*? queue;
-        @c_field(name = "_dqa") raw QueueAttributes*? queue_attributes;
-        @c_field(name = "_dg") raw Group*? group;
-        @c_field(name = "_ds") raw Source*? source;
-        @c_field(name = "_dch") raw Channel*? channel;
-        @c_field(name = "_dm") raw Mach*? mach;
-        @c_field(name = "_dmsg") raw MachMessage*? mach_message;
-        @c_field(name = "_dsema") raw Semaphore*? semaphore;
-        @c_field(name = "_ddata") raw Data*? data;
-        @c_field(name = "_dchannel") raw Io*? io;
-    };
-
-    // DISPATCH_SOURCE_TYPE_TIMER and DISPATCH_QUEUE_CONCURRENT are the addresses of these objects.
-    @c_address
-    raw const SourceType* _dispatch_source_type_timer;
-    @c_address
-    raw QueueAttributes* _dispatch_queue_attr_concurrent;
-
-    @c_constant(name = "DISPATCH_TIME_NOW")
-    const c_ullong time_now = 0u64 as c_ullong;
-    @c_constant(name = "DISPATCH_TIME_FOREVER")
-    const c_ullong time_forever = 18446744073709551615u64 as c_ullong;
-    @c_constant(name = "DISPATCH_QUEUE_PRIORITY_DEFAULT")
-    const c_int priority_default = 0i32 as c_int;
-    @c_constant(name = "DISPATCH_TIMER_STRICT")
-    const c_int timer_strict = 1i32 as c_int;
-
-    @safety("R-RUNTIME-DISPATCH-QUEUE-CREATE", "label is null or NUL-terminated")
-    raw Queue*? dispatch_queue_create(raw const c_char*? label, raw QueueAttributes*? attributes);
-    @safety("R-RUNTIME-DISPATCH-GLOBAL-QUEUE", "None")
-    raw Queue*? dispatch_get_global_queue(c_intptr identifier, c_uintptr flags);
-    @safety("R-RUNTIME-DISPATCH-ASYNC", "work may run with context on any thread")
-    void dispatch_async_f(raw Queue*? queue, raw void*? context, raw fn(raw void*) -> void work);
-    @safety("R-RUNTIME-DISPATCH-AFTER", "work may run with context on any thread")
-    void dispatch_after_f(c_uint64 when, raw Queue*? queue, raw void*? context,
-                          raw fn(raw void*) -> void work);
-    @safety("R-RUNTIME-DISPATCH-TIME", "None")
-    c_uint64 dispatch_time(c_uint64 when, c_int64 delta);
-    @safety("R-RUNTIME-DISPATCH-RELEASE", "object is a live dispatch object")
-    void dispatch_release(Object object);
-    @safety("R-RUNTIME-DISPATCH-ACTIVATE", "object is an inactive dispatch object")
-    void dispatch_activate(Object object);
-    @safety("R-RUNTIME-DISPATCH-SET-CONTEXT", "object is a live dispatch object")
-    void dispatch_set_context(Object object, raw void*? context);
-    @safety("R-RUNTIME-DISPATCH-SOURCE-CREATE", "type is a source type of dispatch")
-    raw Source*? dispatch_source_create(raw const SourceType* type, c_uintptr handle,
-                                        c_uintptr mask, raw Queue*? queue);
-    @safety("R-RUNTIME-DISPATCH-SOURCE-SET-TIMER", "source is a timer source")
-    void dispatch_source_set_timer(raw Source*? source, c_uint64 start, c_uint64 interval,
-                                   c_uint64 leeway);
-    @safety("R-RUNTIME-DISPATCH-SOURCE-SET-EVENT-HANDLER", "handler may run with the context")
-    void dispatch_source_set_event_handler_f(raw Source*? source, raw fn?(raw void*) -> void handler);
-    @safety("R-RUNTIME-DISPATCH-SOURCE-SET-CANCEL-HANDLER", "handler may run with the context")
-    void dispatch_source_set_cancel_handler_f(raw Source*? source, raw fn?(raw void*) -> void handler);
-    @safety("R-RUNTIME-DISPATCH-SOURCE-CANCEL", "source is a live source")
-    void dispatch_source_cancel(raw Source*? source);
 }
 
 // A NUL-terminated C string from a constant ending in "\0".

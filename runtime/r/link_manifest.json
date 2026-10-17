@@ -55,87 +55,12 @@
           "binding": "strong"
         },
         {
-          "c_identifier": "_dispatch_queue_attr_concurrent",
-          "kind": "data",
-          "binding": "strong"
-        },
-        {
-          "c_identifier": "_dispatch_source_type_timer",
-          "kind": "data",
-          "binding": "strong"
-        },
-        {
           "c_identifier": "abort",
           "kind": "function",
           "binding": "strong"
         },
         {
           "c_identifier": "calloc",
-          "kind": "function",
-          "binding": "strong"
-        },
-        {
-          "c_identifier": "dispatch_activate",
-          "kind": "function",
-          "binding": "strong"
-        },
-        {
-          "c_identifier": "dispatch_after_f",
-          "kind": "function",
-          "binding": "strong"
-        },
-        {
-          "c_identifier": "dispatch_async_f",
-          "kind": "function",
-          "binding": "strong"
-        },
-        {
-          "c_identifier": "dispatch_get_global_queue",
-          "kind": "function",
-          "binding": "strong"
-        },
-        {
-          "c_identifier": "dispatch_queue_create",
-          "kind": "function",
-          "binding": "strong"
-        },
-        {
-          "c_identifier": "dispatch_release",
-          "kind": "function",
-          "binding": "strong"
-        },
-        {
-          "c_identifier": "dispatch_set_context",
-          "kind": "function",
-          "binding": "strong"
-        },
-        {
-          "c_identifier": "dispatch_source_cancel",
-          "kind": "function",
-          "binding": "strong"
-        },
-        {
-          "c_identifier": "dispatch_source_create",
-          "kind": "function",
-          "binding": "strong"
-        },
-        {
-          "c_identifier": "dispatch_source_set_cancel_handler_f",
-          "kind": "function",
-          "binding": "strong"
-        },
-        {
-          "c_identifier": "dispatch_source_set_event_handler_f",
-          "kind": "function",
-          "binding": "strong"
-        },
-        {
-          "c_identifier": "dispatch_source_set_timer",
-          "kind": "function",
-          "binding": "strong"
-        },
-        {
-          "c_identifier": "dispatch_time",
           "kind": "function",
           "binding": "strong"
         },
@@ -151,6 +76,16 @@
         },
         {
           "c_identifier": "free",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "kevent",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "kqueue",
           "kind": "function",
           "binding": "strong"
         },
@@ -205,12 +140,22 @@
           "binding": "strong"
         },
         {
+          "c_identifier": "pthread_cond_timedwait_relative_np",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
           "c_identifier": "pthread_cond_wait",
           "kind": "function",
           "binding": "strong"
         },
         {
           "c_identifier": "pthread_create",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "pthread_detach",
           "kind": "function",
           "binding": "strong"
         },
@@ -266,6 +211,11 @@
         },
         {
           "c_identifier": "sched_yield",
+          "kind": "function",
+          "binding": "strong"
+        },
+        {
+          "c_identifier": "sysconf",
           "kind": "function",
           "binding": "strong"
         },
